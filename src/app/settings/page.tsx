@@ -2,9 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import Link from "next/link";
 import { PointValuesEditor } from "./point-values-editor";
 import { SpendingEditor } from "./spending-editor";
+import { UserHeader } from "@/components/user-header";
 
 export default async function SettingsPage() {
   const user = await currentUser();
@@ -130,14 +130,9 @@ export default async function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
+      <UserHeader />
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="mb-8">
-          <Link
-            href="/wallet"
-            className="text-sm text-zinc-400 hover:text-white mb-2 inline-block"
-          >
-            ← Back to Wallet
-          </Link>
           <h1 className="text-3xl font-bold text-white">Settings</h1>
           <p className="text-zinc-400 mt-1">
             Customize your point valuations and spending profile

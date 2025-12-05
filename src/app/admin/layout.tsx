@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { UserButton } from "@clerk/nextjs";
 
 const navItems = [
   { href: "/admin", label: "Dashboard" },
@@ -50,12 +51,24 @@ export default function AdminLayout({
                 })}
               </div>
             </div>
-            <Link
-              href="/"
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
-            >
-              ← Back to App
-            </Link>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 border-r border-zinc-700 pr-4">
+                <span className="text-xs text-zinc-500">User View:</span>
+                <Link
+                  href="/wallet"
+                  className="text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  Wallet
+                </Link>
+                <Link
+                  href="/settings"
+                  className="text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  Settings
+                </Link>
+              </div>
+              <UserButton afterSignOutUrl="/" />
+            </div>
           </div>
         </div>
       </nav>
