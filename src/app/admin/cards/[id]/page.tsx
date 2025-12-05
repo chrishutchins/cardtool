@@ -27,7 +27,7 @@ export default async function CardDetailPage({ params }: PageProps) {
     supabase.from("issuers").select("*").order("name"),
     supabase.from("reward_currencies").select("*").order("name"),
     supabase.from("earning_categories").select("*").order("sort_order"),
-    supabase.from("card_earning_rules").select("*, earning_categories(*)").eq("card_id", id),
+    supabase.from("card_earning_rules").select("id, card_id, category_id, rate, has_cap, cap_amount, cap_unit, cap_period, post_cap_rate, notes, earning_categories(id, name, slug)").eq("card_id", id),
     supabase.from("card_currency_enablers").select("enabler_card_id").eq("card_id", id),
     supabase.from("card_with_currency").select("*").neq("id", id).order("issuer_name").order("name"),
   ]);
