@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tables } from "@/lib/database.types";
 
 interface CardFormProps {
@@ -22,6 +22,14 @@ interface CardFormProps {
 export function CardForm({ action, issuers, currencies, defaultValues }: CardFormProps) {
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [slug, setSlug] = useState(defaultValues?.slug ?? "");
+
+  // Sync state when defaultValues changes (e.g., after form submission and revalidation)
+  useEffect(() => {
+    if (defaultValues) {
+      setName(defaultValues.name);
+      setSlug(defaultValues.slug);
+    }
+  }, [defaultValues?.name, defaultValues?.slug]);
 
   const generateSlug = (value: string) => {
     return value
