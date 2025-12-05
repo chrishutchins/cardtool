@@ -119,7 +119,7 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
   };
 
   const formatFee = (fee: number | null) => {
-    if (!fee) return "Free";
+    if (!fee) return "$0";
     return `$${fee}`;
   };
 

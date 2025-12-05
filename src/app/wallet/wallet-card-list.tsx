@@ -34,7 +34,7 @@ export function WalletCardList({
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   const formatFee = (fee: number) => {
-    if (!fee) return "No fee";
+    if (!fee) return "$0/yr";
     return `$${fee}/yr`;
   };
 
