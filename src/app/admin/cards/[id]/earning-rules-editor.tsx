@@ -1,10 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { Tables } from "@/lib/database.types";
+import { Tables, Database } from "@/lib/database.types";
 
-interface EarningRule extends Tables<"card_earning_rules"> {
-  earning_categories: Tables<"earning_categories"> | null;
+// Simplified type for the rule as returned from the query
+interface EarningRule {
+  id: string;
+  card_id: string;
+  category_id: number;
+  rate: number;
+  has_cap: boolean;
+  cap_amount: number | null;
+  cap_unit: Database["public"]["Enums"]["cap_unit"] | null;
+  cap_period: Database["public"]["Enums"]["cap_period"];
+  post_cap_rate: number | null;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  earning_categories: {
+    id: number;
+    name: string;
+    slug: string;
+  } | null;
 }
 
 interface EarningRulesEditorProps {

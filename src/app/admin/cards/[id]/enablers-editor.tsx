@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Views } from "@/lib/database.types";
+import { Database } from "@/lib/database.types";
+
+type CardWithCurrency = Database["public"]["Views"]["card_with_currency"]["Row"];
 
 interface EnablersEditorProps {
   currentEnablerIds: string[];
-  availableCards: Views<"card_with_currency">[];
+  availableCards: CardWithCurrency[];
   onUpdate: (enablerIds: string[]) => Promise<void>;
 }
 
@@ -43,7 +45,7 @@ export function EnablersEditor({
     if (!acc[issuer]) acc[issuer] = [];
     acc[issuer].push(card);
     return acc;
-  }, {} as Record<string, Views<"card_with_currency">[]>);
+  }, {} as Record<string, CardWithCurrency[]>);
 
   return (
     <div className="space-y-4">

@@ -30,8 +30,8 @@ export default async function WalletPage() {
         primary_currency_id,
         secondary_currency_id,
         issuers:issuer_id (name),
-        primary_currency:primary_currency_id (name, code, currency_type),
-        secondary_currency:secondary_currency_id (name, code, currency_type)
+        primary_currency:reward_currencies!cards_primary_currency_id_fkey (name, code, currency_type),
+        secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (name, code, currency_type)
       )
     `)
     .eq("user_id", user.id);

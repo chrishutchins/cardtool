@@ -114,8 +114,10 @@ export default async function CardsPage() {
                     <form action={async () => {
                       "use server";
                       const supabase = await createClient();
-                      await supabase.from("cards").delete().eq("id", card.id);
-                      revalidatePath("/admin/cards");
+                      if (card.id) {
+                        await supabase.from("cards").delete().eq("id", card.id);
+                        revalidatePath("/admin/cards");
+                      }
                     }}>
                       <button
                         type="submit"

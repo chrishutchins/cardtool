@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Views } from "@/lib/database.types";
+import { Database } from "@/lib/database.types";
+
+type CardWithCurrency = Database["public"]["Views"]["card_with_currency"]["Row"];
 
 interface AddCardModalProps {
-  availableCards: Views<"card_with_currency">[];
+  availableCards: CardWithCurrency[];
   onAddCard: (cardId: string) => Promise<void>;
 }
 
@@ -25,7 +27,7 @@ export function AddCardModal({ availableCards, onAddCard }: AddCardModalProps) {
     if (!acc[issuer]) acc[issuer] = [];
     acc[issuer].push(card);
     return acc;
-  }, {} as Record<string, Views<"card_with_currency">[]>);
+  }, {} as Record<string, CardWithCurrency[]>);
 
   const handleAdd = async (cardId: string) => {
     setAddingId(cardId);
