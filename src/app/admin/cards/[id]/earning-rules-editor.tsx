@@ -82,7 +82,7 @@ export function EarningRulesEditor({
                   <td className="px-4 py-3 text-zinc-400 text-sm">
                     {rule.has_cap ? (
                       <span>
-                        ${rule.cap_amount?.toLocaleString()} {rule.cap_unit} / {capPeriodLabels[rule.cap_period]}
+                        ${rule.cap_amount != null ? rule.cap_amount.toLocaleString() : "N/A"} {rule.cap_unit} / {capPeriodLabels[rule.cap_period]}
                         {rule.post_cap_rate && (
                           <span className="text-zinc-500"> → {rule.post_cap_rate}x</span>
                         )}
@@ -172,6 +172,7 @@ export function EarningRulesEditor({
                   min="0"
                   placeholder="e.g., 25000"
                   className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+                  required
                 />
               </div>
               <div>

@@ -1,7 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Define protected routes - wallet requires auth
-const isProtectedRoute = createRouteMatcher(["/wallet(.*)"]);
+// Define protected routes - wallet and admin require auth
+const isProtectedRoute = createRouteMatcher(["/wallet(.*)", "/admin(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
