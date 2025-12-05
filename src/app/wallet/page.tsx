@@ -40,10 +40,13 @@ export default async function WalletPage() {
   // Get currency enablers for user's cards
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
   
-  const { data: enablers } = await supabase
-    .from("card_currency_enablers")
-    .select("card_id, enabler_card_id")
-    .in("card_id", userCardIds);
+  // Only query enablers if user has cards (empty array in .in() can cause issues)
+  const { data: enablers } = userCardIds.length > 0
+    ? await supabase
+        .from("card_currency_enablers")
+        .select("card_id, enabler_card_id")
+        .in("card_id", userCardIds)
+    : { data: [] };
 
   // Calculate which cards have their secondary currency enabled
   const enabledSecondaryCards = new Set<string>();
@@ -80,8 +83,16 @@ export default async function WalletPage() {
 
   async function removeFromWallet(walletId: string) {
     "use server";
+    const user = await currentUser();
+    if (!user) return;
+
     const supabase = await createClient();
-    await supabase.from("user_wallets").delete().eq("id", walletId);
+    // Only delete if the wallet entry belongs to the current user
+    await supabase
+      .from("user_wallets")
+      .delete()
+      .eq("id", walletId)
+      .eq("user_id", user.id);
     revalidatePath("/wallet");
   }
 
