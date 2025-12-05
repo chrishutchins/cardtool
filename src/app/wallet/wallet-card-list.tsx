@@ -34,19 +34,19 @@ export function WalletCardList({
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   const formatFee = (cents: number) => {
-    if (!cents) return "No annual fee";
-    return `$${(cents / 100).toFixed(0)}/year`;
+    if (!cents) return "No fee";
+    return `$${(cents / 100).toFixed(0)}/yr`;
   };
 
   const currencyTypeColors: Record<string, string> = {
-    points: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-    cash: "bg-green-500/20 text-green-300 border-green-500/30",
-    miles: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-    other: "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+    points: "bg-purple-500/20 text-purple-300",
+    cash: "bg-green-500/20 text-green-300",
+    miles: "bg-blue-500/20 text-blue-300",
+    other: "bg-zinc-500/20 text-zinc-300",
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {walletCards.map((wc) => {
         if (!wc.cards) return null;
         const card = wc.cards;
@@ -58,59 +58,51 @@ export function WalletCardList({
         return (
           <div
             key={wc.id}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 hover:border-zinc-700 transition-colors"
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 hover:border-zinc-700 transition-colors"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-xl font-semibold text-white">{card.name}</h3>
-                  {hasSecondaryEnabled && card.secondary_currency && (
-                    <span className="px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Upgraded
-                    </span>
-                  )}
-                </div>
-                <p className="text-zinc-400 mt-1">{card.issuers?.name}</p>
-
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {/* Active Currency */}
-                  {activeCurrency && (
-                    <div className={`px-3 py-1.5 rounded-lg border ${currencyTypeColors[activeCurrency.currency_type]}`}>
-                      <span className="text-sm font-medium">{activeCurrency.name}</span>
-                      <span className="text-xs opacity-70 ml-1">({activeCurrency.code})</span>
-                    </div>
-                  )}
-
-                  {/* Show upgrade indicator if secondary currency is available but not enabled */}
-                  {card.secondary_currency && !hasSecondaryEnabled && (
-                    <div className="px-3 py-1.5 rounded-lg border border-dashed border-zinc-600 text-zinc-500 text-sm">
-                      Can upgrade to {card.secondary_currency.name}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 flex gap-6 text-sm text-zinc-400">
-                  <span>{formatFee(card.annual_fee_cents)}</span>
-                  <span>{card.default_earn_rate}x default rate</span>
+            <div className="flex items-center justify-between gap-4">
+              {/* Left: Card info */}
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-white truncate">{card.name}</span>
+                    <span className="text-zinc-500 text-sm hidden sm:inline">·</span>
+                    <span className="text-zinc-500 text-sm hidden sm:inline truncate">{card.issuers?.name}</span>
+                    {hasSecondaryEnabled && card.secondary_currency && (
+                      <span className="px-1.5 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 shrink-0">
+                        ↑
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div>
+              {/* Middle: Currency badge */}
+              {activeCurrency && (
+                <div className={`px-2 py-1 rounded text-xs font-medium shrink-0 ${currencyTypeColors[activeCurrency.currency_type]}`}>
+                  {activeCurrency.code}
+                </div>
+              )}
+
+              {/* Right: Fee, rate, remove */}
+              <div className="flex items-center gap-4 text-sm text-zinc-500 shrink-0">
+                <span className="hidden md:inline">{formatFee(card.annual_fee_cents)}</span>
+                <span className="hidden lg:inline">{card.default_earn_rate}x</span>
+                
                 {removingId === wc.id ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-zinc-400">Remove?</span>
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={async () => {
                         await onRemove(wc.id);
                         setRemovingId(null);
                       }}
-                      className="px-3 py-1 rounded text-sm text-red-400 hover:bg-red-500/20 transition-colors"
+                      className="px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/20 transition-colors"
                     >
                       Yes
                     </button>
                     <button
                       onClick={() => setRemovingId(null)}
-                      className="px-3 py-1 rounded text-sm text-zinc-400 hover:bg-zinc-700 transition-colors"
+                      className="px-2 py-1 rounded text-xs text-zinc-400 hover:bg-zinc-700 transition-colors"
                     >
                       No
                     </button>
@@ -118,9 +110,9 @@ export function WalletCardList({
                 ) : (
                   <button
                     onClick={() => setRemovingId(wc.id)}
-                    className="px-3 py-1 rounded text-sm text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                    className="px-2 py-1 rounded text-xs text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
                   >
-                    Remove
+                    ✕
                   </button>
                 )}
               </div>
@@ -131,4 +123,3 @@ export function WalletCardList({
     </div>
   );
 }
-

@@ -46,7 +46,7 @@ export function AdminNav() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 border-r border-zinc-700 pr-4">
+            <div className="flex items-center gap-3 border-r border-zinc-700 pr-4">
               <span className="text-xs text-zinc-500">User View:</span>
               <Link
                 href="/wallet"
@@ -55,10 +55,16 @@ export function AdminNav() {
                 Wallet
               </Link>
               <Link
-                href="/settings"
+                href="/spending"
                 className="text-sm text-zinc-400 hover:text-white transition-colors"
               >
-                Settings
+                Spending
+              </Link>
+              <Link
+                href="/point-values"
+                className="text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                Points
               </Link>
             </div>
             <UserButton afterSignOutUrl="/" />

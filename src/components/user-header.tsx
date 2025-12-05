@@ -6,7 +6,8 @@ import { UserButton } from "@clerk/nextjs";
 
 const navItems = [
   { href: "/wallet", label: "My Wallet" },
-  { href: "/settings", label: "Settings" },
+  { href: "/spending", label: "My Spending" },
+  { href: "/point-values", label: "My Point Values" },
 ];
 
 export function UserHeader() {
@@ -53,4 +54,3 @@ export function UserHeader() {
     </nav>
   );
 }
-
