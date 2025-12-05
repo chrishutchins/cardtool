@@ -10,7 +10,7 @@ interface WalletCard {
     id: string;
     name: string;
     slug: string;
-    annual_fee_cents: number;
+    annual_fee: number;
     default_earn_rate: number;
     primary_currency_id: string;
     secondary_currency_id: string | null;
@@ -33,9 +33,9 @@ export function WalletCardList({
 }: WalletCardListProps) {
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const formatFee = (cents: number) => {
-    if (!cents) return "No fee";
-    return `$${(cents / 100).toFixed(0)}/yr`;
+  const formatFee = (fee: number) => {
+    if (!fee) return "No fee";
+    return `$${fee}/yr`;
   };
 
   const currencyTypeColors: Record<string, string> = {
@@ -86,7 +86,7 @@ export function WalletCardList({
 
               {/* Right: Fee, rate, remove */}
               <div className="flex items-center gap-4 text-sm text-zinc-500 shrink-0">
-                <span className="hidden md:inline">{formatFee(card.annual_fee_cents)}</span>
+                <span className="hidden md:inline">{formatFee(card.annual_fee)}</span>
                 <span className="hidden lg:inline">{card.default_earn_rate}x</span>
                 
                 {removingId === wc.id ? (

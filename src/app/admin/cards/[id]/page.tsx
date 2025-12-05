@@ -48,7 +48,7 @@ export default async function CardDetailPage({ params }: PageProps) {
     const primary_currency_id = formData.get("primary_currency_id") as string;
     const secondary_currency_id = (formData.get("secondary_currency_id") as string | null) || null;
     const product_type = formData.get("product_type") as "personal" | "business";
-    const annual_fee_cents = parseInt(formData.get("annual_fee_cents") as string) || 0;
+    const annual_fee = parseFloat(formData.get("annual_fee") as string) || 0;
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;
 
     await supabase
@@ -60,7 +60,7 @@ export default async function CardDetailPage({ params }: PageProps) {
         primary_currency_id,
         secondary_currency_id: secondary_currency_id || null,
         product_type,
-        annual_fee_cents,
+        annual_fee,
         default_earn_rate,
       })
       .eq("id", id);
@@ -151,7 +151,7 @@ export default async function CardDetailPage({ params }: PageProps) {
             primary_currency_id: card.primary_currency_id,
             secondary_currency_id: card.secondary_currency_id,
             product_type: card.product_type,
-            annual_fee_cents: card.annual_fee_cents,
+            annual_fee: card.annual_fee,
             default_earn_rate: card.default_earn_rate,
           }}
         />

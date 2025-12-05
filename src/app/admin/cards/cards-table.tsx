@@ -11,7 +11,7 @@ interface Card {
   primary_currency_name: string | null;
   secondary_currency_name: string | null;
   product_type: string | null;
-  annual_fee_cents: number | null;
+  annual_fee: number | null;
   default_earn_rate: number | null;
 }
 
@@ -20,7 +20,7 @@ interface CardsTableProps {
   onDelete: (id: string) => Promise<void>;
 }
 
-type SortField = "name" | "issuer_name" | "product_type" | "annual_fee_cents" | "default_earn_rate";
+type SortField = "name" | "issuer_name" | "product_type" | "annual_fee" | "default_earn_rate";
 type SortDir = "asc" | "desc";
 
 export function CardsTable({ cards, onDelete }: CardsTableProps) {
@@ -118,9 +118,9 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
     return <span className="text-blue-400 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
   };
 
-  const formatFee = (cents: number | null) => {
-    if (!cents) return "Free";
-    return `$${(cents / 100).toFixed(0)}`;
+  const formatFee = (fee: number | null) => {
+    if (!fee) return "Free";
+    return `$${fee}`;
   };
 
   const productTypeColors: Record<string, string> = {
@@ -223,9 +223,9 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
               </th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white"
-                onClick={() => handleSort("annual_fee_cents")}
+                onClick={() => handleSort("annual_fee")}
               >
-                Annual Fee <SortIcon field="annual_fee_cents" />
+                Annual Fee <SortIcon field="annual_fee" />
               </th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white"
@@ -275,7 +275,7 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
                   </span>
                 </td>
                 <td className="px-6 py-4 text-zinc-400">
-                  {formatFee(card.annual_fee_cents)}
+                  {formatFee(card.annual_fee)}
                 </td>
                 <td className="px-6 py-4 text-zinc-400">
                   {card.default_earn_rate}x

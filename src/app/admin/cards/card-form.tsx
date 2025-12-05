@@ -14,7 +14,7 @@ interface CardFormProps {
     primary_currency_id: string;
     secondary_currency_id: string | null;
     product_type: "personal" | "business";
-    annual_fee_cents: number;
+    annual_fee: number;
     default_earn_rate: number;
   };
 }
@@ -155,16 +155,16 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-zinc-400 mb-1">Annual Fee (cents)</label>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Annual Fee ($)</label>
           <input
             type="number"
-            name="annual_fee_cents"
-            defaultValue={defaultValues?.annual_fee_cents ?? 0}
+            name="annual_fee"
+            defaultValue={defaultValues?.annual_fee ?? 0}
             min="0"
-            placeholder="e.g., 9500 for $95"
+            step="0.01"
+            placeholder="e.g., 95"
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
-          <p className="mt-1 text-xs text-zinc-500">Enter in cents (9500 = $95)</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">Default Earn Rate</label>

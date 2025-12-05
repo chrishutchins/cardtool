@@ -92,8 +92,8 @@ export function AddCardModal({ availableCards, onAddCard }: AddCardModalProps) {
                       <p className="text-white font-medium">{card.name}</p>
                       <p className="text-sm text-zinc-500">
                         {card.primary_currency_name}
-                        {card.annual_fee_cents
-                          ? ` • $${(card.annual_fee_cents / 100).toFixed(0)}/yr`
+                        {card.annual_fee
+                          ? ` • $${card.annual_fee}/yr`
                           : " • No annual fee"}
                       </p>
                     </div>

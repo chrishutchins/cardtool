@@ -26,7 +26,7 @@ export default async function WalletPage() {
         id,
         name,
         slug,
-        annual_fee_cents,
+        annual_fee,
         default_earn_rate,
         primary_currency_id,
         secondary_currency_id,

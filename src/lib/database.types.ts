@@ -134,7 +134,7 @@ export type Database = {
       }
       cards: {
         Row: {
-          annual_fee_cents: number
+          annual_fee: number
           created_at: string | null
           default_earn_rate: number
           id: string
@@ -148,7 +148,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          annual_fee_cents?: number
+          annual_fee?: number
           created_at?: string | null
           default_earn_rate?: number
           id?: string
@@ -162,7 +162,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          annual_fee_cents?: number
+          annual_fee?: number
           created_at?: string | null
           default_earn_rate?: number
           id?: string
@@ -515,7 +515,7 @@ export type Database = {
     Views: {
       card_with_currency: {
         Row: {
-          annual_fee_cents: number | null
+          annual_fee: number | null
           default_earn_rate: number | null
           id: string | null
           is_active: boolean | null
