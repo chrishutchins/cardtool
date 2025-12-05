@@ -27,10 +27,11 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
   const [search, setSearch] = useState("");
   const [issuerFilter, setIssuerFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
+  const [currencyFilter, setCurrencyFilter] = useState<string>("");
   const [sortField, setSortField] = useState<SortField>("issuer_name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  // Get unique issuers and types for filter dropdowns
+  // Get unique values for filter dropdowns
   const issuers = useMemo(() => {
     const set = new Set(cards.map((c) => c.issuer_name).filter(Boolean));
     return Array.from(set).sort() as string[];
@@ -38,6 +39,11 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
 
   const productTypes = useMemo(() => {
     const set = new Set(cards.map((c) => c.product_type).filter(Boolean));
+    return Array.from(set).sort() as string[];
+  }, [cards]);
+
+  const currencies = useMemo(() => {
+    const set = new Set(cards.map((c) => c.primary_currency_name).filter(Boolean));
     return Array.from(set).sort() as string[];
   }, [cards]);
 
@@ -66,6 +72,11 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
       result = result.filter((c) => c.product_type === typeFilter);
     }
 
+    // Currency filter
+    if (currencyFilter) {
+      result = result.filter((c) => c.primary_currency_name === currencyFilter);
+    }
+
     // Sort
     result = [...result].sort((a, b) => {
       let aVal = a[sortField];
@@ -91,7 +102,7 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
     });
 
     return result;
-  }, [cards, search, issuerFilter, typeFilter, sortField, sortDir]);
+  }, [cards, search, issuerFilter, typeFilter, currencyFilter, sortField, sortDir]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -133,7 +144,7 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
           onChange={(e) => setIssuerFilter(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-zinc-300 focus:border-blue-500 focus:outline-none"
         >
-          <option value="">All Issuers</option>
+          <option value="">Issuer</option>
           {issuers.map((issuer) => (
             <option key={issuer} value={issuer}>
               {issuer}
@@ -145,19 +156,32 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
           onChange={(e) => setTypeFilter(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-zinc-300 focus:border-blue-500 focus:outline-none"
         >
-          <option value="">All Types</option>
+          <option value="">Type</option>
           {productTypes.map((type) => (
             <option key={type} value={type}>
               {type}
             </option>
           ))}
         </select>
-        {(search || issuerFilter || typeFilter) && (
+        <select
+          value={currencyFilter}
+          onChange={(e) => setCurrencyFilter(e.target.value)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-zinc-300 focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">Currency</option>
+          {currencies.map((currency) => (
+            <option key={currency} value={currency}>
+              {currency}
+            </option>
+          ))}
+        </select>
+        {(search || issuerFilter || typeFilter || currencyFilter) && (
           <button
             onClick={() => {
               setSearch("");
               setIssuerFilter("");
               setTypeFilter("");
+              setCurrencyFilter("");
             }}
             className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
           >
