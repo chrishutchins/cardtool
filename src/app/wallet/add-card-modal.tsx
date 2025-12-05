@@ -83,9 +83,9 @@ export function AddCardModal({ availableCards, onAddCard }: AddCardModalProps) {
                 <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase sticky top-0">
                   {issuer}
                 </div>
-                {cards.map((card) => (
+                {cards.map((card, index) => (
                   <div
-                    key={card.id}
+                    key={card.id ?? `modal-card-${index}`}
                     className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
                   >
                     <div>

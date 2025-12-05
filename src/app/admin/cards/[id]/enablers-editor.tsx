@@ -55,9 +55,9 @@ export function EnablersEditor({
             <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase sticky top-0">
               {issuer}
             </div>
-            {cards.map((card) => (
+            {cards.map((card, index) => (
               <label
-                key={card.id}
+                key={card.id ?? `enabler-${index}`}
                 className="flex items-center gap-3 px-4 py-2 hover:bg-zinc-800/30 cursor-pointer"
               >
                 <input

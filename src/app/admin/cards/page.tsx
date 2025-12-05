@@ -73,8 +73,8 @@ export default async function CardsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
-            {cards?.map((card) => (
-              <tr key={card.id} className="hover:bg-zinc-800/50 transition-colors">
+            {cards?.map((card, index) => (
+              <tr key={card.id ?? `card-${index}`} className="hover:bg-zinc-800/50 transition-colors">
                 <td className="px-6 py-4">
                   <div className="flex flex-col">
                     <span className="text-white font-medium">{card.name}</span>
