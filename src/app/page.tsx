@@ -26,10 +26,10 @@ export default function Home() {
                   My Wallet
                 </Link>
                 <Link
-                  href="/settings"
+                  href="/spending"
                   className="text-sm text-zinc-400 hover:text-white transition-colors"
                 >
-                  Settings
+                  My Spending
                 </Link>
                 <UserButton afterSignOutUrl="/" />
               </SignedIn>
