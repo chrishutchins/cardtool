@@ -23,7 +23,7 @@ export default async function CurrenciesPage() {
     const base_value_cents = formData.get("base_value_cents")
       ? parseFloat(formData.get("base_value_cents") as string)
       : null;
-    const notes = formData.get("notes") as string || null;
+    const notes = (formData.get("notes") as string | null) || null;
 
     await supabase.from("reward_currencies").insert({
       name,
@@ -51,7 +51,7 @@ export default async function CurrenciesPage() {
     const base_value_cents = formData.get("base_value_cents")
       ? parseFloat(formData.get("base_value_cents") as string)
       : null;
-    const notes = formData.get("notes") as string || null;
+    const notes = (formData.get("notes") as string | null) || null;
 
     await supabase.from("reward_currencies").update({
       name,
