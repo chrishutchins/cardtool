@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { Tables } from "@/lib/database.types";
 
 interface CardFormProps {
@@ -22,6 +22,8 @@ interface CardFormProps {
 export function CardForm({ action, issuers, currencies, defaultValues }: CardFormProps) {
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [slug, setSlug] = useState(defaultValues?.slug ?? "");
+  const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
 
   // Sync state when defaultValues changes (e.g., after form submission and revalidation)
   useEffect(() => {
@@ -31,6 +33,15 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
     }
   }, [defaultValues?.name, defaultValues?.slug]);
 
+  const handleSubmit = async (formData: FormData) => {
+    setSaved(false);
+    startTransition(async () => {
+      await action(formData);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  };
+
   const generateSlug = (value: string) => {
     return value
       .toLowerCase()
@@ -39,7 +50,7 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
   };
 
   return (
-    <form action={action} className="space-y-6">
+    <form action={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">Card Name</label>
@@ -170,13 +181,17 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
         </div>
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex items-center gap-3">
         <button
           type="submit"
-          className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          disabled={isPending}
+          className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {defaultValues ? "Update Card" : "Create Card"}
+          {isPending ? "Saving..." : defaultValues ? "Update Card" : "Create Card"}
         </button>
+        {saved && (
+          <span className="text-sm text-green-400">Saved!</span>
+        )}
       </div>
     </form>
   );
