@@ -46,7 +46,7 @@ export default async function CardDetailPage({ params }: PageProps) {
     const slug = formData.get("slug") as string;
     const issuer_id = formData.get("issuer_id") as string;
     const primary_currency_id = formData.get("primary_currency_id") as string;
-    const secondary_currency_id = formData.get("secondary_currency_id") as string || null;
+    const secondary_currency_id = (formData.get("secondary_currency_id") as string | null) || null;
     const product_type = formData.get("product_type") as "personal" | "business";
     const annual_fee_cents = parseInt(formData.get("annual_fee_cents") as string) || 0;
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;

@@ -97,13 +97,15 @@ export function AddCardModal({ availableCards, onAddCard }: AddCardModalProps) {
                           : " • No annual fee"}
                       </p>
                     </div>
-                    <button
-                      onClick={() => handleAdd(card.id!)}
-                      disabled={addingId === card.id}
-                      className="px-3 py-1 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                    >
-                      {addingId === card.id ? "Adding..." : "Add"}
-                    </button>
+                    {card.id && (
+                      <button
+                        onClick={() => handleAdd(card.id!)}
+                        disabled={addingId === card.id}
+                        className="px-3 py-1 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      >
+                        {addingId === card.id ? "Adding..." : "Add"}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

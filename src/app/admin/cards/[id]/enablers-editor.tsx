@@ -62,8 +62,8 @@ export function EnablersEditor({
               >
                 <input
                   type="checkbox"
-                  checked={selectedIds.has(card.id!)}
-                  onChange={() => handleToggle(card.id!)}
+                  checked={card.id ? selectedIds.has(card.id) : false}
+                  onChange={() => card.id && handleToggle(card.id)}
                   className="rounded border-zinc-600 bg-zinc-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
                 />
                 <div>

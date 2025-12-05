@@ -20,7 +20,7 @@ export default async function CategoriesPage() {
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
     const sort_order = parseInt(formData.get("sort_order") as string) || 100;
-    const description = formData.get("description") as string || null;
+    const description = (formData.get("description") as string | null) || null;
 
     await supabase.from("earning_categories").insert({
       name,
@@ -44,7 +44,7 @@ export default async function CategoriesPage() {
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
     const sort_order = parseInt(formData.get("sort_order") as string) || 100;
-    const description = formData.get("description") as string || null;
+    const description = (formData.get("description") as string | null) || null;
 
     await supabase.from("earning_categories").update({
       name,

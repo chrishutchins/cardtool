@@ -65,7 +65,7 @@ export default async function WalletPage() {
     .order("name");
 
   const cardsNotInWallet = allCards?.filter(
-    (card) => !userCardIds.includes(card.id!)
+    (card) => card.id && !userCardIds.includes(card.id)
   ) ?? [];
 
   async function addToWallet(cardId: string) {
