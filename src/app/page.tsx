@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export default function Home() {
   return (
@@ -29,10 +29,15 @@ export default function Home() {
               </SignedIn>
               <SignedOut>
                 <SignInButton mode="modal">
-                  <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+                  <button className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors">
                     Sign In
                   </button>
                 </SignInButton>
+                <SignUpButton mode="modal">
+                  <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+                    Sign Up
+                  </button>
+                </SignUpButton>
               </SignedOut>
             </div>
           </div>
@@ -63,11 +68,11 @@ export default function Home() {
               </Link>
             </SignedIn>
             <SignedOut>
-              <SignInButton mode="modal">
+              <SignUpButton mode="modal">
                 <button className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
                   Get Started
                 </button>
-              </SignInButton>
+              </SignUpButton>
             </SignedOut>
             <Link
               href="/admin"
