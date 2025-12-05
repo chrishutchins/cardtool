@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { WalletCardList } from "./wallet-card-list";
 import { AddCardModal } from "./add-card-modal";
 
@@ -94,10 +95,18 @@ export default async function WalletPage() {
               {walletCards?.length ?? 0} card{walletCards?.length !== 1 ? "s" : ""} in your wallet
             </p>
           </div>
-          <AddCardModal
-            availableCards={cardsNotInWallet}
-            onAddCard={addToWallet}
-          />
+          <div className="flex items-center gap-3">
+            <Link
+              href="/settings"
+              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
+            >
+              Settings
+            </Link>
+            <AddCardModal
+              availableCards={cardsNotInWallet}
+              onAddCard={addToWallet}
+            />
+          </div>
         </div>
 
         {walletCards && walletCards.length > 0 ? (

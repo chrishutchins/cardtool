@@ -25,6 +25,12 @@ export default function Home() {
                 >
                   My Wallet
                 </Link>
+                <Link
+                  href="/settings"
+                  className="text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  Settings
+                </Link>
                 <UserButton afterSignOutUrl="/" />
               </SignedIn>
               <SignedOut>

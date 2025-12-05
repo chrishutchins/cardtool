@@ -123,6 +123,13 @@ export type Database = {
             referencedRelation: "earning_categories"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "card_earning_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
+          },
         ]
       }
       cards: {
@@ -205,6 +212,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cards_primary_currency_id_fkey"
+            columns: ["primary_currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
+          },
+          {
             foreignKeyName: "cards_secondary_currency_id_fkey"
             columns: ["secondary_currency_id"]
             isOneToOne: false
@@ -224,6 +238,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "reward_currencies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cards_secondary_currency_id_fkey"
+            columns: ["secondary_currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
           },
         ]
       }
@@ -314,6 +335,146 @@ export type Database = {
         }
         Relationships: []
       }
+      spending_defaults: {
+        Row: {
+          annual_spend_cents: number
+          category_id: number
+          created_at: string | null
+          id: number
+          source: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          annual_spend_cents?: number
+          category_id: number
+          created_at?: string | null
+          id?: number
+          source?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          annual_spend_cents?: number
+          category_id?: number
+          created_at?: string | null
+          id?: number
+          source?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spending_defaults_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: true
+            referencedRelation: "earning_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spending_defaults_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: true
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
+          },
+        ]
+      }
+      user_category_spend: {
+        Row: {
+          annual_spend_cents: number
+          category_id: number
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          annual_spend_cents: number
+          category_id: number
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          annual_spend_cents?: number
+          category_id?: number
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_category_spend_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "earning_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_category_spend_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
+          },
+        ]
+      }
+      user_currency_values: {
+        Row: {
+          created_at: string | null
+          currency_id: string
+          id: string
+          updated_at: string | null
+          user_id: string
+          value_cents: number
+        }
+        Insert: {
+          created_at?: string | null
+          currency_id: string
+          id?: string
+          updated_at?: string | null
+          user_id: string
+          value_cents: number
+        }
+        Update: {
+          created_at?: string | null
+          currency_id?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_currency_values_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["primary_currency_id"]
+          },
+          {
+            foreignKeyName: "user_currency_values_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["secondary_currency_id"]
+          },
+          {
+            foreignKeyName: "user_currency_values_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "reward_currencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_currency_values_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
+          },
+        ]
+      }
       user_wallets: {
         Row: {
           added_at: string | null
@@ -378,6 +539,32 @@ export type Database = {
             | null
           secondary_currency_value: number | null
           slug: string | null
+        }
+        Relationships: []
+      }
+      user_effective_currency_values: {
+        Row: {
+          code: string | null
+          currency_id: string | null
+          currency_type:
+            | Database["public"]["Enums"]["reward_currency_type"]
+            | null
+          is_custom: boolean | null
+          name: string | null
+          user_id: string | null
+          value_cents: number | null
+        }
+        Relationships: []
+      }
+      user_effective_spending: {
+        Row: {
+          annual_spend_cents: number | null
+          category_id: number | null
+          category_name: string | null
+          category_slug: string | null
+          is_custom: boolean | null
+          sort_order: number | null
+          user_id: string | null
         }
         Relationships: []
       }
