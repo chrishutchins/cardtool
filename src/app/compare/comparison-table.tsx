@@ -315,16 +315,12 @@ export function ComparisonTable({
               {sortedCards.map((card) => (
                 <tr
                   key={card.id}
-                  className={`hover:bg-zinc-800/30 ${
-                    filterMode === "all" && card.isOwned
-                      ? "bg-blue-950/20"
-                      : ""
-                  }`}
+                  className="hover:bg-zinc-800/30"
                 >
                   {/* Sticky Card Info */}
                   <td className="sticky left-0 z-10 bg-zinc-900 px-4 py-3 border-r border-zinc-700">
                     <div className="flex items-center gap-2">
-                      {filterMode === "all" && card.isOwned && (
+                      {card.isOwned && (
                         <span className="shrink-0 w-2 h-2 rounded-full bg-blue-500" title="In your wallet" />
                       )}
                       <div className="min-w-0">
@@ -374,15 +370,11 @@ export function ComparisonTable({
           <div className="w-4 h-4 rounded bg-emerald-500/40" />
           <span>High</span>
         </div>
-        {filterMode === "all" && (
-          <>
-            <span className="text-zinc-700">|</span>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <span>In your wallet</span>
-            </div>
-          </>
-        )}
+        <span className="text-zinc-700">|</span>
+        <div className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-blue-500" />
+          <span>In your wallet</span>
+        </div>
       </div>
 
       {/* Click outside to close category selector */}
