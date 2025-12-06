@@ -213,6 +213,7 @@ export interface CalculatorInput {
   defaultCurrencyValues: Map<string, number>;
   cashOutValues: Map<string, number>; // currency_id -> cash_out_value_cents (for cash_only mode)
   perksValues: Map<string, number>;
+  debitPayValues?: Map<string, number>; // card_id -> debit_pay_percent bonus
   userSelections: Map<string, number>; // cap_id -> selected_category_id
   travelPreferences: TravelPreference[];
   enabledSecondaryCards: Set<string>; // card IDs with secondary currency enabled
@@ -229,6 +230,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     defaultCurrencyValues,
     cashOutValues,
     perksValues,
+    debitPayValues = new Map(),
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
@@ -359,7 +361,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       categorySpend.category_id,
       earningRateMap,
       capUsage,
-      getCardCurrencyInfo
+      getCardCurrencyInfo,
+      debitPayValues
     );
 
     // Allocate spending to cards in order of value
@@ -379,9 +382,12 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         const earned = currencyInfo.isCashback 
           ? spendAmount * (postCapRate / 100)  // Cash back: rate is percentage
           : spendAmount * postCapRate;          // Points: rate is multiplier
-        const earnedValue = currencyInfo.isCashback 
+        const baseEarnedValue = currencyInfo.isCashback 
           ? earned 
           : earned * (currencyInfo.valueCents / 100);
+        // Add debit pay bonus (extra % of spend)
+        const debitPayBonus = spendAmount * ((debitPayValues.get(card.id) ?? 0) / 100);
+        const earnedValue = baseEarnedValue + debitPayBonus;
 
         allocations.push({
           cardId: card.id,
@@ -409,9 +415,12 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         const earned = currencyInfo.isCashback 
           ? spendAtElevated * (rate / 100)
           : spendAtElevated * rate;
-        const earnedValue = currencyInfo.isCashback 
+        const baseEarnedValue = currencyInfo.isCashback 
           ? earned 
           : earned * (currencyInfo.valueCents / 100);
+        // Add debit pay bonus (extra % of spend)
+        const debitPayBonus = spendAtElevated * ((debitPayValues.get(card.id) ?? 0) / 100);
+        const earnedValue = baseEarnedValue + debitPayBonus;
 
         allocations.push({
           cardId: card.id,
@@ -448,9 +457,12 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         if (currencyInfo.excluded) continue;
         
         const rate = card.default_earn_rate;
-        const value = currencyInfo.isCashback 
+        const baseValue = currencyInfo.isCashback 
           ? rate / 100 
           : rate * (currencyInfo.valueCents / 100);
+        // Include debit pay bonus in value comparison
+        const debitPayBonus = (debitPayValues.get(card.id) ?? 0) / 100;
+        const value = baseValue + debitPayBonus;
         if (value > bestValue) {
           bestValue = value;
           bestCard = card;
@@ -464,9 +476,12 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         const earned = currencyInfo.isCashback 
           ? remainingSpend * (rate / 100)
           : remainingSpend * rate;
-        const earnedValue = currencyInfo.isCashback 
+        const baseEarnedValue = currencyInfo.isCashback 
           ? earned 
           : earned * (currencyInfo.valueCents / 100);
+        // Add debit pay bonus (extra % of spend)
+        const debitPayBonus = remainingSpend * ((debitPayValues.get(bestCard.id) ?? 0) / 100);
+        const earnedValue = baseEarnedValue + debitPayBonus;
 
         allocations.push({
           cardId: bestCard.id,
@@ -748,7 +763,8 @@ function rankCardsForCategory(
   categoryId: number,
   earningRateMap: Map<string, Map<number, RateInfo[]>>,
   capUsage: Map<string, number>,
-  getCardCurrencyInfo: (card: CardInput) => { valueCents: number; isCashback: boolean; excluded: boolean }
+  getCardCurrencyInfo: (card: CardInput) => { valueCents: number; isCashback: boolean; excluded: boolean },
+  debitPayValues: Map<string, number> = new Map()
 ): RankedCard[] {
   const ranked: RankedCard[] = [];
 
@@ -759,13 +775,16 @@ function rankCardsForCategory(
     if (currencyInfo.excluded) continue;
     
     const cardRates = earningRateMap.get(card.id)?.get(categoryId) ?? [];
+    // Debit pay bonus adds a flat % return on all spend with this card
+    const debitPayBonus = (debitPayValues.get(card.id) ?? 0) / 100;
 
     if (cardRates.length === 0) {
       // Use default rate
       const rate = card.default_earn_rate;
-      const effectiveValue = currencyInfo.isCashback 
+      const baseValue = currencyInfo.isCashback 
         ? rate / 100 
         : rate * (currencyInfo.valueCents / 100);
+      const effectiveValue = baseValue + debitPayBonus;
       
       ranked.push({
         card,
@@ -781,9 +800,10 @@ function rankCardsForCategory(
         const usedCap = capUsage.get(rateInfo.capKey) ?? 0;
         const hasRoomInCap = usedCap < rateInfo.annualCap;
         
-        const effectiveValue = currencyInfo.isCashback 
+        const baseValue = currencyInfo.isCashback 
           ? rateInfo.rate / 100 
           : rateInfo.rate * (currencyInfo.valueCents / 100);
+        const effectiveValue = baseValue + debitPayBonus;
 
         // Only add if there's room in cap or there's a post-cap rate
         if (hasRoomInCap || rateInfo.postCapRate !== null) {
@@ -793,7 +813,7 @@ function rankCardsForCategory(
             annualCap: rateInfo.annualCap,
             postCapRate: rateInfo.postCapRate,
             capKey: rateInfo.capKey,
-            effectiveValue: hasRoomInCap ? effectiveValue : 0, // If cap exhausted, value is 0 for sorting
+            effectiveValue: hasRoomInCap ? effectiveValue : debitPayBonus, // If cap exhausted, only debit pay value for sorting
           });
         }
       }

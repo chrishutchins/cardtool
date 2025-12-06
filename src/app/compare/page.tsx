@@ -86,7 +86,16 @@ export default async function ComparePage() {
   const categoryBonusesMap: Record<string, Record<number, number>> = {};
   const allCategoriesBonusMap: Record<string, number> = {}; // cardId -> rate for all_categories bonuses
   
-  for (const bonus of allCategoryBonuses ?? []) {
+  type BonusData = {
+    id: string;
+    card_id: string;
+    cap_type: string;
+    elevated_rate: number | null;
+    post_cap_rate: number | null;
+    cap_amount: number | null;
+    card_cap_categories: { category_id: number }[] | null;
+  };
+  for (const bonus of (allCategoryBonuses ?? []) as unknown as BonusData[]) {
     if (bonus.cap_type === "all_categories") {
       // For all_categories, store the elevated rate (or post_cap_rate if it's a threshold bonus)
       // Use higher of elevated_rate and post_cap_rate for "best possible" display
@@ -157,7 +166,17 @@ export default async function ComparePage() {
     .map((cat) => cat.id);
 
   // Transform cards for the client component
-  const cardsForTable = (allCards ?? []).map((card) => {
+  type CardData = {
+    id: string;
+    name: string;
+    slug: string;
+    annual_fee: number;
+    default_earn_rate: number;
+    primary_currency_id: string;
+    issuers: { id: string; name: string } | null;
+    primary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
+  };
+  const cardsForTable = ((allCards ?? []) as unknown as CardData[]).map((card) => {
     const currency = card.primary_currency;
     const pointValue = currency?.id 
       ? userValuesByCurrency.get(currency.id) ?? currency.base_value_cents ?? 1

@@ -40,9 +40,21 @@ export default async function SettingsPage() {
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
   
   // Build set of currency IDs the user "owns" (from cards in wallet)
+  type WalletCardData = { 
+    id: string;
+    card_id: string; 
+    cards: { 
+      id: string; 
+      name: string;
+      primary_currency_id: string; 
+      issuer_id: string;
+      primary_currency: { id: string; name: string; currency_type: string } | null;
+    } | null 
+  };
+  const typedWalletCards = (walletCards ?? []) as unknown as WalletCardData[];
   const userPrimaryCurrencyIds = new Set(
-    walletCards
-      ?.map((wc) => wc.cards?.primary_currency_id)
+    typedWalletCards
+      .map((wc) => wc.cards?.primary_currency_id)
       .filter((id): id is string => !!id)
   );
 
@@ -74,9 +86,10 @@ export default async function SettingsPage() {
     : { data: [] };
 
   // Build caps data structure
+  type CapCategoryData = { cap_id: string; earning_categories: { id: number; name: string } | null };
   const cardCapsWithCategories = (cardCaps ?? []).map((cap) => ({
     ...cap,
-    categories: (capCategories ?? [])
+    categories: ((capCategories ?? []) as unknown as CapCategoryData[])
       .filter((cc) => cc.cap_id === cap.id)
       .map((cc) => cc.earning_categories)
       .filter((cat): cat is { id: number; name: string } => cat !== null),
@@ -256,12 +269,12 @@ export default async function SettingsPage() {
   }
 
   // Cards that require category selection
-  const cardsNeedingSelection = (walletCards ?? []).filter(
+  const cardsNeedingSelection = typedWalletCards.filter(
     (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
   );
 
   // Build airline brands from user's cards with airline_miles currency
-  const airlineBrands = (walletCards ?? [])
+  const airlineBrands = typedWalletCards
     .filter((wc) => wc.cards?.primary_currency?.currency_type === "airline_miles")
     .map((wc) => ({
       name: wc.cards!.primary_currency!.name.replace(" Miles", "").replace(" Mileage Plan", ""),
@@ -270,7 +283,7 @@ export default async function SettingsPage() {
     .filter((v, i, a) => a.findIndex((t) => t.name === v.name) === i);
 
   // Build hotel brands from user's cards with hotel_points currency
-  const hotelBrands = (walletCards ?? [])
+  const hotelBrands = typedWalletCards
     .filter((wc) => wc.cards?.primary_currency?.currency_type === "hotel_points")
     .map((wc) => ({
       name: wc.cards!.primary_currency!.name.replace(" Points", "").replace(" Honors", "").replace(" Bonvoy", ""),
@@ -279,9 +292,10 @@ export default async function SettingsPage() {
     .filter((v, i, a) => a.findIndex((t) => t.name === v.name) === i);
 
   // Build portal issuers from user's cards that have portal earning rules
+  type PortalRuleData = { card_id: string; cards: { issuer_id: string } | null };
   const portalIssuerIds = new Set(
-    (portalEarningRules ?? [])
-      .map((r) => (r.cards as { issuer_id: string } | null)?.issuer_id)
+    ((portalEarningRules ?? []) as unknown as PortalRuleData[])
+      .map((r) => r.cards?.issuer_id)
       .filter((id): id is string => !!id)
   );
   const portalIssuers = (issuers ?? [])
@@ -295,20 +309,21 @@ export default async function SettingsPage() {
   }));
 
   // Build programs with tiers
+  type TierData = {
+    id: string;
+    name: string;
+    multiplier: number;
+    requirements: string | null;
+    sort_order: number;
+    has_cap: boolean;
+    cap_amount: number | null;
+    cap_period: string | null;
+  };
   const programsWithTiers = (multiplierPrograms ?? []).map((p) => ({
     id: p.id,
     name: p.name,
     description: p.description,
-    tiers: ((p.earning_multiplier_tiers as Array<{
-      id: string;
-      name: string;
-      multiplier: number;
-      requirements: string | null;
-      sort_order: number;
-      has_cap: boolean;
-      cap_amount: number | null;
-      cap_period: string | null;
-    }>) ?? []).sort((a, b) => a.sort_order - b.sort_order),
+    tiers: ((p.earning_multiplier_tiers as unknown as TierData[]) ?? []).sort((a, b) => a.sort_order - b.sort_order),
   }));
 
   // Check if user has any cards with mobile pay earning rules

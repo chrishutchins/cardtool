@@ -24,11 +24,14 @@ interface WalletCardListProps {
   walletCards: WalletCard[];
   enabledSecondaryCards: Set<string>;
   perksMap: Map<string, number>;
+  debitPayMap?: Map<string, number>;
+  debitPayEnabled?: boolean;
   onRemove: (walletId: string) => Promise<void>;
   onUpdatePerks: (cardId: string, perksValue: number) => Promise<void>;
+  onUpdateDebitPay?: (cardId: string, percent: number) => Promise<void>;
 }
 
-type SortField = "name" | "issuer" | "currency" | "annual_fee" | "perks" | "net_fee";
+type SortField = "name" | "issuer" | "currency" | "annual_fee" | "perks" | "net_fee" | "debit_pay";
 type SortDirection = "asc" | "desc";
 
 const currencyTypeConfig: Record<string, { label: string; className: string }> = {
@@ -79,12 +82,17 @@ export function WalletCardList({
   walletCards,
   enabledSecondaryCards,
   perksMap,
+  debitPayMap = new Map(),
+  debitPayEnabled = false,
   onRemove,
   onUpdatePerks,
+  onUpdateDebitPay,
 }: WalletCardListProps) {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [editingPerksId, setEditingPerksId] = useState<string | null>(null);
   const [editPerksValue, setEditPerksValue] = useState<string>("");
+  const [editingDebitPayId, setEditingDebitPayId] = useState<string | null>(null);
+  const [editDebitPayValue, setEditDebitPayValue] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   
   // Filter and sort state
@@ -156,6 +164,9 @@ export function WalletCardList({
         ? b.cards.secondary_currency
         : b.cards.primary_currency;
       
+      const aDebitPay = debitPayMap.get(a.cards.id) ?? 0;
+      const bDebitPay = debitPayMap.get(b.cards.id) ?? 0;
+      
       let comparison = 0;
       switch (sortField) {
         case "name":
@@ -176,13 +187,16 @@ export function WalletCardList({
         case "net_fee":
           comparison = aNet - bNet;
           break;
+        case "debit_pay":
+          comparison = aDebitPay - bDebitPay;
+          break;
       }
       
       return sortDirection === "asc" ? comparison : -comparison;
     });
     
     return result;
-  }, [walletCards, searchQuery, issuerFilter, currencyFilter, sortField, sortDirection, perksMap, enabledSecondaryCards]);
+  }, [walletCards, searchQuery, issuerFilter, currencyFilter, sortField, sortDirection, perksMap, debitPayMap, enabledSecondaryCards]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -226,6 +240,26 @@ export function WalletCardList({
   const handleCancelPerks = () => {
     setEditingPerksId(null);
     setEditPerksValue("");
+  };
+
+  const handleEditDebitPay = (cardId: string, currentValue: number) => {
+    setEditingDebitPayId(cardId);
+    setEditDebitPayValue(currentValue.toString());
+  };
+
+  const handleSaveDebitPay = (cardId: string) => {
+    const value = parseFloat(editDebitPayValue) || 0;
+    if (onUpdateDebitPay) {
+      startTransition(async () => {
+        await onUpdateDebitPay(cardId, value);
+        setEditingDebitPayId(null);
+      });
+    }
+  };
+
+  const handleCancelDebitPay = () => {
+    setEditingDebitPayId(null);
+    setEditDebitPayValue("");
   };
 
   return (
@@ -316,6 +350,15 @@ export function WalletCardList({
               >
                 <span className="inline-flex items-center justify-end">Net<SortIcon field="net_fee" /></span>
               </th>
+              {debitPayEnabled && (
+                <th 
+                  className="px-4 py-3 text-right text-xs font-medium text-amber-400/70 uppercase cursor-pointer hover:text-amber-400 whitespace-nowrap hidden lg:table-cell"
+                  onClick={() => handleSort("debit_pay")}
+                  title="Extra % bonus from debit pay"
+                >
+                  <span className="inline-flex items-center justify-end">Debit +%<SortIcon field="debit_pay" /></span>
+                </th>
+              )}
               <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase w-20">
               </th>
             </tr>
@@ -417,6 +460,56 @@ export function WalletCardList({
                       {netFee < 0 ? `-$${Math.abs(netFee)}` : `$${netFee}`}
                     </span>
                   </td>
+
+                  {/* Debit Pay (only if enabled) */}
+                  {debitPayEnabled && (
+                    <td className="px-4 py-3 text-right hidden lg:table-cell">
+                      {editingDebitPayId === card.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editDebitPayValue}
+                            onChange={(e) => setEditDebitPayValue(e.target.value)}
+                            className="w-16 rounded border border-amber-600/50 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-amber-500 focus:outline-none"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveDebitPay(card.id);
+                              if (e.key === "Escape") handleCancelDebitPay();
+                            }}
+                          />
+                          <span className="text-amber-400/70">%</span>
+                          <button
+                            onClick={() => handleSaveDebitPay(card.id)}
+                            disabled={isPending}
+                            className="px-1.5 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={handleCancelDebitPay}
+                            disabled={isPending}
+                            className="px-1.5 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleEditDebitPay(card.id, debitPayMap.get(card.id) ?? 0)}
+                          className="text-zinc-400 hover:text-amber-400 transition-colors group"
+                          title="Click to edit debit pay bonus"
+                        >
+                          {(debitPayMap.get(card.id) ?? 0) > 0 ? (
+                            <span className="text-amber-400">+{debitPayMap.get(card.id)}%</span>
+                          ) : (
+                            <span className="text-zinc-600 group-hover:text-zinc-400">0%</span>
+                          )}
+                          <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
+                        </button>
+                      )}
+                    </td>
+                  )}
 
                   {/* Actions */}
                   <td className="px-4 py-3 text-right">

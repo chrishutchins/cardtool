@@ -40,6 +40,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     currenciesResult,
     userCurrencyValuesResult,
     perksResult,
+    debitPayResult,
     selectionsResult,
     travelPrefsResult,
     categoriesResult,
@@ -110,6 +111,12 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .select("card_id, perks_value")
       .eq("user_id", user.id),
     
+    // User's debit pay values
+    supabase
+      .from("user_card_debit_pay")
+      .select("card_id, debit_pay_percent")
+      .eq("user_id", user.id),
+    
     // User's category selections for "selected_category" bonuses
     supabase
       .from("user_card_selections")
@@ -167,7 +174,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
       cap_period: b.cap_period,
       elevated_rate: Number(b.elevated_rate),
       post_cap_rate: b.post_cap_rate ? Number(b.post_cap_rate) : null,
-      category_ids: (b.card_cap_categories as { category_id: number }[] ?? []).map(c => c.category_id),
+      category_ids: ((b.card_cap_categories as unknown as { category_id: number }[]) ?? []).map(c => c.category_id),
     }));
 
   // Build category map with exclusion status
@@ -211,6 +218,12 @@ export default async function ReturnsPage({ searchParams }: Props) {
     perksValues.set(p.card_id, p.perks_value);
   });
 
+  // Build debit pay values map
+  const debitPayValues = new Map<string, number>();
+  debitPayResult.data?.forEach((d) => {
+    debitPayValues.set(d.card_id, Number(d.debit_pay_percent) ?? 0);
+  });
+
   // Build user selections map
   const userSelections = new Map<string, number>();
   selectionsResult.data?.forEach((s) => {
@@ -248,6 +261,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     defaultCurrencyValues,
     cashOutValues,
     perksValues,
+    debitPayValues,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,

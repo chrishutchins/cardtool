@@ -92,9 +92,12 @@ export default async function MultipliersPage() {
       {/* Programs List */}
       <div className="space-y-4">
         {programs?.map((program) => {
-          const tiers = program.earning_multiplier_tiers || [];
-          const currencies = program.earning_multiplier_currencies || [];
-          const cards = program.earning_multiplier_cards || [];
+          type TierData = { id: string; name: string; multiplier: number; sort_order: number | null };
+          type CurrencyData = { currency_id: string; reward_currencies: { name: string } | null };
+          type CardData = { card_id: string; cards: { name: string } | null };
+          const tiers = (program.earning_multiplier_tiers || []) as unknown as TierData[];
+          const currencies = (program.earning_multiplier_currencies || []) as unknown as CurrencyData[];
+          const cards = (program.earning_multiplier_cards || []) as unknown as CardData[];
           const sortedTiers = [...tiers].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
           return (

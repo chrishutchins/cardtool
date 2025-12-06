@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
@@ -27,29 +25,7 @@ export type Database = {
           cap_id?: string
           category_id?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "card_cap_categories_cap_id_fkey"
-            columns: ["cap_id"]
-            isOneToOne: false
-            referencedRelation: "card_caps"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "card_cap_categories_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "earning_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "card_cap_categories_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_spending"
-            referencedColumns: ["category_id"]
-          },
-        ]
+        Relationships: []
       }
       card_caps: {
         Row: {
@@ -88,22 +64,7 @@ export type Database = {
           post_cap_rate?: number | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "card_caps_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "card_with_currency"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "card_caps_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "cards"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       card_earning_rules: {
         Row: {
@@ -154,36 +115,7 @@ export type Database = {
           rate?: number
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "card_earning_rules_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "card_with_currency"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "card_earning_rules_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "cards"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "card_earning_rules_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "earning_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "card_earning_rules_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_spending"
-            referencedColumns: ["category_id"]
-          },
-        ]
+        Relationships: []
       }
       cards: {
         Row: {
@@ -228,43 +160,7 @@ export type Database = {
           slug?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "cards_issuer_id_fkey"
-            columns: ["issuer_id"]
-            isOneToOne: false
-            referencedRelation: "issuers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cards_primary_currency_id_fkey"
-            columns: ["primary_currency_id"]
-            isOneToOne: false
-            referencedRelation: "reward_currencies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cards_primary_currency_id_fkey"
-            columns: ["primary_currency_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_currency_values"
-            referencedColumns: ["currency_id"]
-          },
-          {
-            foreignKeyName: "cards_secondary_currency_id_fkey"
-            columns: ["secondary_currency_id"]
-            isOneToOne: false
-            referencedRelation: "reward_currencies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cards_secondary_currency_id_fkey"
-            columns: ["secondary_currency_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_currency_values"
-            referencedColumns: ["currency_id"]
-          },
-        ]
+        Relationships: []
       }
       earning_categories: {
         Row: {
@@ -297,22 +193,7 @@ export type Database = {
           slug?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "earning_categories_parent_category_id_fkey"
-            columns: ["parent_category_id"]
-            isOneToOne: false
-            referencedRelation: "earning_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "earning_categories_parent_category_id_fkey"
-            columns: ["parent_category_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_spending"
-            referencedColumns: ["category_id"]
-          },
-        ]
+        Relationships: []
       }
       earning_multiplier_cards: {
         Row: {
@@ -327,29 +208,7 @@ export type Database = {
           card_id?: string
           program_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "earning_multiplier_cards_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "card_with_currency"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "earning_multiplier_cards_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "cards"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "earning_multiplier_cards_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "earning_multiplier_programs"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       earning_multiplier_currencies: {
         Row: {
@@ -364,29 +223,7 @@ export type Database = {
           currency_id?: string
           program_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "earning_multiplier_currencies_currency_id_fkey"
-            columns: ["currency_id"]
-            isOneToOne: false
-            referencedRelation: "reward_currencies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "earning_multiplier_currencies_currency_id_fkey"
-            columns: ["currency_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_currency_values"
-            referencedColumns: ["currency_id"]
-          },
-          {
-            foreignKeyName: "earning_multiplier_currencies_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "earning_multiplier_programs"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       earning_multiplier_programs: {
         Row: {
@@ -455,15 +292,7 @@ export type Database = {
           requirements?: string | null
           sort_order?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "earning_multiplier_tiers_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "earning_multiplier_programs"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       issuers: {
         Row: {
@@ -550,22 +379,34 @@ export type Database = {
           source?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "spending_defaults_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: true
-            referencedRelation: "earning_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "spending_defaults_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: true
-            referencedRelation: "user_effective_spending"
-            referencedColumns: ["category_id"]
-          },
-        ]
+        Relationships: []
+      }
+      user_card_debit_pay: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          debit_pay_percent: number | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          debit_pay_percent?: number | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          debit_pay_percent?: number | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_card_perks_values: {
         Row: {
@@ -592,22 +433,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_card_perks_values_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "card_with_currency"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_card_perks_values_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "cards"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_card_selections: {
         Row: {
@@ -634,29 +460,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_card_selections_cap_id_fkey"
-            columns: ["cap_id"]
-            isOneToOne: false
-            referencedRelation: "card_caps"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_card_selections_selected_category_id_fkey"
-            columns: ["selected_category_id"]
-            isOneToOne: false
-            referencedRelation: "earning_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_card_selections_selected_category_id_fkey"
-            columns: ["selected_category_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_spending"
-            referencedColumns: ["category_id"]
-          },
-        ]
+        Relationships: []
       }
       user_category_spend: {
         Row: {
@@ -683,22 +487,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_category_spend_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "earning_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_category_spend_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_spending"
-            referencedColumns: ["category_id"]
-          },
-        ]
+        Relationships: []
       }
       user_currency_values: {
         Row: {
@@ -725,22 +514,31 @@ export type Database = {
           user_id?: string
           value_cents?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_currency_values_currency_id_fkey"
-            columns: ["currency_id"]
-            isOneToOne: false
-            referencedRelation: "reward_currencies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_currency_values_currency_id_fkey"
-            columns: ["currency_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_currency_values"
-            referencedColumns: ["currency_id"]
-          },
-        ]
+        Relationships: []
+      }
+      user_feature_flags: {
+        Row: {
+          created_at: string | null
+          debit_pay_enabled: boolean | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          debit_pay_enabled?: boolean | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          debit_pay_enabled?: boolean | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_mobile_pay_categories: {
         Row: {
@@ -761,22 +559,7 @@ export type Database = {
           id?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_mobile_pay_categories_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "earning_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_mobile_pay_categories_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "user_effective_spending"
-            referencedColumns: ["category_id"]
-          },
-        ]
+        Relationships: []
       }
       user_multiplier_tiers: {
         Row: {
@@ -803,22 +586,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_multiplier_tiers_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "earning_multiplier_programs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_multiplier_tiers_tier_id_fkey"
-            columns: ["tier_id"]
-            isOneToOne: false
-            referencedRelation: "earning_multiplier_tiers"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_travel_booking_preferences: {
         Row: {
@@ -851,15 +619,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_travel_booking_preferences_portal_issuer_id_fkey"
-            columns: ["portal_issuer_id"]
-            isOneToOne: false
-            referencedRelation: "issuers"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_wallets: {
         Row: {
@@ -880,22 +640,7 @@ export type Database = {
           id?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_wallets_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "card_with_currency"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_wallets_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "cards"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
@@ -918,9 +663,7 @@ export type Database = {
         Row: {
           code: string | null
           currency_id: string | null
-          currency_type:
-            | Database["public"]["Enums"]["reward_currency_type"]
-            | null
+          currency_type: Database["public"]["Enums"]["reward_currency_type"] | null
           is_custom: boolean | null
           name: string | null
           user_id: string | null
@@ -941,64 +684,7 @@ export type Database = {
       }
     }
     Functions: {
-      add_card_rules: {
-        Args: {
-          p_ads: number
-          p_amazon: number
-          p_card_name: string
-          p_dining: number
-          p_drugstore: number
-          p_entertainment: number
-          p_flights: number
-          p_gas: number
-          p_grocery: number
-          p_home: number
-          p_hotels: number
-          p_internet: number
-          p_mobile_pay: number
-          p_office: number
-          p_over5k: number
-          p_phone: number
-          p_rent: number
-          p_rental_car: number
-          p_streaming: number
-          p_transit: number
-          p_travel: number
-          p_wholesale: number
-        }
-        Returns: undefined
-      }
-      get_currency_for_issuer: {
-        Args: { issuer_name: string }
-        Returns: string
-      }
-      insert_earning_rules: {
-        Args: {
-          p_ads: number
-          p_amazon: number
-          p_card_slug: string
-          p_dining: number
-          p_drugstore: number
-          p_entertainment: number
-          p_flights: number
-          p_gas: number
-          p_grocery: number
-          p_home_improvement: number
-          p_hotels: number
-          p_internet: number
-          p_mobile_pay: number
-          p_office: number
-          p_over_5k: number
-          p_phone: number
-          p_rent: number
-          p_rental_car: number
-          p_streaming: number
-          p_transit: number
-          p_travel: number
-          p_wholesale: number
-        }
-        Returns: undefined
-      }
+      [_ in never]: never
     }
     Enums: {
       booking_method: "any" | "portal" | "brand"
@@ -1149,37 +835,3 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
-
-export const Constants = {
-  public: {
-    Enums: {
-      booking_method: ["any", "portal", "brand"],
-      cap_period: ["none", "month", "quarter", "year", "lifetime"],
-      cap_type: [
-        "single_category",
-        "combined_categories",
-        "selected_category",
-        "top_category",
-        "top_two_categories",
-        "top_three_categories",
-        "second_top_category",
-        "all_categories",
-      ],
-      cap_unit: ["spend", "rewards"],
-      card_product_type: ["personal", "business"],
-      reward_currency_type: [
-        "points",
-        "cash",
-        "miles",
-        "other",
-        "airline_miles",
-        "hotel_points",
-        "transferable_points",
-        "non_transferable_points",
-        "cash_back",
-        "crypto",
-      ],
-      travel_preference_type: ["direct", "brand", "portal"],
-    },
-  },
-} as const

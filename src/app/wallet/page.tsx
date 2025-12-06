@@ -37,6 +37,8 @@ export default async function WalletPage() {
     selectionsResult,
     travelPrefsResult,
     categoriesResult,
+    featureFlagsResult,
+    debitPayResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -127,9 +129,41 @@ export default async function WalletPage() {
     supabase
       .from("earning_categories")
       .select("id, name, slug, parent_category_id, excluded_by_default"),
+    
+    // User's feature flags (for debit pay)
+    supabase
+      .from("user_feature_flags")
+      .select("debit_pay_enabled")
+      .eq("user_id", user.id)
+      .single(),
+    
+    // User's debit pay values
+    supabase
+      .from("user_card_debit_pay")
+      .select("card_id, debit_pay_percent")
+      .eq("user_id", user.id),
   ]);
 
-  const walletCards = walletResult.data ?? [];
+  // Type assertion for wallet cards since Supabase types don't infer relations correctly
+  type WalletCardData = {
+    id: string;
+    card_id: string;
+    added_at: string | null;
+    cards: {
+      id: string;
+      name: string;
+      slug: string;
+      annual_fee: number;
+      default_earn_rate: number;
+      primary_currency_id: string;
+      secondary_currency_id: string | null;
+      issuer_id: string;
+      issuers: { name: string } | null;
+      primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
+      secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
+    } | null;
+  };
+  const walletCards = (walletResult.data ?? []) as unknown as WalletCardData[];
   const userCardIds = walletCards.map((wc) => wc.card_id);
   
   // Build set of currency IDs the user "owns" (from cards in wallet)
@@ -152,6 +186,15 @@ export default async function WalletPage() {
   const perksMap = new Map<string, number>();
   perksResult.data?.forEach((pv) => {
     perksMap.set(pv.card_id, pv.perks_value);
+  });
+
+  // Check if debit pay is enabled
+  const debitPayEnabled = featureFlagsResult.data?.debit_pay_enabled ?? false;
+
+  // Build debit pay map
+  const debitPayMap = new Map<string, number>();
+  debitPayResult.data?.forEach((dp) => {
+    debitPayMap.set(dp.card_id, Number(dp.debit_pay_percent) ?? 0);
   });
 
   const cardsNotInWallet = allCardsResult.data?.filter(
@@ -194,7 +237,7 @@ export default async function WalletPage() {
       cap_period: b.cap_period,
       elevated_rate: Number(b.elevated_rate),
       post_cap_rate: b.post_cap_rate ? Number(b.post_cap_rate) : null,
-      category_ids: (b.card_cap_categories as { category_id: number }[] ?? []).map(c => c.category_id),
+      category_ids: ((b.card_cap_categories as unknown as { category_id: number }[]) ?? []).map(c => c.category_id),
     }));
 
   // Build category maps
@@ -250,10 +293,13 @@ export default async function WalletPage() {
     categoryBonuses,
     userCurrencyValues,
     defaultCurrencyValues,
+    cashOutValues: new Map(), // Not used on wallet summary
     perksValues: perksMap,
+    debitPayValues: debitPayMap,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
+    earningsGoal: "maximize", // Default to maximize for wallet summary
   }) : null;
 
   async function addToWallet(cardId: string) {
@@ -300,6 +346,39 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
+  async function enableDebitPay() {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase.from("user_feature_flags").upsert(
+      {
+        user_id: user.id,
+        debit_pay_enabled: true,
+      },
+      { onConflict: "user_id" }
+    );
+    revalidatePath("/wallet");
+  }
+
+  async function updateDebitPay(cardId: string, percent: number) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase.from("user_card_debit_pay").upsert(
+      {
+        user_id: user.id,
+        card_id: cardId,
+        debit_pay_percent: percent,
+      },
+      { onConflict: "user_id,card_id" }
+    );
+    revalidatePath("/wallet");
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950">
       <UserHeader />
@@ -314,6 +393,8 @@ export default async function WalletPage() {
           <AddCardModal
             availableCards={cardsNotInWallet}
             onAddCard={addToWallet}
+            debitPayEnabled={debitPayEnabled}
+            onEnableDebitPay={enableDebitPay}
           />
         </div>
 
@@ -327,8 +408,11 @@ export default async function WalletPage() {
             walletCards={walletCards}
             enabledSecondaryCards={enabledSecondaryCards}
             perksMap={perksMap}
+            debitPayMap={debitPayMap}
+            debitPayEnabled={debitPayEnabled}
             onRemove={removeFromWallet}
             onUpdatePerks={updatePerksValue}
+            onUpdateDebitPay={updateDebitPay}
           />
         ) : (
           <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">

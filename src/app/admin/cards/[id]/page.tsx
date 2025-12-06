@@ -260,13 +260,14 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
   const allCategories = categoriesResult.data ?? [];
   
   // Get user's primary currency IDs for the "Enabled" indicator on secondary currency
-  const userPrimaryCurrencyIds = (userWalletResult.data ?? [])
-    .map((w: { cards: { primary_currency_id: string } | null }) => w.cards?.primary_currency_id)
+  const userPrimaryCurrencyIds = ((userWalletResult.data ?? []) as unknown as { cards: { primary_currency_id: string } | null }[])
+    .map((w) => w.cards?.primary_currency_id)
     .filter((id): id is string => !!id);
 
   // Build caps with their categories
+  type CategoryAssoc = { cap_id: string; earning_categories: { id: number; name: string } | null };
   const caps = (capsResult.data ?? []).map((cap) => {
-    const categoryAssociations = (capCategoriesResult.data ?? []).filter(
+    const categoryAssociations = ((capCategoriesResult.data ?? []) as unknown as CategoryAssoc[]).filter(
       (cc) => cc.cap_id === cap.id
     );
     return {
@@ -317,7 +318,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Earning Rules</h2>
               <EarningRulesEditor
-                rules={rulesResult.data ?? []}
+                rules={(rulesResult.data ?? []) as unknown as Parameters<typeof EarningRulesEditor>[0]["rules"]}
                 availableCategories={allCategories}
                 onAddRule={addRule}
                 onUpdateRule={updateRule}
