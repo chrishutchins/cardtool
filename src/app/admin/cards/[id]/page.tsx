@@ -44,7 +44,8 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     supabase.from("earning_categories").select("*").order("name"),
     supabase.from("card_earning_rules").select("id, card_id, category_id, rate, has_cap, cap_amount, cap_unit, cap_period, post_cap_rate, notes, booking_method, brand_name, created_at, updated_at, earning_categories(id, name, slug, parent_category_id)").eq("card_id", id),
     supabase.from("card_caps").select("*").eq("card_id", id),
-    supabase.from("card_cap_categories").select("cap_id, category_id, earning_categories(id, name)"),
+    // Only fetch cap categories for this card's caps (join through card_caps)
+    supabase.from("card_cap_categories").select("cap_id, category_id, earning_categories(id, name), card_caps!inner(card_id)").eq("card_caps.card_id", id),
     user ? supabase.from("user_wallets").select("cards(primary_currency_id)").eq("user_id", user.id) : Promise.resolve({ data: [] }),
   ]);
 
