@@ -401,8 +401,11 @@ export function EarningRulesEditor({
                     <td className="px-4 py-3 text-zinc-400 text-sm">
                       {rule.has_cap ? (
                         <span>
-                          ${rule.cap_amount != null ? rule.cap_amount.toLocaleString() : "N/A"} {rule.cap_unit} / {capPeriodLabels[rule.cap_period]}
-                          {rule.post_cap_rate && (
+                          {rule.cap_unit === "spend" ? "$" : ""}
+                          {rule.cap_amount != null ? rule.cap_amount.toLocaleString() : "N/A"}
+                          {rule.cap_unit === "rewards" ? " pts" : ""}
+                          {rule.cap_period && rule.cap_period !== "none" ? ` / ${rule.cap_period}` : ""}
+                          {rule.post_cap_rate != null && (
                             <span className="text-zinc-500"> → {rule.post_cap_rate}x</span>
                           )}
                         </span>
