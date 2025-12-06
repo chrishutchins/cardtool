@@ -9,6 +9,7 @@ const navItems = [
   { href: "/compare", label: "Compare" },
   { href: "/spending", label: "Spending" },
   { href: "/point-values", label: "Point Values" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function UserHeader() {

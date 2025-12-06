@@ -73,6 +73,12 @@ export function AdminNav() {
               >
                 Points
               </Link>
+              <Link
+                href="/settings"
+                className="text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                Settings
+              </Link>
             </div>
             <UserButton afterSignOutUrl="/" />
           </div>
