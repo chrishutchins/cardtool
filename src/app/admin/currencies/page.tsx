@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { CurrencyForm } from "./currency-form";
 import { CurrencyRow } from "./currency-row";
+import { Enums } from "@/lib/database.types";
 
 export default async function CurrenciesPage() {
   const supabase = await createClient();
@@ -19,7 +20,7 @@ export default async function CurrenciesPage() {
     const supabase = await createClient();
     const name = formData.get("name") as string;
     const code = formData.get("code") as string;
-    const currency_type = formData.get("currency_type") as "points" | "cash" | "miles" | "other";
+    const currency_type = formData.get("currency_type") as Enums<"reward_currency_type">;
     const base_value_cents = formData.get("base_value_cents")
       ? parseFloat(formData.get("base_value_cents") as string)
       : null;
@@ -51,7 +52,7 @@ export default async function CurrenciesPage() {
     const supabase = await createClient();
     const name = formData.get("name") as string;
     const code = formData.get("code") as string;
-    const currency_type = formData.get("currency_type") as "points" | "cash" | "miles" | "other";
+    const currency_type = formData.get("currency_type") as Enums<"reward_currency_type">;
     const base_value_cents = formData.get("base_value_cents")
       ? parseFloat(formData.get("base_value_cents") as string)
       : null;
