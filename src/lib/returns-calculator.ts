@@ -280,8 +280,24 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
   const categoryMap = new Map<number, CategorySpending>();
   spending.forEach(s => categoryMap.set(s.category_id, s));
 
+  // Build combined currency values map for top category calculation
+  const combinedCurrencyValues = new Map<string, number>();
+  defaultCurrencyValues.forEach((v, k) => combinedCurrencyValues.set(k, v));
+  userCurrencyValues.forEach((v, k) => combinedCurrencyValues.set(k, v)); // User values override defaults
+
   // Determine which categories are "top N" for each card's category bonuses
-  const topCategoriesMap = calculateTopCategories(cards, categoryBonuses, spending, categoryMap);
+  // This now picks categories based on MARGINAL VALUE (where the bonus beats alternatives most)
+  // rather than just highest spending
+  const topCategoriesMap = calculateTopCategories(
+    cards, 
+    categoryBonuses, 
+    spending, 
+    categoryMap,
+    earningRules,
+    combinedCurrencyValues,
+    enabledSecondaryCards,
+    cardMultipliers
+  );
 
   // Build earning rate lookup: card_id -> category_id -> { rate, annualCap, postCapRate }
   const earningRateMap = buildEarningRateMap(
@@ -674,10 +690,56 @@ function calculateTopCategories(
   cards: CardInput[],
   categoryBonuses: CategoryBonusInput[],
   spending: CategorySpending[],
-  categoryMap: Map<number, CategorySpending>
+  categoryMap: Map<number, CategorySpending>,
+  earningRules: EarningRuleInput[],
+  currencyValues: Map<string, number>,
+  enabledSecondaryCards: Set<string>,
+  cardMultipliers: Map<string, number>
 ): Map<string, Set<number>> {
   // Map: cardId -> Set of category IDs that qualify for top N bonuses
   const result = new Map<string, Set<number>>();
+
+  // Helper to get point value for a card
+  const getCardPointValue = (card: CardInput): number => {
+    const useSecondary = enabledSecondaryCards.has(card.id) && card.secondary_currency;
+    const currency = useSecondary ? card.secondary_currency : card.primary_currency;
+    const currencyId = useSecondary ? card.secondary_currency_id : card.primary_currency_id;
+    return currencyValues.get(currencyId!) ?? currency?.base_value_cents ?? 100;
+  };
+
+  // Helper to check if a currency is cash back
+  const isCashbackCurrency = (type: string): boolean => {
+    return ["cash_back", "cash", "crypto"].includes(type);
+  };
+
+  // Helper to get best rate from OTHER cards for a category
+  const getBestOtherCardValue = (excludeCardId: string, categoryId: number): number => {
+    let bestValue = 0;
+    
+    for (const card of cards) {
+      if (card.id === excludeCardId) continue;
+      
+      const pointValue = getCardPointValue(card);
+      const currencyType = card.primary_currency?.currency_type ?? "other";
+      const isCashback = isCashbackCurrency(currencyType);
+      const multiplier = cardMultipliers.get(card.id) ?? 1;
+      
+      // Get this card's rate for the category
+      const rule = earningRules.find(r => r.card_id === card.id && r.category_id === categoryId && r.booking_method === "any");
+      const rate = (rule?.rate ?? card.default_earn_rate) * multiplier;
+      
+      // Calculate effective value per dollar spent
+      const effectiveValue = isCashback 
+        ? rate // Cash back: rate IS the percentage
+        : rate * (pointValue / 100); // Points: rate × point value in cents
+      
+      if (effectiveValue > bestValue) {
+        bestValue = effectiveValue;
+      }
+    }
+    
+    return bestValue;
+  };
 
   for (const card of cards) {
     const cardBonuses = categoryBonuses.filter(b => b.card_id === card.id);
@@ -687,32 +749,51 @@ function calculateTopCategories(
         continue;
       }
 
-      // Get spending for eligible categories, sorted by SPENDING amount
-      // (We use spending to determine which category is "top" - the user naturally
-      // spends more in their top category. The optimization happens at allocation time
-      // where we decide whether to actually USE the card for that category.)
-      const eligibleSpending = bonus.category_ids
-        .map(catId => ({
-          categoryId: catId,
-          spend: categoryMap.get(catId)?.annual_spend_cents ?? 0,
-        }))
-        .filter(s => s.spend > 0) // Only consider categories with actual spending
-        .sort((a, b) => b.spend - a.spend);
+      const pointValue = getCardPointValue(card);
+      const currencyType = card.primary_currency?.currency_type ?? "other";
+      const isCashback = isCashbackCurrency(currencyType);
+      const multiplier = cardMultipliers.get(card.id) ?? 1;
+      
+      // Calculate marginal value for each eligible category
+      // Marginal value = (bonus_rate × point_value × spend) - (best_other_card_value × spend)
+      const eligibleCategories = bonus.category_ids
+        .map(catId => {
+          const spend = categoryMap.get(catId)?.annual_spend_cents ?? 0;
+          if (spend === 0) return { categoryId: catId, marginalValue: -Infinity, spend: 0 };
+          
+          const bonusRate = bonus.elevated_rate * multiplier;
+          const cardValue = isCashback 
+            ? bonusRate 
+            : bonusRate * (pointValue / 100);
+          const bestOtherValue = getBestOtherCardValue(card.id, catId);
+          
+          // Marginal value = how much BETTER this card's bonus is than the best alternative
+          // (per dollar spent, times total spend for ranking purposes)
+          const marginalValue = (cardValue - bestOtherValue) * (spend / 100);
+          
+          return { categoryId: catId, marginalValue, spend };
+        })
+        .filter(s => s.spend > 0)
+        .sort((a, b) => b.marginalValue - a.marginalValue); // Sort by marginal value, not spend!
 
       let qualifyingCategories: number[] = [];
       
       switch (bonus.cap_type) {
         case "top_category":
-          qualifyingCategories = eligibleSpending.slice(0, 1).map(s => s.categoryId);
+          // Pick the category where this card's bonus provides the MOST value over alternatives
+          qualifyingCategories = eligibleCategories.slice(0, 1).map(s => s.categoryId);
           break;
         case "top_two_categories":
-          qualifyingCategories = eligibleSpending.slice(0, 2).map(s => s.categoryId);
+          qualifyingCategories = eligibleCategories.slice(0, 2).map(s => s.categoryId);
           break;
         case "top_three_categories":
-          qualifyingCategories = eligibleSpending.slice(0, 3).map(s => s.categoryId);
+          qualifyingCategories = eligibleCategories.slice(0, 3).map(s => s.categoryId);
           break;
         case "second_top_category":
-          qualifyingCategories = eligibleSpending.slice(1, 2).map(s => s.categoryId);
+          // For "second top", we still use spending-based ranking since this is
+          // typically used with "top_category" on the same card (e.g., Venmo)
+          const bySpend = eligibleCategories.sort((a, b) => b.spend - a.spend);
+          qualifyingCategories = bySpend.slice(1, 2).map(s => s.categoryId);
           break;
       }
 
