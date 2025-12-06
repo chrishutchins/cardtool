@@ -122,6 +122,16 @@ export function ComparisonTable({
     return baseValue + debitPay;
   };
 
+  // Helper to annualize cap amount based on period
+  const annualizeCap = (amount: number, period: string | null): number => {
+    switch (period) {
+      case "month": return amount * 12;
+      case "quarter": return amount * 4;
+      case "year": return amount;
+      default: return amount; // Assume annual if not specified
+    }
+  };
+
   // Calculate earnings for a spend amount considering caps
   const calculateEarnings = (card: Card, categoryId: number, spendCents: number): { earnings: number; debitPayEarnings: number } => {
     const rate = card.earningRates[categoryId] ?? card.defaultEarnRate;
@@ -132,14 +142,22 @@ export function ComparisonTable({
     
     let earnings: number;
     
-    if (cap && cap.capAmount && spendDollars > cap.capAmount) {
-      // Spend exceeds cap - blend elevated and post-cap rates
-      const elevatedEarnings = cap.capAmount * cap.elevatedRate * (pointValue / 100);
-      const postCapRate = cap.postCapRate ?? card.defaultEarnRate;
-      const postCapEarnings = (spendDollars - cap.capAmount) * postCapRate * (pointValue / 100);
-      earnings = elevatedEarnings + postCapEarnings;
+    if (cap && cap.capAmount) {
+      // Annualize the cap for comparison with annual spending
+      const annualCapAmount = annualizeCap(cap.capAmount, cap.capPeriod);
+      
+      if (spendDollars > annualCapAmount) {
+        // Spend exceeds annual cap - blend elevated and post-cap rates
+        const elevatedEarnings = annualCapAmount * cap.elevatedRate * (pointValue / 100);
+        const postCapRate = cap.postCapRate ?? card.defaultEarnRate;
+        const postCapEarnings = (spendDollars - annualCapAmount) * postCapRate * (pointValue / 100);
+        earnings = elevatedEarnings + postCapEarnings;
+      } else {
+        // All spend within cap at elevated rate
+        earnings = spendDollars * cap.elevatedRate * (pointValue / 100);
+      }
     } else {
-      // All spend at elevated rate
+      // No cap - use the card's rate for this category
       earnings = spendDollars * rate * (pointValue / 100);
     }
     
