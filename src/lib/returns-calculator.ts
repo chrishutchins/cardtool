@@ -100,7 +100,8 @@ export interface AllocationEntry {
   spend: number;       // $ allocated
   rate: number;        // earning rate
   earned: number;      // points or $ earned
-  earnedValue: number; // $ value of earnings
+  earnedValue: number; // $ value of earnings (including debit pay)
+  debitPayBonus: number; // $ from debit pay bonus
   isCashback: boolean;
 }
 
@@ -161,6 +162,9 @@ export interface PortfolioReturns {
   avgPointsRate: number;
   totalPointsValue: number;
   avgPointValue: number;
+  
+  // Debit pay bonus (extra cash earned on all spending)
+  totalDebitPay: number;
   
   // Per-currency breakdown (for points currencies only)
   currencyBreakdown: CurrencyEarningsBreakdown[];
@@ -461,6 +465,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           rate: postCapRate,
           earned,
           earnedValue,
+          debitPayBonus,
           isCashback: currencyInfo.isCashback,
         });
 
@@ -495,6 +500,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           rate,
           earned,
           earnedValue,
+          debitPayBonus,
           isCashback: currencyInfo.isCashback,
         });
 
@@ -562,6 +568,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           rate,
           earned,
           earnedValue,
+          debitPayBonus,
           isCashback: currencyInfo.isCashback,
         });
 
@@ -589,6 +596,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
   let pointsEarned = 0;
   let totalPointsValue = 0;
   let netAnnualFees = 0;
+  let totalDebitPay = 0;
 
   for (const card of cardBreakdown) {
     totalSpend += card.totalSpend;
@@ -604,10 +612,17 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     }
   }
 
+  // Calculate total debit pay bonus from all allocations
+  for (const category of categoryAllocations) {
+    for (const alloc of category.allocations) {
+      totalDebitPay += alloc.debitPayBonus;
+    }
+  }
+
   const avgCashbackRate = cashbackSpend > 0 ? (cashbackEarned / cashbackSpend) * 100 : 0;
   const avgPointsRate = pointsSpend > 0 ? pointsEarned / pointsSpend : 0;
   const avgPointValue = pointsEarned > 0 ? (totalPointsValue / pointsEarned) * 100 : 0;
-  const totalValue = cashbackEarned + totalPointsValue;
+  const totalValue = cashbackEarned + totalPointsValue + totalDebitPay;
   const netValueEarned = totalValue - netAnnualFees;
   const netReturnRate = totalSpend > 0 ? (netValueEarned / totalSpend) * 100 : 0;
 
@@ -632,6 +647,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     avgPointsRate,
     totalPointsValue,
     avgPointValue,
+    totalDebitPay,
     currencyBreakdown,
     totalValue,
     netAnnualFees,
