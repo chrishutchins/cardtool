@@ -23,10 +23,12 @@ export function IssuerForm({ action, defaultValues, onCancel }: IssuerFormProps)
   const handleSubmit = (formData: FormData) => {
     startTransition(async () => {
       await action(formData);
-      // Reset form for new entries (not edits)
+      // Reset form for new entries, close form for edits
       if (!defaultValues) {
         setName("");
         setSlug("");
+      } else {
+        onCancel?.();
       }
     });
   };

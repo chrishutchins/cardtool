@@ -336,6 +336,7 @@ function AddTierForm({
                 type="number"
                 name="cap_amount"
                 placeholder="e.g., 10000"
+                required
                 className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
