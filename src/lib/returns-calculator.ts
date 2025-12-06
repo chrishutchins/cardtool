@@ -409,13 +409,11 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
 
       if (availableCap <= 0 && postCapRate !== null) {
         // Cap exhausted, use post-cap rate for remaining
+        // Note: postCapRate from rankedCard is already multiplied by cardMultipliers in rankCardsForCategory
         const spendAmount = remainingSpend;
-        // Apply earning multiplier (e.g., BoA Preferred Rewards 1.75x)
-        const multiplier = cardMultipliers.get(card.id) ?? 1;
-        const effectiveRate = postCapRate * multiplier;
         const earned = currencyInfo.isCashback 
-          ? spendAmount * (effectiveRate / 100)  // Cash back: rate is percentage
-          : spendAmount * effectiveRate;          // Points: rate is multiplier
+          ? spendAmount * (postCapRate / 100)  // Cash back: rate is percentage
+          : spendAmount * postCapRate;          // Points: rate is multiplier
         const baseEarnedValue = currencyInfo.isCashback 
           ? earned 
           : earned * (currencyInfo.valueCents / 100);
@@ -429,14 +427,14 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           currencyType: currencyInfo.currencyType,
           currencyName: currencyInfo.currencyName,
           spend: spendAmount,
-          rate: effectiveRate,
+          rate: postCapRate,
           earned,
           earnedValue,
           isCashback: currencyInfo.isCashback,
         });
 
         // Update card earnings
-        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAmount, effectiveRate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAmount, postCapRate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
         
         remainingSpend = 0;
         break;
@@ -446,12 +444,10 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       const spendAtElevated = Math.min(remainingSpend, availableCap);
       
       if (spendAtElevated > 0) {
-        // Apply earning multiplier (e.g., BoA Preferred Rewards 1.75x)
-        const multiplier = cardMultipliers.get(card.id) ?? 1;
-        const effectiveRate = rate * multiplier;
+        // Note: rate from rankedCard is already multiplied by cardMultipliers in rankCardsForCategory
         const earned = currencyInfo.isCashback 
-          ? spendAtElevated * (effectiveRate / 100)
-          : spendAtElevated * effectiveRate;
+          ? spendAtElevated * (rate / 100)
+          : spendAtElevated * rate;
         const baseEarnedValue = currencyInfo.isCashback 
           ? earned 
           : earned * (currencyInfo.valueCents / 100);
@@ -465,7 +461,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           currencyType: currencyInfo.currencyType,
           currencyName: currencyInfo.currencyName,
           spend: spendAtElevated,
-          rate: effectiveRate,
+          rate,
           earned,
           earnedValue,
           isCashback: currencyInfo.isCashback,
@@ -477,7 +473,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         }
 
         // Update card earnings
-        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAtElevated, effectiveRate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAtElevated, rate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
 
         remainingSpend -= spendAtElevated;
       }
