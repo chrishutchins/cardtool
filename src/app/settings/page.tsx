@@ -25,6 +25,7 @@ export default async function SettingsPage() {
     travelCategoriesResult,
     allCategoriesResult,
     mobilePayCategoriesResult,
+    debitPayFlagsResult,
   ] = await Promise.all([
     supabase
       .from("user_wallets")
@@ -62,6 +63,11 @@ export default async function SettingsPage() {
       .from("user_mobile_pay_categories")
       .select("category_id")
       .eq("user_id", user.id),
+    supabase
+      .from("user_feature_flags")
+      .select("debit_pay_enabled")
+      .eq("user_id", user.id)
+      .single(),
   ]);
 
   const walletCards = walletCardsResult.data;
@@ -70,6 +76,7 @@ export default async function SettingsPage() {
   const travelCategories = travelCategoriesResult.data;
   const allCategories = allCategoriesResult.data;
   const mobilePayCategories = mobilePayCategoriesResult.data;
+  const debitPayEnabled = debitPayFlagsResult.data?.debit_pay_enabled ?? false;
 
   // Process wallet cards
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
@@ -273,6 +280,30 @@ export default async function SettingsPage() {
     // No revalidatePath - using optimistic updates for instant UI
   }
 
+  async function disableDebitPay() {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    
+    // Set debit_pay_enabled to false
+    await supabase
+      .from("user_feature_flags")
+      .update({ debit_pay_enabled: false })
+      .eq("user_id", user.id);
+    
+    // Also clear all debit pay values for this user
+    await supabase
+      .from("user_card_debit_pay")
+      .delete()
+      .eq("user_id", user.id);
+
+    revalidatePath("/settings");
+    revalidatePath("/wallet");
+    revalidatePath("/returns");
+  }
+
   // Cards that require category selection
   const cardsNeedingSelection = typedWalletCards.filter(
     (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
@@ -432,6 +463,30 @@ export default async function SettingsPage() {
                   selectedCategoryIds={(mobilePayCategories ?? []).map((m) => m.category_id)}
                   onToggleCategory={toggleMobilePayCategory}
                 />
+              </div>
+            )}
+
+            {/* Debit Pay Disable - only show if enabled */}
+            {debitPayEnabled && (
+              <div className="rounded-xl border border-pink-800/50 bg-pink-950/20 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-pink-400 mb-1">
+                      Debit Pay Feature
+                    </h2>
+                    <p className="text-sm text-zinc-400">
+                      You have the secret Debit Pay feature enabled. This adds an extra earning percentage to your cards.
+                    </p>
+                  </div>
+                  <form action={disableDebitPay}>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg border border-pink-600 text-pink-400 hover:bg-pink-950 transition-colors text-sm font-medium"
+                    >
+                      Disable Debit Pay
+                    </button>
+                  </form>
+                </div>
               </div>
             )}
           </div>
