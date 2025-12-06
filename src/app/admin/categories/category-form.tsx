@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { Tables } from "@/lib/database.types";
 
 interface CategoryFormProps {
@@ -18,6 +18,7 @@ interface CategoryFormProps {
 }
 
 export function CategoryForm({ action, defaultValues, onCancel, categories, currentCategoryId }: CategoryFormProps) {
+  const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [slug, setSlug] = useState(defaultValues?.slug ?? "");
   const [description, setDescription] = useState(defaultValues?.description ?? "");
@@ -25,6 +26,28 @@ export function CategoryForm({ action, defaultValues, onCancel, categories, curr
   const [parentCategoryId, setParentCategoryId] = useState<string>(
     defaultValues?.parent_category_id?.toString() ?? ""
   );
+
+  const resetForm = () => {
+    setName("");
+    setSlug("");
+    setDescription("");
+    setExcludedByDefault(false);
+    setParentCategoryId("");
+  };
+
+  const handleSubmit = async (formData: FormData) => {
+    startTransition(async () => {
+      await action(formData);
+      // Only reset form for new categories (not edits)
+      if (!defaultValues) {
+        resetForm();
+      }
+      // If editing, call onCancel to close the edit form
+      if (defaultValues && onCancel) {
+        onCancel();
+      }
+    });
+  };
 
   useEffect(() => {
     if (defaultValues) {
@@ -47,7 +70,7 @@ export function CategoryForm({ action, defaultValues, onCancel, categories, curr
   const availableParents = categories?.filter(c => c.id !== currentCategoryId) ?? [];
 
   return (
-    <form action={action} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+    <form action={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
       <div>
         <label className="block text-sm font-medium text-zinc-400 mb-1">Name</label>
         <input
@@ -120,15 +143,17 @@ export function CategoryForm({ action, defaultValues, onCancel, categories, curr
       <div className="flex items-end gap-2 lg:col-span-5">
         <button
           type="submit"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          disabled={isPending}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {defaultValues ? "Update" : "Add Category"}
+          {isPending ? (defaultValues ? "Updating..." : "Adding...") : (defaultValues ? "Update" : "Add Category")}
         </button>
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-600 transition-colors"
+            disabled={isPending}
+            className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
