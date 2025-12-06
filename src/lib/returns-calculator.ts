@@ -612,10 +612,13 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     }
   }
 
-  // Calculate total debit pay bonus from all allocations
+  // Calculate total debit pay bonus from CASHBACK allocations only
+  // (Points cards already include debit pay in totalEarnedValue)
   for (const category of categoryAllocations) {
     for (const alloc of category.allocations) {
-      totalDebitPay += alloc.debitPayBonus;
+      if (alloc.isCashback) {
+        totalDebitPay += alloc.debitPayBonus;
+      }
     }
   }
 
