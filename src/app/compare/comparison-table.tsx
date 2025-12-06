@@ -548,7 +548,7 @@ export function ComparisonTable({
                     className={`hover:bg-zinc-800/30 ${isEvaluating ? "bg-amber-950/10" : ""}`}
                   >
                     {/* Sticky Card Info */}
-                    <td className={`sticky left-0 z-10 px-4 py-3 border-r border-zinc-700 ${isEvaluating ? "bg-amber-950/20" : "bg-zinc-900"}`}>
+                    <td className={`sticky left-0 z-10 px-4 py-3 border-r border-zinc-700 ${isEvaluating ? "bg-amber-950" : "bg-zinc-900"}`}>
                       <div className="flex items-center gap-2">
                         {card.isOwned && (
                           <span className="shrink-0 w-2 h-2 rounded-full bg-blue-500" title="In your wallet" />
