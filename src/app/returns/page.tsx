@@ -7,6 +7,7 @@ import { isAdminEmail } from "@/lib/admin";
 import {
   calculatePortfolioReturns,
   calculateMarginalValues,
+  calculateCardRecommendations,
   CardInput,
   CategorySpending,
   EarningRuleInput,
@@ -14,6 +15,7 @@ import {
   TravelPreference,
   EarningsGoal,
   MultiplierProgram,
+  CardRecommendation,
 } from "@/lib/returns-calculator";
 
 interface Props {
@@ -50,6 +52,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     userMultiplierTiersResult,
     mobilePayCategoriesResult,
     mobilePayCategoryResult,
+    allCardsResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -169,6 +172,24 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .select("id")
       .eq("slug", "mobile-pay")
       .single(),
+    
+    // All cards for recommendations
+    supabase
+      .from("cards")
+      .select(`
+        id,
+        name,
+        slug,
+        annual_fee,
+        default_earn_rate,
+        default_perks_value,
+        primary_currency_id,
+        secondary_currency_id,
+        issuer_id,
+        primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
+        secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
+      `)
+      .eq("is_active", true),
   ]);
 
   // Process wallet cards
@@ -358,6 +379,36 @@ export default async function ReturnsPage({ searchParams }: Props) {
     }
   });
 
+  // Calculate recommendations
+  type AllCardData = {
+    id: string;
+    name: string;
+    slug: string;
+    annual_fee: number;
+    default_earn_rate: number;
+    default_perks_value: number | null;
+    primary_currency_id: string;
+    secondary_currency_id: string | null;
+    issuer_id: string;
+    primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
+    secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
+  };
+  const allCards = (allCardsResult.data ?? []) as unknown as AllCardData[];
+  
+  const recommendations: CardRecommendation[] = returns.totalSpend > 0 ? calculateCardRecommendations(
+    {
+      ...calculatorInput,
+      allCards: allCards.map(c => ({
+        ...c,
+        issuer_id: c.issuer_id,
+        primary_currency: c.primary_currency,
+        secondary_currency: c.secondary_currency,
+      })),
+    },
+    returns,
+    3
+  ) : [];
+
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
   return (
@@ -371,7 +422,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
           </p>
         </div>
 
-        <ReturnsDisplay returns={returns} earningsGoal={earningsGoal} />
+        <ReturnsDisplay returns={returns} earningsGoal={earningsGoal} recommendations={recommendations} />
       </div>
     </div>
   );

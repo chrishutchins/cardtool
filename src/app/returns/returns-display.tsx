@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PortfolioReturns, EarningsGoal } from "@/lib/returns-calculator";
+import { PortfolioReturns, EarningsGoal, CardRecommendation } from "@/lib/returns-calculator";
+import { CardRecommendations } from "@/app/wallet/card-recommendations";
 
 interface ReturnsDisplayProps {
   returns: PortfolioReturns;
   earningsGoal: EarningsGoal;
+  recommendations?: CardRecommendation[];
 }
 
 function formatCurrency(value: number): string {
@@ -40,7 +42,7 @@ function formatRate(value: number, suffix: string): string {
   return `${formatted}${suffix}`;
 }
 
-export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
+export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: ReturnsDisplayProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showCategoryDetails, setShowCategoryDetails] = useState(false);
@@ -435,6 +437,16 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
             <div className="px-4 py-3 text-xs text-zinc-500 border-t border-zinc-700/50">
               Marginal Value = Card Value - Replacement Value - Net Fee. Negative values indicate cards that cost more than they contribute.
             </div>
+          </div>
+        )}
+
+        {/* Card Recommendations */}
+        {recommendations.length > 0 && (
+          <div className="mt-8">
+            <CardRecommendations 
+              recommendations={recommendations}
+              variant="callout"
+            />
           </div>
         )}
       </div>

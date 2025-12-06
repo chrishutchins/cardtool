@@ -9,12 +9,15 @@ import { ReturnsSummary } from "./returns-summary";
 import { isAdminEmail } from "@/lib/admin";
 import {
   calculatePortfolioReturns,
+  calculateCardRecommendations,
   CardInput,
   CategorySpending,
   EarningRuleInput,
   CategoryBonusInput,
   TravelPreference,
+  MultiplierProgram,
 } from "@/lib/returns-calculator";
+import { CardRecommendations } from "./card-recommendations";
 
 export default async function WalletPage() {
   const user = await currentUser();
@@ -40,6 +43,7 @@ export default async function WalletPage() {
     categoriesResult,
     featureFlagsResult,
     debitPayResult,
+    multiplierTiersResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -64,12 +68,24 @@ export default async function WalletPage() {
       `)
       .eq("user_id", user.id),
     
-    // All available cards for adding
+    // All available cards for adding (includes default_perks_value for recommendations)
     supabase
-      .from("card_with_currency")
-      .select("*")
+      .from("cards")
+      .select(`
+        id,
+        name,
+        slug,
+        annual_fee,
+        default_earn_rate,
+        default_perks_value,
+        primary_currency_id,
+        secondary_currency_id,
+        issuer_id,
+        issuers:issuer_id (id, name),
+        primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
+        secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
+      `)
       .eq("is_active", true)
-      .order("issuer_name")
       .order("name"),
     
     // User's spending per category
@@ -143,6 +159,20 @@ export default async function WalletPage() {
       .from("user_card_debit_pay")
       .select("card_id, debit_pay_percent")
       .eq("user_id", user.id),
+      
+    // Multiplier programs for recommendations
+    supabase
+      .from("user_multiplier_tiers")
+      .select(`
+        program_id,
+        tier_id,
+        earning_multiplier_tiers:tier_id (multiplier),
+        earning_multiplier_programs:program_id (
+          earning_multiplier_currencies (currency_id),
+          earning_multiplier_cards (card_id)
+        )
+      `)
+      .eq("user_id", user.id),
   ]);
 
   // Type assertion for wallet cards since Supabase types don't infer relations correctly
@@ -198,9 +228,26 @@ export default async function WalletPage() {
     debitPayMap.set(dp.card_id, Number(dp.debit_pay_percent) ?? 0);
   });
 
-  const cardsNotInWallet = allCardsResult.data?.filter(
+  // Type for all cards
+  type AllCardData = {
+    id: string;
+    name: string;
+    slug: string;
+    annual_fee: number;
+    default_earn_rate: number;
+    default_perks_value: number | null;
+    primary_currency_id: string;
+    secondary_currency_id: string | null;
+    issuer_id: string;
+    issuers: { id: string; name: string } | null;
+    primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
+    secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
+  };
+  const allCards = (allCardsResult.data ?? []) as unknown as AllCardData[];
+  
+  const cardsNotInWallet = allCards.filter(
     (card) => card.id && !userCardIds.includes(card.id)
-  ) ?? [];
+  );
 
   // Calculate portfolio returns
   const userCardIdsSet = new Set(userCardIds);
@@ -286,22 +333,63 @@ export default async function WalletPage() {
     portal_issuer_id: p.portal_issuer_id,
   }));
 
+  // Build multiplier programs for calculations
+  type MultiplierTierData = {
+    program_id: string;
+    tier_id: string | null;
+    earning_multiplier_tiers: { multiplier: number } | null;
+    earning_multiplier_programs: {
+      earning_multiplier_currencies: { currency_id: string }[] | null;
+      earning_multiplier_cards: { card_id: string }[] | null;
+    } | null;
+  };
+  const multiplierPrograms: MultiplierProgram[] = [];
+  (multiplierTiersResult.data ?? []).forEach((t: unknown) => {
+    const tier = t as MultiplierTierData;
+    if (tier.tier_id && tier.earning_multiplier_tiers?.multiplier) {
+      multiplierPrograms.push({
+        programId: tier.program_id,
+        multiplier: tier.earning_multiplier_tiers.multiplier,
+        applicableCurrencyIds: tier.earning_multiplier_programs?.earning_multiplier_currencies?.map((c: { currency_id: string }) => c.currency_id) ?? [],
+        applicableCardIds: tier.earning_multiplier_programs?.earning_multiplier_cards?.map((c: { card_id: string }) => c.card_id) ?? [],
+      });
+    }
+  });
+
   // Calculate returns (only if user has cards)
-  const returns = cards.length > 0 ? calculatePortfolioReturns({
+  const calculatorInput = {
     cards,
     spending,
     earningRules,
     categoryBonuses,
     userCurrencyValues,
     defaultCurrencyValues,
-    cashOutValues: new Map(), // Not used on wallet summary
+    cashOutValues: new Map<string, number>(), // Not used on wallet summary
     perksValues: perksMap,
     debitPayValues: debitPayMap,
+    multiplierPrograms,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
-    earningsGoal: "maximize", // Default to maximize for wallet summary
-  }) : null;
+    earningsGoal: "maximize" as const, // Default to maximize for wallet summary
+  };
+  
+  const returns = cards.length > 0 ? calculatePortfolioReturns(calculatorInput) : null;
+
+  // Calculate card recommendations (only if user has spending data)
+  const recommendations = returns && returns.totalSpend > 0 ? calculateCardRecommendations(
+    {
+      ...calculatorInput,
+      allCards: allCards.map(c => ({
+        ...c,
+        issuer_id: c.issuer_id,
+        primary_currency: c.primary_currency,
+        secondary_currency: c.secondary_currency,
+      })),
+    },
+    returns,
+    3 // Top 3 recommendations
+  ) : [];
 
   async function addToWallet(cardId: string) {
     "use server";
@@ -309,10 +397,32 @@ export default async function WalletPage() {
     if (!user) return;
 
     const supabase = await createClient();
+    
+    // Get the card's default perks value
+    const { data: card } = await supabase
+      .from("cards")
+      .select("default_perks_value")
+      .eq("id", cardId)
+      .single();
+    
+    // Add card to wallet
     await supabase.from("user_wallets").insert({
       user_id: user.id,
       card_id: cardId,
     });
+    
+    // If card has a default perks value, set it for the user
+    if (card?.default_perks_value && card.default_perks_value > 0) {
+      await supabase.from("user_card_perks_values").upsert(
+        {
+          user_id: user.id,
+          card_id: cardId,
+          perks_value: card.default_perks_value,
+        },
+        { onConflict: "user_id,card_id" }
+      );
+    }
+    
     revalidatePath("/wallet");
   }
 
@@ -404,6 +514,16 @@ export default async function WalletPage() {
         {/* Returns Summary */}
         {returns && returns.totalSpend > 0 && (
           <ReturnsSummary returns={returns} />
+        )}
+
+        {/* Card Recommendations */}
+        {recommendations.length > 0 && (
+          <div className="mb-8">
+            <CardRecommendations 
+              recommendations={recommendations}
+              onAddCard={addToWallet}
+            />
+          </div>
         )}
 
         {walletCards.length > 0 ? (

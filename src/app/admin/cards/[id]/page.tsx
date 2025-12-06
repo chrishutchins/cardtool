@@ -67,6 +67,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     const product_type = formData.get("product_type") as "personal" | "business";
     const annual_fee = parseFloat(formData.get("annual_fee") as string) || 0;
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;
+    const default_perks_value = parseFloat(formData.get("default_perks_value") as string) || 0;
 
     await supabase
       .from("cards")
@@ -79,6 +80,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
         product_type,
         annual_fee,
         default_earn_rate,
+        default_perks_value,
       })
       .eq("id", id);
 
@@ -309,6 +311,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
             product_type: card.product_type,
             annual_fee: card.annual_fee,
             default_earn_rate: card.default_earn_rate,
+            default_perks_value: card.default_perks_value,
           }}
         />
       </div>

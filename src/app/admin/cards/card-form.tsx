@@ -17,6 +17,7 @@ interface CardFormProps {
     product_type: "personal" | "business";
     annual_fee: number;
     default_earn_rate: number;
+    default_perks_value: number | null;
   };
 }
 
@@ -29,6 +30,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
   const [productType, setProductType] = useState<"personal" | "business">(defaultValues?.product_type ?? "personal");
   const [annualFee, setAnnualFee] = useState(defaultValues?.annual_fee ?? 0);
   const [defaultEarnRate, setDefaultEarnRate] = useState(defaultValues?.default_earn_rate ?? 1.0);
+  const [defaultPerksValue, setDefaultPerksValue] = useState(defaultValues?.default_perks_value ?? 0);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
 
@@ -43,6 +45,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
       setProductType(defaultValues.product_type ?? "personal");
       setAnnualFee(defaultValues.annual_fee ?? 0);
       setDefaultEarnRate(defaultValues.default_earn_rate ?? 1.0);
+      setDefaultPerksValue(defaultValues.default_perks_value ?? 0);
     }
   }, [defaultValues]);
 
@@ -175,7 +178,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">Annual Fee ($)</label>
           <input
@@ -188,6 +191,20 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
             placeholder="e.g., 95"
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Default Perks Value ($)</label>
+          <input
+            type="number"
+            name="default_perks_value"
+            value={defaultPerksValue}
+            onChange={(e) => setDefaultPerksValue(parseFloat(e.target.value) || 0)}
+            min="0"
+            step="1"
+            placeholder="e.g., 300"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-zinc-500">Initial value when added to wallet</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">Default Earn Rate</label>

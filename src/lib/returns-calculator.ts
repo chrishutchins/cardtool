@@ -1110,3 +1110,95 @@ export function calculateMarginalValues(
   return result;
 }
 
+// ============================================================================
+// Card Recommendations Engine
+// ============================================================================
+
+export interface CardRecommendation {
+  card: CardInput;
+  defaultPerksValue: number;
+  currentNetEarnings: number;
+  newNetEarnings: number;
+  improvement: number; // positive = better
+  improvementPercent: number;
+}
+
+export interface RecommendationsInput extends CalculatorInput {
+  allCards: (CardInput & { default_perks_value: number | null })[]; // All available cards with default perks
+}
+
+/**
+ * Calculates the top N card recommendations based on net earnings improvement.
+ * For each card not in the user's wallet, this calculates what the net earnings
+ * would be if they added it, using the card's default perks value.
+ */
+export function calculateCardRecommendations(
+  input: RecommendationsInput,
+  currentReturns: PortfolioReturns,
+  topN: number = 3
+): CardRecommendation[] {
+  const { allCards, cards: userCards, ...baseInput } = input;
+  
+  // Get IDs of cards already in wallet
+  const userCardIds = new Set(userCards.map(c => c.id));
+  
+  // Filter to cards not in wallet
+  const candidateCards = allCards.filter(c => !userCardIds.has(c.id));
+  
+  const currentNetEarnings = currentReturns.netValueEarned;
+  const recommendations: CardRecommendation[] = [];
+
+  for (const candidate of candidateCards) {
+    // Add this card to the user's wallet
+    const cardsWithCandidate = [...userCards, candidate];
+    
+    // Update enabled secondary cards based on new wallet
+    const userPrimaryCurrencyIds = new Set<string>();
+    cardsWithCandidate.forEach((c) => {
+      userPrimaryCurrencyIds.add(c.primary_currency_id);
+    });
+    
+    const enabledSecondaryCardsNew = new Set<string>();
+    cardsWithCandidate.forEach((c) => {
+      if (c.secondary_currency_id && userPrimaryCurrencyIds.has(c.secondary_currency_id)) {
+        enabledSecondaryCardsNew.add(c.id);
+      }
+    });
+
+    // Create perks values map with the candidate's default perks value
+    const perksWithCandidate = new Map(input.perksValues);
+    const defaultPerksValue = candidate.default_perks_value ?? 0;
+    perksWithCandidate.set(candidate.id, defaultPerksValue);
+
+    // Calculate returns with this card added
+    const returnsWithCard = calculatePortfolioReturns({
+      ...baseInput,
+      cards: cardsWithCandidate,
+      perksValues: perksWithCandidate,
+      enabledSecondaryCards: enabledSecondaryCardsNew,
+    });
+
+    const newNetEarnings = returnsWithCard.netValueEarned;
+    const improvement = newNetEarnings - currentNetEarnings;
+    const improvementPercent = currentNetEarnings !== 0 
+      ? (improvement / Math.abs(currentNetEarnings)) * 100 
+      : 0;
+
+    // Only consider cards that would improve earnings
+    if (improvement > 0) {
+      recommendations.push({
+        card: candidate,
+        defaultPerksValue,
+        currentNetEarnings,
+        newNetEarnings,
+        improvement,
+        improvementPercent,
+      });
+    }
+  }
+
+  // Sort by improvement (descending) and take top N
+  recommendations.sort((a, b) => b.improvement - a.improvement);
+  return recommendations.slice(0, topN);
+}
+
