@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { isCurrentUserAdmin } from "@/lib/admin";
 
 export default async function Home() {
@@ -57,16 +57,18 @@ export default async function Home() {
                 <UserButton afterSignOutUrl="/" />
               </SignedIn>
               <SignedOut>
-                <SignInButton mode="modal">
-                  <button className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors">
-                    Sign In
-                  </button>
-                </SignInButton>
-                <SignUpButton mode="modal">
-                  <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
-                    Sign Up
-                  </button>
-                </SignUpButton>
+                <Link
+                  href="/sign-in"
+                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/sign-up"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  Sign Up
+                </Link>
               </SignedOut>
             </div>
           </div>
@@ -97,11 +99,12 @@ export default async function Home() {
               </Link>
             </SignedIn>
             <SignedOut>
-              <SignUpButton mode="modal">
-                <button className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
-                  Get Started
-                </button>
-              </SignUpButton>
+              <Link
+                href="/sign-up"
+                className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+              >
+                Get Started
+              </Link>
             </SignedOut>
             {isAdmin && (
               <Link
