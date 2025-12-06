@@ -6,7 +6,7 @@ import { UserButton } from "@clerk/nextjs";
 
 const navItems = [
   { href: "/wallet", label: "My Wallet" },
-  { href: "/returns", label: "Returns" },
+  { href: "/returns", label: "Earnings" },
   { href: "/compare", label: "Compare" },
   { href: "/spending", label: "Spending" },
   { href: "/point-values", label: "Point Values" },

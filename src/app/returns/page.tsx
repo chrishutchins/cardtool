@@ -5,14 +5,24 @@ import { UserHeader } from "@/components/user-header";
 import { ReturnsDisplay } from "./returns-display";
 import {
   calculatePortfolioReturns,
+  calculateMarginalValues,
   CardInput,
   CategorySpending,
   EarningRuleInput,
   CategoryBonusInput,
   TravelPreference,
+  EarningsGoal,
 } from "@/lib/returns-calculator";
 
-export default async function ReturnsPage() {
+interface Props {
+  searchParams: Promise<{ goal?: string }>;
+}
+
+export default async function ReturnsPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const earningsGoal = (["maximize", "cash_only", "points_only"].includes(params.goal ?? "") 
+    ? params.goal 
+    : "maximize") as EarningsGoal;
   const user = await currentUser();
   
   if (!user) {
@@ -83,10 +93,10 @@ export default async function ReturnsPage() {
         card_cap_categories (category_id)
       `),
     
-    // All currencies for default values
+    // All currencies for default values and cash out values
     supabase
       .from("reward_currencies")
-      .select("id, base_value_cents"),
+      .select("id, base_value_cents, cash_out_value_cents"),
     
     // User's custom currency values
     supabase
@@ -180,9 +190,13 @@ export default async function ReturnsPage() {
 
   // Build currency value maps
   const defaultCurrencyValues = new Map<string, number>();
+  const cashOutValues = new Map<string, number>();
   currenciesResult.data?.forEach((c) => {
     if (c.base_value_cents) {
       defaultCurrencyValues.set(c.id, c.base_value_cents);
+    }
+    if (c.cash_out_value_cents) {
+      cashOutValues.set(c.id, c.cash_out_value_cents);
     }
   });
 
@@ -225,17 +239,33 @@ export default async function ReturnsPage() {
   });
 
   // Calculate returns
-  const returns = calculatePortfolioReturns({
+  const calculatorInput = {
     cards,
     spending,
     earningRules,
     categoryBonuses,
     userCurrencyValues,
     defaultCurrencyValues,
+    cashOutValues,
     perksValues,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
+    earningsGoal,
+  };
+  
+  const returns = calculatePortfolioReturns(calculatorInput);
+  
+  // Calculate marginal values for each card
+  const marginalValues = calculateMarginalValues(calculatorInput, returns);
+  
+  // Merge marginal values into card breakdown
+  returns.cardBreakdown.forEach(card => {
+    const mv = marginalValues.get(card.cardId);
+    if (mv) {
+      card.marginalValue = mv.marginalValue;
+      card.replacementValue = mv.replacementValue;
+    }
   });
 
   return (
@@ -243,13 +273,13 @@ export default async function ReturnsPage() {
       <UserHeader />
       <div className="mx-auto max-w-5xl px-4 py-12">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">Portfolio Returns</h1>
+          <h1 className="text-3xl font-bold text-white">Total Earnings</h1>
           <p className="text-zinc-400 mt-1">
             Optimal allocation of your spending across {cards.length} card{cards.length !== 1 ? "s" : ""}
           </p>
         </div>
 
-        <ReturnsDisplay returns={returns} />
+        <ReturnsDisplay returns={returns} earningsGoal={earningsGoal} />
       </div>
     </div>
   );

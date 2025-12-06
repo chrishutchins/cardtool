@@ -25,7 +25,7 @@ export function ReturnsSummary({ returns }: ReturnsSummaryProps) {
     <div className="rounded-xl border border-amber-700/30 bg-gradient-to-r from-amber-950/30 to-zinc-900/50 p-6 mb-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex-1">
-          <h2 className="text-lg font-semibold text-amber-400 mb-1">Portfolio Returns</h2>
+          <h2 className="text-lg font-semibold text-amber-400 mb-1">Total Earnings</h2>
           <p className="text-sm text-zinc-400">Based on your spending allocation</p>
         </div>
         
@@ -36,7 +36,7 @@ export function ReturnsSummary({ returns }: ReturnsSummaryProps) {
           </div>
           
           <div className="text-center">
-            <div className="text-xs text-zinc-500 uppercase mb-0.5">Net Value</div>
+            <div className="text-xs text-zinc-500 uppercase mb-0.5">Net Earnings</div>
             <div className="text-lg font-semibold text-emerald-400">{formatCurrency(returns.netValueEarned)}</div>
           </div>
           

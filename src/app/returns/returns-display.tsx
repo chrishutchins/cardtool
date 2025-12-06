@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { PortfolioReturns } from "@/lib/returns-calculator";
+import { useRouter, useSearchParams } from "next/navigation";
+import { PortfolioReturns, EarningsGoal } from "@/lib/returns-calculator";
 
 interface ReturnsDisplayProps {
   returns: PortfolioReturns;
+  earningsGoal: EarningsGoal;
 }
 
 function formatCurrency(value: number): string {
@@ -27,12 +29,59 @@ function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
-export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
+export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [showCategoryDetails, setShowCategoryDetails] = useState(false);
   const [showCardDetails, setShowCardDetails] = useState(false);
+  const [showCurrencyBreakdown, setShowCurrencyBreakdown] = useState(false);
+
+  const handleGoalChange = (goal: EarningsGoal) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (goal === "maximize") {
+      params.delete("goal");
+    } else {
+      params.set("goal", goal);
+    }
+    router.push(`/returns${params.toString() ? `?${params.toString()}` : ""}`);
+  };
+
+  const goalButtons: { value: EarningsGoal; label: string; description: string }[] = [
+    { value: "maximize", label: "Maximize", description: "Best total value" },
+    { value: "cash_only", label: "Cash Only", description: "Use cash out values" },
+    { value: "points_only", label: "Points Only", description: "Miles & hotel points" },
+  ];
 
   return (
     <div className="space-y-6">
+      {/* Earnings Goal Toggle */}
+      <div className="rounded-xl border border-zinc-700 bg-zinc-900/50 p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <span className="text-sm text-zinc-400 font-medium whitespace-nowrap">Earnings Goal:</span>
+          <div className="flex rounded-lg border border-zinc-700 overflow-hidden">
+            {goalButtons.map((btn) => (
+              <button
+                key={btn.value}
+                onClick={() => handleGoalChange(btn.value)}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  earningsGoal === btn.value
+                    ? "bg-blue-600 text-white"
+                    : "bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                }`}
+                title={btn.description}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-zinc-500">
+            {earningsGoal === "maximize" && "Optimizes for highest total value across all cards"}
+            {earningsGoal === "cash_only" && "Values points at their cash redemption rate"}
+            {earningsGoal === "points_only" && "Only considers airline miles, hotel points, and transferable points"}
+          </span>
+        </div>
+      </div>
+
       {/* Overview Card */}
       <div className="rounded-xl border border-zinc-700 bg-zinc-900/50 p-6">
         <div className="text-center">
@@ -77,7 +126,20 @@ export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
             </div>
             <div className="text-center">
               <div className="text-sm text-zinc-400 mb-1">Points Earned</div>
-              <div className="text-xl font-semibold text-violet-400">{formatNumber(returns.pointsEarned, 0)}</div>
+              <button 
+                onClick={() => setShowCurrencyBreakdown(!showCurrencyBreakdown)}
+                className="text-xl font-semibold text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 mx-auto"
+              >
+                {formatNumber(returns.pointsEarned, 0)}
+                <svg
+                  className={`w-4 h-4 transition-transform ${showCurrencyBreakdown ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
             </div>
             <div className="text-center">
               <div className="text-sm text-zinc-400 mb-1">Avg Point Earn Rate</div>
@@ -88,7 +150,28 @@ export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
               <div className="text-xl font-semibold text-violet-400">{formatCurrency(returns.totalPointsValue)}</div>
             </div>
           </div>
-          <div className="text-center text-sm text-zinc-500">
+          
+          {/* Currency Breakdown Expansion */}
+          {showCurrencyBreakdown && returns.currencyBreakdown.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-violet-800/30">
+              <div className="space-y-2">
+                {returns.currencyBreakdown.map((currency) => (
+                  <div 
+                    key={currency.currencyId} 
+                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-violet-900/20"
+                  >
+                    <span className="text-zinc-300 font-medium">{currency.currencyName}</span>
+                    <div className="flex items-center gap-4">
+                      <span className="text-violet-400">{formatNumber(currency.pointsEarned, 0)} pts</span>
+                      <span className="text-zinc-400">({formatCurrency(currency.pointsValue)})</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <div className="text-center text-sm text-zinc-500 mt-4">
             Avg Point Value: {returns.avgPointValue.toFixed(2)}¢
           </div>
         </div>
@@ -101,7 +184,7 @@ export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
         </h2>
         <div className="space-y-3">
           <div className="flex justify-between items-center py-2 border-b border-zinc-700/50">
-            <span className="text-zinc-400">Total Value</span>
+            <span className="text-zinc-400">Total Earnings</span>
             <span className="text-xl font-semibold text-white">{formatCurrency(returns.totalValue)}</span>
           </div>
           <div className="flex justify-between items-center py-2 border-b border-zinc-700/50">
@@ -109,7 +192,7 @@ export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
             <span className="text-xl font-semibold text-red-400">-{formatCurrency(returns.netAnnualFees)}</span>
           </div>
           <div className="flex justify-between items-center py-3 bg-amber-900/20 rounded-lg px-4 -mx-4">
-            <span className="text-amber-300 font-medium">Net Value Earned</span>
+            <span className="text-amber-300 font-medium">Total Net Earnings</span>
             <span className="text-2xl font-bold text-amber-400">{formatCurrency(returns.netValueEarned)}</span>
           </div>
           <div className="flex justify-between items-center py-3 bg-amber-900/20 rounded-lg px-4 -mx-4">
@@ -146,6 +229,7 @@ export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
                   <th className="text-left text-xs font-medium text-zinc-400 uppercase px-4 py-3">Card(s)</th>
                   <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Earned</th>
                   <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Value</th>
+                  <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">ROS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-700/50">
@@ -185,6 +269,12 @@ export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
                           </div>
                         ))}
                       </td>
+                      <td className="px-4 py-3 text-right text-amber-400 font-medium">
+                        {category.totalSpend > 0 
+                          ? formatPercent((category.allocations.reduce((sum, a) => sum + a.earnedValue, 0) / category.totalSpend) * 100)
+                          : "—"
+                        }
+                      </td>
                     </tr>
                   ))}
               </tbody>
@@ -219,15 +309,22 @@ export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
                   <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Spend</th>
                   <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Earned</th>
                   <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Value</th>
-                  <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Net Fee</th>
+                  <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3" title="What this card earns minus what other cards would earn if removed, minus net fee">
+                    Marginal Value
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-700/50">
                 {returns.cardBreakdown
                   .filter(c => c.totalSpend > 0 || c.netFee !== 0)
-                  .sort((a, b) => b.totalEarnedValue - a.totalEarnedValue)
+                  .sort((a, b) => (b.marginalValue ?? 0) - (a.marginalValue ?? 0))
                   .map((card) => (
-                    <tr key={card.cardId} className="hover:bg-zinc-800/30">
+                    <tr 
+                      key={card.cardId} 
+                      className={`hover:bg-zinc-800/30 ${
+                        (card.marginalValue ?? 0) < 0 ? "bg-red-950/20" : ""
+                      }`}
+                    >
                       <td className="px-4 py-3">
                         <div className="text-white font-medium">{card.cardName}</div>
                         <div className="text-xs text-zinc-500">{card.currencyName}</div>
@@ -247,19 +344,31 @@ export function ReturnsDisplay({ returns }: ReturnsDisplayProps) {
                         {formatCurrency(card.totalEarnedValue)}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className={card.netFee <= 0 ? "text-emerald-400" : "text-red-400"}>
-                          {card.netFee < 0 
-                            ? `+${formatCurrency(Math.abs(card.netFee))}`
-                            : card.netFee > 0 
-                              ? `-${formatCurrency(card.netFee)}`
+                        <span className={
+                          (card.marginalValue ?? 0) < 0 
+                            ? "text-red-400 font-semibold" 
+                            : (card.marginalValue ?? 0) > 0 
+                              ? "text-emerald-400" 
+                              : "text-zinc-400"
+                        }>
+                          {(card.marginalValue ?? 0) < 0 
+                            ? `-${formatCurrency(Math.abs(card.marginalValue ?? 0))}`
+                            : (card.marginalValue ?? 0) > 0 
+                              ? `+${formatCurrency(card.marginalValue ?? 0)}`
                               : "$0"
                           }
                         </span>
+                        {(card.marginalValue ?? 0) < 0 && (
+                          <div className="text-xs text-red-400 mt-0.5">Consider removing</div>
+                        )}
                       </td>
                     </tr>
                   ))}
               </tbody>
             </table>
+            <div className="px-4 py-3 text-xs text-zinc-500 border-t border-zinc-700/50">
+              Marginal Value = Card Value - Replacement Value - Net Fee. Negative values indicate cards that cost more than they contribute.
+            </div>
           </div>
         )}
       </div>

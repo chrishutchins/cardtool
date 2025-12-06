@@ -127,6 +127,17 @@ export interface CardEarnings {
   totalEarned: number;
   totalEarnedValue: number;
   categoryBreakdown: CardCategoryBreakdown[];
+  // Marginal value fields (calculated separately)
+  marginalValue?: number;         // Value this card adds over replacement
+  replacementValue?: number;      // What other cards would earn if this card removed
+}
+
+export interface CurrencyEarningsBreakdown {
+  currencyId: string;
+  currencyName: string;
+  currencyType: string;
+  pointsEarned: number;
+  pointsValue: number;
 }
 
 export interface PortfolioReturns {
@@ -143,6 +154,9 @@ export interface PortfolioReturns {
   avgPointsRate: number;
   totalPointsValue: number;
   avgPointValue: number;
+  
+  // Per-currency breakdown (for points currencies only)
+  currencyBreakdown: CurrencyEarningsBreakdown[];
   
   // Summary
   totalValue: number;
@@ -188,6 +202,8 @@ function getCurrencyValueCents(
 // Main Calculator
 // ============================================================================
 
+export type EarningsGoal = "maximize" | "cash_only" | "points_only";
+
 export interface CalculatorInput {
   cards: CardInput[];
   spending: CategorySpending[];
@@ -195,10 +211,12 @@ export interface CalculatorInput {
   categoryBonuses: CategoryBonusInput[];
   userCurrencyValues: Map<string, number>;
   defaultCurrencyValues: Map<string, number>;
+  cashOutValues: Map<string, number>; // currency_id -> cash_out_value_cents (for cash_only mode)
   perksValues: Map<string, number>;
   userSelections: Map<string, number>; // cap_id -> selected_category_id
   travelPreferences: TravelPreference[];
   enabledSecondaryCards: Set<string>; // card IDs with secondary currency enabled
+  earningsGoal: EarningsGoal; // Which optimization mode to use
 }
 
 export function calculatePortfolioReturns(input: CalculatorInput): PortfolioReturns {
@@ -209,10 +227,12 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     categoryBonuses,
     userCurrencyValues,
     defaultCurrencyValues,
+    cashOutValues,
     perksValues,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
+    earningsGoal,
   } = input;
 
   // Build category map for parent lookups
@@ -236,27 +256,73 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
   // Track cap usage per card per category (for rules with caps)
   const capUsage = new Map<string, number>(); // key: `${cardId}:${categoryId}` or `${cardId}:combined:${bonusId}`
 
-  // Get currency value for each card (considering secondary currency enablement)
+  // Currency types that qualify for "points_only" mode
+  const POINTS_ONLY_TYPES = ["airline_miles", "hotel_points", "transferable_points"];
+
+  // Get currency value for each card (considering secondary currency enablement and earnings goal)
   const getCardCurrencyInfo = (card: CardInput): { 
     currencyId: string; 
     currencyType: string; 
     currencyName: string;
     valueCents: number;
     isCashback: boolean;
+    excluded: boolean; // Card excluded from earning due to goal
   } => {
     const useSecondary = enabledSecondaryCards.has(card.id) && card.secondary_currency;
     const currency = useSecondary ? card.secondary_currency! : card.primary_currency;
     const currencyId = useSecondary ? card.secondary_currency_id! : card.primary_currency_id;
     const currencyType = currency?.currency_type ?? "other";
     const currencyName = currency?.name ?? "Unknown";
-    const valueCents = getCurrencyValueCents(currencyId, userCurrencyValues, defaultCurrencyValues);
     const isCashback = isCashbackCurrency(currencyType);
-    return { currencyId, currencyType, currencyName, valueCents, isCashback };
+    
+    // Determine value based on earnings goal
+    let valueCents: number;
+    let excluded = false;
+    
+    switch (earningsGoal) {
+      case "cash_only":
+        if (isCashback) {
+          // Cash back cards work as normal (their "rate" is already a percentage)
+          valueCents = 100; // 100 cents = $1 (for cashback, rate IS the value)
+        } else {
+          // For points currencies, use cash out value
+          const cashOutValue = cashOutValues.get(currencyId);
+          if (cashOutValue) {
+            valueCents = cashOutValue;
+          } else {
+            // No cash out value available - exclude this card
+            valueCents = 0;
+            excluded = true;
+          }
+        }
+        break;
+        
+      case "points_only":
+        if (POINTS_ONLY_TYPES.includes(currencyType)) {
+          // Use normal point value
+          valueCents = getCurrencyValueCents(currencyId, userCurrencyValues, defaultCurrencyValues);
+        } else {
+          // Not a qualifying points currency - exclude
+          valueCents = 0;
+          excluded = true;
+        }
+        break;
+        
+      case "maximize":
+      default:
+        // Use normal point value
+        valueCents = getCurrencyValueCents(currencyId, userCurrencyValues, defaultCurrencyValues);
+        break;
+    }
+    
+    return { currencyId, currencyType, currencyName, valueCents, isCashback, excluded };
   };
 
   // Initialize tracking structures
   const categoryAllocations: CategoryAllocation[] = [];
   const cardEarningsMap = new Map<string, CardEarnings>();
+  // Track per-currency earnings: currencyId -> { name, type, earned, value }
+  const currencyEarningsMap = new Map<string, { name: string; type: string; earned: number; value: number }>();
 
   // Initialize card earnings for all cards
   cards.forEach(card => {
@@ -330,7 +396,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         });
 
         // Update card earnings
-        updateCardEarnings(cardEarningsMap, card.id, categorySpend, spendAmount, postCapRate, earned, earnedValue);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAmount, postCapRate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
         
         remainingSpend = 0;
         break;
@@ -365,7 +431,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         }
 
         // Update card earnings
-        updateCardEarnings(cardEarningsMap, card.id, categorySpend, spendAtElevated, rate, earned, earnedValue);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAtElevated, rate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
 
         remainingSpend -= spendAtElevated;
       }
@@ -409,7 +475,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         isCashback: currencyInfo.isCashback,
       });
 
-      updateCardEarnings(cardEarningsMap, bestCard.id, categorySpend, remainingSpend, rate, earned, earnedValue);
+      updateCardEarnings(cardEarningsMap, currencyEarningsMap, bestCard.id, categorySpend, remainingSpend, rate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
     }
 
     categoryAllocations.push({
@@ -453,6 +519,17 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
   const netValueEarned = totalValue - netAnnualFees;
   const netReturnRate = totalSpend > 0 ? (netValueEarned / totalSpend) * 100 : 0;
 
+  // Build currency breakdown array
+  const currencyBreakdown: CurrencyEarningsBreakdown[] = Array.from(currencyEarningsMap.entries())
+    .map(([currencyId, data]) => ({
+      currencyId,
+      currencyName: data.name,
+      currencyType: data.type,
+      pointsEarned: data.earned,
+      pointsValue: data.value,
+    }))
+    .sort((a, b) => b.pointsValue - a.pointsValue);
+
   return {
     totalSpend,
     cashbackSpend,
@@ -463,6 +540,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     avgPointsRate,
     totalPointsValue,
     avgPointValue,
+    currencyBreakdown,
     totalValue,
     netAnnualFees,
     netValueEarned,
@@ -723,12 +801,17 @@ function rankCardsForCategory(
 
 function updateCardEarnings(
   cardEarningsMap: Map<string, CardEarnings>,
+  currencyEarningsMap: Map<string, { name: string; type: string; earned: number; value: number }>,
   cardId: string,
   category: CategorySpending,
   spend: number,
   rate: number,
   earned: number,
-  earnedValue: number
+  earnedValue: number,
+  currencyId: string,
+  currencyName: string,
+  currencyType: string,
+  isCashback: boolean
 ): void {
   const cardEarnings = cardEarningsMap.get(cardId);
   if (!cardEarnings) return;
@@ -736,6 +819,22 @@ function updateCardEarnings(
   cardEarnings.totalSpend += spend;
   cardEarnings.totalEarned += earned;
   cardEarnings.totalEarnedValue += earnedValue;
+
+  // Update per-currency breakdown (for non-cashback currencies)
+  if (!isCashback) {
+    const existing = currencyEarningsMap.get(currencyId);
+    if (existing) {
+      existing.earned += earned;
+      existing.value += earnedValue;
+    } else {
+      currencyEarningsMap.set(currencyId, {
+        name: currencyName,
+        type: currencyType,
+        earned,
+        value: earnedValue,
+      });
+    }
+  }
 
   // Find or create category breakdown entry
   let catBreakdown = cardEarnings.categoryBreakdown.find(
@@ -761,5 +860,74 @@ function updateCardEarnings(
   catBreakdown.rate = catBreakdown.spend > 0 ? newTotal / catBreakdown.spend : 0;
   catBreakdown.earned += earned;
   catBreakdown.earnedValue += earnedValue;
+}
+
+// ============================================================================
+// Calculate Marginal Value for Each Card
+// ============================================================================
+
+/**
+ * Calculates the marginal value of each card in a portfolio.
+ * Marginal Value = Card's Current Value - Replacement Value - Net Fee
+ * Where Replacement Value = what other cards would earn if this card were removed
+ */
+export function calculateMarginalValues(
+  input: CalculatorInput,
+  currentReturns: PortfolioReturns
+): Map<string, { marginalValue: number; replacementValue: number }> {
+  const result = new Map<string, { marginalValue: number; replacementValue: number }>();
+  
+  // For each card with non-zero spend or non-zero fee, calculate its marginal value
+  for (const cardEarnings of currentReturns.cardBreakdown) {
+    if (cardEarnings.totalSpend === 0 && cardEarnings.netFee === 0) {
+      // Card has no impact, skip
+      result.set(cardEarnings.cardId, { marginalValue: 0, replacementValue: 0 });
+      continue;
+    }
+
+    // Create input without this card
+    const cardsWithout = input.cards.filter(c => c.id !== cardEarnings.cardId);
+    
+    if (cardsWithout.length === 0) {
+      // This is the only card - no replacement possible
+      result.set(cardEarnings.cardId, { 
+        marginalValue: cardEarnings.totalEarnedValue - cardEarnings.netFee,
+        replacementValue: 0 
+      });
+      continue;
+    }
+
+    // Also need to update enabledSecondaryCards since removing a card may affect secondary currency enablement
+    const userPrimaryCurrencyIdsWithout = new Set<string>();
+    cardsWithout.forEach((c) => {
+      userPrimaryCurrencyIdsWithout.add(c.primary_currency_id);
+    });
+    
+    const enabledSecondaryCardsWithout = new Set<string>();
+    cardsWithout.forEach((c) => {
+      if (c.secondary_currency_id && userPrimaryCurrencyIdsWithout.has(c.secondary_currency_id)) {
+        enabledSecondaryCardsWithout.add(c.id);
+      }
+    });
+
+    // Calculate returns without this card
+    const returnsWithout = calculatePortfolioReturns({
+      ...input,
+      cards: cardsWithout,
+      enabledSecondaryCards: enabledSecondaryCardsWithout,
+    });
+
+    // Replacement value = what other cards would earn on spend that was allocated to this card
+    // This is the difference in total value (excluding this card's value and fee)
+    const currentTotalValueExcludingThisCard = currentReturns.totalValue - cardEarnings.totalEarnedValue;
+    const replacementValue = returnsWithout.totalValue - currentTotalValueExcludingThisCard;
+
+    // Marginal Value = What this card earns - What replacement earns - Net Fee
+    const marginalValue = cardEarnings.totalEarnedValue - replacementValue - cardEarnings.netFee;
+
+    result.set(cardEarnings.cardId, { marginalValue, replacementValue });
+  }
+
+  return result;
 }
 

@@ -29,7 +29,7 @@ export default function Home() {
                   href="/returns"
                   className="text-sm text-zinc-400 hover:text-white transition-colors"
                 >
-                  Returns
+                  Earnings
                 </Link>
                 <Link
                   href="/compare"
