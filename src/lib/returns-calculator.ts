@@ -741,7 +741,7 @@ function buildEarningRateMap(
 
   // Apply Mobile Pay rates to categories user has selected for mobile pay
   for (const categoryId of mobilePayCategories) {
-    // Skip the Mobile Pay category itself
+    // Skip the Mobile Pay category itself (it already has the rule)
     if (categoryId === mobilePayCategoryId) continue;
 
     for (const [cardId, mobilePayRate] of mobilePayRates) {
@@ -755,8 +755,9 @@ function buildEarningRateMap(
       }
 
       // Add Mobile Pay rate as an option for this category
-      // The cap key is shared across all mobile pay categories (combined cap)
-      const capKey = `${cardId}:mobilepay:${mobilePayRate.ruleId}`;
+      // IMPORTANT: Use the same cap key as the Mobile Pay rule itself so all
+      // mobile pay spending shares the same cap (e.g., $5k/month)
+      const capKey = `${cardId}:rule:${mobilePayRate.ruleId}`;
       
       cardMap.get(categoryId)!.push({
         rate: mobilePayRate.rate,
