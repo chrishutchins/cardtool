@@ -98,24 +98,32 @@ export function CardRecommendations({
             </div>
 
             <div className="space-y-2 mb-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">Annual Fee</span>
-                <span className="text-zinc-300">
-                  {rec.card.annual_fee > 0 ? formatCurrency(rec.card.annual_fee) : "$0"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">Est. Perks Value</span>
-                <span className="text-zinc-300">
-                  {rec.defaultPerksValue > 0 ? formatCurrency(rec.defaultPerksValue) : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">Your Increase</span>
-                <span className="text-emerald-400 font-semibold">
-                  +{formatCurrency(rec.improvement)}/yr
-                </span>
-              </div>
+              {(() => {
+                const netFee = rec.card.annual_fee - rec.defaultPerksValue;
+                const spendingEarnings = rec.improvement + netFee;
+                return (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-400">Spending Earnings</span>
+                      <span className="text-zinc-300">
+                        +{formatCurrency(spendingEarnings)}/yr
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-400">Net Annual Fee</span>
+                      <span className="text-zinc-300">
+                        {netFee > 0 ? `-${formatCurrency(netFee)}` : "$0"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm border-t border-zinc-700 pt-2 mt-2">
+                      <span className="text-zinc-300 font-medium">Total Earnings</span>
+                      <span className="text-emerald-400 font-semibold">
+                        +{formatCurrency(rec.improvement)}/yr
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {onAddCard && (
