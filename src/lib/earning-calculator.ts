@@ -71,7 +71,7 @@ export function getEffectiveEarningRate(
   
   // Get travel preference for this category if it's a travel subcategory
   const travelPref = isTravelSubcategory(category)
-    ? travelPreferences.find(p => p.category_slug === category.slug)
+    ? travelPreferences.find(p => p.category_slug === category.slug) ?? null
     : null;
 
   // Find rules for this specific category

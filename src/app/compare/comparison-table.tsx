@@ -64,23 +64,19 @@ export function ComparisonTable({
     return rate * card.pointValue;
   };
 
-  // Get min/max values per category for color scaling
+  // Get min/max values per category for color scaling (always use all cards for consistent coloring)
   const categoryStats = useMemo(() => {
     const stats: Record<number, { min: number; max: number }> = {};
-    
-    const filteredCards = filterMode === "my-cards" 
-      ? cards.filter((c) => c.isOwned)
-      : cards;
 
     for (const category of selectedCategories) {
-      const values = filteredCards.map((card) => getEffectiveValue(card, category.id));
+      const values = cards.map((card) => getEffectiveValue(card, category.id));
       stats[category.id] = {
         min: Math.min(...values),
         max: Math.max(...values),
       };
     }
     return stats;
-  }, [cards, selectedCategories, filterMode]);
+  }, [cards, selectedCategories]);
 
   // Get color class based on value position in range
   const getColorStyle = (value: number, categoryId: number): string => {
