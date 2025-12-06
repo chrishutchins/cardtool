@@ -84,6 +84,13 @@ export interface TravelPreference {
   portal_issuer_id: string | null;
 }
 
+export interface MultiplierProgram {
+  programId: string;
+  multiplier: number;
+  applicableCurrencyIds: string[]; // currencies this multiplier applies to
+  applicableCardIds: string[]; // specific cards this multiplier applies to
+}
+
 // Output Types
 export interface AllocationEntry {
   cardId: string;
@@ -214,6 +221,7 @@ export interface CalculatorInput {
   cashOutValues: Map<string, number>; // currency_id -> cash_out_value_cents (for cash_only mode)
   perksValues: Map<string, number>;
   debitPayValues?: Map<string, number>; // card_id -> debit_pay_percent bonus
+  multiplierPrograms?: MultiplierProgram[]; // earning multipliers (e.g., BoA Preferred Rewards)
   userSelections: Map<string, number>; // cap_id -> selected_category_id
   travelPreferences: TravelPreference[];
   enabledSecondaryCards: Set<string>; // card IDs with secondary currency enabled
@@ -231,11 +239,33 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     cashOutValues,
     perksValues,
     debitPayValues = new Map(),
+    multiplierPrograms = [],
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
     earningsGoal,
   } = input;
+
+  // Build a map of card_id -> multiplier (for earning multiplier programs like BoA Preferred Rewards)
+  const cardMultipliers = new Map<string, number>();
+  for (const program of multiplierPrograms) {
+    for (const card of cards) {
+      // Check if this card is eligible for this multiplier program
+      const currencyId = enabledSecondaryCards.has(card.id) && card.secondary_currency
+        ? card.secondary_currency.id
+        : card.primary_currency?.id;
+      
+      const isEligible = 
+        program.applicableCardIds.includes(card.id) ||
+        (currencyId && program.applicableCurrencyIds.includes(currencyId));
+      
+      if (isEligible) {
+        // If multiple programs apply, use the highest multiplier
+        const existing = cardMultipliers.get(card.id) ?? 1;
+        cardMultipliers.set(card.id, Math.max(existing, program.multiplier));
+      }
+    }
+  }
 
   // Build category map for parent lookups
   const categoryMap = new Map<number, CategorySpending>();
@@ -362,7 +392,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       earningRateMap,
       capUsage,
       getCardCurrencyInfo,
-      debitPayValues
+      debitPayValues,
+      cardMultipliers
     );
 
     // Allocate spending to cards in order of value
@@ -379,9 +410,12 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       if (availableCap <= 0 && postCapRate !== null) {
         // Cap exhausted, use post-cap rate for remaining
         const spendAmount = remainingSpend;
+        // Apply earning multiplier (e.g., BoA Preferred Rewards 1.75x)
+        const multiplier = cardMultipliers.get(card.id) ?? 1;
+        const effectiveRate = postCapRate * multiplier;
         const earned = currencyInfo.isCashback 
-          ? spendAmount * (postCapRate / 100)  // Cash back: rate is percentage
-          : spendAmount * postCapRate;          // Points: rate is multiplier
+          ? spendAmount * (effectiveRate / 100)  // Cash back: rate is percentage
+          : spendAmount * effectiveRate;          // Points: rate is multiplier
         const baseEarnedValue = currencyInfo.isCashback 
           ? earned 
           : earned * (currencyInfo.valueCents / 100);
@@ -395,14 +429,14 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           currencyType: currencyInfo.currencyType,
           currencyName: currencyInfo.currencyName,
           spend: spendAmount,
-          rate: postCapRate,
+          rate: effectiveRate,
           earned,
           earnedValue,
           isCashback: currencyInfo.isCashback,
         });
 
         // Update card earnings
-        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAmount, postCapRate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAmount, effectiveRate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
         
         remainingSpend = 0;
         break;
@@ -412,9 +446,12 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       const spendAtElevated = Math.min(remainingSpend, availableCap);
       
       if (spendAtElevated > 0) {
+        // Apply earning multiplier (e.g., BoA Preferred Rewards 1.75x)
+        const multiplier = cardMultipliers.get(card.id) ?? 1;
+        const effectiveRate = rate * multiplier;
         const earned = currencyInfo.isCashback 
-          ? spendAtElevated * (rate / 100)
-          : spendAtElevated * rate;
+          ? spendAtElevated * (effectiveRate / 100)
+          : spendAtElevated * effectiveRate;
         const baseEarnedValue = currencyInfo.isCashback 
           ? earned 
           : earned * (currencyInfo.valueCents / 100);
@@ -428,7 +465,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           currencyType: currencyInfo.currencyType,
           currencyName: currencyInfo.currencyName,
           spend: spendAtElevated,
-          rate,
+          rate: effectiveRate,
           earned,
           earnedValue,
           isCashback: currencyInfo.isCashback,
@@ -440,7 +477,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         }
 
         // Update card earnings
-        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAtElevated, rate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAtElevated, effectiveRate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
 
         remainingSpend -= spendAtElevated;
       }
@@ -456,7 +493,10 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         // Skip excluded cards
         if (currencyInfo.excluded) continue;
         
-        const rate = card.default_earn_rate;
+        const baseRate = card.default_earn_rate;
+        // Apply earning multiplier (e.g., BoA Preferred Rewards 1.75x)
+        const multiplier = cardMultipliers.get(card.id) ?? 1;
+        const rate = baseRate * multiplier;
         const baseValue = currencyInfo.isCashback 
           ? rate / 100 
           : rate * (currencyInfo.valueCents / 100);
@@ -472,7 +512,10 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       // Only allocate if we found a non-excluded card
       if (bestCard) {
         const currencyInfo = getCardCurrencyInfo(bestCard);
-        const rate = bestCard.default_earn_rate;
+        const baseRate = bestCard.default_earn_rate;
+        // Apply earning multiplier (e.g., BoA Preferred Rewards 1.75x)
+        const multiplier = cardMultipliers.get(bestCard.id) ?? 1;
+        const rate = baseRate * multiplier;
         const earned = currencyInfo.isCashback 
           ? remainingSpend * (rate / 100)
           : remainingSpend * rate;
@@ -764,7 +807,8 @@ function rankCardsForCategory(
   earningRateMap: Map<string, Map<number, RateInfo[]>>,
   capUsage: Map<string, number>,
   getCardCurrencyInfo: (card: CardInput) => { valueCents: number; isCashback: boolean; excluded: boolean },
-  debitPayValues: Map<string, number> = new Map()
+  debitPayValues: Map<string, number> = new Map(),
+  cardMultipliers: Map<string, number> = new Map()
 ): RankedCard[] {
   const ranked: RankedCard[] = [];
 
@@ -777,10 +821,13 @@ function rankCardsForCategory(
     const cardRates = earningRateMap.get(card.id)?.get(categoryId) ?? [];
     // Debit pay bonus adds a flat % return on all spend with this card
     const debitPayBonus = (debitPayValues.get(card.id) ?? 0) / 100;
+    // Earning multiplier (e.g., BoA Preferred Rewards 1.75x)
+    const multiplier = cardMultipliers.get(card.id) ?? 1;
 
     if (cardRates.length === 0) {
       // Use default rate
-      const rate = card.default_earn_rate;
+      const baseRate = card.default_earn_rate;
+      const rate = baseRate * multiplier;
       const baseValue = currencyInfo.isCashback 
         ? rate / 100 
         : rate * (currencyInfo.valueCents / 100);
@@ -800,18 +847,22 @@ function rankCardsForCategory(
         const usedCap = capUsage.get(rateInfo.capKey) ?? 0;
         const hasRoomInCap = usedCap < rateInfo.annualCap;
         
+        // Apply multiplier to rates
+        const effectiveRate = rateInfo.rate * multiplier;
+        const effectivePostCapRate = rateInfo.postCapRate !== null ? rateInfo.postCapRate * multiplier : null;
+        
         const baseValue = currencyInfo.isCashback 
-          ? rateInfo.rate / 100 
-          : rateInfo.rate * (currencyInfo.valueCents / 100);
+          ? effectiveRate / 100 
+          : effectiveRate * (currencyInfo.valueCents / 100);
         const effectiveValue = baseValue + debitPayBonus;
 
         // Only add if there's room in cap or there's a post-cap rate
-        if (hasRoomInCap || rateInfo.postCapRate !== null) {
+        if (hasRoomInCap || effectivePostCapRate !== null) {
           ranked.push({
             card,
-            rate: rateInfo.rate,
+            rate: effectiveRate,
             annualCap: rateInfo.annualCap,
-            postCapRate: rateInfo.postCapRate,
+            postCapRate: effectivePostCapRate,
             capKey: rateInfo.capKey,
             effectiveValue: hasRoomInCap ? effectiveValue : debitPayBonus, // If cap exhausted, only debit pay value for sorting
           });

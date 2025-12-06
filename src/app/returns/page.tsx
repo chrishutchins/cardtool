@@ -12,6 +12,7 @@ import {
   CategoryBonusInput,
   TravelPreference,
   EarningsGoal,
+  MultiplierProgram,
 } from "@/lib/returns-calculator";
 
 interface Props {
@@ -44,6 +45,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     selectionsResult,
     travelPrefsResult,
     categoriesResult,
+    multiplierProgramsResult,
+    userMultiplierTiersResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -133,6 +136,23 @@ export default async function ReturnsPage({ searchParams }: Props) {
     supabase
       .from("earning_categories")
       .select("id, name, slug, parent_category_id, excluded_by_default"),
+    
+    // Multiplier programs with their tiers and eligibility
+    supabase
+      .from("earning_multiplier_programs")
+      .select(`
+        id,
+        name,
+        earning_multiplier_tiers (id, name, multiplier),
+        earning_multiplier_currencies (currency_id),
+        earning_multiplier_cards (card_id)
+      `),
+    
+    // User's selected multiplier tiers
+    supabase
+      .from("user_multiplier_tiers")
+      .select("program_id, tier_id")
+      .eq("user_id", user.id),
   ]);
 
   // Process wallet cards
@@ -251,6 +271,36 @@ export default async function ReturnsPage({ searchParams }: Props) {
     }
   });
 
+  // Build multiplier programs data
+  const userTierMap = new Map<string, string>();
+  userMultiplierTiersResult.data?.forEach((t) => {
+    if (t.program_id && t.tier_id) {
+      userTierMap.set(t.program_id, t.tier_id);
+    }
+  });
+
+  const multiplierPrograms: MultiplierProgram[] = [];
+  multiplierProgramsResult.data?.forEach((program) => {
+    const selectedTierId = userTierMap.get(program.id);
+    if (!selectedTierId) return; // User hasn't selected a tier for this program
+    
+    const selectedTier = (program.earning_multiplier_tiers as unknown as Array<{ id: string; name: string; multiplier: number }>)
+      ?.find((t) => t.id === selectedTierId);
+    if (!selectedTier) return;
+    
+    const applicableCurrencyIds = ((program.earning_multiplier_currencies as unknown as Array<{ currency_id: string }>) ?? [])
+      .map((c) => c.currency_id);
+    const applicableCardIds = ((program.earning_multiplier_cards as unknown as Array<{ card_id: string }>) ?? [])
+      .map((c) => c.card_id);
+    
+    multiplierPrograms.push({
+      programId: program.id,
+      multiplier: Number(selectedTier.multiplier),
+      applicableCurrencyIds,
+      applicableCardIds,
+    });
+  });
+
   // Calculate returns
   const calculatorInput = {
     cards,
@@ -262,6 +312,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     cashOutValues,
     perksValues,
     debitPayValues,
+    multiplierPrograms,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
