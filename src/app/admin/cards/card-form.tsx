@@ -35,14 +35,14 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
   // Sync state when defaultValues changes (e.g., after form submission and revalidation)
   useEffect(() => {
     if (defaultValues) {
-      setName(defaultValues.name);
-      setSlug(defaultValues.slug);
-      setIssuerId(defaultValues.issuer_id);
-      setPrimaryCurrencyId(defaultValues.primary_currency_id);
+      setName(defaultValues.name ?? "");
+      setSlug(defaultValues.slug ?? "");
+      setIssuerId(defaultValues.issuer_id ?? "");
+      setPrimaryCurrencyId(defaultValues.primary_currency_id ?? "");
       setSecondaryCurrencyId(defaultValues.secondary_currency_id ?? "");
-      setProductType(defaultValues.product_type);
-      setAnnualFee(defaultValues.annual_fee);
-      setDefaultEarnRate(defaultValues.default_earn_rate);
+      setProductType(defaultValues.product_type ?? "personal");
+      setAnnualFee(defaultValues.annual_fee ?? 0);
+      setDefaultEarnRate(defaultValues.default_earn_rate ?? 1.0);
     }
   }, [defaultValues]);
 
