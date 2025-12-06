@@ -381,17 +381,42 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     });
   });
 
-  // Process each category with non-zero spending
-  for (const categorySpend of spending) {
-    if (categorySpend.annual_spend_cents <= 0) continue;
-    if (categorySpend.excluded_by_default) continue;
+  // Sort categories to optimize shared cap allocation
+  // Categories where the best card uses a shared cap AND provides big marginal benefit
+  // should be processed first so they get priority for limited cap room
+  const sortedSpending = [...spending]
+    .filter(s => s.annual_spend_cents > 0 && !s.excluded_by_default)
+    .map(categorySpend => {
+      // Get ranked cards for this category to calculate marginal benefit
+      const rankedCards = rankCardsForCategory(
+        cards,
+        categorySpend.category_id,
+        earningRateMap,
+        new Map(), // Empty cap usage for initial ranking
+        getCardCurrencyInfo,
+        debitPayValues,
+        cardMultipliers
+      );
+      
+      // Calculate marginal benefit: difference between best and second-best
+      const bestValue = rankedCards[0]?.effectiveValue ?? 0;
+      const secondBestValue = rankedCards[1]?.effectiveValue ?? 0;
+      const marginalBenefit = (bestValue - secondBestValue) * (categorySpend.annual_spend_cents / 100);
+      
+      return { categorySpend, marginalBenefit };
+    })
+    // Sort by marginal benefit descending - categories that benefit most from their best card go first
+    .sort((a, b) => b.marginalBenefit - a.marginalBenefit)
+    .map(x => x.categorySpend);
 
+  // Process each category with non-zero spending (now sorted by optimization priority)
+  for (const categorySpend of sortedSpending) {
     const spendDollars = categorySpend.annual_spend_cents / 100;
     let remainingSpend = spendDollars;
 
     const allocations: AllocationEntry[] = [];
 
-    // Rank cards by effective value for this category
+    // Rank cards by effective value for this category (with current cap usage)
     const rankedCards = rankCardsForCategory(
       cards,
       categorySpend.category_id,
