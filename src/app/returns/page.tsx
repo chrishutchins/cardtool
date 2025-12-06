@@ -1,11 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import { WalletCardList } from "./wallet-card-list";
-import { AddCardModal } from "./add-card-modal";
 import { UserHeader } from "@/components/user-header";
-import { ReturnsSummary } from "./returns-summary";
+import { ReturnsDisplay } from "./returns-display";
 import {
   calculatePortfolioReturns,
   CardInput,
@@ -15,7 +12,7 @@ import {
   TravelPreference,
 } from "@/lib/returns-calculator";
 
-export default async function WalletPage() {
+export default async function ReturnsPage() {
   const user = await currentUser();
   
   if (!user) {
@@ -24,10 +21,9 @@ export default async function WalletPage() {
 
   const supabase = await createClient();
 
-  // Fetch wallet cards and returns data in parallel
+  // Fetch all required data in parallel
   const [
     walletResult,
-    allCardsResult,
     spendingResult,
     rulesResult,
     bonusesResult,
@@ -42,9 +38,7 @@ export default async function WalletPage() {
     supabase
       .from("user_wallets")
       .select(`
-        id,
         card_id,
-        added_at,
         cards:card_id (
           id,
           name,
@@ -54,20 +48,15 @@ export default async function WalletPage() {
           primary_currency_id,
           secondary_currency_id,
           issuer_id,
-          issuers:issuer_id (name),
-          primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
-          secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
+          primary_currency:reward_currencies!cards_primary_currency_id_fkey (
+            id, name, code, currency_type, base_value_cents
+          ),
+          secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (
+            id, name, code, currency_type, base_value_cents
+          )
         )
       `)
       .eq("user_id", user.id),
-    
-    // All available cards for adding
-    supabase
-      .from("card_with_currency")
-      .select("*")
-      .eq("is_active", true)
-      .order("issuer_name")
-      .order("name"),
     
     // User's spending per category
     supabase
@@ -75,12 +64,12 @@ export default async function WalletPage() {
       .select("category_id, category_name, category_slug, annual_spend_cents")
       .eq("user_id", user.id),
     
-    // All earning rules
+    // All earning rules for user's cards (fetched after we know which cards)
     supabase
       .from("card_earning_rules")
       .select("id, card_id, category_id, rate, has_cap, cap_amount, cap_period, cap_unit, post_cap_rate, booking_method, brand_name"),
     
-    // All category bonuses
+    // All category bonuses with their categories
     supabase
       .from("card_caps")
       .select(`
@@ -111,64 +100,38 @@ export default async function WalletPage() {
       .select("card_id, perks_value")
       .eq("user_id", user.id),
     
-    // User's category selections
+    // User's category selections for "selected_category" bonuses
     supabase
       .from("user_card_selections")
       .select("cap_id, selected_category_id")
       .eq("user_id", user.id),
     
-    // User's travel preferences
+    // User's travel booking preferences
     supabase
       .from("user_travel_booking_preferences")
       .select("category_slug, preference_type, brand_name, portal_issuer_id")
       .eq("user_id", user.id),
     
-    // All categories for parent lookups
+    // All categories for parent lookups and exclusion status
     supabase
       .from("earning_categories")
       .select("id, name, slug, parent_category_id, excluded_by_default"),
   ]);
 
-  const walletCards = walletResult.data ?? [];
-  const userCardIds = walletCards.map((wc) => wc.card_id);
+  // Process wallet cards
+  const userCardIds = new Set<string>();
+  const cards: CardInput[] = [];
   
-  // Build set of currency IDs the user "owns" (from cards in wallet)
-  const userPrimaryCurrencyIds = new Set(
-    walletCards
-      .map((wc) => wc.cards?.primary_currency_id)
-      .filter((id): id is string => !!id)
-  );
-
-  // Cards with secondary currency enabled if user has a card with that as primary
-  const enabledSecondaryCards = new Set<string>();
-  walletCards.forEach((wc) => {
-    if (wc.cards?.secondary_currency_id && 
-        userPrimaryCurrencyIds.has(wc.cards.secondary_currency_id)) {
-      enabledSecondaryCards.add(wc.cards.id);
+  walletResult.data?.forEach((w) => {
+    if (w.cards) {
+      userCardIds.add(w.card_id);
+      cards.push(w.cards as unknown as CardInput);
     }
   });
 
-  // Build perks map
-  const perksMap = new Map<string, number>();
-  perksResult.data?.forEach((pv) => {
-    perksMap.set(pv.card_id, pv.perks_value);
-  });
-
-  const cardsNotInWallet = allCardsResult.data?.filter(
-    (card) => card.id && !userCardIds.includes(card.id)
-  ) ?? [];
-
-  // Calculate portfolio returns
-  const userCardIdsSet = new Set(userCardIds);
-  
-  // Process cards for returns calculator
-  const cards: CardInput[] = walletCards
-    .filter(w => w.cards)
-    .map(w => w.cards as unknown as CardInput);
-
   // Filter earning rules to only user's cards
   const earningRules: EarningRuleInput[] = (rulesResult.data ?? [])
-    .filter((r) => userCardIdsSet.has(r.card_id))
+    .filter((r) => userCardIds.has(r.card_id))
     .map((r) => ({
       id: r.id,
       card_id: r.card_id,
@@ -185,7 +148,7 @@ export default async function WalletPage() {
 
   // Filter category bonuses to only user's cards
   const categoryBonuses: CategoryBonusInput[] = (bonusesResult.data ?? [])
-    .filter((b) => userCardIdsSet.has(b.card_id))
+    .filter((b) => userCardIds.has(b.card_id))
     .map((b) => ({
       id: b.id,
       card_id: b.card_id,
@@ -197,7 +160,7 @@ export default async function WalletPage() {
       category_ids: (b.card_cap_categories as { category_id: number }[] ?? []).map(c => c.category_id),
     }));
 
-  // Build category maps
+  // Build category map with exclusion status
   const categoryExclusionMap = new Map<number, boolean>();
   const categoryParentMap = new Map<number, number | null>();
   categoriesResult.data?.forEach((c) => {
@@ -205,7 +168,7 @@ export default async function WalletPage() {
     categoryParentMap.set(c.id, c.parent_category_id);
   });
 
-  // Process spending
+  // Process spending with exclusion status
   const spending: CategorySpending[] = (spendingResult.data ?? []).map((s) => ({
     category_id: s.category_id!,
     category_name: s.category_name!,
@@ -228,6 +191,12 @@ export default async function WalletPage() {
     userCurrencyValues.set(v.currency_id, v.value_cents);
   });
 
+  // Build perks values map
+  const perksValues = new Map<string, number>();
+  perksResult.data?.forEach((p) => {
+    perksValues.set(p.card_id, p.perks_value);
+  });
+
   // Build user selections map
   const userSelections = new Map<string, number>();
   selectionsResult.data?.forEach((s) => {
@@ -242,103 +211,47 @@ export default async function WalletPage() {
     portal_issuer_id: p.portal_issuer_id,
   }));
 
-  // Calculate returns (only if user has cards)
-  const returns = cards.length > 0 ? calculatePortfolioReturns({
+  // Determine enabled secondary cards
+  const userPrimaryCurrencyIds = new Set<string>();
+  cards.forEach((c) => {
+    userPrimaryCurrencyIds.add(c.primary_currency_id);
+  });
+
+  const enabledSecondaryCards = new Set<string>();
+  cards.forEach((c) => {
+    if (c.secondary_currency_id && userPrimaryCurrencyIds.has(c.secondary_currency_id)) {
+      enabledSecondaryCards.add(c.id);
+    }
+  });
+
+  // Calculate returns
+  const returns = calculatePortfolioReturns({
     cards,
     spending,
     earningRules,
     categoryBonuses,
     userCurrencyValues,
     defaultCurrencyValues,
-    perksValues: perksMap,
+    perksValues,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
-  }) : null;
-
-  async function addToWallet(cardId: string) {
-    "use server";
-    const user = await currentUser();
-    if (!user) return;
-
-    const supabase = await createClient();
-    await supabase.from("user_wallets").insert({
-      user_id: user.id,
-      card_id: cardId,
-    });
-    revalidatePath("/wallet");
-  }
-
-  async function removeFromWallet(walletId: string) {
-    "use server";
-    const user = await currentUser();
-    if (!user) return;
-
-    const supabase = await createClient();
-    await supabase
-      .from("user_wallets")
-      .delete()
-      .eq("id", walletId)
-      .eq("user_id", user.id);
-    revalidatePath("/wallet");
-  }
-
-  async function updatePerksValue(cardId: string, perksValue: number) {
-    "use server";
-    const user = await currentUser();
-    if (!user) return;
-
-    const supabase = await createClient();
-    await supabase.from("user_card_perks_values").upsert(
-      {
-        user_id: user.id,
-        card_id: cardId,
-        perks_value: perksValue,
-      },
-      { onConflict: "user_id,card_id" }
-    );
-    revalidatePath("/wallet");
-  }
+  });
 
   return (
     <div className="min-h-screen bg-zinc-950">
       <UserHeader />
       <div className="mx-auto max-w-5xl px-4 py-12">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white">My Wallet</h1>
-            <p className="text-zinc-400 mt-1">
-              {walletCards.length} card{walletCards.length !== 1 ? "s" : ""} in your wallet
-            </p>
-          </div>
-          <AddCardModal
-            availableCards={cardsNotInWallet}
-            onAddCard={addToWallet}
-          />
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white">Portfolio Returns</h1>
+          <p className="text-zinc-400 mt-1">
+            Optimal allocation of your spending across {cards.length} card{cards.length !== 1 ? "s" : ""}
+          </p>
         </div>
 
-        {/* Returns Summary */}
-        {returns && returns.totalSpend > 0 && (
-          <ReturnsSummary returns={returns} />
-        )}
-
-        {walletCards.length > 0 ? (
-          <WalletCardList
-            walletCards={walletCards}
-            enabledSecondaryCards={enabledSecondaryCards}
-            perksMap={perksMap}
-            onRemove={removeFromWallet}
-            onUpdatePerks={updatePerksValue}
-          />
-        ) : (
-          <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
-            <p className="text-zinc-400 mb-4">Your wallet is empty.</p>
-            <p className="text-zinc-500 text-sm">
-              Add cards to track your rewards and see which currencies are active.
-            </p>
-          </div>
-        )}
+        <ReturnsDisplay returns={returns} />
       </div>
     </div>
   );
 }
+

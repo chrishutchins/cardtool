@@ -26,6 +26,12 @@ export default function Home() {
                   My Wallet
                 </Link>
                 <Link
+                  href="/returns"
+                  className="text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  Returns
+                </Link>
+                <Link
                   href="/compare"
                   className="text-sm text-zinc-400 hover:text-white transition-colors"
                 >
