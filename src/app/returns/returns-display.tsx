@@ -120,45 +120,40 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
               </div>
             </div>
           ) : (
-            // In maximize or points_only mode, show cash back and debit pay separately
-            <div className="space-y-4">
-              {returns.cashbackSpend > 0 && (
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <div className="text-sm text-zinc-400 mb-1">Cash Back Spend</div>
-                    <div className="text-xl font-semibold text-white">{formatCurrency(returns.cashbackSpend)}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm text-zinc-400 mb-1">Cash Back Earned</div>
-                    <div className="text-xl font-semibold text-emerald-400">{formatCurrency(returns.cashbackEarned)}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm text-zinc-400 mb-1">Avg CB Earn Rate</div>
-                    <div className="text-xl font-semibold text-white">{formatPercent(returns.avgCashbackRate)}</div>
-                  </div>
+            // In maximize or points_only mode, show cash back and debit pay
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="text-sm text-zinc-400 mb-1">
+                  {returns.cashbackSpend > 0 ? "Cash Back Spend" : "Total Spend"}
                 </div>
-              )}
-              {returns.totalDebitPay > 0 && (
-                <div className={`grid grid-cols-3 gap-4 ${returns.cashbackSpend > 0 ? "pt-4 border-t border-zinc-700/50" : ""}`}>
-                  <div className="text-center">
-                    <div className="text-sm text-zinc-400 mb-1">Debit Pay Spend</div>
-                    <div className="text-xl font-semibold text-white">{formatCurrency(returns.totalSpend)}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm text-zinc-400 mb-1">Debit Pay Bonus</div>
-                    <div className="text-xl font-semibold text-emerald-400">{formatCurrency(returns.totalDebitPay)}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm text-zinc-400 mb-1">Avg Debit Rate</div>
-                    <div className="text-xl font-semibold text-white">
-                      {returns.totalSpend > 0 ? formatPercent((returns.totalDebitPay / returns.totalSpend) * 100) : "0%"}
-                    </div>
-                  </div>
+                <div className="text-xl font-semibold text-white">
+                  {formatCurrency(returns.cashbackSpend > 0 ? returns.cashbackSpend : returns.totalSpend)}
                 </div>
-              )}
-              {returns.cashbackSpend === 0 && returns.totalDebitPay === 0 && (
-                <p className="text-zinc-500 text-center">No cash back earnings in current allocation</p>
-              )}
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-zinc-400 mb-1">Total Earned</div>
+                <div className="text-xl font-semibold text-emerald-400">
+                  {formatCurrency(returns.cashbackEarned + returns.totalDebitPay)}
+                </div>
+                {returns.totalDebitPay > 0 && returns.cashbackEarned > 0 && (
+                  <div className="text-xs text-pink-400 mt-1">
+                    ({formatCurrency(returns.cashbackEarned)} + {formatCurrency(returns.totalDebitPay)} debit)
+                  </div>
+                )}
+                {returns.totalDebitPay > 0 && returns.cashbackEarned === 0 && (
+                  <div className="text-xs text-pink-400 mt-1">
+                    (debit pay bonus)
+                  </div>
+                )}
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-zinc-400 mb-1">Avg Rate</div>
+                <div className="text-xl font-semibold text-white">
+                  {returns.totalSpend > 0 
+                    ? formatPercent(((returns.cashbackEarned + returns.totalDebitPay) / (returns.cashbackSpend > 0 ? returns.cashbackSpend : returns.totalSpend)) * 100) 
+                    : "0%"}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -299,7 +294,7 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
                               <span className="text-zinc-500 ml-1">
                                 ({formatCurrency(alloc.spend)} @ {alloc.isCashback ? `${alloc.rate.toFixed(2)}%` : `${alloc.rate.toFixed(2)}x`}
                                 {alloc.debitPayBonus > 0 && (
-                                  <span className="text-emerald-500"> + {((alloc.debitPayBonus / alloc.spend) * 100).toFixed(0)}% debit</span>
+                                  <span className="text-pink-400"> +{((alloc.debitPayBonus / alloc.spend) * 100).toFixed(0)}%</span>
                                 )})
                               </span>
                             </div>
@@ -313,9 +308,6 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
                               ? formatCurrency(alloc.earned)
                               : formatNumber(alloc.earned, 0) + " pts"
                             }
-                            {alloc.debitPayBonus > 0 && (
-                              <span className="text-emerald-400 ml-1">+ {formatCurrency(alloc.debitPayBonus)}</span>
-                            )}
                           </div>
                         ))}
                       </td>
