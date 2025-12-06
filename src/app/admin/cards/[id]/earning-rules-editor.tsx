@@ -38,8 +38,9 @@ interface EarningRulesEditorProps {
   cardCurrencyName?: string;
 }
 
-// Travel subcategory slugs
+// Travel subcategory slugs and parent slug
 const TRAVEL_SUBCATEGORY_SLUGS = ["flights", "hotels", "rental-car"];
+const TRAVEL_PARENT_SLUG = "all-travel";
 
 type SortField = "category" | "rate" | "booking";
 type SortDirection = "asc" | "desc";
@@ -84,12 +85,19 @@ export function EarningRulesEditor({
   // Get brand name from currency name (e.g., "Hyatt" from "Hyatt", "Delta" from "Delta")
   const defaultBrandName = cardCurrencyName ?? "";
 
+  // Helper to check if a parent category ID belongs to the travel parent
+  const isParentTravel = (parentCategoryId: number | null) => {
+    if (parentCategoryId === null) return false;
+    const parentCategory = availableCategories.find(c => c.id === parentCategoryId);
+    return parentCategory?.slug === TRAVEL_PARENT_SLUG;
+  };
+
   // Check if a category is a travel subcategory
   const isTravelCategoryById = (categoryId: number) => {
     const category = availableCategories.find(c => c.id === categoryId);
     return category && (
       TRAVEL_SUBCATEGORY_SLUGS.includes(category.slug) || 
-      category.parent_category_id !== null
+      isParentTravel(category.parent_category_id)
     );
   };
   
@@ -98,7 +106,7 @@ export function EarningRulesEditor({
     const embeddedCategory = rule.earning_categories;
     if (embeddedCategory) {
       return TRAVEL_SUBCATEGORY_SLUGS.includes(embeddedCategory.slug) || 
-             embeddedCategory.parent_category_id !== null;
+             isParentTravel(embeddedCategory.parent_category_id);
     }
     return isTravelCategoryById(rule.category_id);
   };
