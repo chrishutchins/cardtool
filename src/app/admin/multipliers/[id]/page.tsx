@@ -65,7 +65,7 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
     const cap_amount = has_cap && formData.get("cap_amount") 
       ? parseFloat(formData.get("cap_amount") as string) 
       : null;
-    const cap_period = (formData.get("cap_period") as "month" | "quarter" | "year") || "month";
+    const cap_period = (formData.get("cap_period") as "none" | "month" | "quarter" | "year" | "lifetime") || "month";
 
     await supabase.from("earning_multiplier_tiers").insert({
       program_id: id,
@@ -92,7 +92,7 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
     const cap_amount = has_cap && formData.get("cap_amount") 
       ? parseFloat(formData.get("cap_amount") as string) 
       : null;
-    const cap_period = (formData.get("cap_period") as "month" | "quarter" | "year") || "month";
+    const cap_period = (formData.get("cap_period") as "none" | "month" | "quarter" | "year" | "lifetime") || "month";
 
     await supabase
       .from("earning_multiplier_tiers")
