@@ -47,6 +47,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     categoriesResult,
     multiplierProgramsResult,
     userMultiplierTiersResult,
+    mobilePayCategoriesResult,
+    mobilePayCategoryResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -153,6 +155,19 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .from("user_multiplier_tiers")
       .select("program_id, tier_id")
       .eq("user_id", user.id),
+    
+    // User's mobile pay categories
+    supabase
+      .from("user_mobile_pay_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    
+    // Get the Mobile Pay category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "mobile-pay")
+      .single(),
   ]);
 
   // Process wallet cards
@@ -301,6 +316,13 @@ export default async function ReturnsPage({ searchParams }: Props) {
     });
   });
 
+  // Build mobile pay categories set
+  const mobilePayCategories = new Set<number>();
+  mobilePayCategoriesResult.data?.forEach((m) => {
+    mobilePayCategories.add(m.category_id);
+  });
+  const mobilePayCategoryId = mobilePayCategoryResult.data?.id;
+
   // Calculate returns
   const calculatorInput = {
     cards,
@@ -313,6 +335,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     perksValues,
     debitPayValues,
     multiplierPrograms,
+    mobilePayCategories,
+    mobilePayCategoryId,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,

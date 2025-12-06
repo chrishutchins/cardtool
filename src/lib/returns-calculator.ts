@@ -222,6 +222,8 @@ export interface CalculatorInput {
   perksValues: Map<string, number>;
   debitPayValues?: Map<string, number>; // card_id -> debit_pay_percent bonus
   multiplierPrograms?: MultiplierProgram[]; // earning multipliers (e.g., BoA Preferred Rewards)
+  mobilePayCategories?: Set<number>; // category_ids where user uses mobile pay
+  mobilePayCategoryId?: number; // the category_id for "Mobile Pay" itself
   userSelections: Map<string, number>; // cap_id -> selected_category_id
   travelPreferences: TravelPreference[];
   enabledSecondaryCards: Set<string>; // card IDs with secondary currency enabled
@@ -240,6 +242,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     perksValues,
     debitPayValues = new Map(),
     multiplierPrograms = [],
+    mobilePayCategories = new Set(),
+    mobilePayCategoryId,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
@@ -282,7 +286,9 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     categoryMap,
     userSelections,
     topCategoriesMap,
-    travelPreferences
+    travelPreferences,
+    mobilePayCategories,
+    mobilePayCategoryId
   );
 
   // Track cap usage per card per category (for rules with caps)
@@ -685,10 +691,28 @@ function buildEarningRateMap(
   categoryMap: Map<number, CategorySpending>,
   userSelections: Map<string, number>,
   topCategoriesMap: Map<string, Set<number>>,
-  travelPreferences: TravelPreference[]
+  travelPreferences: TravelPreference[],
+  mobilePayCategories: Set<number> = new Set(),
+  mobilePayCategoryId?: number
 ): Map<string, Map<number, RateInfo[]>> {
   // card_id -> category_id -> array of RateInfo (multiple rates possible with different caps)
   const result = new Map<string, Map<number, RateInfo[]>>();
+
+  // First, build a map of card_id -> Mobile Pay rate info (for applying to user's mobile pay categories)
+  const mobilePayRates = new Map<string, { rate: number; cap: number; postCapRate: number | null; ruleId: string }>();
+  if (mobilePayCategoryId) {
+    for (const rule of earningRules) {
+      if (rule.category_id === mobilePayCategoryId && rule.booking_method === "any") {
+        const annualCap = rule.has_cap ? annualizeCap(rule.cap_amount, rule.cap_period) : Infinity;
+        mobilePayRates.set(rule.card_id, {
+          rate: Number(rule.rate),
+          cap: annualCap,
+          postCapRate: rule.post_cap_rate !== null ? Number(rule.post_cap_rate) : null,
+          ruleId: rule.id,
+        });
+      }
+    }
+  }
 
   // Process earning rules
   for (const rule of earningRules) {
@@ -713,6 +737,34 @@ function buildEarningRateMap(
       postCapRate: rule.post_cap_rate !== null ? Number(rule.post_cap_rate) : null,
       capKey,
     });
+  }
+
+  // Apply Mobile Pay rates to categories user has selected for mobile pay
+  for (const categoryId of mobilePayCategories) {
+    // Skip the Mobile Pay category itself
+    if (categoryId === mobilePayCategoryId) continue;
+
+    for (const [cardId, mobilePayRate] of mobilePayRates) {
+      if (!result.has(cardId)) {
+        result.set(cardId, new Map());
+      }
+      const cardMap = result.get(cardId)!;
+      
+      if (!cardMap.has(categoryId)) {
+        cardMap.set(categoryId, []);
+      }
+
+      // Add Mobile Pay rate as an option for this category
+      // The cap key is shared across all mobile pay categories (combined cap)
+      const capKey = `${cardId}:mobilepay:${mobilePayRate.ruleId}`;
+      
+      cardMap.get(categoryId)!.push({
+        rate: mobilePayRate.rate,
+        annualCap: mobilePayRate.cap,
+        postCapRate: mobilePayRate.postCapRate,
+        capKey,
+      });
+    }
   }
 
   // Process category bonuses
