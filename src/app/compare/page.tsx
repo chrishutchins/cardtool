@@ -35,7 +35,7 @@ export default async function ComparePage() {
   // Get all earning rules
   const { data: allEarningRules } = await supabase
     .from("card_earning_rules")
-    .select("card_id, category_id, rate, booking_method");
+    .select("card_id, category_id, rate, booking_method, has_cap, cap_amount, cap_period, post_cap_rate");
 
   // Get all category bonuses (card_caps) with their categories
   const { data: allCategoryBonuses } = await supabase
@@ -47,6 +47,7 @@ export default async function ComparePage() {
       elevated_rate,
       post_cap_rate,
       cap_amount,
+      cap_period,
       card_cap_categories (category_id)
     `);
 
@@ -67,6 +68,30 @@ export default async function ComparePage() {
   const userValuesByCurrency = new Map(
     userCurrencyValues?.map((v) => [v.currency_id, v.value_cents]) ?? []
   );
+
+  // Get user's debit pay values and feature flag
+  const [{ data: debitPayEnabled }, { data: debitPayValues }] = await Promise.all([
+    supabase.from("user_feature_flags").select("debit_pay_enabled").eq("user_id", user.id).single(),
+    supabase.from("user_card_debit_pay").select("card_id, debit_pay_percent").eq("user_id", user.id),
+  ]);
+
+  const debitPayMap: Record<string, number> = {};
+  if (debitPayEnabled?.debit_pay_enabled) {
+    for (const dp of debitPayValues ?? []) {
+      debitPayMap[dp.card_id] = Number(dp.debit_pay_percent) || 0;
+    }
+  }
+
+  // Get user's category spending
+  const { data: userSpendingData } = await supabase
+    .from("user_category_spend")
+    .select("category_id, annual_spend_cents")
+    .eq("user_id", user.id);
+
+  const userSpending: Record<number, number> = {};
+  for (const spend of userSpendingData ?? []) {
+    userSpending[spend.category_id] = spend.annual_spend_cents;
+  }
 
   // Get all categories
   const { data: allCategories } = await supabase
@@ -94,8 +119,20 @@ export default async function ComparePage() {
     elevated_rate: number | null;
     post_cap_rate: number | null;
     cap_amount: number | null;
+    cap_period: string | null;
     card_cap_categories: { category_id: number }[] | null;
   };
+  
+  // Build cap info for tooltips: cardId -> categoryId -> cap details
+  type CapInfo = {
+    capAmount: number | null;
+    capPeriod: string | null;
+    capType: string;
+    postCapRate: number | null;
+    elevatedRate: number;
+  };
+  const capInfoMap: Record<string, Record<number, CapInfo>> = {};
+  
   for (const bonus of (allCategoryBonuses ?? []) as unknown as BonusData[]) {
     if (bonus.cap_type === "all_categories") {
       // For all_categories, store the elevated rate (or post_cap_rate if it's a threshold bonus)
@@ -115,6 +152,18 @@ export default async function ComparePage() {
         if ((bonus.elevated_rate ?? 0) > currentRate) {
           categoryBonusesMap[bonus.card_id][categoryId] = bonus.elevated_rate ?? 0;
         }
+        
+        // Store cap info for this card/category
+        if (!capInfoMap[bonus.card_id]) {
+          capInfoMap[bonus.card_id] = {};
+        }
+        capInfoMap[bonus.card_id][categoryId] = {
+          capAmount: bonus.cap_amount,
+          capPeriod: bonus.cap_period,
+          capType: bonus.cap_type,
+          postCapRate: bonus.post_cap_rate,
+          elevatedRate: bonus.elevated_rate ?? 0,
+        };
       }
     }
   }
@@ -131,6 +180,46 @@ export default async function ComparePage() {
     const currentRate = earningRulesMap[rule.card_id][rule.category_id] ?? 0;
     if (rule.rate > currentRate) {
       earningRulesMap[rule.card_id][rule.category_id] = rule.rate;
+    }
+  }
+  
+  // Build earning rule cap info: cardId -> categoryId -> cap details
+  // This will be merged with category bonus caps later
+  type EarningRuleCapInfo = {
+    capAmount: number | null;
+    capPeriod: string | null;
+    capType: string;
+    postCapRate: number | null;
+    elevatedRate: number;
+  };
+  const earningRuleCapInfoMap: Record<string, Record<number, EarningRuleCapInfo>> = {};
+  for (const rule of allEarningRules ?? []) {
+    if (rule.booking_method !== "any") continue;
+    if (rule.has_cap && rule.cap_amount) {
+      if (!earningRuleCapInfoMap[rule.card_id]) {
+        earningRuleCapInfoMap[rule.card_id] = {};
+      }
+      earningRuleCapInfoMap[rule.card_id][rule.category_id] = {
+        capAmount: rule.cap_amount,
+        capPeriod: rule.cap_period,
+        capType: "single_category",
+        postCapRate: rule.post_cap_rate,
+        elevatedRate: rule.rate,
+      };
+    }
+  }
+  
+  // Merge earning rule caps into capInfoMap (category bonus caps take precedence)
+  for (const cardId in earningRuleCapInfoMap) {
+    if (!capInfoMap[cardId]) {
+      capInfoMap[cardId] = {};
+    }
+    for (const categoryId in earningRuleCapInfoMap[cardId]) {
+      const catId = Number(categoryId);
+      // Only add if no category bonus cap exists
+      if (!capInfoMap[cardId][catId]) {
+        capInfoMap[cardId][catId] = earningRuleCapInfoMap[cardId][catId];
+      }
     }
   }
 
@@ -243,6 +332,9 @@ export default async function ComparePage() {
           cards={cardsForTable}
           categories={categoriesForTable}
           defaultCategorySlugs={defaultCategorySlugs}
+          debitPayValues={debitPayMap}
+          userSpending={userSpending}
+          capInfo={capInfoMap}
         />
       </div>
     </div>
