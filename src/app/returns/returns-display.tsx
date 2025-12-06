@@ -319,6 +319,9 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
                               ? formatCurrency(alloc.earned)
                               : formatNumber(alloc.earned, 0) + " pts"
                             }
+                            {alloc.debitPayBonus > 0 && (
+                              <span className="text-pink-400"> + {formatCurrency(alloc.debitPayBonus)}</span>
+                            )}
                           </div>
                         ))}
                       </td>
