@@ -216,11 +216,13 @@ export function ComparisonTable({
         const cmp = a.name.localeCompare(b.name);
         return sortConfig.direction === "asc" ? cmp : -cmp;
       } else if (sortConfig.categoryId !== undefined) {
-        const aVal = showSpending 
-          ? calculateEarnings(a, sortConfig.categoryId, userSpending[sortConfig.categoryId] ?? 0).earnings
+        const spendCents = userSpending[sortConfig.categoryId] ?? 0;
+        // Only sort by earnings if there's actual spending; otherwise sort by rate
+        const aVal = showSpending && spendCents > 0
+          ? calculateEarnings(a, sortConfig.categoryId, spendCents).earnings + calculateEarnings(a, sortConfig.categoryId, spendCents).debitPayEarnings
           : getEffectiveValueWithDebit(a, sortConfig.categoryId);
-        const bVal = showSpending
-          ? calculateEarnings(b, sortConfig.categoryId, userSpending[sortConfig.categoryId] ?? 0).earnings
+        const bVal = showSpending && spendCents > 0
+          ? calculateEarnings(b, sortConfig.categoryId, spendCents).earnings + calculateEarnings(b, sortConfig.categoryId, spendCents).debitPayEarnings
           : getEffectiveValueWithDebit(b, sortConfig.categoryId);
         const cmp = aVal - bVal;
         return sortConfig.direction === "asc" ? cmp : -cmp;

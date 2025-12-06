@@ -82,13 +82,24 @@ export default async function ComparePage() {
     }
   }
 
-  // Get user's category spending
-  const { data: userSpendingData } = await supabase
-    .from("user_category_spend")
-    .select("category_id, annual_spend_cents")
-    .eq("user_id", user.id);
+  // Get user's category spending and spending defaults
+  const [{ data: userSpendingData }, { data: spendingDefaults }] = await Promise.all([
+    supabase
+      .from("user_category_spend")
+      .select("category_id, annual_spend_cents")
+      .eq("user_id", user.id),
+    supabase
+      .from("spending_defaults")
+      .select("category_id, annual_spend_cents"),
+  ]);
 
+  // Build spending map: user values override defaults
   const userSpending: Record<number, number> = {};
+  // First, populate with defaults
+  for (const def of spendingDefaults ?? []) {
+    userSpending[def.category_id] = def.annual_spend_cents;
+  }
+  // Then override with user-specific values
   for (const spend of userSpendingData ?? []) {
     userSpending[spend.category_id] = spend.annual_spend_cents;
   }
