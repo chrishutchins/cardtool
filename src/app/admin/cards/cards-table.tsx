@@ -21,7 +21,7 @@ interface CardsTableProps {
   onDelete: (id: string) => Promise<void>;
 }
 
-type SortField = "name" | "issuer_name" | "product_type" | "annual_fee" | "default_earn_rate";
+type SortField = "name" | "issuer_name" | "product_type";
 type SortDir = "asc" | "desc";
 
 export function CardsTable({ cards, onDelete }: CardsTableProps) {
@@ -259,39 +259,27 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-800/50">
               <th
-                className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white whitespace-nowrap"
                 onClick={() => handleSort("name")}
               >
-                Card <SortIcon field="name" />
+                <span className="inline-flex items-center">Card<SortIcon field="name" /></span>
               </th>
               <th
-                className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white whitespace-nowrap"
                 onClick={() => handleSort("issuer_name")}
               >
-                Issuer <SortIcon field="issuer_name" />
+                <span className="inline-flex items-center">Issuer<SortIcon field="issuer_name" /></span>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">
                 Currency
               </th>
               <th
-                className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white whitespace-nowrap"
                 onClick={() => handleSort("product_type")}
               >
-                Type <SortIcon field="product_type" />
+                <span className="inline-flex items-center">Type<SortIcon field="product_type" /></span>
               </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white"
-                onClick={() => handleSort("annual_fee")}
-              >
-                Annual Fee <SortIcon field="annual_fee" />
-              </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white"
-                onClick={() => handleSort("default_earn_rate")}
-              >
-                Default Rate <SortIcon field="default_earn_rate" />
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">
                 Actions
               </th>
             </tr>
@@ -331,12 +319,6 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
                   >
                     {card.product_type}
                   </span>
-                </td>
-                <td className="px-6 py-4 text-zinc-400">
-                  {formatFee(card.annual_fee)}
-                </td>
-                <td className="px-6 py-4 text-zinc-400">
-                  {card.default_earn_rate ?? 1}x
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">

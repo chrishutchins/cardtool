@@ -56,6 +56,12 @@ export function AdminNav() {
                 Wallet
               </Link>
               <Link
+                href="/compare"
+                className="text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                Compare
+              </Link>
+              <Link
                 href="/spending"
                 className="text-sm text-zinc-400 hover:text-white transition-colors"
               >
