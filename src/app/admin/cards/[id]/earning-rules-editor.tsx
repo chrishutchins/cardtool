@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { Tables, Database, Enums } from "@/lib/database.types";
+import { formatRate } from "@/lib/earning-calculator";
 
 // Simplified type for the rule as returned from the query
 interface EarningRule {
@@ -385,7 +386,7 @@ export function EarningRulesEditor({
                       {rule.earning_categories?.name ?? "Unknown"}
                     </td>
                     <td className="px-4 py-3 text-zinc-300 font-mono">
-                      {rule.rate}x
+                      {formatRate(rule.rate, cardCurrencyType)}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {(() => {
@@ -406,7 +407,7 @@ export function EarningRulesEditor({
                           {rule.cap_unit === "rewards" ? " pts" : ""}
                           {rule.cap_period && rule.cap_period !== "none" ? ` / ${rule.cap_period}` : ""}
                           {rule.post_cap_rate != null && (
-                            <span className="text-zinc-500"> → {rule.post_cap_rate}x</span>
+                            <span className="text-zinc-500"> → {formatRate(rule.post_cap_rate, cardCurrencyType)}</span>
                           )}
                         </span>
                       ) : (

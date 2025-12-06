@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Tables, Enums } from "@/lib/database.types";
+import { formatRate } from "@/lib/earning-calculator";
 
 interface Cap {
   id: string;
@@ -21,6 +22,7 @@ interface CapsEditorProps {
   onUpdateCap: (capId: string, formData: FormData) => Promise<void>;
   onDeleteCap: (capId: string) => Promise<void>;
   onUpdateCapCategories: (capId: string, categoryIds: number[]) => Promise<void>;
+  currencyType?: Enums<"reward_currency_type">;
 }
 
 // Only show cap types that aren't handled by Earning Rules
@@ -62,6 +64,7 @@ export function CapsEditor({
   onUpdateCap,
   onDeleteCap,
   onUpdateCapCategories,
+  currencyType,
 }: CapsEditorProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -343,9 +346,9 @@ export function CapsEditor({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-300 font-mono text-sm">
-                      <span className="text-emerald-400 font-semibold">{cap.elevated_rate}x</span>
+                      <span className="text-emerald-400 font-semibold">{formatRate(cap.elevated_rate, currencyType)}</span>
                       {cap.post_cap_rate !== null && (
-                        <span className="text-zinc-500 text-xs ml-1">→ {cap.post_cap_rate}x</span>
+                        <span className="text-zinc-500 text-xs ml-1">→ {formatRate(cap.post_cap_rate, currencyType)}</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-300 font-mono text-sm">

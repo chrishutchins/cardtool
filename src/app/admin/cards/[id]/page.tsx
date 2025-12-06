@@ -341,6 +341,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
           onUpdateCap={updateCap}
           onDeleteCap={deleteCap}
           onUpdateCapCategories={updateCapCategories}
+          currencyType={card.primary_currency?.currency_type}
         />
       </div>
     </div>

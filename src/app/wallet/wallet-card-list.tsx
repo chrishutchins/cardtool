@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatRate } from "@/lib/earning-calculator";
 
 interface WalletCard {
   id: string;
@@ -94,7 +95,7 @@ export function WalletCardList({
               {/* Right: Fee, rate, remove */}
               <div className="flex items-center gap-4 text-sm text-zinc-500 shrink-0">
                 <span className="hidden md:inline">{formatFee(card.annual_fee)}</span>
-                <span className="hidden lg:inline">{card.default_earn_rate ?? 1}x</span>
+                <span className="hidden lg:inline">{formatRate(card.default_earn_rate ?? 1, card.primary_currency?.currency_type)}</span>
                 
                 {removingId === wc.id ? (
                   <div className="flex items-center gap-1">

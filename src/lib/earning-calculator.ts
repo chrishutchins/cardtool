@@ -195,3 +195,16 @@ export function findBestCardForCategory(
   return { card: bestCard, rate: bestRate, value: bestValue };
 }
 
+/**
+ * Format a rate for display based on currency type
+ * Cash back and crypto currencies show as percentages (e.g., "6%")
+ * Points and miles show as multipliers (e.g., "6x")
+ */
+export function formatRate(
+  rate: number,
+  currencyType?: string | null
+): string {
+  const isCashLike = currencyType === "cash_back" || currencyType === "crypto" || currencyType === "cash";
+  return isCashLike ? `${rate}%` : `${rate}x`;
+}
+
