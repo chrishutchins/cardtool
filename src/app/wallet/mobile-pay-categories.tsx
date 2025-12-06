@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition, useOptimistic } from "react";
 
 interface MobilePayCategoriesProps {
   categories: { id: number; name: string; slug: string }[];
@@ -14,12 +14,30 @@ export function MobilePayCategories({
   onToggleCategory,
 }: MobilePayCategoriesProps) {
   const [isPending, startTransition] = useTransition();
-  const selectedSet = new Set(selectedCategoryIds);
+  
+  // Use optimistic updates for instant UI feedback
+  const [optimisticSelected, setOptimisticSelected] = useOptimistic(
+    selectedCategoryIds,
+    (current: number[], { categoryId, selected }: { categoryId: number; selected: boolean }) => {
+      if (selected) {
+        return [...current, categoryId];
+      } else {
+        return current.filter(id => id !== categoryId);
+      }
+    }
+  );
+  
+  const selectedSet = new Set(optimisticSelected);
 
   const handleToggle = (categoryId: number) => {
     const isSelected = selectedSet.has(categoryId);
+    const newSelected = !isSelected;
+    
     startTransition(async () => {
-      await onToggleCategory(categoryId, !isSelected);
+      // Optimistically update UI immediately
+      setOptimisticSelected({ categoryId, selected: newSelected });
+      // Then persist to server (no need to wait for revalidation)
+      await onToggleCategory(categoryId, newSelected);
     });
   };
 

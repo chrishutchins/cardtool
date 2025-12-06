@@ -17,29 +17,63 @@ export default async function SettingsPage() {
 
   const supabase = await createClient();
 
-  // Get user's wallet cards with full card info
-  const { data: walletCards } = await supabase
-    .from("user_wallets")
-    .select(`
-      id,
-      card_id,
-      cards:card_id (
+  // ============ BATCH 1: All independent queries in parallel ============
+  const [
+    walletCardsResult,
+    issuersResult,
+    travelPreferencesResult,
+    travelCategoriesResult,
+    allCategoriesResult,
+    mobilePayCategoriesResult,
+  ] = await Promise.all([
+    supabase
+      .from("user_wallets")
+      .select(`
         id,
-        name,
-        slug,
-        primary_currency_id,
-        secondary_currency_id,
-        issuers:issuer_id (name),
-        primary_currency:reward_currencies!cards_primary_currency_id_fkey (name, code, currency_type),
-        secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (name, code, currency_type)
-      )
-    `)
-    .eq("user_id", user.id);
+        card_id,
+        cards:card_id (
+          id,
+          name,
+          slug,
+          primary_currency_id,
+          secondary_currency_id,
+          issuers:issuer_id (name),
+          primary_currency:reward_currencies!cards_primary_currency_id_fkey (name, code, currency_type),
+          secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (name, code, currency_type)
+        )
+      `)
+      .eq("user_id", user.id),
+    supabase.from("issuers").select("id, name").order("name"),
+    supabase
+      .from("user_travel_booking_preferences")
+      .select("category_slug, preference_type, brand_name, portal_issuer_id")
+      .eq("user_id", user.id),
+    supabase
+      .from("earning_categories")
+      .select("id, name, slug, parent_category_id")
+      .not("parent_category_id", "is", null),
+    supabase
+      .from("earning_categories")
+      .select("id, name, slug")
+      .eq("excluded_by_default", false)
+      .is("parent_category_id", null)
+      .order("name"),
+    supabase
+      .from("user_mobile_pay_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+  ]);
 
-  // Get card IDs for queries
+  const walletCards = walletCardsResult.data;
+  const issuers = issuersResult.data;
+  const travelPreferences = travelPreferencesResult.data;
+  const travelCategories = travelCategoriesResult.data;
+  const allCategories = allCategoriesResult.data;
+  const mobilePayCategories = mobilePayCategoriesResult.data;
+
+  // Process wallet cards
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
   
-  // Build set of currency IDs the user "owns" (from cards in wallet)
   type WalletCardData = { 
     id: string;
     card_id: string; 
@@ -58,32 +92,54 @@ export default async function SettingsPage() {
       .filter((id): id is string => !!id)
   );
 
-  // Get caps with selectable categories for user's cards
-  const { data: cardCaps } = userCardIds.length > 0
-    ? await supabase
-        .from("card_caps")
-        .select("id, card_id, cap_type, cap_amount")
-        .eq("cap_type", "selected_category")
-        .in("card_id", userCardIds)
-    : { data: [] };
+  // ============ BATCH 2: Queries that depend on wallet cards ============
+  const [cardCapsResult, portalEarningRulesResult, programsByCurrencyResult, programsByCardResult] = 
+    userCardIds.length > 0
+      ? await Promise.all([
+          supabase
+            .from("card_caps")
+            .select("id, card_id, cap_type, cap_amount")
+            .eq("cap_type", "selected_category")
+            .in("card_id", userCardIds),
+          supabase
+            .from("card_earning_rules")
+            .select("card_id, booking_method, cards:card_id(issuer_id)")
+            .eq("booking_method", "portal")
+            .in("card_id", userCardIds),
+          supabase
+            .from("earning_multiplier_currencies")
+            .select("program_id")
+            .in("currency_id", Array.from(userPrimaryCurrencyIds)),
+          supabase
+            .from("earning_multiplier_cards")
+            .select("program_id")
+            .in("card_id", userCardIds),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
-  // Get cap categories
+  const cardCaps = cardCapsResult.data ?? [];
+  const portalEarningRules = portalEarningRulesResult.data;
+  const programsByCurrency = programsByCurrencyResult.data;
+  const programsByCard = programsByCardResult.data;
+
+  // ============ BATCH 3: Queries that depend on caps ============
   const capIds = cardCaps?.map((c) => c.id) ?? [];
-  const { data: capCategories } = capIds.length > 0
-    ? await supabase
-        .from("card_cap_categories")
-        .select("cap_id, category_id, earning_categories(id, name)")
-        .in("cap_id", capIds)
-    : { data: [] };
+  const [capCategoriesResult, userSelectionsResult] = capIds.length > 0
+    ? await Promise.all([
+        supabase
+          .from("card_cap_categories")
+          .select("cap_id, category_id, earning_categories(id, name)")
+          .in("cap_id", capIds),
+        supabase
+          .from("user_card_selections")
+          .select("cap_id, selected_category_id")
+          .eq("user_id", user.id)
+          .in("cap_id", capIds),
+      ])
+    : [{ data: [] }, { data: [] }];
 
-  // Get user's current selections
-  const { data: userSelections } = capIds.length > 0
-    ? await supabase
-        .from("user_card_selections")
-        .select("cap_id, selected_category_id")
-        .eq("user_id", user.id)
-        .in("cap_id", capIds)
-    : { data: [] };
+  const capCategories = capCategoriesResult.data;
+  const userSelections = userSelectionsResult.data;
 
   // Build caps data structure
   type CapCategoryData = { cap_id: string; earning_categories: { id: number; name: string } | null };
@@ -102,80 +158,29 @@ export default async function SettingsPage() {
     return acc;
   }, {} as Record<string, typeof cardCapsWithCategories>);
 
-  // Get issuers for travel portal options
-  const { data: issuers } = await supabase
-    .from("issuers")
-    .select("id, name")
-    .order("name");
-
-  // Get user's travel booking preferences
-  const { data: travelPreferences } = await supabase
-    .from("user_travel_booking_preferences")
-    .select("category_slug, preference_type, brand_name, portal_issuer_id")
-    .eq("user_id", user.id);
-
-  // Get travel subcategories
-  const { data: travelCategories } = await supabase
-    .from("earning_categories")
-    .select("id, name, slug, parent_category_id")
-    .not("parent_category_id", "is", null);
-
-  // Get all non-excluded categories for mobile pay selection
-  const { data: allCategories } = await supabase
-    .from("earning_categories")
-    .select("id, name, slug")
-    .eq("excluded_by_default", false)
-    .is("parent_category_id", null)
-    .order("name");
-
-  // Get user's mobile pay category selections
-  const { data: mobilePayCategories } = await supabase
-    .from("user_mobile_pay_categories")
-    .select("category_id")
-    .eq("user_id", user.id);
-
-  // Get earning rules with portal rates for user's cards
-  const { data: portalEarningRules } = userCardIds.length > 0
-    ? await supabase
-        .from("card_earning_rules")
-        .select("card_id, booking_method, cards:card_id(issuer_id)")
-        .eq("booking_method", "portal")
-        .in("card_id", userCardIds)
-    : { data: [] };
-
-  // Get multiplier programs that apply to user's cards
-  const { data: programsByCurrency } = await supabase
-    .from("earning_multiplier_currencies")
-    .select("program_id")
-    .in("currency_id", Array.from(userPrimaryCurrencyIds));
-
-  const { data: programsByCard } = userCardIds.length > 0
-    ? await supabase
-        .from("earning_multiplier_cards")
-        .select("program_id")
-        .in("card_id", userCardIds)
-    : { data: [] };
-
+  // ============ BATCH 4: Multiplier programs ============
   const applicableProgramIds = new Set([
     ...(programsByCurrency?.map((p) => p.program_id) ?? []),
     ...(programsByCard?.map((p) => p.program_id) ?? []),
   ]);
 
-  const { data: multiplierPrograms } = applicableProgramIds.size > 0
-    ? await supabase
-        .from("earning_multiplier_programs")
-        .select("id, name, description, earning_multiplier_tiers(id, name, multiplier, requirements, sort_order, has_cap, cap_amount, cap_period)")
-        .in("id", Array.from(applicableProgramIds))
-        .order("name")
-    : { data: [] };
+  const [multiplierProgramsResult, userMultiplierSelectionsResult] = applicableProgramIds.size > 0
+    ? await Promise.all([
+        supabase
+          .from("earning_multiplier_programs")
+          .select("id, name, description, earning_multiplier_tiers(id, name, multiplier, requirements, sort_order, has_cap, cap_amount, cap_period)")
+          .in("id", Array.from(applicableProgramIds))
+          .order("name"),
+        supabase
+          .from("user_multiplier_tiers")
+          .select("program_id, tier_id")
+          .eq("user_id", user.id)
+          .in("program_id", Array.from(applicableProgramIds)),
+      ])
+    : [{ data: [] }, { data: [] }];
 
-  const { data: userMultiplierSelections } = applicableProgramIds.size > 0
-    ? await supabase
-        .from("user_multiplier_tiers")
-        .select("program_id, tier_id")
-        .eq("user_id", user.id)
-        .in("program_id", Array.from(applicableProgramIds))
-    : { data: [] };
+  const multiplierPrograms = multiplierProgramsResult.data;
+  const userMultiplierSelections = userMultiplierSelectionsResult.data;
 
   // Server actions
   async function selectCategory(capId: string, categoryId: number) {
@@ -265,7 +270,7 @@ export default async function SettingsPage() {
         .eq("user_id", user.id)
         .eq("category_id", categoryId);
     }
-    revalidatePath("/settings");
+    // No revalidatePath - using optimistic updates for instant UI
   }
 
   // Cards that require category selection
