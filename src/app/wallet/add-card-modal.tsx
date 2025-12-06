@@ -1,12 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Database } from "@/lib/database.types";
 
-type CardWithCurrency = Database["public"]["Views"]["card_with_currency"]["Row"];
+interface AvailableCard {
+  id: string;
+  name: string;
+  slug: string;
+  annual_fee: number;
+  issuer_name?: string;
+  primary_currency_name?: string;
+}
 
 interface AddCardModalProps {
-  availableCards: CardWithCurrency[];
+  availableCards: AvailableCard[];
   onAddCard: (cardId: string) => Promise<void>;
   debitPayEnabled?: boolean;
   onEnableDebitPay?: () => Promise<void>;

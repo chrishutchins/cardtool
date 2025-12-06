@@ -1125,6 +1125,8 @@ export interface CardRecommendation {
 
 export interface RecommendationsInput extends CalculatorInput {
   allCards: (CardInput & { default_perks_value: number | null })[]; // All available cards with default perks
+  allEarningRules: EarningRuleInput[]; // ALL earning rules (not filtered to user's cards)
+  allCategoryBonuses: CategoryBonusInput[]; // ALL category bonuses (not filtered to user's cards)
 }
 
 /**
@@ -1137,7 +1139,7 @@ export function calculateCardRecommendations(
   currentReturns: PortfolioReturns,
   topN: number = 3
 ): CardRecommendation[] {
-  const { allCards, cards: userCards, ...baseInput } = input;
+  const { allCards, allEarningRules, allCategoryBonuses, cards: userCards, ...baseInput } = input;
   
   // Get IDs of cards already in wallet
   const userCardIds = new Set(userCards.map(c => c.id));
@@ -1151,6 +1153,7 @@ export function calculateCardRecommendations(
   for (const candidate of candidateCards) {
     // Add this card to the user's wallet
     const cardsWithCandidate = [...userCards, candidate];
+    const cardIdsWithCandidate = new Set([...userCardIds, candidate.id]);
     
     // Update enabled secondary cards based on new wallet
     const userPrimaryCurrencyIds = new Set<string>();
@@ -1170,10 +1173,16 @@ export function calculateCardRecommendations(
     const defaultPerksValue = candidate.default_perks_value ?? 0;
     perksWithCandidate.set(candidate.id, defaultPerksValue);
 
+    // Filter earning rules to include user's cards + candidate card
+    const earningRulesWithCandidate = allEarningRules.filter(r => cardIdsWithCandidate.has(r.card_id));
+    const categoryBonusesWithCandidate = allCategoryBonuses.filter(b => cardIdsWithCandidate.has(b.card_id));
+
     // Calculate returns with this card added
     const returnsWithCard = calculatePortfolioReturns({
       ...baseInput,
       cards: cardsWithCandidate,
+      earningRules: earningRulesWithCandidate,
+      categoryBonuses: categoryBonusesWithCandidate,
       perksValues: perksWithCandidate,
       enabledSecondaryCards: enabledSecondaryCardsNew,
     });

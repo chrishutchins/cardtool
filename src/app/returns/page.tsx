@@ -203,9 +203,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     }
   });
 
-  // Filter earning rules to only user's cards
-  const earningRules: EarningRuleInput[] = (rulesResult.data ?? [])
-    .filter((r) => userCardIds.has(r.card_id))
+  // Process ALL earning rules (needed for recommendations)
+  const allEarningRules: EarningRuleInput[] = (rulesResult.data ?? [])
     .map((r) => ({
       id: r.id,
       card_id: r.card_id,
@@ -220,9 +219,11 @@ export default async function ReturnsPage({ searchParams }: Props) {
       brand_name: r.brand_name,
     }));
 
-  // Filter category bonuses to only user's cards
-  const categoryBonuses: CategoryBonusInput[] = (bonusesResult.data ?? [])
-    .filter((b) => userCardIds.has(b.card_id))
+  // Filter earning rules to only user's cards (for current returns calculation)
+  const earningRules = allEarningRules.filter((r) => userCardIds.has(r.card_id));
+
+  // Process ALL category bonuses (needed for recommendations)
+  const allCategoryBonuses: CategoryBonusInput[] = (bonusesResult.data ?? [])
     .map((b) => ({
       id: b.id,
       card_id: b.card_id,
@@ -233,6 +234,9 @@ export default async function ReturnsPage({ searchParams }: Props) {
       post_cap_rate: b.post_cap_rate ? Number(b.post_cap_rate) : null,
       category_ids: ((b.card_cap_categories as unknown as { category_id: number }[]) ?? []).map(c => c.category_id),
     }));
+
+  // Filter category bonuses to only user's cards (for current returns calculation)
+  const categoryBonuses = allCategoryBonuses.filter((b) => userCardIds.has(b.card_id));
 
   // Build category map with exclusion status
   const categoryExclusionMap = new Map<number, boolean>();
@@ -404,6 +408,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
         primary_currency: c.primary_currency,
         secondary_currency: c.secondary_currency,
       })),
+      allEarningRules,
+      allCategoryBonuses,
     },
     returns,
     3
