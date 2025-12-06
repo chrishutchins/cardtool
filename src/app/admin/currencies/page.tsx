@@ -23,6 +23,9 @@ export default async function CurrenciesPage() {
     const base_value_cents = formData.get("base_value_cents")
       ? parseFloat(formData.get("base_value_cents") as string)
       : null;
+    const cash_out_value_cents = formData.get("cash_out_value_cents")
+      ? parseFloat(formData.get("cash_out_value_cents") as string)
+      : null;
     const notes = (formData.get("notes") as string | null) || null;
 
     await supabase.from("reward_currencies").insert({
@@ -30,6 +33,7 @@ export default async function CurrenciesPage() {
       code,
       currency_type,
       base_value_cents,
+      cash_out_value_cents,
       notes,
     });
     revalidatePath("/admin/currencies");
@@ -51,6 +55,9 @@ export default async function CurrenciesPage() {
     const base_value_cents = formData.get("base_value_cents")
       ? parseFloat(formData.get("base_value_cents") as string)
       : null;
+    const cash_out_value_cents = formData.get("cash_out_value_cents")
+      ? parseFloat(formData.get("cash_out_value_cents") as string)
+      : null;
     const notes = (formData.get("notes") as string | null) || null;
 
     await supabase.from("reward_currencies").update({
@@ -58,6 +65,7 @@ export default async function CurrenciesPage() {
       code,
       currency_type,
       base_value_cents,
+      cash_out_value_cents,
       notes,
     }).eq("id", id);
     revalidatePath("/admin/currencies");
@@ -91,6 +99,9 @@ export default async function CurrenciesPage() {
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 Value (¢/unit)
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                Cash Out (¢/unit)
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 Actions

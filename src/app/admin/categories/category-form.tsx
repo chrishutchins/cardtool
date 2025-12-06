@@ -1,21 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Tables } from "@/lib/database.types";
 
 interface CategoryFormProps {
   action: (formData: FormData) => Promise<void>;
   defaultValues?: {
     name: string;
     slug: string;
-    sort_order: number;
     description: string | null;
+    excluded_by_default: boolean;
+    parent_category_id: number | null;
   };
   onCancel?: () => void;
+  categories?: Tables<"earning_categories">[];
+  currentCategoryId?: number;
 }
 
-export function CategoryForm({ action, defaultValues, onCancel }: CategoryFormProps) {
+export function CategoryForm({ action, defaultValues, onCancel, categories, currentCategoryId }: CategoryFormProps) {
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [slug, setSlug] = useState(defaultValues?.slug ?? "");
+  const [description, setDescription] = useState(defaultValues?.description ?? "");
+  const [excludedByDefault, setExcludedByDefault] = useState(defaultValues?.excluded_by_default ?? false);
+  const [parentCategoryId, setParentCategoryId] = useState<string>(
+    defaultValues?.parent_category_id?.toString() ?? ""
+  );
+
+  useEffect(() => {
+    if (defaultValues) {
+      setName(defaultValues.name);
+      setSlug(defaultValues.slug);
+      setDescription(defaultValues.description ?? "");
+      setExcludedByDefault(defaultValues.excluded_by_default);
+      setParentCategoryId(defaultValues.parent_category_id?.toString() ?? "");
+    }
+  }, [defaultValues]);
 
   const generateSlug = (value: string) => {
     return value
@@ -24,8 +43,11 @@ export function CategoryForm({ action, defaultValues, onCancel }: CategoryFormPr
       .replace(/(^-|-$)/g, "");
   };
 
+  // Filter out the current category from parent options (can't be parent of itself)
+  const availableParents = categories?.filter(c => c.id !== currentCategoryId) ?? [];
+
   return (
-    <form action={action} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <form action={action} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
       <div>
         <label className="block text-sm font-medium text-zinc-400 mb-1">Name</label>
         <input
@@ -56,26 +78,46 @@ export function CategoryForm({ action, defaultValues, onCancel }: CategoryFormPr
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-zinc-400 mb-1">Sort Order</label>
-        <input
-          type="number"
-          name="sort_order"
-          defaultValue={defaultValues?.sort_order ?? 100}
-          min="0"
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <label className="block text-sm font-medium text-zinc-400 mb-1">Parent Category</label>
+        <select
+          name="parent_category_id"
+          value={parentCategoryId}
+          onChange={(e) => setParentCategoryId(e.target.value)}
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          <option value="">None</option>
+          {availableParents.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="block text-sm font-medium text-zinc-400 mb-1">Description</label>
         <input
           type="text"
           name="description"
-          defaultValue={defaultValues?.description ?? ""}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional description..."
           className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
-      <div className="flex items-end gap-2 lg:col-span-4">
+      <div className="flex items-center gap-3">
+        <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+          <input
+            type="checkbox"
+            name="excluded_by_default"
+            value="true"
+            checked={excludedByDefault}
+            onChange={(e) => setExcludedByDefault(e.target.checked)}
+            className="w-4 h-4 rounded border-zinc-600 bg-zinc-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-zinc-900"
+          />
+          Excluded
+        </label>
+      </div>
+      <div className="flex items-end gap-2 lg:col-span-5">
         <button
           type="submit"
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
@@ -95,4 +137,3 @@ export function CategoryForm({ action, defaultValues, onCancel }: CategoryFormPr
     </form>
   );
 }
-

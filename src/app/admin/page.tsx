@@ -1,7 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
+import { currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 
 export default async function AdminDashboard() {
+  const user = await currentUser();
+  if (!user) {
+    redirect("/sign-in");
+  }
+
   const supabase = await createClient();
 
   const [issuersResult, currenciesResult, categoriesResult, cardsResult] =

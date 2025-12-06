@@ -17,8 +17,8 @@ export default async function SpendingPage() {
   // Get all categories with defaults and user's custom values
   const { data: categories } = await supabase
     .from("earning_categories")
-    .select("id, name, slug, sort_order")
-    .order("sort_order");
+    .select("id, name, slug")
+    .order("name");
 
   const { data: spendingDefaults } = await supabase
     .from("spending_defaults")

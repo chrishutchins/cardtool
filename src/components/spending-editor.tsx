@@ -6,7 +6,6 @@ interface Category {
   id: number;
   name: string;
   slug: string;
-  sort_order: number;
   default_annual_spend_cents: number;
   effective_annual_spend_cents: number;
   is_custom: boolean;

@@ -10,6 +10,7 @@ const navItems = [
   { href: "/admin/currencies", label: "Currencies" },
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/cards", label: "Cards" },
+  { href: "/admin/multipliers", label: "Multipliers" },
 ];
 
 export function AdminNav() {

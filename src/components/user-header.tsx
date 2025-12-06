@@ -6,16 +6,19 @@ import { UserButton } from "@clerk/nextjs";
 
 const navItems = [
   { href: "/wallet", label: "My Wallet" },
-  { href: "/spending", label: "My Spending" },
-  { href: "/point-values", label: "My Point Values" },
+  { href: "/compare", label: "Compare" },
+  { href: "/spending", label: "Spending" },
+  { href: "/point-values", label: "Point Values" },
 ];
 
 export function UserHeader() {
   const pathname = usePathname();
 
+  const isComparePage = pathname.startsWith("/compare");
+
   return (
     <nav className="border-b border-zinc-800 bg-zinc-900">
-      <div className="mx-auto max-w-4xl px-4">
+      <div className={`mx-auto px-4 ${isComparePage ? "max-w-[1600px]" : "max-w-4xl"}`}>
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="text-lg font-bold text-white">

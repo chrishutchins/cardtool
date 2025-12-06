@@ -8,7 +8,7 @@ export default async function CategoriesPage() {
   const { data: categories, error } = await supabase
     .from("earning_categories")
     .select("*")
-    .order("sort_order");
+    .order("name");
 
   if (error) {
     return <div className="text-red-400">Error loading categories: {error.message}</div>;
@@ -19,14 +19,17 @@ export default async function CategoriesPage() {
     const supabase = await createClient();
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
-    const sort_order = parseInt(formData.get("sort_order") as string) || 100;
     const description = (formData.get("description") as string | null) || null;
+    const excluded_by_default = formData.get("excluded_by_default") === "true";
+    const parent_category_id_str = formData.get("parent_category_id") as string;
+    const parent_category_id = parent_category_id_str ? parseInt(parent_category_id_str) : null;
 
     await supabase.from("earning_categories").insert({
       name,
       slug,
-      sort_order,
       description,
+      excluded_by_default,
+      parent_category_id,
     });
     revalidatePath("/admin/categories");
   }
@@ -43,14 +46,17 @@ export default async function CategoriesPage() {
     const supabase = await createClient();
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
-    const sort_order = parseInt(formData.get("sort_order") as string) || 100;
     const description = (formData.get("description") as string | null) || null;
+    const excluded_by_default = formData.get("excluded_by_default") === "true";
+    const parent_category_id_str = formData.get("parent_category_id") as string;
+    const parent_category_id = parent_category_id_str ? parseInt(parent_category_id_str) : null;
 
     await supabase.from("earning_categories").update({
       name,
       slug,
-      sort_order,
       description,
+      excluded_by_default,
+      parent_category_id,
     }).eq("id", id);
     revalidatePath("/admin/categories");
   }
@@ -64,7 +70,7 @@ export default async function CategoriesPage() {
       {/* Add New Category Form */}
       <div className="mb-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
         <h2 className="text-lg font-semibold text-white mb-4">Add New Category</h2>
-        <CategoryForm action={createCategory} />
+        <CategoryForm action={createCategory} categories={categories ?? []} />
       </div>
 
       {/* Categories Table */}
@@ -73,16 +79,19 @@ export default async function CategoriesPage() {
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-800/50">
               <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Order
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 Slug
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                Parent
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 Description
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                Excluded
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 Actions
@@ -94,6 +103,7 @@ export default async function CategoriesPage() {
               <CategoryRow
                 key={category.id}
                 category={category}
+                categories={categories}
                 onDelete={deleteCategory}
                 onUpdate={updateCategory}
               />
@@ -109,4 +119,3 @@ export default async function CategoriesPage() {
     </div>
   );
 }
-

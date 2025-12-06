@@ -64,30 +64,37 @@ export function WalletCardList({
               {/* Left: Card info */}
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-white truncate">{card.name}</span>
                     <span className="text-zinc-500 text-sm hidden sm:inline">·</span>
                     <span className="text-zinc-500 text-sm hidden sm:inline truncate">{card.issuers?.name}</span>
-                    {hasSecondaryEnabled && card.secondary_currency && (
-                      <span className="px-1.5 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 shrink-0">
-                        ↑
-                      </span>
-                    )}
                   </div>
+                  {hasSecondaryEnabled && card.secondary_currency && card.primary_currency && (
+                    <div className="text-xs text-amber-400 mt-0.5">
+                      Earning {card.secondary_currency.name} instead of {card.primary_currency.name}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Middle: Currency badge */}
               {activeCurrency && (
-                <div className={`px-2 py-1 rounded text-xs font-medium shrink-0 ${currencyTypeColors[activeCurrency.currency_type]}`}>
-                  {activeCurrency.code}
+                <div className="flex items-center gap-2 shrink-0">
+                  {hasSecondaryEnabled && card.secondary_currency && (
+                    <span className="px-1.5 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300">
+                      ↑
+                    </span>
+                  )}
+                  <div className={`px-2 py-1 rounded text-xs font-medium ${currencyTypeColors[activeCurrency.currency_type]}`}>
+                    {activeCurrency.code}
+                  </div>
                 </div>
               )}
 
               {/* Right: Fee, rate, remove */}
               <div className="flex items-center gap-4 text-sm text-zinc-500 shrink-0">
                 <span className="hidden md:inline">{formatFee(card.annual_fee)}</span>
-                <span className="hidden lg:inline">{card.default_earn_rate}x</span>
+                <span className="hidden lg:inline">{card.default_earn_rate ?? 1}x</span>
                 
                 {removingId === wc.id ? (
                   <div className="flex items-center gap-1">

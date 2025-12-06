@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
 interface Card {
@@ -24,12 +25,43 @@ type SortField = "name" | "issuer_name" | "product_type" | "annual_fee" | "defau
 type SortDir = "asc" | "desc";
 
 export function CardsTable({ cards, onDelete }: CardsTableProps) {
-  const [search, setSearch] = useState("");
-  const [issuerFilter, setIssuerFilter] = useState<string>("");
-  const [typeFilter, setTypeFilter] = useState<string>("");
-  const [currencyFilter, setCurrencyFilter] = useState<string>("");
-  const [sortField, setSortField] = useState<SortField>("issuer_name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Initialize state from URL params
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [issuerFilter, setIssuerFilter] = useState<string>(searchParams.get("issuer") ?? "");
+  const [typeFilter, setTypeFilter] = useState<string>(searchParams.get("type") ?? "");
+  const [currencyFilter, setCurrencyFilter] = useState<string>(searchParams.get("currency") ?? "");
+  const [sortField, setSortField] = useState<SortField>((searchParams.get("sort") as SortField) || "issuer_name");
+  const [sortDir, setSortDir] = useState<SortDir>((searchParams.get("dir") as SortDir) || "asc");
+
+  // Update URL when filters change
+  const updateUrl = useCallback((newParams: Record<string, string>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    });
+    const queryString = params.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
+  }, [searchParams, router, pathname]);
+
+  // Build query string for links
+  const filterQueryString = useMemo(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (issuerFilter) params.set("issuer", issuerFilter);
+    if (typeFilter) params.set("type", typeFilter);
+    if (currencyFilter) params.set("currency", currencyFilter);
+    if (sortField !== "issuer_name") params.set("sort", sortField);
+    if (sortDir !== "asc") params.set("dir", sortDir);
+    return params.toString();
+  }, [search, issuerFilter, typeFilter, currencyFilter, sortField, sortDir]);
 
   // Get unique values for filter dropdowns
   const issuers = useMemo(() => {
@@ -105,12 +137,17 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
   }, [cards, search, issuerFilter, typeFilter, currencyFilter, sortField, sortDir]);
 
   const handleSort = (field: SortField) => {
+    const newDir = sortField === field ? (sortDir === "asc" ? "desc" : "asc") : "asc";
     if (sortField === field) {
-      setSortDir(sortDir === "asc" ? "desc" : "asc");
+      setSortDir(newDir);
     } else {
       setSortField(field);
       setSortDir("asc");
     }
+    updateUrl({ 
+      sort: field !== "issuer_name" ? field : "", 
+      dir: newDir !== "asc" ? newDir : "" 
+    });
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
@@ -136,12 +173,18 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
           type="text"
           placeholder="Search cards..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            updateUrl({ q: e.target.value });
+          }}
           className="flex-1 min-w-[200px] rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
         />
         <select
           value={issuerFilter}
-          onChange={(e) => setIssuerFilter(e.target.value)}
+          onChange={(e) => {
+            setIssuerFilter(e.target.value);
+            updateUrl({ issuer: e.target.value });
+          }}
           className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-zinc-300 focus:border-blue-500 focus:outline-none"
         >
           <option value="">Issuer</option>
@@ -153,7 +196,10 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
         </select>
         <select
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
+          onChange={(e) => {
+            setTypeFilter(e.target.value);
+            updateUrl({ type: e.target.value });
+          }}
           className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-zinc-300 focus:border-blue-500 focus:outline-none"
         >
           <option value="">Type</option>
@@ -165,7 +211,10 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
         </select>
         <select
           value={currencyFilter}
-          onChange={(e) => setCurrencyFilter(e.target.value)}
+          onChange={(e) => {
+            setCurrencyFilter(e.target.value);
+            updateUrl({ currency: e.target.value });
+          }}
           className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-zinc-300 focus:border-blue-500 focus:outline-none"
         >
           <option value="">Currency</option>
@@ -182,6 +231,7 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
               setIssuerFilter("");
               setTypeFilter("");
               setCurrencyFilter("");
+              router.replace(pathname, { scroll: false });
             }}
             className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
           >
@@ -278,23 +328,25 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
                   {formatFee(card.annual_fee)}
                 </td>
                 <td className="px-6 py-4 text-zinc-400">
-                  {card.default_earn_rate}x
+                  {card.default_earn_rate ?? 1}x
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <Link
-                      href={`/admin/cards/${card.id}`}
-                      className="rounded px-3 py-1 text-sm text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
-                    >
-                      Edit
-                    </Link>
                     {card.id && (
-                      <button
-                        onClick={() => card.id && onDelete(card.id)}
-                        className="rounded px-3 py-1 text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-700 transition-colors"
-                      >
-                        Delete
-                      </button>
+                      <>
+                        <Link
+                          href={`/admin/cards/${card.id}${filterQueryString ? `?${filterQueryString}` : ""}`}
+                          className="rounded px-3 py-1 text-sm text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          onClick={() => onDelete(card.id!)}
+                          className="rounded px-3 py-1 text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-700 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>

@@ -7,6 +7,7 @@ interface CardFormProps {
   action: (formData: FormData) => Promise<void>;
   issuers: Tables<"issuers">[];
   currencies: Tables<"reward_currencies">[];
+  userPrimaryCurrencyIds?: string[];
   defaultValues?: {
     name: string;
     slug: string;
@@ -19,9 +20,15 @@ interface CardFormProps {
   };
 }
 
-export function CardForm({ action, issuers, currencies, defaultValues }: CardFormProps) {
+export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, defaultValues }: CardFormProps) {
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [slug, setSlug] = useState(defaultValues?.slug ?? "");
+  const [issuerId, setIssuerId] = useState(defaultValues?.issuer_id ?? "");
+  const [primaryCurrencyId, setPrimaryCurrencyId] = useState(defaultValues?.primary_currency_id ?? "");
+  const [secondaryCurrencyId, setSecondaryCurrencyId] = useState(defaultValues?.secondary_currency_id ?? "");
+  const [productType, setProductType] = useState<"personal" | "business">(defaultValues?.product_type ?? "personal");
+  const [annualFee, setAnnualFee] = useState(defaultValues?.annual_fee ?? 0);
+  const [defaultEarnRate, setDefaultEarnRate] = useState(defaultValues?.default_earn_rate ?? 1.0);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
 
@@ -30,8 +37,14 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
     if (defaultValues) {
       setName(defaultValues.name);
       setSlug(defaultValues.slug);
+      setIssuerId(defaultValues.issuer_id);
+      setPrimaryCurrencyId(defaultValues.primary_currency_id);
+      setSecondaryCurrencyId(defaultValues.secondary_currency_id ?? "");
+      setProductType(defaultValues.product_type);
+      setAnnualFee(defaultValues.annual_fee);
+      setDefaultEarnRate(defaultValues.default_earn_rate);
     }
-  }, [defaultValues?.name, defaultValues?.slug]);
+  }, [defaultValues]);
 
   const handleSubmit = async (formData: FormData) => {
     setSaved(false);
@@ -88,7 +101,8 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
           <label className="block text-sm font-medium text-zinc-400 mb-1">Issuer</label>
           <select
             name="issuer_id"
-            defaultValue={defaultValues?.issuer_id ?? ""}
+            value={issuerId}
+            onChange={(e) => setIssuerId(e.target.value)}
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             required
           >
@@ -104,7 +118,8 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
           <label className="block text-sm font-medium text-zinc-400 mb-1">Product Type</label>
           <select
             name="product_type"
-            defaultValue={defaultValues?.product_type ?? "personal"}
+            value={productType}
+            onChange={(e) => setProductType(e.target.value as "personal" | "business")}
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             required
           >
@@ -119,7 +134,8 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
           <label className="block text-sm font-medium text-zinc-400 mb-1">Primary Currency</label>
           <select
             name="primary_currency_id"
-            defaultValue={defaultValues?.primary_currency_id ?? ""}
+            value={primaryCurrencyId}
+            onChange={(e) => setPrimaryCurrencyId(e.target.value)}
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             required
           >
@@ -134,10 +150,16 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">
             Secondary Currency <span className="text-zinc-500">(optional)</span>
+            {secondaryCurrencyId && userPrimaryCurrencyIds?.includes(secondaryCurrencyId) && (
+              <span className="ml-2 px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400 font-medium">
+                Enabled
+              </span>
+            )}
           </label>
           <select
             name="secondary_currency_id"
-            defaultValue={defaultValues?.secondary_currency_id ?? ""}
+            value={secondaryCurrencyId}
+            onChange={(e) => setSecondaryCurrencyId(e.target.value)}
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="">None</option>
@@ -148,7 +170,7 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
             ))}
           </select>
           <p className="mt-1 text-xs text-zinc-500">
-            Enabled when user holds an enabler card
+            Automatically enabled when you hold a card with this currency as primary
           </p>
         </div>
       </div>
@@ -159,7 +181,8 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
           <input
             type="number"
             name="annual_fee"
-            defaultValue={defaultValues?.annual_fee ?? 0}
+            value={annualFee}
+            onChange={(e) => setAnnualFee(parseFloat(e.target.value) || 0)}
             min="0"
             step="0.01"
             placeholder="e.g., 95"
@@ -173,7 +196,8 @@ export function CardForm({ action, issuers, currencies, defaultValues }: CardFor
             name="default_earn_rate"
             step="0.1"
             min="0"
-            defaultValue={defaultValues?.default_earn_rate ?? 1.0}
+            value={defaultEarnRate}
+            onChange={(e) => setDefaultEarnRate(parseFloat(e.target.value) || 1.0)}
             placeholder="e.g., 1.5"
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
