@@ -256,8 +256,8 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     revalidatePath(`/admin/cards/${id}`);
   }
 
-  const existingRuleCategoryIds = new Set(rulesResult.data?.map((r) => r.category_id) ?? []);
-  const availableCategories = categoriesResult.data?.filter((c) => !existingRuleCategoryIds.has(c.id)) ?? [];
+  // Pass all categories - cards can have multiple rules per category (e.g., direct vs portal booking)
+  const allCategories = categoriesResult.data ?? [];
   
   // Get user's primary currency IDs for the "Enabled" indicator on secondary currency
   const userPrimaryCurrencyIds = (userWalletResult.data ?? [])
@@ -310,40 +310,42 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       </div>
 
       {/* Earning Rules */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Earning Rules</h2>
-        {(() => {
-          const cardCurrency = currenciesResult.data?.find(c => c.id === card.primary_currency_id);
-          return (
-            <EarningRulesEditor
-              rules={rulesResult.data ?? []}
-              availableCategories={availableCategories}
-              onAddRule={addRule}
-              onUpdateRule={updateRule}
-              onDeleteRule={deleteRule}
-              cardCurrencyType={cardCurrency?.currency_type}
-              cardCurrencyName={cardCurrency?.name}
-            />
-          );
-        })()}
-      </div>
+      {(() => {
+        const cardCurrency = currenciesResult.data?.find(c => c.id === card.primary_currency_id);
+        return (
+          <>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+              <h2 className="text-lg font-semibold text-white mb-4">Earning Rules</h2>
+              <EarningRulesEditor
+                rules={rulesResult.data ?? []}
+                availableCategories={allCategories}
+                onAddRule={addRule}
+                onUpdateRule={updateRule}
+                onDeleteRule={deleteRule}
+                cardCurrencyType={cardCurrency?.currency_type}
+                cardCurrencyName={cardCurrency?.name}
+              />
+            </div>
 
-      {/* Category Bonuses */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <h2 className="text-lg font-semibold text-white mb-2">Category Bonuses</h2>
-        <p className="text-sm text-zinc-400 mb-4">
-          Special earning rules: user-selected categories, top spending categories, or combined category caps.
-        </p>
-        <CapsEditor
-          caps={caps}
-          allCategories={categoriesResult.data ?? []}
-          onAddCap={addCap}
-          onUpdateCap={updateCap}
-          onDeleteCap={deleteCap}
-          onUpdateCapCategories={updateCapCategories}
-          currencyType={card.primary_currency?.currency_type}
-        />
-      </div>
+            {/* Category Bonuses */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+              <h2 className="text-lg font-semibold text-white mb-2">Category Bonuses</h2>
+              <p className="text-sm text-zinc-400 mb-4">
+                Special earning rules: user-selected categories, top spending categories, or combined category caps.
+              </p>
+              <CapsEditor
+                caps={caps}
+                allCategories={categoriesResult.data ?? []}
+                onAddCap={addCap}
+                onUpdateCap={updateCap}
+                onDeleteCap={deleteCap}
+                onUpdateCapCategories={updateCapCategories}
+                currencyType={cardCurrency?.currency_type}
+              />
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

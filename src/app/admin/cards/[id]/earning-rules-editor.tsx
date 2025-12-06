@@ -464,11 +464,14 @@ export function EarningRulesEditor({
                 required
               >
                 <option value="">Select category...</option>
-                {availableCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
+                {availableCategories.map((cat) => {
+                  const hasExistingRule = rules.some(r => r.category_id === cat.id);
+                  return (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}{hasExistingRule ? " •" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div>
@@ -605,9 +608,6 @@ export function EarningRulesEditor({
         )
       )}
 
-      {availableCategories.length === 0 && !showAddForm && (
-        <p className="text-sm text-zinc-500">All categories have rules assigned.</p>
-      )}
     </div>
   );
 }
