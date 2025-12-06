@@ -387,7 +387,7 @@ export function ComparisonTable({
                         className="rounded border-zinc-600 bg-zinc-700 text-amber-500 focus:ring-amber-500 focus:ring-offset-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm text-zinc-300 truncate">{card.name}</div>
+                        <div className="text-sm text-zinc-300">{card.name}</div>
                         <div className="text-xs text-zinc-500">{card.issuerName}</div>
                       </div>
                     </label>
@@ -494,7 +494,7 @@ export function ComparisonTable({
                 {/* Sticky Card Column Header */}
                 <th
                   onClick={() => handleSort("card")}
-                  className="sticky left-0 z-10 bg-zinc-800 px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white min-w-[220px] max-w-[280px] border-r border-zinc-700 whitespace-nowrap"
+                  className="sticky left-0 z-10 bg-zinc-800 px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white border-r border-zinc-700 whitespace-nowrap"
                 >
                   <span className="inline-flex items-center">
                     Card
@@ -540,7 +540,7 @@ export function ComparisonTable({
                     className={`hover:bg-zinc-800/30 ${isEvaluating ? "bg-amber-950/10" : ""}`}
                   >
                     {/* Sticky Card Info */}
-                    <td className={`sticky left-0 z-10 px-4 py-3 border-r border-zinc-700 min-w-[220px] max-w-[280px] ${isEvaluating ? "bg-amber-950/20" : "bg-zinc-900"}`}>
+                    <td className={`sticky left-0 z-10 px-4 py-3 border-r border-zinc-700 ${isEvaluating ? "bg-amber-950/20" : "bg-zinc-900"}`}>
                       <div className="flex items-center gap-2">
                         {card.isOwned && (
                           <span className="shrink-0 w-2 h-2 rounded-full bg-blue-500" title="In your wallet" />
@@ -549,7 +549,7 @@ export function ComparisonTable({
                           <span className="shrink-0 w-2 h-2 rounded-full bg-amber-500" title="Evaluating" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-white truncate max-w-[200px]">{card.name}</div>
+                          <div className="font-medium text-white">{card.name}</div>
                           <div className="text-xs text-zinc-500 flex items-center gap-2">
                             <span>{card.issuerName}</span>
                             <span>·</span>
