@@ -23,6 +23,7 @@ export default async function NewCardPage() {
     const product_type = formData.get("product_type") as "personal" | "business";
     const annual_fee = parseFloat(formData.get("annual_fee") as string) || 0;
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;
+    const default_perks_value = parseFloat(formData.get("default_perks_value") as string) || 0;
 
     const { data, error } = await supabase
       .from("cards")
@@ -35,6 +36,7 @@ export default async function NewCardPage() {
         product_type,
         annual_fee,
         default_earn_rate,
+        default_perks_value,
       })
       .select()
       .single();

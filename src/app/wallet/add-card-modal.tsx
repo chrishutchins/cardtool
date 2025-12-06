@@ -57,7 +57,7 @@ export function AddCardModal({
     if (!acc[issuer]) acc[issuer] = [];
     acc[issuer].push(card);
     return acc;
-  }, {} as Record<string, CardWithCurrency[]>);
+  }, {} as Record<string, AvailableCard[]>);
 
   const handleAdd = async (cardId: string) => {
     setAddingId(cardId);
