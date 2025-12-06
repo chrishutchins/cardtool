@@ -413,7 +413,7 @@ export function WalletCardList({
 
                   {/* Net Fee */}
                   <td className="px-4 py-3 text-right">
-                    <span className={`font-medium ${netFee <= 0 ? "text-emerald-400" : "text-zinc-300"}`}>
+                    <span className={`font-medium ${netFee < 0 ? "text-emerald-400" : "text-zinc-300"}`}>
                       {netFee < 0 ? `-$${Math.abs(netFee)}` : `$${netFee}`}
                     </span>
                   </td>
