@@ -390,8 +390,11 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
   // Sort categories to optimize shared cap allocation
   // Categories where the best card uses a shared cap AND provides big marginal benefit
   // should be processed first so they get priority for limited cap room
+  // NOTE: We include excluded_by_default categories (like Rent/Mortgage) because
+  // some cards (like Bilt) CAN earn on them. The allocation logic will handle
+  // cases where no card can earn on a category (they just get $0 allocated).
   const sortedSpending = [...spending]
-    .filter(s => s.annual_spend_cents > 0 && !s.excluded_by_default)
+    .filter(s => s.annual_spend_cents > 0)
     .map(categorySpend => {
       // Get ranked cards for this category to calculate marginal benefit
       const rankedCards = rankCardsForCategory(
@@ -684,12 +687,16 @@ function calculateTopCategories(
         continue;
       }
 
-      // Get spending for eligible categories
+      // Get spending for eligible categories, sorted by SPENDING amount
+      // (We use spending to determine which category is "top" - the user naturally
+      // spends more in their top category. The optimization happens at allocation time
+      // where we decide whether to actually USE the card for that category.)
       const eligibleSpending = bonus.category_ids
         .map(catId => ({
           categoryId: catId,
           spend: categoryMap.get(catId)?.annual_spend_cents ?? 0,
         }))
+        .filter(s => s.spend > 0) // Only consider categories with actual spending
         .sort((a, b) => b.spend - a.spend);
 
       let qualifyingCategories: number[] = [];
