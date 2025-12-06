@@ -262,25 +262,33 @@ export function CapsEditor({
                             />
                           </div>
                         </div>
-                        <div>
-                          <label className="block text-xs text-zinc-400 mb-1">Categories</label>
-                          <div className="flex flex-wrap gap-1">
-                            {allCategories.map((cat) => (
-                              <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => toggleCategory(cat.id)}
-                                className={`px-2 py-0.5 text-xs rounded ${
-                                  selectedCategories.includes(cat.id)
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
-                                }`}
-                              >
-                                {cat.name}
-                              </button>
-                            ))}
+                        {editCapType !== "all_categories" ? (
+                          <div>
+                            <label className="block text-xs text-zinc-400 mb-1">Categories</label>
+                            <div className="flex flex-wrap gap-1">
+                              {allCategories.map((cat) => (
+                                <button
+                                  key={cat.id}
+                                  type="button"
+                                  onClick={() => toggleCategory(cat.id)}
+                                  className={`px-2 py-0.5 text-xs rounded ${
+                                    selectedCategories.includes(cat.id)
+                                      ? "bg-blue-600 text-white"
+                                      : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
+                                  }`}
+                                >
+                                  {cat.name}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="bg-emerald-900/20 border border-emerald-700/50 rounded p-2">
+                            <p className="text-xs text-emerald-300">
+                              Applies to all non-excluded categories automatically.
+                            </p>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -313,16 +321,24 @@ export function CapsEditor({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
-                        {cap.categories.map((cat) => (
-                          <span
-                            key={cat.id}
-                            className="px-2 py-0.5 text-xs rounded bg-zinc-700 text-zinc-300"
-                          >
-                            {cat.name}
+                        {cap.cap_type === "all_categories" ? (
+                          <span className="px-2 py-0.5 text-xs rounded bg-emerald-700/50 text-emerald-300">
+                            All (non-excluded)
                           </span>
-                        ))}
-                        {cap.categories.length === 0 && (
-                          <span className="text-zinc-500 text-sm">No categories</span>
+                        ) : (
+                          <>
+                            {cap.categories.map((cat) => (
+                              <span
+                                key={cat.id}
+                                className="px-2 py-0.5 text-xs rounded bg-zinc-700 text-zinc-300"
+                              >
+                                {cat.name}
+                              </span>
+                            ))}
+                            {cap.categories.length === 0 && (
+                              <span className="text-zinc-500 text-sm">No categories</span>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
@@ -463,32 +479,42 @@ export function CapsEditor({
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-2">
-              Categories
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {allCategories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => toggleCategory(cat.id, true)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    newCategories.includes(cat.id)
-                      ? "bg-blue-600 text-white"
-                      : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
+          {capType !== "all_categories" && (
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-2">
+                Categories
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {allCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => toggleCategory(cat.id, true)}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${
+                      newCategories.includes(cat.id)
+                        ? "bg-blue-600 text-white"
+                        : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {capType === "all_categories" && (
+            <div className="bg-emerald-900/20 border border-emerald-700/50 rounded-lg p-3">
+              <p className="text-sm text-emerald-300">
+                This bonus will apply to all categories except those marked as "excluded by default" (e.g., Rent, Mortgage).
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-2 pt-2">
             <button
               type="submit"
-              disabled={isPending || newCategories.length === 0}
+              disabled={isPending || (capType !== "all_categories" && newCategories.length === 0)}
               className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isPending ? "Adding..." : "Add Cap"}
