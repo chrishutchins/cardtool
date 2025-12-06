@@ -745,6 +745,78 @@ export type Database = {
           },
         ]
       }
+      user_compare_categories: {
+        Row: {
+          category_id: number
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          category_id: number
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: number
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_compare_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "earning_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_compare_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
+          },
+        ]
+      }
+      user_compare_evaluation_cards: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_compare_evaluation_cards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_compare_evaluation_cards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_currency_values: {
         Row: {
           created_at: string | null

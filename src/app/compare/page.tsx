@@ -1,9 +1,52 @@
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { UserHeader } from "@/components/user-header";
 import { ComparisonTable } from "./comparison-table";
 import { isAdminEmail } from "@/lib/admin";
+
+async function saveCompareCategories(categoryIds: number[]) {
+  "use server";
+  const user = await currentUser();
+  if (!user) return;
+  
+  const supabase = await createClient();
+  
+  // Delete existing
+  await supabase
+    .from("user_compare_categories")
+    .delete()
+    .eq("user_id", user.id);
+  
+  // Insert new
+  if (categoryIds.length > 0) {
+    await supabase
+      .from("user_compare_categories")
+      .insert(categoryIds.map((id) => ({ user_id: user.id, category_id: id })));
+  }
+}
+
+async function saveCompareEvalCards(cardIds: string[]) {
+  "use server";
+  const user = await currentUser();
+  if (!user) return;
+  
+  const supabase = await createClient();
+  
+  // Delete existing
+  await supabase
+    .from("user_compare_evaluation_cards")
+    .delete()
+    .eq("user_id", user.id);
+  
+  // Insert new
+  if (cardIds.length > 0) {
+    await supabase
+      .from("user_compare_evaluation_cards")
+      .insert(cardIds.map((id) => ({ user_id: user.id, card_id: id })));
+  }
+}
 
 export default async function ComparePage() {
   const user = await currentUser();
@@ -103,6 +146,21 @@ export default async function ComparePage() {
   for (const spend of userSpendingData ?? []) {
     userSpending[spend.category_id] = spend.annual_spend_cents;
   }
+
+  // Get user's saved compare preferences
+  const [{ data: savedCategories }, { data: savedEvalCards }] = await Promise.all([
+    supabase
+      .from("user_compare_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    supabase
+      .from("user_compare_evaluation_cards")
+      .select("card_id")
+      .eq("user_id", user.id),
+  ]);
+
+  const savedCategoryIds = savedCategories?.map((c) => c.category_id) ?? [];
+  const savedEvalCardIds = savedEvalCards?.map((c) => c.card_id) ?? [];
 
   // Get all categories
   const { data: allCategories } = await supabase
@@ -314,9 +372,9 @@ export default async function ComparePage() {
       parentCategoryId: cat.parent_category_id,
     }));
 
-  // Default category slugs to show
+  // Default category slugs to show (used only if user has no saved preferences)
   const defaultCategorySlugs = [
-    "gas",
+    "gas-ev",
     "grocery",
     "dining",
     "all-travel",
@@ -325,6 +383,13 @@ export default async function ComparePage() {
     "streaming",
     "amazon",
   ];
+
+  // Convert saved category IDs to slugs, or use defaults if none saved
+  const initialCategorySlugs = savedCategoryIds.length > 0
+    ? (allCategories ?? [])
+        .filter((cat) => savedCategoryIds.includes(cat.id))
+        .map((cat) => cat.slug)
+    : defaultCategorySlugs;
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
@@ -343,9 +408,13 @@ export default async function ComparePage() {
           cards={cardsForTable}
           categories={categoriesForTable}
           defaultCategorySlugs={defaultCategorySlugs}
+          initialCategorySlugs={initialCategorySlugs}
+          initialEvalCardIds={savedEvalCardIds}
           debitPayValues={debitPayMap}
           userSpending={userSpending}
           capInfo={capInfoMap}
+          onSaveCategories={saveCompareCategories}
+          onSaveEvalCards={saveCompareEvalCards}
         />
       </div>
     </div>

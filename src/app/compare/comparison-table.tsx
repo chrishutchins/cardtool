@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 interface Card {
   id: string;
@@ -35,9 +35,13 @@ interface ComparisonTableProps {
   cards: Card[];
   categories: Category[];
   defaultCategorySlugs: string[];
+  initialCategorySlugs: string[];
+  initialEvalCardIds: string[];
   debitPayValues: Record<string, number>;
   userSpending: Record<number, number>;
   capInfo: Record<string, Record<number, CapInfo>>;
+  onSaveCategories?: (categoryIds: number[]) => Promise<void>;
+  onSaveEvalCards?: (cardIds: string[]) => Promise<void>;
 }
 
 type SortConfig = {
@@ -84,24 +88,66 @@ export function ComparisonTable({
   cards,
   categories,
   defaultCategorySlugs,
+  initialCategorySlugs,
+  initialEvalCardIds,
   debitPayValues,
   userSpending,
   capInfo,
+  onSaveCategories,
+  onSaveEvalCards,
 }: ComparisonTableProps) {
   // State
   const [selectedCategorySlugs, setSelectedCategorySlugs] = useState<Set<string>>(
-    new Set(defaultCategorySlugs)
+    new Set(initialCategorySlugs)
   );
-  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [filterMode, setFilterMode] = useState<FilterMode>(
+    initialEvalCardIds.length > 0 ? "evaluate" : "all"
+  );
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     type: "card",
     direction: "asc",
   });
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [showSpending, setShowSpending] = useState(false);
-  const [evaluationCardIds, setEvaluationCardIds] = useState<Set<string>>(new Set());
+  const [evaluationCardIds, setEvaluationCardIds] = useState<Set<string>>(
+    new Set(initialEvalCardIds)
+  );
   const [showCardSelector, setShowCardSelector] = useState(false);
   const [cardSearchQuery, setCardSearchQuery] = useState("");
+
+  // Track if this is the initial mount (to avoid saving on first render)
+  const isInitialMount = useRef(true);
+  const categoriesInitialMount = useRef(true);
+
+  // Debounced save for categories
+  useEffect(() => {
+    if (categoriesInitialMount.current) {
+      categoriesInitialMount.current = false;
+      return;
+    }
+    
+    const categoryIds = categories
+      .filter((cat) => selectedCategorySlugs.has(cat.slug))
+      .map((cat) => cat.id);
+    
+    const timeout = setTimeout(() => {
+      onSaveCategories?.(categoryIds);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [selectedCategorySlugs, categories, onSaveCategories]);
+
+  // Debounced save for evaluation cards
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
+    const timeout = setTimeout(() => {
+      onSaveEvalCards?.(Array.from(evaluationCardIds));
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [evaluationCardIds, onSaveEvalCards]);
 
   // Selected categories in order
   const selectedCategories = useMemo(() => {
