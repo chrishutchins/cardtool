@@ -56,6 +56,21 @@ export default async function WalletPage() {
     }
   });
 
+  // Get user's perks values for their cards
+  const { data: perksValues } = userCardIds.length > 0
+    ? await supabase
+        .from("user_card_perks_values")
+        .select("card_id, perks_value")
+        .eq("user_id", user.id)
+        .in("card_id", userCardIds)
+    : { data: [] };
+
+  // Build perks map
+  const perksMap = new Map<string, number>();
+  perksValues?.forEach((pv) => {
+    perksMap.set(pv.card_id, pv.perks_value);
+  });
+
   // Get all available cards for adding
   const { data: allCards } = await supabase
     .from("card_with_currency")
@@ -95,10 +110,27 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
+  async function updatePerksValue(cardId: string, perksValue: number) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase.from("user_card_perks_values").upsert(
+      {
+        user_id: user.id,
+        card_id: cardId,
+        perks_value: perksValue,
+      },
+      { onConflict: "user_id,card_id" }
+    );
+    revalidatePath("/wallet");
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950">
       <UserHeader />
-      <div className="mx-auto max-w-4xl px-4 py-12">
+      <div className="mx-auto max-w-5xl px-4 py-12">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-white">My Wallet</h1>
@@ -116,7 +148,9 @@ export default async function WalletPage() {
           <WalletCardList
             walletCards={walletCards}
             enabledSecondaryCards={enabledSecondaryCards}
+            perksMap={perksMap}
             onRemove={removeFromWallet}
+            onUpdatePerks={updatePerksValue}
           />
         ) : (
           <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
