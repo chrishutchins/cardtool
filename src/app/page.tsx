@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { isCurrentUserAdmin } from "@/lib/admin";
 
-export default function Home() {
+export default async function Home() {
+  const isAdmin = await isCurrentUserAdmin();
+
   return (
     <div className="min-h-screen bg-zinc-950">
       {/* Navigation */}
@@ -12,12 +15,14 @@ export default function Home() {
               CardTool
             </Link>
             <div className="flex items-center gap-4">
-              <Link
-                href="/admin"
-                className="text-sm text-zinc-400 hover:text-white transition-colors"
-              >
-                Admin
-              </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  Admin
+                </Link>
+              )}
               <SignedIn>
                 <Link
                   href="/wallet"
@@ -98,12 +103,14 @@ export default function Home() {
                 </button>
               </SignUpButton>
             </SignedOut>
-            <Link
-              href="/admin"
-              className="rounded-lg border border-zinc-700 px-6 py-3 text-sm font-semibold text-zinc-300 hover:bg-zinc-800 transition-colors"
-            >
-              View Cards Database
-            </Link>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="rounded-lg border border-zinc-700 px-6 py-3 text-sm font-semibold text-zinc-300 hover:bg-zinc-800 transition-colors"
+              >
+                View Cards Database
+              </Link>
+            )}
           </div>
         </div>
 

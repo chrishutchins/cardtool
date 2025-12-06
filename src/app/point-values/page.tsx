@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { PointValuesEditor } from "@/components/point-values-editor";
 import { UserHeader } from "@/components/user-header";
+import { isAdminEmail } from "@/lib/admin";
 
 export default async function PointValuesPage() {
   const user = await currentUser();
@@ -66,9 +67,11 @@ export default async function PointValuesPage() {
     revalidatePath("/point-values");
   }
 
+  const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
+
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader />
+      <UserHeader isAdmin={isAdmin} />
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">My Point Values</h1>

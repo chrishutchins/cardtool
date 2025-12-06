@@ -6,6 +6,7 @@ import { WalletCardList } from "./wallet-card-list";
 import { AddCardModal } from "./add-card-modal";
 import { UserHeader } from "@/components/user-header";
 import { ReturnsSummary } from "./returns-summary";
+import { isAdminEmail } from "@/lib/admin";
 import {
   calculatePortfolioReturns,
   CardInput,
@@ -379,9 +380,11 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
+  const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
+
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader />
+      <UserHeader isAdmin={isAdmin} />
       <div className="mx-auto max-w-5xl px-4 py-12">
         <div className="flex items-center justify-between mb-8">
           <div>

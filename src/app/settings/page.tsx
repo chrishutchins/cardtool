@@ -7,6 +7,7 @@ import { CardCategorySelector } from "@/app/wallet/card-category-selector";
 import { MultiplierSelector } from "@/app/wallet/multiplier-selector";
 import { TravelPreferences } from "@/app/wallet/travel-preferences";
 import { MobilePayCategories } from "@/app/wallet/mobile-pay-categories";
+import { isAdminEmail } from "@/lib/admin";
 
 export default async function SettingsPage() {
   const user = await currentUser();
@@ -369,9 +370,11 @@ export default async function SettingsPage() {
     (travelSubcategories.length > 0 && (airlineBrands.length > 0 || hotelBrands.length > 0 || portalIssuers.length > 0)) ||
     (hasMobilePayCards && (allCategories ?? []).length > 0);
 
+  const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
+
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader />
+      <UserHeader isAdmin={isAdmin} />
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Settings</h1>

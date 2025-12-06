@@ -13,7 +13,11 @@ const navItems = [
   { href: "/settings", label: "Settings" },
 ];
 
-export function UserHeader() {
+interface UserHeaderProps {
+  isAdmin?: boolean;
+}
+
+export function UserHeader({ isAdmin = false }: UserHeaderProps) {
   const pathname = usePathname();
 
   return (
@@ -44,12 +48,14 @@ export function UserHeader() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Link
-              href="/admin"
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              Admin →
-            </Link>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Admin →
+              </Link>
+            )}
             <UserButton afterSignOutUrl="/" />
           </div>
         </div>

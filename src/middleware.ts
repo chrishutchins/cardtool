@@ -1,10 +1,32 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-// Define protected routes - user pages and admin require auth
-const isProtectedRoute = createRouteMatcher(["/wallet(.*)", "/returns(.*)", "/compare(.*)", "/spending(.*)", "/point-values(.*)", "/settings(.*)", "/admin(.*)"]);
+// Define protected routes - user pages require auth
+const isProtectedRoute = createRouteMatcher(["/wallet(.*)", "/returns(.*)", "/compare(.*)", "/spending(.*)", "/point-values(.*)", "/settings(.*)"]);
+
+// Admin routes require auth + admin role
+const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
+
+// Check if email is in admin list
+function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim().toLowerCase()) ?? [];
+  return adminEmails.includes(email.toLowerCase());
+}
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
+  // Check admin routes first
+  if (isAdminRoute(req)) {
+    const { userId, sessionClaims } = await auth.protect();
+    
+    // Get user's email from session claims
+    const email = sessionClaims?.email as string | undefined;
+    
+    if (!isAdminEmail(email)) {
+      // Non-admin trying to access admin route - redirect to home
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+  } else if (isProtectedRoute(req)) {
     await auth.protect();
   }
 });

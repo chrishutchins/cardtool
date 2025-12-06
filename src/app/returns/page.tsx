@@ -3,6 +3,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { UserHeader } from "@/components/user-header";
 import { ReturnsDisplay } from "./returns-display";
+import { isAdminEmail } from "@/lib/admin";
 import {
   calculatePortfolioReturns,
   calculateMarginalValues,
@@ -357,9 +358,11 @@ export default async function ReturnsPage({ searchParams }: Props) {
     }
   });
 
+  const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
+
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader />
+      <UserHeader isAdmin={isAdmin} />
       <div className="mx-auto max-w-5xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Total Earnings</h1>
