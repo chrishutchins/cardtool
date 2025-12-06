@@ -352,7 +352,7 @@ export function WalletCardList({
               </th>
               {debitPayEnabled && (
                 <th 
-                  className="px-4 py-3 text-right text-xs font-medium text-amber-400/70 uppercase cursor-pointer hover:text-amber-400 whitespace-nowrap hidden lg:table-cell"
+                  className="px-4 py-3 text-right text-xs font-medium text-pink-400/70 uppercase cursor-pointer hover:text-pink-400 whitespace-nowrap hidden lg:table-cell"
                   onClick={() => handleSort("debit_pay")}
                   title="Extra % bonus from debit pay"
                 >
@@ -471,14 +471,14 @@ export function WalletCardList({
                             step="0.1"
                             value={editDebitPayValue}
                             onChange={(e) => setEditDebitPayValue(e.target.value)}
-                            className="w-16 rounded border border-amber-600/50 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-amber-500 focus:outline-none"
+                            className="w-16 rounded border border-pink-600/50 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-pink-500 focus:outline-none"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Enter") handleSaveDebitPay(card.id);
                               if (e.key === "Escape") handleCancelDebitPay();
                             }}
                           />
-                          <span className="text-amber-400/70">%</span>
+                          <span className="text-pink-400/70">%</span>
                           <button
                             onClick={() => handleSaveDebitPay(card.id)}
                             disabled={isPending}
@@ -497,11 +497,11 @@ export function WalletCardList({
                       ) : (
                         <button
                           onClick={() => handleEditDebitPay(card.id, debitPayMap.get(card.id) ?? 0)}
-                          className="text-zinc-400 hover:text-amber-400 transition-colors group"
+                          className="text-zinc-400 hover:text-pink-400 transition-colors group"
                           title="Click to edit debit pay bonus"
                         >
                           {(debitPayMap.get(card.id) ?? 0) > 0 ? (
-                            <span className="text-amber-400">+{debitPayMap.get(card.id)}%</span>
+                            <span className="text-pink-400">+{debitPayMap.get(card.id)}%</span>
                           ) : (
                             <span className="text-zinc-600 group-hover:text-zinc-400">0%</span>
                           )}

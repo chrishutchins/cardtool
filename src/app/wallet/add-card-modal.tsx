@@ -105,10 +105,10 @@ export function AddCardModal({
           {isSecretCode && !debitPayEnabled && onEnableDebitPay && (
             <div className="p-6 text-center">
               <div className="mb-4">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 mb-4">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-pink-600 mb-4">
                   <span className="text-3xl">🔓</span>
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Secret Feature Unlocked!</h3>
+                <h3 className="text-lg font-semibold text-pink-400 mb-2">Secret Feature Unlocked!</h3>
                 <p className="text-sm text-zinc-400 mb-4">
                   You've discovered the Debit Pay feature. This allows you to add an extra earning 
                   percentage to any card in your wallet.
@@ -117,7 +117,7 @@ export function AddCardModal({
               <button
                 onClick={handleEnableDebitPay}
                 disabled={isPending}
-                className="px-6 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white font-medium hover:from-amber-600 hover:to-orange-700 disabled:opacity-50 transition-all"
+                className="px-6 py-2 rounded-lg bg-gradient-to-r from-pink-500 to-pink-600 text-white font-medium hover:from-pink-600 hover:to-pink-700 disabled:opacity-50 transition-all"
               >
                 {isPending ? "Enabling..." : "Enable Debit Pay"}
               </button>
@@ -127,10 +127,10 @@ export function AddCardModal({
           {/* Already Unlocked Message */}
           {showSecretUnlock && debitPayEnabled && (
             <div className="p-6 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 mb-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-pink-600 mb-4">
                 <span className="text-3xl">✓</span>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Debit Pay Enabled!</h3>
+              <h3 className="text-lg font-semibold text-pink-400 mb-2">Debit Pay Enabled!</h3>
               <p className="text-sm text-zinc-400">
                 You can now add Debit Pay percentages to your cards in the wallet table.
               </p>
