@@ -15,7 +15,9 @@ import { currentUser } from "@clerk/nextjs/server";
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   
-  const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim().toLowerCase()) ?? [];
+  // Remove any surrounding quotes from env var and split by comma
+  const rawEmails = process.env.ADMIN_EMAILS?.replace(/^["']|["']$/g, "") ?? "";
+  const adminEmails = rawEmails.split(",").map(e => e.trim().toLowerCase()).filter(e => e.length > 0);
   return adminEmails.includes(email.toLowerCase());
 }
 
