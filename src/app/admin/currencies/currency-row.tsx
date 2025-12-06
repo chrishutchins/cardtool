@@ -100,7 +100,7 @@ export function CurrencyRow({ currency, onDelete, onUpdate }: CurrencyRowProps) 
         {currency.base_value_cents ? `${currency.base_value_cents}¢` : "—"}
       </td>
       <td className="px-6 py-4 text-zinc-400">
-        {currency.currency_type !== "cash" && currency.currency_type !== "cash_back"
+        {currency.currency_type !== "cash_back"
           ? (currency.cash_out_value_cents ? `${currency.cash_out_value_cents}¢` : "—")
           : <span className="text-zinc-600">N/A</span>
         }

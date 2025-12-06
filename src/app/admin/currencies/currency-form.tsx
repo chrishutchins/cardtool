@@ -68,7 +68,7 @@ export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormPr
   }, [defaultValues]);
 
   // Cash out value only applies to non-cash currencies
-  const showCashOutValue = currencyType !== "cash" && currencyType !== "cash_back";
+  const showCashOutValue = currencyType !== "cash_back";
 
   const generateCode = (value: string) => {
     return value
