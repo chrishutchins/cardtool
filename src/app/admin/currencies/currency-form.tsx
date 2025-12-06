@@ -24,16 +24,12 @@ const currencyTypes: { value: Enums<"reward_currency_type">; label: string }[] =
   { value: "cash_back", label: "Cash Back" },
   { value: "crypto", label: "Crypto" },
   { value: "other", label: "Other" },
-  // Legacy types (kept for backward compatibility)
-  { value: "points", label: "Points (Legacy)" },
-  { value: "cash", label: "Cash (Legacy)" },
-  { value: "miles", label: "Miles (Legacy)" },
 ];
 
 export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormProps) {
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [code, setCode] = useState(defaultValues?.code ?? "");
-  const [currencyType, setCurrencyType] = useState<Enums<"reward_currency_type">>(defaultValues?.currency_type ?? "points");
+  const [currencyType, setCurrencyType] = useState<Enums<"reward_currency_type">>(defaultValues?.currency_type ?? "transferable_points");
   const [baseValueCents, setBaseValueCents] = useState<string>(defaultValues?.base_value_cents?.toString() ?? "");
   const [cashOutValueCents, setCashOutValueCents] = useState<string>(defaultValues?.cash_out_value_cents?.toString() ?? "");
   const [notes, setNotes] = useState(defaultValues?.notes ?? "");
