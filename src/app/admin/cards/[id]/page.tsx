@@ -162,15 +162,16 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     const category_ids = JSON.parse(formData.get("category_ids") as string) as number[];
 
     // Create the cap
+    // Only set cap_period if there's a cap_amount (mirrors earning rules pattern)
     const { data: cap, error } = await supabase
       .from("card_caps")
       .insert({
         card_id: id,
         cap_type,
         cap_amount,
-        cap_period,
+        cap_period: cap_amount ? cap_period : "none",
         elevated_rate,
-        post_cap_rate,
+        post_cap_rate: cap_amount ? post_cap_rate : null,
         notes,
       })
       .select()
@@ -230,14 +231,15 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     const category_ids = JSON.parse(formData.get("category_ids") as string) as number[];
 
     // Update the cap
+    // Only set cap_period if there's a cap_amount (mirrors earning rules pattern)
     await supabase
       .from("card_caps")
       .update({
         cap_type,
         cap_amount,
-        cap_period,
+        cap_period: cap_amount ? cap_period : "none",
         elevated_rate,
-        post_cap_rate,
+        post_cap_rate: cap_amount ? post_cap_rate : null,
         notes,
       })
       .eq("id", capId);
