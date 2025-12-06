@@ -402,6 +402,9 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
                             : formatNumber(card.totalEarned, 0) + " pts"
                           }
                         </span>
+                        {card.totalDebitPay > 0 && (
+                          <span className="text-pink-400"> + {formatCurrency(card.totalDebitPay)}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right text-emerald-400">
                         {formatCurrency(card.totalEarnedValue)}

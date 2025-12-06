@@ -134,6 +134,7 @@ export interface CardEarnings {
   totalSpend: number;
   totalEarned: number;
   totalEarnedValue: number;
+  totalDebitPay: number;          // Total debit pay bonus for this card
   categoryBreakdown: CardCategoryBreakdown[];
   // Marginal value fields (calculated separately)
   marginalValue?: number;         // Value this card adds over replacement
@@ -381,6 +382,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       totalSpend: 0,
       totalEarned: 0,
       totalEarnedValue: 0,
+      totalDebitPay: 0,
       categoryBreakdown: [],
     });
   });
@@ -470,7 +472,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         });
 
         // Update card earnings
-        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAmount, postCapRate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAmount, postCapRate, earned, earnedValue, debitPayBonus, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
         
         remainingSpend = 0;
         break;
@@ -510,7 +512,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         }
 
         // Update card earnings
-        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAtElevated, rate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, card.id, categorySpend, spendAtElevated, rate, earned, earnedValue, debitPayBonus, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
 
         remainingSpend -= spendAtElevated;
       }
@@ -572,7 +574,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           isCashback: currencyInfo.isCashback,
         });
 
-        updateCardEarnings(cardEarningsMap, currencyEarningsMap, bestCard.id, categorySpend, remainingSpend, rate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, bestCard.id, categorySpend, remainingSpend, rate, earned, earnedValue, debitPayBonus, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
       }
       // Note: If all cards are excluded, remaining spend is not allocated (this is intentional for goal-based filtering)
     }
@@ -983,6 +985,7 @@ function updateCardEarnings(
   rate: number,
   earned: number,
   earnedValue: number,
+  debitPayBonus: number,
   currencyId: string,
   currencyName: string,
   currencyType: string,
@@ -994,6 +997,7 @@ function updateCardEarnings(
   cardEarnings.totalSpend += spend;
   cardEarnings.totalEarned += earned;
   cardEarnings.totalEarnedValue += earnedValue;
+  cardEarnings.totalDebitPay += debitPayBonus;
 
   // Update per-currency breakdown (for non-cashback currencies)
   if (!isCashback) {
