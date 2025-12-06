@@ -17,6 +17,50 @@ interface PointValuesEditorProps {
   onUpdate: (currencyId: string, valueCents: number | null) => Promise<void>;
 }
 
+const typeConfig: Record<string, { label: string; className: string }> = {
+  airline_miles: { 
+    label: "✈️ Airline Miles", 
+    className: "bg-sky-500/20 text-sky-300 border border-sky-500/30" 
+  },
+  hotel_points: { 
+    label: "🏨 Hotel Points", 
+    className: "bg-amber-500/20 text-amber-300 border border-amber-500/30" 
+  },
+  transferable_points: { 
+    label: "🔄 Transferable", 
+    className: "bg-violet-500/20 text-violet-300 border border-violet-500/30" 
+  },
+  non_transferable_points: { 
+    label: "📍 Non-Transferable", 
+    className: "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" 
+  },
+  cash_back: { 
+    label: "💵 Cash Back", 
+    className: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+  },
+  crypto: { 
+    label: "₿ Crypto", 
+    className: "bg-orange-500/20 text-orange-300 border border-orange-500/30" 
+  },
+  other: { 
+    label: "Other", 
+    className: "bg-zinc-500/20 text-zinc-300 border border-zinc-500/30" 
+  },
+  // Legacy types
+  points: { 
+    label: "Points", 
+    className: "bg-purple-500/20 text-purple-300 border border-purple-500/30" 
+  },
+  cash: { 
+    label: "Cash", 
+    className: "bg-green-500/20 text-green-300 border border-green-500/30" 
+  },
+  miles: { 
+    label: "Miles", 
+    className: "bg-blue-500/20 text-blue-300 border border-blue-500/30" 
+  },
+};
+
 export function PointValuesEditor({
   currencies,
   onUpdate,
@@ -89,8 +133,15 @@ export function PointValuesEditor({
                   </span>
                 </div>
               </td>
-              <td className="px-4 py-3 text-zinc-400 text-sm capitalize">
-                {currency.currency_type}
+              <td className="px-4 py-3">
+                {(() => {
+                  const config = typeConfig[currency.currency_type] ?? typeConfig.other;
+                  return (
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${config.className}`}>
+                      {config.label}
+                    </span>
+                  );
+                })()}
               </td>
               <td className="px-4 py-3 text-right text-zinc-400 font-mono text-sm">
                 {formatValue(currency.base_value_cents)}
