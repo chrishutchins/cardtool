@@ -14,11 +14,9 @@ const navItems = [
 export function UserHeader() {
   const pathname = usePathname();
 
-  const isComparePage = pathname.startsWith("/compare");
-
   return (
     <nav className="border-b border-zinc-800 bg-zinc-900">
-      <div className={`mx-auto px-4 ${isComparePage ? "max-w-[1600px]" : "max-w-4xl"}`}>
+      <div className="mx-auto max-w-7xl px-4">
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="text-lg font-bold text-white">
