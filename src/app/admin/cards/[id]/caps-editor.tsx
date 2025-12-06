@@ -297,8 +297,8 @@ export function CapsEditor({
                           <button
                             type="button"
                             onClick={() => handleSaveCap(cap.id)}
-                            disabled={isPending}
-                            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50"
+                            disabled={isPending || (editCapType !== "all_categories" && selectedCategories.length === 0)}
+                            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isPending ? "Saving..." : "Save"}
                           </button>
