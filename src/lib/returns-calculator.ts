@@ -439,11 +439,14 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
 
     // If still have remaining spend, allocate to best uncapped card at default rate
     if (remainingSpend > 0 && cards.length > 0) {
-      let bestCard = cards[0];
-      let bestValue = 0;
+      let bestCard: CardInput | null = null;
+      let bestValue = -1;
       
       for (const card of cards) {
         const currencyInfo = getCardCurrencyInfo(card);
+        // Skip excluded cards
+        if (currencyInfo.excluded) continue;
+        
         const rate = card.default_earn_rate;
         const value = currencyInfo.isCashback 
           ? rate / 100 
@@ -454,28 +457,32 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         }
       }
 
-      const currencyInfo = getCardCurrencyInfo(bestCard);
-      const rate = bestCard.default_earn_rate;
-      const earned = currencyInfo.isCashback 
-        ? remainingSpend * (rate / 100)
-        : remainingSpend * rate;
-      const earnedValue = currencyInfo.isCashback 
-        ? earned 
-        : earned * (currencyInfo.valueCents / 100);
+      // Only allocate if we found a non-excluded card
+      if (bestCard) {
+        const currencyInfo = getCardCurrencyInfo(bestCard);
+        const rate = bestCard.default_earn_rate;
+        const earned = currencyInfo.isCashback 
+          ? remainingSpend * (rate / 100)
+          : remainingSpend * rate;
+        const earnedValue = currencyInfo.isCashback 
+          ? earned 
+          : earned * (currencyInfo.valueCents / 100);
 
-      allocations.push({
-        cardId: bestCard.id,
-        cardName: bestCard.name,
-        currencyType: currencyInfo.currencyType,
-        currencyName: currencyInfo.currencyName,
-        spend: remainingSpend,
-        rate,
-        earned,
-        earnedValue,
-        isCashback: currencyInfo.isCashback,
-      });
+        allocations.push({
+          cardId: bestCard.id,
+          cardName: bestCard.name,
+          currencyType: currencyInfo.currencyType,
+          currencyName: currencyInfo.currencyName,
+          spend: remainingSpend,
+          rate,
+          earned,
+          earnedValue,
+          isCashback: currencyInfo.isCashback,
+        });
 
-      updateCardEarnings(cardEarningsMap, currencyEarningsMap, bestCard.id, categorySpend, remainingSpend, rate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+        updateCardEarnings(cardEarningsMap, currencyEarningsMap, bestCard.id, categorySpend, remainingSpend, rate, earned, earnedValue, currencyInfo.currencyId, currencyInfo.currencyName, currencyInfo.currencyType, currencyInfo.isCashback);
+      }
+      // Note: If all cards are excluded, remaining spend is not allocated (this is intentional for goal-based filtering)
     }
 
     categoryAllocations.push({
@@ -741,12 +748,16 @@ function rankCardsForCategory(
   categoryId: number,
   earningRateMap: Map<string, Map<number, RateInfo[]>>,
   capUsage: Map<string, number>,
-  getCardCurrencyInfo: (card: CardInput) => { valueCents: number; isCashback: boolean }
+  getCardCurrencyInfo: (card: CardInput) => { valueCents: number; isCashback: boolean; excluded: boolean }
 ): RankedCard[] {
   const ranked: RankedCard[] = [];
 
   for (const card of cards) {
     const currencyInfo = getCardCurrencyInfo(card);
+    
+    // Skip excluded cards entirely (they shouldn't receive any spending)
+    if (currencyInfo.excluded) continue;
+    
     const cardRates = earningRateMap.get(card.id)?.get(categoryId) ?? [];
 
     if (cardRates.length === 0) {

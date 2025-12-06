@@ -48,7 +48,7 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
 
   const goalButtons: { value: EarningsGoal; label: string; description: string }[] = [
     { value: "maximize", label: "Maximize", description: "Best total value" },
-    { value: "cash_only", label: "Cash Only", description: "Use cash out values" },
+    { value: "cash_only", label: "Cash Back", description: "Use cash out values" },
     { value: "points_only", label: "Points Only", description: "Miles & hotel points" },
   ];
 
@@ -76,7 +76,7 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
           </div>
           <span className="text-xs text-zinc-500">
             {earningsGoal === "maximize" && "Optimizes for highest total value across all cards"}
-            {earningsGoal === "cash_only" && "Values points at their cash redemption rate"}
+            {earningsGoal === "cash_only" && "All earnings shown as cash back (points valued at cash redemption rate)"}
             {earningsGoal === "points_only" && "Only considers airline miles, hotel points, and transferable points"}
           </span>
         </div>
@@ -90,31 +90,56 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
         </div>
       </div>
 
-      {/* Cashback Section */}
-      {returns.cashbackSpend > 0 && (
+      {/* Cashback Section - Show when goal is maximize or cash_only (and there's spend), hide in points_only */}
+      {earningsGoal !== "points_only" && returns.totalSpend > 0 && (
         <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-6">
           <h2 className="text-lg font-semibold text-emerald-400 mb-4 flex items-center gap-2">
             <span className="text-xl">💵</span> Cash Back Earnings
           </h2>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-sm text-zinc-400 mb-1">Cash Back Spend</div>
-              <div className="text-xl font-semibold text-white">{formatCurrency(returns.cashbackSpend)}</div>
+          {earningsGoal === "cash_only" ? (
+            // In cash_only mode, show total value as cash back (all earnings converted to cash)
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="text-sm text-zinc-400 mb-1">Total Spend</div>
+                <div className="text-xl font-semibold text-white">{formatCurrency(returns.totalSpend)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-zinc-400 mb-1">Cash Back Earned</div>
+                <div className="text-xl font-semibold text-emerald-400">{formatCurrency(returns.totalValue)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-zinc-400 mb-1">Avg Cash Back Rate</div>
+                <div className="text-xl font-semibold text-white">
+                  {returns.totalSpend > 0 ? formatPercent((returns.totalValue / returns.totalSpend) * 100) : "0%"}
+                </div>
+              </div>
             </div>
-            <div className="text-center">
-              <div className="text-sm text-zinc-400 mb-1">Cash Back Earned</div>
-              <div className="text-xl font-semibold text-emerald-400">{formatCurrency(returns.cashbackEarned)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-zinc-400 mb-1">Avg CB Earn Rate</div>
-              <div className="text-xl font-semibold text-white">{formatPercent(returns.avgCashbackRate)}</div>
-            </div>
-          </div>
+          ) : (
+            // In maximize mode, show only actual cash back (not points)
+            returns.cashbackSpend > 0 ? (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="text-sm text-zinc-400 mb-1">Cash Back Spend</div>
+                  <div className="text-xl font-semibold text-white">{formatCurrency(returns.cashbackSpend)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-sm text-zinc-400 mb-1">Cash Back Earned</div>
+                  <div className="text-xl font-semibold text-emerald-400">{formatCurrency(returns.cashbackEarned)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-sm text-zinc-400 mb-1">Avg CB Earn Rate</div>
+                  <div className="text-xl font-semibold text-white">{formatPercent(returns.avgCashbackRate)}</div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-zinc-500 text-center">No cash back earnings in current allocation</p>
+            )
+          )}
         </div>
       )}
 
-      {/* Points Section */}
-      {returns.pointsSpend > 0 && (
+      {/* Points Section - Hide in cash_only mode */}
+      {earningsGoal !== "cash_only" && returns.pointsSpend > 0 && (
         <div className="rounded-xl border border-violet-800/50 bg-violet-950/20 p-6">
           <h2 className="text-lg font-semibold text-violet-400 mb-4 flex items-center gap-2">
             <span className="text-xl">🔮</span> Points Earnings

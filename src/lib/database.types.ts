@@ -742,6 +742,42 @@ export type Database = {
           },
         ]
       }
+      user_mobile_pay_categories: {
+        Row: {
+          category_id: number
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          category_id: number
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: number
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_mobile_pay_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "earning_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_mobile_pay_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
+          },
+        ]
+      }
       user_multiplier_tiers: {
         Row: {
           created_at: string | null

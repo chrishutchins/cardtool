@@ -6,6 +6,7 @@ import { UserHeader } from "@/components/user-header";
 import { CardCategorySelector } from "@/app/wallet/card-category-selector";
 import { MultiplierSelector } from "@/app/wallet/multiplier-selector";
 import { TravelPreferences } from "@/app/wallet/travel-preferences";
+import { MobilePayCategories } from "@/app/wallet/mobile-pay-categories";
 
 export default async function SettingsPage() {
   const user = await currentUser();
@@ -105,6 +106,20 @@ export default async function SettingsPage() {
     .from("earning_categories")
     .select("id, name, slug, parent_category_id")
     .not("parent_category_id", "is", null);
+
+  // Get all non-excluded categories for mobile pay selection
+  const { data: allCategories } = await supabase
+    .from("earning_categories")
+    .select("id, name, slug")
+    .eq("excluded_by_default", false)
+    .is("parent_category_id", null)
+    .order("name");
+
+  // Get user's mobile pay category selections
+  const { data: mobilePayCategories } = await supabase
+    .from("user_mobile_pay_categories")
+    .select("category_id")
+    .eq("user_id", user.id);
 
   // Get earning rules with portal rates for user's cards
   const { data: portalEarningRules } = userCardIds.length > 0
@@ -216,6 +231,30 @@ export default async function SettingsPage() {
     revalidatePath("/settings");
   }
 
+  async function toggleMobilePayCategory(categoryId: number, selected: boolean) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    if (selected) {
+      await supabase.from("user_mobile_pay_categories").upsert(
+        {
+          user_id: user.id,
+          category_id: categoryId,
+        },
+        { onConflict: "user_id,category_id" }
+      );
+    } else {
+      await supabase
+        .from("user_mobile_pay_categories")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("category_id", categoryId);
+    }
+    revalidatePath("/settings");
+  }
+
   // Cards that require category selection
   const cardsNeedingSelection = (walletCards ?? []).filter(
     (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
@@ -272,8 +311,12 @@ export default async function SettingsPage() {
     }>) ?? []).sort((a, b) => a.sort_order - b.sort_order),
   }));
 
+  // Check if user has any cards with mobile pay earning rules
+  const hasMobilePayCards = userCardIds.length > 0;
+  
   const hasAnySettings = cardsNeedingSelection.length > 0 || programsWithTiers.length > 0 || 
-    (travelSubcategories.length > 0 && (airlineBrands.length > 0 || hotelBrands.length > 0 || portalIssuers.length > 0));
+    (travelSubcategories.length > 0 && (airlineBrands.length > 0 || hotelBrands.length > 0 || portalIssuers.length > 0)) ||
+    (hasMobilePayCards && (allCategories ?? []).length > 0);
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -350,6 +393,24 @@ export default async function SettingsPage() {
                   hotelBrands={hotelBrands}
                   portalIssuers={portalIssuers}
                   onUpdatePreference={updateTravelPreference}
+                />
+              </div>
+            )}
+
+            {/* Mobile Pay Categories */}
+            {hasMobilePayCards && (allCategories ?? []).length > 0 && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+                <h2 className="text-lg font-semibold text-white mb-2">
+                  Mobile Pay Categories
+                </h2>
+                <MobilePayCategories
+                  categories={(allCategories ?? []).map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    slug: c.slug,
+                  }))}
+                  selectedCategoryIds={(mobilePayCategories ?? []).map((m) => m.category_id)}
+                  onToggleCategory={toggleMobilePayCategory}
                 />
               </div>
             )}
