@@ -1169,9 +1169,12 @@ export function calculateCardRecommendations(
     });
 
     // Create perks values map with the candidate's default perks value
+    // Cap perks value to annual fee so net fee is never negative for recommendations
+    // This prevents cards like Delta Blue (high perks, $0 fee) from artificially boosting scores
     const perksWithCandidate = new Map(input.perksValues);
-    const defaultPerksValue = candidate.default_perks_value ?? 0;
-    perksWithCandidate.set(candidate.id, defaultPerksValue);
+    const rawDefaultPerksValue = candidate.default_perks_value ?? 0;
+    const cappedPerksValue = Math.min(rawDefaultPerksValue, candidate.annual_fee);
+    perksWithCandidate.set(candidate.id, cappedPerksValue);
 
     // Filter earning rules to include user's cards + candidate card
     const earningRulesWithCandidate = allEarningRules.filter(r => cardIdsWithCandidate.has(r.card_id));
@@ -1197,7 +1200,7 @@ export function calculateCardRecommendations(
     if (improvement > 0) {
       recommendations.push({
         card: candidate,
-        defaultPerksValue,
+        defaultPerksValue: cappedPerksValue,
         currentNetEarnings,
         newNetEarnings,
         improvement,
