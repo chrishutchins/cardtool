@@ -29,6 +29,17 @@ function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
+// Format rate without unnecessary trailing zeros (3.00 -> 3, 3.50 -> 3.5, 3.25 -> 3.25)
+function formatRate(value: number, suffix: string): string {
+  // Round to 2 decimal places first
+  const rounded = Math.round(value * 100) / 100;
+  // Remove trailing zeros
+  const formatted = rounded % 1 === 0 
+    ? rounded.toString() 
+    : rounded.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted}${suffix}`;
+}
+
 export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -189,7 +200,7 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
             </div>
             <div className="text-center">
               <div className="text-sm text-zinc-400 mb-1">Avg Point Earn Rate</div>
-              <div className="text-xl font-semibold text-white">{returns.avgPointsRate.toFixed(2)}x</div>
+              <div className="text-xl font-semibold text-white">{formatRate(returns.avgPointsRate, "x")}</div>
             </div>
             <div className="text-center">
               <div className="text-sm text-zinc-400 mb-1">Total Points Value</div>
@@ -292,7 +303,7 @@ export function ReturnsDisplay({ returns, earningsGoal }: ReturnsDisplayProps) {
                             <div key={idx} className="text-sm">
                               <span className="text-zinc-300">{alloc.cardName}</span>
                               <span className="text-zinc-500 ml-1">
-                                ({formatCurrency(alloc.spend)} @ {alloc.isCashback ? `${alloc.rate.toFixed(2)}%` : `${alloc.rate.toFixed(2)}x`}
+                                ({formatCurrency(alloc.spend)} @ {formatRate(alloc.rate, alloc.isCashback ? "%" : "x")}
                                 {alloc.debitPayBonus > 0 && (
                                   <span className="text-pink-400"> +{((alloc.debitPayBonus / alloc.spend) * 100).toFixed(0)}%</span>
                                 )})
