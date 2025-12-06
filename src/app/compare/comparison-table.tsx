@@ -286,13 +286,15 @@ export function ComparisonTable({
                 {/* Sticky Card Column Header */}
                 <th
                   onClick={() => handleSort("card")}
-                  className="sticky left-0 z-10 bg-zinc-800 px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white min-w-[280px] border-r border-zinc-700"
+                  className="sticky left-0 z-10 bg-zinc-800 px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white min-w-[280px] border-r border-zinc-700 whitespace-nowrap"
                 >
-                  Card
-                  <SortIndicator
-                    active={sortConfig.type === "card"}
-                    direction={sortConfig.direction}
-                  />
+                  <span className="inline-flex items-center">
+                    Card
+                    <SortIndicator
+                      active={sortConfig.type === "card"}
+                      direction={sortConfig.direction}
+                    />
+                  </span>
                 </th>
                 
                 {/* Category Headers */}
@@ -302,11 +304,13 @@ export function ComparisonTable({
                     onClick={() => handleSort("category", cat.id)}
                     className="px-3 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white min-w-[80px] whitespace-nowrap"
                   >
-                    {cat.name}
-                    <SortIndicator
-                      active={sortConfig.type === "category" && sortConfig.categoryId === cat.id}
-                      direction={sortConfig.direction}
-                    />
+                    <span className="inline-flex items-center justify-center">
+                      {cat.name}
+                      <SortIndicator
+                        active={sortConfig.type === "category" && sortConfig.categoryId === cat.id}
+                        direction={sortConfig.direction}
+                      />
+                    </span>
                   </th>
                 ))}
               </tr>

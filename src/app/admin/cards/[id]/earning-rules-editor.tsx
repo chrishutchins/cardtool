@@ -240,27 +240,27 @@ export function EarningRulesEditor({
             <thead>
               <tr className="bg-zinc-800/50 border-b border-zinc-700">
                 <th 
-                  className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200"
+                  className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200 whitespace-nowrap"
                   onClick={() => handleSort("category")}
                 >
-                  Category <SortIcon field="category" />
+                  <span className="inline-flex items-center">Category<SortIcon field="category" /></span>
                 </th>
                 <th 
-                  className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200"
+                  className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200 whitespace-nowrap"
                   onClick={() => handleSort("rate")}
                 >
-                  Rate <SortIcon field="rate" />
+                  <span className="inline-flex items-center">Rate<SortIcon field="rate" /></span>
                 </th>
                 <th 
-                  className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200"
+                  className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200 whitespace-nowrap"
                   onClick={() => handleSort("booking")}
                 >
-                  Booking <SortIcon field="booking" />
+                  <span className="inline-flex items-center">Booking<SortIcon field="booking" /></span>
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase">
+                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase whitespace-nowrap">
                   Cap
                 </th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-zinc-400 uppercase">
+                <th className="px-4 py-2 text-right text-xs font-medium text-zinc-400 uppercase whitespace-nowrap">
                   Actions
                 </th>
               </tr>
