@@ -1240,6 +1240,22 @@ export function calculateCardRecommendations(
   const currentNetEarnings = currentReturns.netValueEarned;
   const recommendations: CardRecommendation[] = [];
 
+  // Debug: Log candidate count and check for Bilt
+  const biltCard = candidateCards.find(c => c.name.toLowerCase().includes('bilt'));
+  if (biltCard) {
+    console.log('[RECOMMENDATIONS DEBUG] Bilt found in candidates:', biltCard.name, biltCard.id);
+  } else {
+    console.log('[RECOMMENDATIONS DEBUG] Bilt NOT found. Candidate count:', candidateCards.length);
+  }
+  
+  // Debug: Check if Rent spending is in the input
+  const rentSpending = baseInput.spending?.find((s: CategorySpending) => s.category_slug === 'rent');
+  console.log('[RECOMMENDATIONS DEBUG] Rent spending:', rentSpending ? `$${rentSpending.annual_spend_cents / 100}` : 'NOT FOUND');
+  
+  // Debug: Check if Bilt's Rent earning rule is in allEarningRules
+  const biltRentRule = allEarningRules.find(r => r.card_id === biltCard?.id && r.category_id === 37);
+  console.log('[RECOMMENDATIONS DEBUG] Bilt Rent earning rule:', biltRentRule ? `${biltRentRule.rate}x` : 'NOT FOUND');
+
   for (const candidate of candidateCards) {
     // Add this card to the user's wallet
     const cardsWithCandidate = [...userCards, candidate];
@@ -1285,6 +1301,16 @@ export function calculateCardRecommendations(
     const improvementPercent = currentNetEarnings !== 0 
       ? (improvement / Math.abs(currentNetEarnings)) * 100 
       : 0;
+
+    // Debug: Log Bilt and Custom Cash specifically
+    if (candidate.name.toLowerCase().includes('bilt') || candidate.name.toLowerCase().includes('custom cash')) {
+      console.log(`[RECOMMENDATIONS DEBUG] ${candidate.name}:`, {
+        currentNetEarnings,
+        newNetEarnings,
+        improvement,
+        rulesCount: earningRulesWithCandidate.filter(r => r.card_id === candidate.id).length,
+      });
+    }
 
     // Only consider cards that would improve earnings
     if (improvement > 0) {
