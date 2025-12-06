@@ -78,6 +78,7 @@ export default async function WalletPage() {
         annual_fee,
         default_earn_rate,
         default_perks_value,
+        exclude_from_recommendations,
         primary_currency_id,
         secondary_currency_id,
         issuer_id,
@@ -236,6 +237,7 @@ export default async function WalletPage() {
     annual_fee: number;
     default_earn_rate: number;
     default_perks_value: number | null;
+    exclude_from_recommendations: boolean;
     primary_currency_id: string;
     secondary_currency_id: string | null;
     issuer_id: string;

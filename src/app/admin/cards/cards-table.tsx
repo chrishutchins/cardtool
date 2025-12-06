@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useTransition } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -14,20 +14,25 @@ interface Card {
   product_type: string | null;
   annual_fee: number | null;
   default_earn_rate: number | null;
+  default_perks_value: number | null;
+  exclude_from_recommendations: boolean | null;
 }
 
 interface CardsTableProps {
   cards: Card[];
   onDelete: (id: string) => Promise<void>;
+  onUpdatePerksValue: (id: string, value: number | null) => Promise<void>;
+  onToggleExcludeRecommendations: (id: string, exclude: boolean) => Promise<void>;
 }
 
-type SortField = "name" | "issuer_name" | "product_type";
+type SortField = "name" | "issuer_name" | "product_type" | "default_perks_value";
 type SortDir = "asc" | "desc";
 
-export function CardsTable({ cards, onDelete }: CardsTableProps) {
+export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExcludeRecommendations }: CardsTableProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
 
   // Initialize state from URL params
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
@@ -36,6 +41,10 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
   const [currencyFilter, setCurrencyFilter] = useState<string>(searchParams.get("currency") ?? "");
   const [sortField, setSortField] = useState<SortField>((searchParams.get("sort") as SortField) || "issuer_name");
   const [sortDir, setSortDir] = useState<SortDir>((searchParams.get("dir") as SortDir) || "asc");
+  
+  // Track which cells are being edited
+  const [editingPerks, setEditingPerks] = useState<string | null>(null);
+  const [perksInputValue, setPerksInputValue] = useState<string>("");
 
   // Update URL when filters change
   const updateUrl = useCallback((newParams: Record<string, string>) => {
@@ -115,8 +124,8 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
       let bVal = b[sortField];
 
       // Handle nulls
-      if (aVal === null) return sortDir === "asc" ? 1 : -1;
-      if (bVal === null) return sortDir === "asc" ? -1 : 1;
+      if (aVal === null || aVal === undefined) return sortDir === "asc" ? 1 : -1;
+      if (bVal === null || bVal === undefined) return sortDir === "asc" ? -1 : 1;
 
       // String comparison
       if (typeof aVal === "string" && typeof bVal === "string") {
@@ -163,14 +172,33 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
     );
   };
 
-  const formatFee = (fee: number | null) => {
-    if (!fee) return "$0";
-    return `$${fee}`;
-  };
-
   const productTypeColors: Record<string, string> = {
     personal: "bg-blue-500/20 text-blue-300",
     business: "bg-amber-500/20 text-amber-300",
+  };
+
+  const handlePerksEdit = (card: Card) => {
+    if (!card.id) return;
+    setEditingPerks(card.id);
+    setPerksInputValue(card.default_perks_value?.toString() ?? "");
+  };
+
+  const handlePerksSave = async (cardId: string) => {
+    const value = perksInputValue.trim() === "" ? null : parseFloat(perksInputValue);
+    if (value !== null && isNaN(value)) {
+      setEditingPerks(null);
+      return;
+    }
+    startTransition(async () => {
+      await onUpdatePerksValue(cardId, value);
+      setEditingPerks(null);
+    });
+  };
+
+  const handleExcludeToggle = (cardId: string, currentValue: boolean | null) => {
+    startTransition(async () => {
+      await onToggleExcludeRecommendations(cardId, !currentValue);
+    });
   };
 
   return (
@@ -279,6 +307,15 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
               >
                 <span className="inline-flex items-center">Type<SortIcon field="product_type" /></span>
               </th>
+              <th
+                className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white whitespace-nowrap"
+                onClick={() => handleSort("default_perks_value")}
+              >
+                <span className="inline-flex items-center justify-end">Perks<SortIcon field="default_perks_value" /></span>
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">
+                Exclude
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">
                 Actions
               </th>
@@ -288,15 +325,10 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
             {filteredCards.map((card, index) => (
               <tr
                 key={card.id ?? `card-${index}`}
-                className="hover:bg-zinc-800/50 transition-colors"
+                className={`hover:bg-zinc-800/50 transition-colors ${card.exclude_from_recommendations ? "opacity-50" : ""}`}
               >
                 <td className="px-6 py-4">
-                  <div className="flex flex-col">
-                    <span className="text-white font-medium">{card.name}</span>
-                    <span className="text-zinc-500 text-xs font-mono">
-                      {card.slug}
-                    </span>
-                  </div>
+                  <span className="text-white font-medium">{card.name}</span>
                 </td>
                 <td className="px-6 py-4 text-zinc-400">{card.issuer_name}</td>
                 <td className="px-6 py-4">
@@ -319,6 +351,54 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
                   >
                     {card.product_type}
                   </span>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  {editingPerks === card.id ? (
+                    <div className="flex items-center justify-end gap-1">
+                      <span className="text-zinc-500">$</span>
+                      <input
+                        type="number"
+                        value={perksInputValue}
+                        onChange={(e) => setPerksInputValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handlePerksSave(card.id!);
+                          if (e.key === "Escape") setEditingPerks(null);
+                        }}
+                        onBlur={() => handlePerksSave(card.id!)}
+                        className="w-20 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-blue-500 focus:outline-none"
+                        autoFocus
+                        disabled={isPending}
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handlePerksEdit(card)}
+                      className="text-zinc-400 hover:text-white text-sm"
+                      disabled={!card.id}
+                    >
+                      {card.default_perks_value != null ? `$${card.default_perks_value}` : "—"}
+                    </button>
+                  )}
+                </td>
+                <td className="px-6 py-4 text-center">
+                  {card.id && (
+                    <button
+                      onClick={() => handleExcludeToggle(card.id!, card.exclude_from_recommendations)}
+                      disabled={isPending}
+                      className={`w-5 h-5 rounded border transition-colors ${
+                        card.exclude_from_recommendations
+                          ? "bg-red-500/20 border-red-500 text-red-400"
+                          : "border-zinc-600 hover:border-zinc-400"
+                      }`}
+                      title={card.exclude_from_recommendations ? "Excluded from recommendations" : "Click to exclude from recommendations"}
+                    >
+                      {card.exclude_from_recommendations && (
+                        <svg className="w-full h-full p-0.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">
@@ -355,4 +435,3 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
     </div>
   );
 }
-

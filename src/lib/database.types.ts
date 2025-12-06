@@ -191,6 +191,7 @@ export type Database = {
           created_at: string | null
           default_earn_rate: number
           default_perks_value: number | null
+          exclude_from_recommendations: boolean
           id: string
           is_active: boolean
           issuer_id: string
@@ -206,6 +207,7 @@ export type Database = {
           created_at?: string | null
           default_earn_rate?: number
           default_perks_value?: number | null
+          exclude_from_recommendations?: boolean
           id?: string
           is_active?: boolean
           issuer_id: string
@@ -221,6 +223,7 @@ export type Database = {
           created_at?: string | null
           default_earn_rate?: number
           default_perks_value?: number | null
+          exclude_from_recommendations?: boolean
           id?: string
           is_active?: boolean
           issuer_id?: string
@@ -1044,6 +1047,8 @@ export type Database = {
         Row: {
           annual_fee: number | null
           default_earn_rate: number | null
+          default_perks_value: number | null
+          exclude_from_recommendations: boolean | null
           id: string | null
           is_active: boolean | null
           issuer_name: string | null

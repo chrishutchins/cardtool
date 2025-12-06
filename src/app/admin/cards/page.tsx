@@ -23,6 +23,26 @@ export default async function CardsPage() {
     revalidatePath("/admin/cards");
   }
 
+  async function updatePerksValue(id: string, value: number | null) {
+    "use server";
+    const supabase = await createClient();
+    await supabase
+      .from("cards")
+      .update({ default_perks_value: value })
+      .eq("id", id);
+    revalidatePath("/admin/cards");
+  }
+
+  async function toggleExcludeRecommendations(id: string, exclude: boolean) {
+    "use server";
+    const supabase = await createClient();
+    await supabase
+      .from("cards")
+      .update({ exclude_from_recommendations: exclude })
+      .eq("id", id);
+    revalidatePath("/admin/cards");
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -35,7 +55,12 @@ export default async function CardsPage() {
         </Link>
       </div>
 
-      <CardsTable cards={cards ?? []} onDelete={deleteCard} />
+      <CardsTable 
+        cards={cards ?? []} 
+        onDelete={deleteCard}
+        onUpdatePerksValue={updatePerksValue}
+        onToggleExcludeRecommendations={toggleExcludeRecommendations}
+      />
     </div>
   );
 }
