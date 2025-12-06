@@ -71,7 +71,6 @@ export function EarningRulesEditor({
   const [editRate, setEditRate] = useState("");
   const [editHasCap, setEditHasCap] = useState(false);
   const [editCapAmount, setEditCapAmount] = useState("");
-  const [editCapUnit, setEditCapUnit] = useState<"spend" | "rewards">("spend");
   const [editCapPeriod, setEditCapPeriod] = useState<"none" | "month" | "quarter" | "year" | "lifetime">("year");
   const [editPostCapRate, setEditPostCapRate] = useState("");
   const [editBookingMethod, setEditBookingMethod] = useState<"any" | "portal" | "brand">("any");
@@ -184,8 +183,7 @@ export function EarningRulesEditor({
     setEditRate(rule.rate.toString());
     setEditHasCap(rule.has_cap);
     setEditCapAmount(rule.cap_amount?.toString() ?? "");
-    setEditCapUnit(rule.cap_unit ?? "spend");
-    setEditCapPeriod(rule.cap_period);
+    setEditCapPeriod(rule.cap_period ?? "year");
     setEditPostCapRate(rule.post_cap_rate?.toString() ?? "");
     setEditBookingMethod(rule.booking_method);
     setEditBrandName(rule.brand_name ?? defaultBrandName);
@@ -196,7 +194,7 @@ export function EarningRulesEditor({
     formData.set("rate", editRate);
     formData.set("has_cap", editHasCap ? "true" : "false");
     formData.set("cap_amount", editCapAmount);
-    formData.set("cap_unit", editCapUnit);
+    formData.set("cap_unit", "spend");
     formData.set("cap_period", editCapPeriod);
     formData.set("post_cap_rate", editPostCapRate);
     formData.set("booking_method", editBookingMethod);
@@ -325,21 +323,16 @@ export function EarningRulesEditor({
                         </label>
                         {editHasCap && (
                           <>
-                            <input
-                              type="number"
-                              value={editCapAmount}
-                              onChange={(e) => setEditCapAmount(e.target.value)}
-                              placeholder="Amount"
-                              className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-white text-xs"
-                            />
-                            <select
-                              value={editCapUnit}
-                              onChange={(e) => setEditCapUnit(e.target.value as "spend" | "rewards")}
-                              className="rounded border border-zinc-600 bg-zinc-700 px-1 py-1 text-white text-xs"
-                            >
-                              <option value="spend">$</option>
-                              <option value="rewards">pts</option>
-                            </select>
+                            <div className="flex items-center gap-1">
+                              <span className="text-zinc-400 text-xs">$</span>
+                              <input
+                                type="number"
+                                value={editCapAmount}
+                                onChange={(e) => setEditCapAmount(e.target.value)}
+                                placeholder="Amount"
+                                className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-white text-xs"
+                              />
+                            </div>
                             <select
                               value={editCapPeriod}
                               onChange={(e) => setEditCapPeriod(e.target.value as "none" | "month" | "quarter" | "year" | "lifetime")}
@@ -402,9 +395,7 @@ export function EarningRulesEditor({
                     <td className="px-4 py-3 text-zinc-400 text-sm">
                       {rule.has_cap ? (
                         <span>
-                          {rule.cap_unit === "spend" ? "$" : ""}
-                          {rule.cap_amount != null ? rule.cap_amount.toLocaleString() : "N/A"}
-                          {rule.cap_unit === "rewards" ? " pts" : ""}
+                          ${rule.cap_amount != null ? rule.cap_amount.toLocaleString() : "N/A"}
                           {rule.cap_period && rule.cap_period !== "none" ? ` / ${rule.cap_period}` : ""}
                           {rule.post_cap_rate != null && (
                             <span className="text-zinc-500"> → {formatRate(rule.post_cap_rate, cardCurrencyType)}</span>
@@ -542,7 +533,7 @@ export function EarningRulesEditor({
           {hasCap && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 border-t border-zinc-700">
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Cap Amount</label>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Cap Amount ($)</label>
                 <input
                   type="number"
                   name="cap_amount"
@@ -553,16 +544,7 @@ export function EarningRulesEditor({
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Cap Unit</label>
-                <select
-                  name="cap_unit"
-                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="spend">Spend ($)</option>
-                  <option value="rewards">Rewards</option>
-                </select>
-              </div>
+              <input type="hidden" name="cap_unit" value="spend" />
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Cap Period</label>
                 <select
