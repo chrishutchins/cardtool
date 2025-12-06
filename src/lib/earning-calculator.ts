@@ -52,6 +52,10 @@ export function isTravelSubcategory(category: Category): boolean {
  * Get the effective earning rate for a card on a specific category
  * considering booking preferences and category inheritance.
  * 
+ * Priority order:
+ * 1. Explicit 0% rules always win (card issuer is excluding this category)
+ * 2. Otherwise, highest applicable rate wins
+ * 
  * @param card - The card to check
  * @param category - The category to get the rate for
  * @param allRules - All earning rules for the user's cards
@@ -84,9 +88,14 @@ export function getEffectiveEarningRate(
     card.issuer_id
   );
 
-  // If we found a matching rule, use it
+  // IMPORTANT: If there's an explicit 0% rule for this category, it overrides everything
+  // This handles cases where a card excludes specific categories from bonuses
+  if (applicableRules.some(r => r.rate === 0)) {
+    return 0;
+  }
+
+  // If we found a matching rule, use the highest rate
   if (applicableRules.length > 0) {
-    // Return the highest applicable rate
     return Math.max(...applicableRules.map(r => r.rate));
   }
 
