@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 
 interface WalletCard {
   id: string;
@@ -27,6 +27,9 @@ interface WalletCardListProps {
   onRemove: (walletId: string) => Promise<void>;
   onUpdatePerks: (cardId: string, perksValue: number) => Promise<void>;
 }
+
+type SortField = "name" | "issuer" | "currency" | "annual_fee" | "perks" | "net_fee";
+type SortDirection = "asc" | "desc";
 
 const currencyTypeConfig: Record<string, { label: string; className: string }> = {
   airline_miles: { 
@@ -83,6 +86,125 @@ export function WalletCardList({
   const [editingPerksId, setEditingPerksId] = useState<string | null>(null);
   const [editPerksValue, setEditPerksValue] = useState<string>("");
   const [isPending, startTransition] = useTransition();
+  
+  // Filter and sort state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [issuerFilter, setIssuerFilter] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("");
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  // Get unique issuers and currency types for filters
+  const { issuers, currencyTypes } = useMemo(() => {
+    const issuerSet = new Set<string>();
+    const currencySet = new Set<string>();
+    
+    walletCards.forEach((wc) => {
+      if (wc.cards?.issuers?.name) issuerSet.add(wc.cards.issuers.name);
+      const activeCurrency = enabledSecondaryCards.has(wc.cards?.id ?? "") && wc.cards?.secondary_currency
+        ? wc.cards.secondary_currency
+        : wc.cards?.primary_currency;
+      if (activeCurrency?.currency_type) currencySet.add(activeCurrency.currency_type);
+    });
+    
+    return {
+      issuers: Array.from(issuerSet).sort(),
+      currencyTypes: Array.from(currencySet).sort(),
+    };
+  }, [walletCards, enabledSecondaryCards]);
+
+  // Filter and sort cards
+  const filteredAndSortedCards = useMemo(() => {
+    let result = walletCards.filter((wc) => {
+      if (!wc.cards) return false;
+      const card = wc.cards;
+      
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = card.name.toLowerCase().includes(query);
+        const matchesIssuer = card.issuers?.name.toLowerCase().includes(query);
+        if (!matchesName && !matchesIssuer) return false;
+      }
+      
+      // Issuer filter
+      if (issuerFilter && card.issuers?.name !== issuerFilter) return false;
+      
+      // Currency filter
+      if (currencyFilter) {
+        const activeCurrency = enabledSecondaryCards.has(card.id) && card.secondary_currency
+          ? card.secondary_currency
+          : card.primary_currency;
+        if (activeCurrency?.currency_type !== currencyFilter) return false;
+      }
+      
+      return true;
+    });
+    
+    // Sort
+    result.sort((a, b) => {
+      if (!a.cards || !b.cards) return 0;
+      
+      const aPerks = perksMap.get(a.cards.id) ?? 0;
+      const bPerks = perksMap.get(b.cards.id) ?? 0;
+      const aNet = a.cards.annual_fee - aPerks;
+      const bNet = b.cards.annual_fee - bPerks;
+      const aActiveCurrency = enabledSecondaryCards.has(a.cards.id) && a.cards.secondary_currency
+        ? a.cards.secondary_currency
+        : a.cards.primary_currency;
+      const bActiveCurrency = enabledSecondaryCards.has(b.cards.id) && b.cards.secondary_currency
+        ? b.cards.secondary_currency
+        : b.cards.primary_currency;
+      
+      let comparison = 0;
+      switch (sortField) {
+        case "name":
+          comparison = a.cards.name.localeCompare(b.cards.name);
+          break;
+        case "issuer":
+          comparison = (a.cards.issuers?.name ?? "").localeCompare(b.cards.issuers?.name ?? "");
+          break;
+        case "currency":
+          comparison = (aActiveCurrency?.currency_type ?? "").localeCompare(bActiveCurrency?.currency_type ?? "");
+          break;
+        case "annual_fee":
+          comparison = a.cards.annual_fee - b.cards.annual_fee;
+          break;
+        case "perks":
+          comparison = aPerks - bPerks;
+          break;
+        case "net_fee":
+          comparison = aNet - bNet;
+          break;
+      }
+      
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+    
+    return result;
+  }, [walletCards, searchQuery, issuerFilter, currencyFilter, sortField, sortDirection, perksMap, enabledSecondaryCards]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return null;
+    return (
+      <svg className="w-4 h-4 ml-1 text-blue-400 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {sortDirection === "asc" ? (
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        ) : (
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        )}
+      </svg>
+    );
+  };
 
   const formatFee = (fee: number) => {
     return `$${fee}`;
@@ -107,227 +229,236 @@ export function WalletCardList({
   };
 
   return (
-    <div className="space-y-3">
-      {/* Header row */}
-      <div className="hidden md:grid md:grid-cols-12 gap-4 px-4 py-2 text-xs font-medium text-zinc-500 uppercase">
-        <div className="col-span-4">Card</div>
-        <div className="col-span-2">Currency</div>
-        <div className="col-span-1 text-right">Annual Fee</div>
-        <div className="col-span-2 text-right">Perks Value</div>
-        <div className="col-span-2 text-right">Net Fee</div>
-        <div className="col-span-1"></div>
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <input
+          type="text"
+          placeholder="Search cards..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none w-48"
+        />
+        <select
+          value={issuerFilter}
+          onChange={(e) => setIssuerFilter(e.target.value)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">All Issuers</option>
+          {issuers.map((issuer) => (
+            <option key={issuer} value={issuer}>{issuer}</option>
+          ))}
+        </select>
+        <select
+          value={currencyFilter}
+          onChange={(e) => setCurrencyFilter(e.target.value)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">All Currencies</option>
+          {currencyTypes.map((type) => (
+            <option key={type} value={type}>
+              {currencyTypeConfig[type]?.label ?? type}
+            </option>
+          ))}
+        </select>
+        {(searchQuery || issuerFilter || currencyFilter) && (
+          <button
+            onClick={() => {
+              setSearchQuery("");
+              setIssuerFilter("");
+              setCurrencyFilter("");
+            }}
+            className="text-xs text-zinc-500 hover:text-zinc-300 px-2"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
-      {walletCards.map((wc) => {
-        if (!wc.cards) return null;
-        const card = wc.cards;
-        const hasSecondaryEnabled = enabledSecondaryCards.has(card.id);
-        const activeCurrency = hasSecondaryEnabled && card.secondary_currency
-          ? card.secondary_currency
-          : card.primary_currency;
-        
-        const perksValue = perksMap.get(card.id) ?? 0;
-        const netFee = card.annual_fee - perksValue;
-        const currencyConfig = currencyTypeConfig[activeCurrency?.currency_type ?? "other"] ?? currencyTypeConfig.other;
-
-        return (
-          <div
-            key={wc.id}
-            className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 hover:border-zinc-700 transition-colors"
-          >
-            {/* Desktop layout */}
-            <div className="hidden md:grid md:grid-cols-12 gap-4 items-center">
-              {/* Card name and issuer */}
-              <div className="col-span-4 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-white truncate">{card.name}</span>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-zinc-500 text-sm truncate">{card.issuers?.name}</span>
-                  {hasSecondaryEnabled && card.secondary_currency && card.primary_currency && (
-                    <span className="text-xs text-amber-400">
-                      ↑ {card.secondary_currency.name}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Currency type badge */}
-              <div className="col-span-2">
-                <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${currencyConfig.className}`}>
-                  {currencyConfig.label}
-                </span>
-              </div>
-
-              {/* Annual Fee */}
-              <div className="col-span-1 text-right text-zinc-400">
-                {formatFee(card.annual_fee)}
-              </div>
-
-              {/* Perks Value (editable) */}
-              <div className="col-span-2 text-right">
-                {editingPerksId === card.id ? (
-                  <div className="flex items-center justify-end gap-1">
-                    <span className="text-zinc-500">$</span>
-                    <input
-                      type="number"
-                      value={editPerksValue}
-                      onChange={(e) => setEditPerksValue(e.target.value)}
-                      className="w-16 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-blue-500 focus:outline-none"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSavePerks(card.id);
-                        if (e.key === "Escape") handleCancelPerks();
-                      }}
-                    />
-                    <button
-                      onClick={() => handleSavePerks(card.id)}
-                      disabled={isPending}
-                      className="px-1.5 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
-                    >
-                      ✓
-                    </button>
-                    <button
-                      onClick={handleCancelPerks}
-                      disabled={isPending}
-                      className="px-1.5 py-1 text-xs text-zinc-500 hover:text-zinc-300"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleEditPerks(card.id, perksValue)}
-                    className="text-zinc-400 hover:text-white transition-colors group"
-                    title="Click to edit perks value"
-                  >
-                    {perksValue > 0 ? (
-                      <span className="text-emerald-400">-${perksValue}</span>
-                    ) : (
-                      <span className="text-zinc-600 group-hover:text-zinc-400">$0</span>
-                    )}
-                    <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Net Fee */}
-              <div className="col-span-2 text-right">
-                <span className={`font-medium ${netFee <= 0 ? "text-emerald-400" : "text-zinc-300"}`}>
-                  {netFee < 0 ? `-$${Math.abs(netFee)}` : `$${netFee}`}
-                </span>
-              </div>
-
-              {/* Remove button */}
-              <div className="col-span-1 text-right">
-                {removingId === wc.id ? (
-                  <div className="flex items-center justify-end gap-1">
-                    <button
-                      onClick={async () => {
-                        await onRemove(wc.id);
-                        setRemovingId(null);
-                      }}
-                      className="px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/20 transition-colors"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      onClick={() => setRemovingId(null)}
-                      className="px-2 py-1 rounded text-xs text-zinc-400 hover:bg-zinc-700 transition-colors"
-                    >
-                      No
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setRemovingId(wc.id)}
-                    className="px-2 py-1 rounded text-xs text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Mobile layout */}
-            <div className="md:hidden">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-white truncate">{card.name}</div>
-                  <div className="text-zinc-500 text-sm">{card.issuers?.name}</div>
-                  {hasSecondaryEnabled && card.secondary_currency && card.primary_currency && (
-                    <div className="text-xs text-amber-400 mt-0.5">
-                      ↑ Earning {card.secondary_currency.name}
-                    </div>
-                  )}
-                </div>
-                {removingId === wc.id ? (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={async () => {
-                        await onRemove(wc.id);
-                        setRemovingId(null);
-                      }}
-                      className="px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/20"
-                    >
-                      Remove
-                    </button>
-                    <button
-                      onClick={() => setRemovingId(null)}
-                      className="px-2 py-1 rounded text-xs text-zinc-400"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setRemovingId(wc.id)}
-                    className="px-2 py-1 text-zinc-600 hover:text-zinc-300"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+      {/* Table */}
+      <div className="overflow-hidden rounded-lg border border-zinc-700">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-zinc-800/50 border-b border-zinc-700">
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap"
+                onClick={() => handleSort("name")}
+              >
+                <span className="inline-flex items-center">Card<SortIcon field="name" /></span>
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap hidden md:table-cell"
+                onClick={() => handleSort("issuer")}
+              >
+                <span className="inline-flex items-center">Issuer<SortIcon field="issuer" /></span>
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap hidden sm:table-cell"
+                onClick={() => handleSort("currency")}
+              >
+                <span className="inline-flex items-center">Currency<SortIcon field="currency" /></span>
+              </th>
+              <th 
+                className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap hidden lg:table-cell"
+                onClick={() => handleSort("annual_fee")}
+              >
+                <span className="inline-flex items-center justify-end">Fee<SortIcon field="annual_fee" /></span>
+              </th>
+              <th 
+                className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap hidden lg:table-cell"
+                onClick={() => handleSort("perks")}
+              >
+                <span className="inline-flex items-center justify-end">Perks<SortIcon field="perks" /></span>
+              </th>
+              <th 
+                className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap"
+                onClick={() => handleSort("net_fee")}
+              >
+                <span className="inline-flex items-center justify-end">Net<SortIcon field="net_fee" /></span>
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase w-20">
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-700">
+            {filteredAndSortedCards.map((wc) => {
+              if (!wc.cards) return null;
+              const card = wc.cards;
+              const hasSecondaryEnabled = enabledSecondaryCards.has(card.id);
+              const activeCurrency = hasSecondaryEnabled && card.secondary_currency
+                ? card.secondary_currency
+                : card.primary_currency;
               
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${currencyConfig.className}`}>
-                  {currencyConfig.label}
-                </span>
-                <span className="text-zinc-500">Fee: {formatFee(card.annual_fee)}</span>
-                {editingPerksId === card.id ? (
-                  <div className="flex items-center gap-1">
-                    <span className="text-zinc-500">Perks: $</span>
-                    <input
-                      type="number"
-                      value={editPerksValue}
-                      onChange={(e) => setEditPerksValue(e.target.value)}
-                      className="w-16 rounded border border-zinc-600 bg-zinc-700 px-2 py-0.5 text-white text-sm"
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => handleSavePerks(card.id)}
-                      disabled={isPending}
-                      className="text-green-400 text-xs"
-                    >
-                      ✓
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleEditPerks(card.id, perksValue)}
-                    className="text-zinc-500 hover:text-white"
-                  >
-                    Perks: {perksValue > 0 ? <span className="text-emerald-400">-${perksValue}</span> : "$0"} ✎
-                  </button>
-                )}
-                <span className={`font-medium ${netFee <= 0 ? "text-emerald-400" : "text-zinc-300"}`}>
-                  Net: {netFee < 0 ? `-$${Math.abs(netFee)}` : `$${netFee}`}
-                </span>
-              </div>
-            </div>
+              const perksValue = perksMap.get(card.id) ?? 0;
+              const netFee = card.annual_fee - perksValue;
+              const currencyConfig = currencyTypeConfig[activeCurrency?.currency_type ?? "other"] ?? currencyTypeConfig.other;
+
+              return (
+                <tr key={wc.id} className="hover:bg-zinc-800/30">
+                  {/* Card Name */}
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-white">{card.name}</div>
+                    {hasSecondaryEnabled && card.secondary_currency && card.primary_currency && (
+                      <div className="text-xs text-amber-400 mt-0.5">
+                        ↑ {card.secondary_currency.name}
+                      </div>
+                    )}
+                    {/* Mobile: show issuer below name */}
+                    <div className="text-zinc-500 text-sm md:hidden">{card.issuers?.name}</div>
+                  </td>
+
+                  {/* Issuer */}
+                  <td className="px-4 py-3 text-zinc-400 hidden md:table-cell">
+                    {card.issuers?.name}
+                  </td>
+
+                  {/* Currency Badge */}
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${currencyConfig.className}`}>
+                      {currencyConfig.label}
+                    </span>
+                  </td>
+
+                  {/* Annual Fee */}
+                  <td className="px-4 py-3 text-right text-zinc-400 hidden lg:table-cell">
+                    {formatFee(card.annual_fee)}
+                  </td>
+
+                  {/* Perks Value (editable) */}
+                  <td className="px-4 py-3 text-right hidden lg:table-cell">
+                    {editingPerksId === card.id ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-zinc-500">$</span>
+                        <input
+                          type="number"
+                          value={editPerksValue}
+                          onChange={(e) => setEditPerksValue(e.target.value)}
+                          className="w-16 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-blue-500 focus:outline-none"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSavePerks(card.id);
+                            if (e.key === "Escape") handleCancelPerks();
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSavePerks(card.id)}
+                          disabled={isPending}
+                          className="px-1.5 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={handleCancelPerks}
+                          disabled={isPending}
+                          className="px-1.5 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleEditPerks(card.id, perksValue)}
+                        className="text-zinc-400 hover:text-white transition-colors group"
+                        title="Click to edit perks value"
+                      >
+                        {perksValue > 0 ? (
+                          <span className="text-emerald-400">-${perksValue}</span>
+                        ) : (
+                          <span className="text-zinc-600 group-hover:text-zinc-400">$0</span>
+                        )}
+                        <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
+                      </button>
+                    )}
+                  </td>
+
+                  {/* Net Fee */}
+                  <td className="px-4 py-3 text-right">
+                    <span className={`font-medium ${netFee <= 0 ? "text-emerald-400" : "text-zinc-300"}`}>
+                      {netFee < 0 ? `-$${Math.abs(netFee)}` : `$${netFee}`}
+                    </span>
+                  </td>
+
+                  {/* Actions */}
+                  <td className="px-4 py-3 text-right">
+                    {removingId === wc.id ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={async () => {
+                            await onRemove(wc.id);
+                            setRemovingId(null);
+                          }}
+                          className="px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/20 transition-colors"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setRemovingId(null)}
+                          className="px-2 py-1 rounded text-xs text-zinc-400 hover:bg-zinc-700 transition-colors"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setRemovingId(wc.id)}
+                        className="px-2 py-1 rounded text-xs text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {filteredAndSortedCards.length === 0 && (
+          <div className="text-center py-8 text-zinc-500">
+            No cards match your filters
           </div>
-        );
-      })}
+        )}
+      </div>
     </div>
   );
 }

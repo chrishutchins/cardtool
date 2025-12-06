@@ -117,7 +117,7 @@ export function EarningRulesEditor({
     return canShowBrandOption(slug);
   };
 
-  const selectedCategory = availableCategories.find(c => c.id === parseInt(selectedCategoryId));
+  const selectedCategory = selectedCategoryId ? availableCategories.find(c => c.id === parseInt(selectedCategoryId)) : undefined;
   const showBookingMethod = selectedCategory && isTravelCategoryById(selectedCategory.id);
   const showBrandOption = selectedCategory && canShowBrandOption(selectedCategory.slug);
 
