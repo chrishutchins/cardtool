@@ -301,14 +301,10 @@ export function EarningRulesEditor({
                               <option value="brand">{defaultBrandName || "Brand"}</option>
                             )}
                           </select>
-                          {editBookingMethod === "brand" && (
-                            <input
-                              type="text"
-                              value={editBrandName}
-                              onChange={(e) => setEditBrandName(e.target.value)}
-                              placeholder="Brand name"
-                              className="w-28 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-white text-xs"
-                            />
+                          {editBookingMethod === "brand" && defaultBrandName && (
+                            <span className="text-xs text-zinc-400 px-1">
+                              {defaultBrandName}
+                            </span>
                           )}
                         </div>
                       ) : (
@@ -516,17 +512,12 @@ export function EarningRulesEditor({
                 </select>
               </div>
             )}
-            {showBookingMethod && bookingMethod === "brand" && (
+            {showBookingMethod && bookingMethod === "brand" && defaultBrandName && (
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Brand Name</label>
-                <input
-                  type="text"
-                  value={brandName}
-                  onChange={(e) => setBrandName(e.target.value)}
-                  placeholder="e.g., Hyatt, United"
-                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
-                  required
-                />
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Brand</label>
+                <div className="px-3 py-2 rounded-lg border border-zinc-600 bg-zinc-800 text-zinc-300">
+                  {defaultBrandName}
+                </div>
               </div>
             )}
             <div className="flex items-end">
