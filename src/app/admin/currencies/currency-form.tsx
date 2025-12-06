@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { Enums } from "@/lib/database.types";
 
 interface CurrencyFormProps {
@@ -27,12 +27,34 @@ const currencyTypes: { value: Enums<"reward_currency_type">; label: string }[] =
 ];
 
 export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormProps) {
+  const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [code, setCode] = useState(defaultValues?.code ?? "");
   const [currencyType, setCurrencyType] = useState<Enums<"reward_currency_type">>(defaultValues?.currency_type ?? "transferable_points");
   const [baseValueCents, setBaseValueCents] = useState<string>(defaultValues?.base_value_cents?.toString() ?? "");
   const [cashOutValueCents, setCashOutValueCents] = useState<string>(defaultValues?.cash_out_value_cents?.toString() ?? "");
   const [notes, setNotes] = useState(defaultValues?.notes ?? "");
+
+  const resetForm = () => {
+    setName("");
+    setCode("");
+    setCurrencyType("transferable_points");
+    setBaseValueCents("");
+    setCashOutValueCents("");
+    setNotes("");
+  };
+
+  const handleSubmit = async (formData: FormData) => {
+    startTransition(async () => {
+      await action(formData);
+      if (!defaultValues) {
+        resetForm();
+      }
+      if (defaultValues && onCancel) {
+        onCancel();
+      }
+    });
+  };
 
   useEffect(() => {
     if (defaultValues) {
@@ -56,7 +78,7 @@ export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormPr
   };
 
   return (
-    <form action={action} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <form action={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div>
         <label className="block text-sm font-medium text-zinc-400 mb-1">Name</label>
         <input
@@ -150,15 +172,17 @@ export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormPr
       <div className="flex items-end gap-2">
         <button
           type="submit"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          disabled={isPending}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {defaultValues ? "Update" : "Add Currency"}
+          {isPending ? (defaultValues ? "Updating..." : "Adding...") : (defaultValues ? "Update" : "Add Currency")}
         </button>
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-600 transition-colors"
+            disabled={isPending}
+            className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
