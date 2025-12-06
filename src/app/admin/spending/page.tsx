@@ -14,7 +14,6 @@ interface SpendingDefault {
   id: number;
   category_id: number;
   annual_spend_cents: number;
-  source: string | null;
 }
 
 interface CategoryWithSpending extends Category {
@@ -34,8 +33,7 @@ export default function AdminSpendingPage() {
   const [categories, setCategories] = useState<CategoryWithSpending[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editAmount, setEditAmount] = useState("");
-  const [editSource, setEditSource] = useState("");
+  const [editValue, setEditValue] = useState<string>("");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -52,7 +50,7 @@ export default function AdminSpendingPage() {
         .order("name"),
       supabase
         .from("spending_defaults")
-        .select("*"),
+        .select("id, category_id, annual_spend_cents"),
     ]);
 
     const categoriesData = categoriesResult.data ?? [];
@@ -69,24 +67,17 @@ export default function AdminSpendingPage() {
 
   function startEdit(category: CategoryWithSpending) {
     setEditingId(category.id);
-    setEditAmount(
+    setEditValue(
       category.spending 
         ? (category.spending.annual_spend_cents / 100).toString() 
         : ""
     );
-    setEditSource(category.spending?.source ?? "");
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setEditAmount("");
-    setEditSource("");
   }
 
   async function saveEdit(categoryId: number) {
     startTransition(async () => {
       const supabase = createClient();
-      const amountCents = Math.round(parseFloat(editAmount || "0") * 100);
+      const amountCents = Math.round(parseFloat(editValue || "0") * 100);
       
       const category = categories.find((c) => c.id === categoryId);
       if (!category) return;
@@ -97,7 +88,6 @@ export default function AdminSpendingPage() {
           .from("spending_defaults")
           .update({
             annual_spend_cents: amountCents,
-            source: editSource || null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", category.spending.id);
@@ -108,26 +98,23 @@ export default function AdminSpendingPage() {
           .insert({
             category_id: categoryId,
             annual_spend_cents: amountCents,
-            source: editSource || null,
           });
       }
 
-      cancelEdit();
+      setEditingId(null);
+      setEditValue("");
       loadData();
     });
   }
 
-  async function deleteDefault(spendingId: number) {
-    if (!confirm("Remove default spending for this category?")) return;
-    
-    startTransition(async () => {
-      const supabase = createClient();
-      await supabase
-        .from("spending_defaults")
-        .delete()
-        .eq("id", spendingId);
-      loadData();
-    });
+  function handleKeyDown(e: React.KeyboardEvent, categoryId: number) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveEdit(categoryId);
+    } else if (e.key === "Escape") {
+      setEditingId(null);
+      setEditValue("");
+    }
   }
 
   const totalDefaultSpend = categories.reduce(
@@ -149,7 +136,7 @@ export default function AdminSpendingPage() {
         <div>
           <h1 className="text-3xl font-bold text-white">Default Spending</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Set default annual spending amounts for each category. Users can override these values.
+            Set default annual spending amounts for each category. Click any value to edit.
           </p>
         </div>
         <div className="text-right">
@@ -168,12 +155,6 @@ export default function AdminSpendingPage() {
               <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 Default Annual Spend
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Source
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Actions
-              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
@@ -188,79 +169,34 @@ export default function AdminSpendingPage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-zinc-500">{category.slug}</div>
                 </td>
                 <td className="px-6 py-4 text-right">
                   {editingId === category.id ? (
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-1">
                       <span className="text-zinc-400">$</span>
                       <input
                         type="number"
-                        value={editAmount}
-                        onChange={(e) => setEditAmount(e.target.value)}
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => saveEdit(category.id)}
+                        onKeyDown={(e) => handleKeyDown(e, category.id)}
                         placeholder="0"
-                        className="w-28 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-right text-white text-sm focus:border-emerald-500 focus:outline-none"
+                        disabled={isPending}
+                        className="w-28 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-right text-white text-sm focus:border-emerald-500 focus:outline-none"
                         autoFocus
                       />
                     </div>
                   ) : (
-                    <span className={category.spending ? "text-white" : "text-zinc-600"}>
-                      {category.spending 
-                        ? formatDollars(category.spending.annual_spend_cents)
-                        : "—"}
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  {editingId === category.id ? (
-                    <input
-                      type="text"
-                      value={editSource}
-                      onChange={(e) => setEditSource(e.target.value)}
-                      placeholder="e.g., BLS estimate"
-                      className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-white text-sm focus:border-emerald-500 focus:outline-none"
-                    />
-                  ) : (
-                    <span className="text-zinc-500 text-sm">
-                      {category.spending?.source ?? "—"}
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  {editingId === category.id ? (
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => saveEdit(category.id)}
-                        disabled={isPending}
-                        className="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                      >
-                        {isPending ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        disabled={isPending}
-                        className="px-3 py-1.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:text-white hover:border-zinc-600 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => startEdit(category)}
-                        className="px-3 py-1.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:text-white hover:border-zinc-600 transition-colors"
-                      >
-                        {category.spending ? "Edit" : "Set"}
-                      </button>
-                      {category.spending && (
-                        <button
-                          onClick={() => deleteDefault(category.spending!.id)}
-                          className="px-3 py-1.5 rounded-md border border-zinc-700 text-red-400 text-sm hover:text-red-300 hover:border-red-700 transition-colors"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      onClick={() => startEdit(category)}
+                      className="text-right hover:text-emerald-400 transition-colors cursor-pointer"
+                    >
+                      <span className={category.spending?.annual_spend_cents ? "text-white" : "text-zinc-600"}>
+                        {category.spending?.annual_spend_cents 
+                          ? formatDollars(category.spending.annual_spend_cents)
+                          : "$0"}
+                      </span>
+                    </button>
                   )}
                 </td>
               </tr>
@@ -276,4 +212,3 @@ export default function AdminSpendingPage() {
     </div>
   );
 }
-
