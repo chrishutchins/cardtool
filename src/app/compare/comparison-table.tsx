@@ -460,20 +460,26 @@ export function ComparisonTable({
                 </button>
               </div>
               <div className="p-2 space-y-1">
-                {categories.map((cat) => (
-                  <label
-                    key={cat.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-800 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCategorySlugs.has(cat.slug)}
-                      onChange={() => toggleCategory(cat.slug)}
-                      className="rounded border-zinc-600 bg-zinc-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
-                    />
-                    <span className="text-sm text-zinc-300">{cat.name}</span>
-                  </label>
-                ))}
+                {categories.map((cat) => {
+                  const spendCents = userSpending[cat.id] ?? 0;
+                  return (
+                    <label
+                      key={cat.id}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-800 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCategorySlugs.has(cat.slug)}
+                        onChange={() => toggleCategory(cat.slug)}
+                        className="rounded border-zinc-600 bg-zinc-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                      />
+                      <span className="text-sm text-zinc-300 flex-1">{cat.name}</span>
+                      {spendCents > 0 && (
+                        <span className="text-xs text-zinc-500">{formatCurrency(spendCents)}</span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             </div>
           )}
