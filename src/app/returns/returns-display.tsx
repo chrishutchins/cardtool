@@ -437,16 +437,16 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
             <div className="px-4 py-3 text-xs text-zinc-500 border-t border-zinc-700/50">
               Marginal Value = Card Value - Replacement Value - Net Fee. Negative values indicate cards that cost more than they contribute.
             </div>
-          </div>
-        )}
 
-        {/* Card Recommendations */}
-        {recommendations.length > 0 && (
-          <div className="mt-8">
-            <CardRecommendations 
-              recommendations={recommendations}
-              variant="callout"
-            />
+            {/* Card Recommendations - shown when card breakdown is expanded */}
+            {recommendations.length > 0 && (
+              <div className="p-4 border-t border-zinc-700">
+                <CardRecommendations 
+                  recommendations={recommendations}
+                  variant="callout"
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
