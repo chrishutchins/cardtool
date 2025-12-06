@@ -11,6 +11,7 @@ const navItems = [
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/cards", label: "Cards" },
   { href: "/admin/multipliers", label: "Multipliers" },
+  { href: "/admin/spending", label: "Spending" },
 ];
 
 export function AdminNav() {
