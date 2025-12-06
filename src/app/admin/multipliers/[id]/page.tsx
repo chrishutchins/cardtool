@@ -61,10 +61,10 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
     const multiplier = parseFloat(formData.get("multiplier") as string);
     const sort_order = parseInt(formData.get("sort_order") as string) || 0;
     const requirements = (formData.get("requirements") as string | null) || null;
-    const has_cap = formData.get("has_cap") === "true";
-    const cap_amount = has_cap && formData.get("cap_amount") 
-      ? parseFloat(formData.get("cap_amount") as string) 
-      : null;
+    const cap_amount_raw = formData.get("cap_amount") as string;
+    const cap_amount = cap_amount_raw ? parseFloat(cap_amount_raw) : null;
+    // has_cap is only true if there's actually a cap amount
+    const has_cap = formData.get("has_cap") === "true" && cap_amount !== null;
     const cap_period = (formData.get("cap_period") as "none" | "month" | "quarter" | "year" | "lifetime") || "month";
 
     await supabase.from("earning_multiplier_tiers").insert({
@@ -74,7 +74,7 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
       sort_order,
       requirements,
       has_cap,
-      cap_amount,
+      cap_amount: has_cap ? cap_amount : null,
       cap_period: has_cap ? cap_period : null,
       post_cap_multiplier: has_cap ? 1.0 : null,
     });
@@ -88,10 +88,10 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
     const multiplier = parseFloat(formData.get("multiplier") as string);
     const sort_order = parseInt(formData.get("sort_order") as string) || 0;
     const requirements = (formData.get("requirements") as string | null) || null;
-    const has_cap = formData.get("has_cap") === "true";
-    const cap_amount = has_cap && formData.get("cap_amount") 
-      ? parseFloat(formData.get("cap_amount") as string) 
-      : null;
+    const cap_amount_raw = formData.get("cap_amount") as string;
+    const cap_amount = cap_amount_raw ? parseFloat(cap_amount_raw) : null;
+    // has_cap is only true if there's actually a cap amount
+    const has_cap = formData.get("has_cap") === "true" && cap_amount !== null;
     const cap_period = (formData.get("cap_period") as "none" | "month" | "quarter" | "year" | "lifetime") || "month";
 
     await supabase
@@ -102,7 +102,7 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
         sort_order, 
         requirements,
         has_cap,
-        cap_amount,
+        cap_amount: has_cap ? cap_amount : null,
         cap_period: has_cap ? cap_period : null,
         post_cap_multiplier: has_cap ? 1.0 : null,
       })
