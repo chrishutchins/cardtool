@@ -205,7 +205,8 @@ export function CapsEditor({
                               onChange={(e) => setEditCapType(e.target.value as Enums<"cap_type">)}
                               className="w-full rounded border border-zinc-600 bg-zinc-700 px-2 py-1.5 text-white text-sm"
                             >
-                              {Object.entries(capTypeLabels).map(([value, label]) => (
+                              {/* Use allCapTypeLabels for edit to support legacy single_category */}
+                              {Object.entries(allCapTypeLabels).map(([value, label]) => (
                                 <option key={value} value={value}>{label}</option>
                               ))}
                             </select>

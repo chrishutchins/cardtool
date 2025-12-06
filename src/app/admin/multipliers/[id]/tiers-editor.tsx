@@ -27,7 +27,7 @@ export function TiersEditor({
   const [editRequirements, setEditRequirements] = useState("");
   const [editHasCap, setEditHasCap] = useState(false);
   const [editCapAmount, setEditCapAmount] = useState("");
-  const [editCapPeriod, setEditCapPeriod] = useState<"month" | "quarter" | "year">("month");
+  const [editCapPeriod, setEditCapPeriod] = useState<"none" | "month" | "quarter" | "year" | "lifetime">("month");
 
   const startEdit = (tier: Tables<"earning_multiplier_tiers">) => {
     setEditingTierId(tier.id);
@@ -37,7 +37,7 @@ export function TiersEditor({
     setEditRequirements(tier.requirements ?? "");
     setEditHasCap(tier.has_cap ?? false);
     setEditCapAmount(tier.cap_amount?.toString() ?? "");
-    setEditCapPeriod((tier.cap_period as "month" | "quarter" | "year") ?? "month");
+    setEditCapPeriod((tier.cap_period as "none" | "month" | "quarter" | "year" | "lifetime") ?? "month");
   };
 
   const handleUpdate = (tierId: string) => {
@@ -137,12 +137,14 @@ export function TiersEditor({
                             />
                             <select
                               value={editCapPeriod}
-                              onChange={(e) => setEditCapPeriod(e.target.value as "month" | "quarter" | "year")}
+                              onChange={(e) => setEditCapPeriod(e.target.value as "none" | "month" | "quarter" | "year" | "lifetime")}
                               className="rounded border border-zinc-600 bg-zinc-700 px-1 py-1 text-white text-xs"
                             >
+                              <option value="none">none</option>
                               <option value="month">/mo</option>
                               <option value="quarter">/qtr</option>
                               <option value="year">/yr</option>
+                              <option value="lifetime">lifetime</option>
                             </select>
                           </>
                         )}
@@ -344,9 +346,11 @@ function AddTierForm({
                 defaultValue="month"
                 className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
               >
+                <option value="none">None</option>
                 <option value="month">Monthly</option>
                 <option value="quarter">Quarterly</option>
                 <option value="year">Yearly</option>
+                <option value="lifetime">Lifetime</option>
               </select>
             </div>
           </div>
