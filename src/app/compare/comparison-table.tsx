@@ -144,11 +144,18 @@ export function ComparisonTable({
   };
 
   // Sort indicator
-  const SortIndicator = ({ active, direction }: { active: boolean; direction: "asc" | "desc" }) => (
-    <span className={`ml-1 ${active ? "text-blue-400" : "text-zinc-600"}`}>
-      {active ? (direction === "asc" ? "↑" : "↓") : "↕"}
-    </span>
-  );
+  const SortIndicator = ({ active, direction }: { active: boolean; direction: "asc" | "desc" }) => {
+    if (!active) return null;
+    return (
+      <svg className="w-4 h-4 ml-1 text-blue-400 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {direction === "asc" ? (
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        ) : (
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        )}
+      </svg>
+    );
+  };
 
   // Toggle category selection
   const toggleCategory = (slug: string) => {

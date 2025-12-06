@@ -151,8 +151,16 @@ export function CardsTable({ cards, onDelete }: CardsTableProps) {
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <span className="text-zinc-600 ml-1">↕</span>;
-    return <span className="text-blue-400 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
+    if (sortField !== field) return null;
+    return (
+      <svg className="w-4 h-4 ml-1 text-blue-400 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {sortDir === "asc" ? (
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        ) : (
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        )}
+      </svg>
+    );
   };
 
   const formatFee = (fee: number | null) => {
