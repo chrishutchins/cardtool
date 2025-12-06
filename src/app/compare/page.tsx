@@ -36,6 +36,19 @@ export default async function ComparePage() {
     .from("card_earning_rules")
     .select("card_id, category_id, rate, booking_method");
 
+  // Get all category bonuses (card_caps) with their categories
+  const { data: allCategoryBonuses } = await supabase
+    .from("card_caps")
+    .select(`
+      id,
+      card_id,
+      cap_type,
+      elevated_rate,
+      post_cap_rate,
+      cap_amount,
+      card_cap_categories (category_id)
+    `);
+
   // Get user's wallet cards
   const { data: userWallet } = await supabase
     .from("user_wallets")
@@ -60,7 +73,44 @@ export default async function ComparePage() {
     .select("id, name, slug, parent_category_id, excluded_by_default")
     .order("name");
 
+  // Build a map of parent category IDs for inheritance lookup
+  const parentCategoryMap = new Map<number, number>();
+  for (const cat of allCategories ?? []) {
+    if (cat.parent_category_id) {
+      parentCategoryMap.set(cat.id, cat.parent_category_id);
+    }
+  }
+
+  // Build category bonuses map: cardId -> categoryId -> elevated_rate
+  // This includes both specific categories and "all_categories" bonuses
+  const categoryBonusesMap: Record<string, Record<number, number>> = {};
+  const allCategoriesBonusMap: Record<string, number> = {}; // cardId -> rate for all_categories bonuses
+  
+  for (const bonus of allCategoryBonuses ?? []) {
+    if (bonus.cap_type === "all_categories") {
+      // For all_categories, store the elevated rate (or post_cap_rate if it's a threshold bonus)
+      // Use higher of elevated_rate and post_cap_rate for "best possible" display
+      const bestRate = Math.max(bonus.elevated_rate ?? 0, bonus.post_cap_rate ?? 0);
+      if (bestRate > (allCategoriesBonusMap[bonus.card_id] ?? 0)) {
+        allCategoriesBonusMap[bonus.card_id] = bestRate;
+      }
+    } else {
+      // For specific category bonuses, map to each category
+      const categoryIds = bonus.card_cap_categories?.map((c: { category_id: number }) => c.category_id) ?? [];
+      for (const categoryId of categoryIds) {
+        if (!categoryBonusesMap[bonus.card_id]) {
+          categoryBonusesMap[bonus.card_id] = {};
+        }
+        const currentRate = categoryBonusesMap[bonus.card_id][categoryId] ?? 0;
+        if ((bonus.elevated_rate ?? 0) > currentRate) {
+          categoryBonusesMap[bonus.card_id][categoryId] = bonus.elevated_rate ?? 0;
+        }
+      }
+    }
+  }
+
   // Build earning rules map: cardId -> categoryId -> rate
+  // Only uses 'any' (direct) booking method rules
   const earningRulesMap: Record<string, Record<number, number>> = {};
   for (const rule of allEarningRules ?? []) {
     // Only use 'any' (direct) rules for base comparison
@@ -68,8 +118,43 @@ export default async function ComparePage() {
     if (!earningRulesMap[rule.card_id]) {
       earningRulesMap[rule.card_id] = {};
     }
-    earningRulesMap[rule.card_id][rule.category_id] = rule.rate;
+    const currentRate = earningRulesMap[rule.card_id][rule.category_id] ?? 0;
+    if (rule.rate > currentRate) {
+      earningRulesMap[rule.card_id][rule.category_id] = rule.rate;
+    }
   }
+
+  // Helper: Get the best rate for a card + category using "highest rate wins"
+  const getBestRate = (cardId: string, categoryId: number, defaultRate: number): number => {
+    const rates: number[] = [defaultRate];
+    
+    // 1. Check direct earning rule for this category
+    const directRule = earningRulesMap[cardId]?.[categoryId];
+    if (directRule) rates.push(directRule);
+    
+    // 2. Check parent category rule (e.g., All Travel for Flights)
+    const parentId = parentCategoryMap.get(categoryId);
+    if (parentId) {
+      const parentRule = earningRulesMap[cardId]?.[parentId];
+      if (parentRule) rates.push(parentRule);
+    }
+    
+    // 3. Check category bonuses for this specific category
+    const categoryBonus = categoryBonusesMap[cardId]?.[categoryId];
+    if (categoryBonus) rates.push(categoryBonus);
+    
+    // 4. Check "all categories" bonus (applies to all non-excluded categories)
+    const allCatBonus = allCategoriesBonusMap[cardId];
+    if (allCatBonus) rates.push(allCatBonus);
+    
+    // Return the highest applicable rate
+    return Math.max(...rates);
+  };
+
+  // Get non-excluded category IDs for computing earning rates
+  const nonExcludedCategoryIds = (allCategories ?? [])
+    .filter((cat) => !cat.excluded_by_default)
+    .map((cat) => cat.id);
 
   // Transform cards for the client component
   const cardsForTable = (allCards ?? []).map((card) => {
@@ -77,6 +162,12 @@ export default async function ComparePage() {
     const pointValue = currency?.id 
       ? userValuesByCurrency.get(currency.id) ?? currency.base_value_cents ?? 1
       : 1;
+
+    // Build earning rates using "highest rate wins" logic
+    const earningRates: Record<number, number> = {};
+    for (const categoryId of nonExcludedCategoryIds) {
+      earningRates[categoryId] = getBestRate(card.id, categoryId, card.default_earn_rate ?? 1);
+    }
 
     return {
       id: card.id,
@@ -89,7 +180,7 @@ export default async function ComparePage() {
       currencyName: currency?.name ?? "Unknown",
       pointValue,
       isOwned: userCardIds.has(card.id),
-      earningRates: earningRulesMap[card.id] ?? {},
+      earningRates,
     };
   });
 
