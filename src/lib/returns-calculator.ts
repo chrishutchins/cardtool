@@ -1265,6 +1265,12 @@ export function calculateCardRecommendations(
   const currentNetEarnings = currentReturns.netValueEarned;
   const recommendations: CardRecommendation[] = [];
 
+  // Debug: Check what currentReturns contains for Rent
+  const rentInCurrentReturns = currentReturns.categoryBreakdown.find(c => c.categoryName === 'Rent');
+  console.log('[REC DEBUG] currentReturns Rent:', rentInCurrentReturns ? {
+    allocations: rentInCurrentReturns.allocations.map(a => ({ card: a.cardName, rate: a.rate, value: a.earnedValue })),
+  } : 'NOT IN BREAKDOWN');
+
   // Pre-compute top categories using ONLY user's original cards
   // This prevents candidate cards from affecting existing cards' top category selections
   const categoryMap = new Map<number, CategorySpending>();
