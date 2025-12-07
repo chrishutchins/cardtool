@@ -61,15 +61,16 @@ export default async function PointValuesPage() {
     : { data: [] };
   
   // Build maps for quick lookup
-  const templateValueMap = new Map((templateValues ?? []).map((tv) => [tv.currency_id, tv.value_cents]));
-  const userOverrideMap = new Map(userOverrides.map((uv) => [uv.currency_id, uv.value_cents]));
+  // Note: Supabase returns NUMERIC as strings, so parse them explicitly
+  const templateValueMap = new Map((templateValues ?? []).map((tv) => [tv.currency_id, parseFloat(String(tv.value_cents))]));
+  const userOverrideMap = new Map(userOverrides.map((uv) => [uv.currency_id, parseFloat(String(uv.value_cents))]));
 
   // Build currency data with effective values
   // Priority: user override > template value > base currency value
   const currencyData = currencies.map((currency) => {
     const userValue = userOverrideMap.get(currency.id);
     const templateValue = templateValueMap.get(currency.id);
-    const baseValue = currency.base_value_cents ?? 100;
+    const baseValue = parseFloat(String(currency.base_value_cents)) || 100;
     
     return {
       ...currency,

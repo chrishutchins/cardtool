@@ -38,12 +38,13 @@ export default async function TemplateDetailPage({ params }: Props) {
   const templateValues = valuesResult.data ?? [];
 
   // Build a map of currency values for this template
-  const valueMap = new Map(templateValues.map((v) => [v.currency_id, v.value_cents]));
+  // Note: Supabase returns NUMERIC as strings, so we parse them explicitly
+  const valueMap = new Map(templateValues.map((v) => [v.currency_id, parseFloat(String(v.value_cents))]));
 
   // Build currency data with template values
   const currencyData = currencies.map((currency) => ({
     ...currency,
-    template_value_cents: valueMap.get(currency.id) ?? currency.base_value_cents ?? 100,
+    template_value_cents: valueMap.get(currency.id) ?? parseFloat(String(currency.base_value_cents)) ?? 100,
     has_template_value: valueMap.has(currency.id),
   }));
 

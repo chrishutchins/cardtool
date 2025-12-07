@@ -291,10 +291,11 @@ export default async function ReturnsPage({ searchParams }: Props) {
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
   
   // Build template value map
+  // Note: Supabase returns NUMERIC as strings, so parse them explicitly
   const templateValueMap = new Map<string, number>();
   if (selectedTemplate?.template_currency_values) {
     for (const tv of selectedTemplate.template_currency_values) {
-      templateValueMap.set(tv.currency_id, tv.value_cents);
+      templateValueMap.set(tv.currency_id, parseFloat(String(tv.value_cents)));
     }
   }
 
@@ -308,7 +309,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     if (templateValue !== undefined) {
       defaultCurrencyValues.set(c.id, templateValue);
     } else if (c.base_value_cents) {
-      defaultCurrencyValues.set(c.id, c.base_value_cents);
+      defaultCurrencyValues.set(c.id, parseFloat(String(c.base_value_cents)));
     }
     if (c.cash_out_value_cents) {
       cashOutValues.set(c.id, c.cash_out_value_cents);
