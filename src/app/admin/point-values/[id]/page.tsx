@@ -170,15 +170,23 @@ export default async function TemplateDetailPage({ params }: Props) {
 
       {/* Import from URL */}
       <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <h2 className="text-lg font-semibold text-white mb-2">Import from URL</h2>
+        <h2 className="text-lg font-semibold text-white mb-2">
+          {template.source_url ? "Refresh from Source" : "Import from URL"}
+        </h2>
         <p className="text-sm text-zinc-400 mb-4">
-          Automatically pull point values from sites like{" "}
-          <a href="https://frequentmiler.com/reasonable-redemption-values-rrvs/" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300">
-            Frequent Miler
-          </a>.
+          {template.source_url ? (
+            <>Check for updated values from the source. Changes will be shown for review before applying.</>
+          ) : (
+            <>
+              Automatically pull point values from sites like{" "}
+              <a href="https://frequentmiler.com/reasonable-redemption-values-rrvs/" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300">
+                Frequent Miler
+              </a>.
+            </>
+          )}
         </p>
         <UrlImporter
-          currencies={currencies}
+          currencies={currencyData}
           sourceUrl={template.source_url}
           onImport={bulkUpdateTemplateValues}
         />
