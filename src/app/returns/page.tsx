@@ -52,6 +52,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     userMultiplierTiersResult,
     mobilePayCategoriesResult,
     mobilePayCategoryResult,
+    largePurchaseCategoryResult,
     allCardsResult,
   ] = await Promise.all([
     // User's wallet cards with full details
@@ -78,10 +79,10 @@ export default async function ReturnsPage({ searchParams }: Props) {
       `)
       .eq("user_id", user.id),
     
-    // User's spending per category
+    // User's spending per category (including >$5k portions)
     supabase
       .from("user_effective_spending")
-      .select("category_id, category_name, category_slug, annual_spend_cents")
+      .select("category_id, category_name, category_slug, annual_spend_cents, large_purchase_spend_cents")
       .eq("user_id", user.id),
     
     // All earning rules for user's cards (fetched after we know which cards)
@@ -173,6 +174,13 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .eq("slug", "mobile-pay")
       .single(),
     
+    // Get the >$5k Purchases category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "large-purchases-5k")
+      .single(),
+    
     // All cards for recommendations
     supabase
       .from("cards")
@@ -247,12 +255,13 @@ export default async function ReturnsPage({ searchParams }: Props) {
     categoryParentMap.set(c.id, c.parent_category_id);
   });
 
-  // Process spending with exclusion status
+  // Process spending with exclusion status and >$5k tracking
   const spending: CategorySpending[] = (spendingResult.data ?? []).map((s) => ({
     category_id: s.category_id!,
     category_name: s.category_name!,
     category_slug: s.category_slug!,
     annual_spend_cents: s.annual_spend_cents!,
+    large_purchase_spend_cents: s.large_purchase_spend_cents ?? 0,
     excluded_by_default: categoryExclusionMap.get(s.category_id!) ?? false,
     parent_category_id: categoryParentMap.get(s.category_id!) ?? null,
   }));
@@ -349,6 +358,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     mobilePayCategories.add(m.category_id);
   });
   const mobilePayCategoryId = mobilePayCategoryResult.data?.id;
+  const largePurchaseCategoryId = largePurchaseCategoryResult.data?.id;
 
   // Calculate returns
   const calculatorInput = {
@@ -364,6 +374,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     multiplierPrograms,
     mobilePayCategories,
     mobilePayCategoryId,
+    largePurchaseCategoryId,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,

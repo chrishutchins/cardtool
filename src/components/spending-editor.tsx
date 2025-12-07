@@ -158,8 +158,8 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
                     {/* Expanded view for >$5k tracking */}
                     {category.has_large_purchase_tracking && isExpanded && (
                       <div className="mt-2 ml-6 space-y-1 text-sm">
-                        <div className="text-zinc-400">└ &lt; $5k</div>
-                        <div className="text-zinc-400">└ &gt; $5k</div>
+                        <div className="text-zinc-400">Transactions &lt;$5k</div>
+                        <div className="text-zinc-400">Transactions &gt;$5k</div>
                       </div>
                     )}
                   </td>

@@ -1123,6 +1123,7 @@ export type Database = {
           category_name: string | null
           category_slug: string | null
           is_custom: boolean | null
+          large_purchase_spend_cents: number | null
           user_id: string | null
         }
         Relationships: []

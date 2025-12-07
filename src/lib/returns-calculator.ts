@@ -38,8 +38,13 @@ export interface CategorySpending {
   category_name: string;
   category_slug: string;
   annual_spend_cents: number;
+  large_purchase_spend_cents?: number; // >$5k purchases (subset of parent category)
   excluded_by_default?: boolean;
   parent_category_id?: number | null;
+  // Virtual category marker - when true, this is a >$5k portion that should use MAX logic
+  is_large_purchase_portion?: boolean;
+  // Reference to original category for >$5k portions
+  original_category_id?: number;
 }
 
 export interface EarningRuleInput {
@@ -210,6 +215,54 @@ function getCurrencyValueCents(
   return userCurrencyValues.get(currencyId) ?? defaultValues.get(currencyId) ?? 100;
 }
 
+/**
+ * Expands spending into virtual sub-categories for >$5k tracking.
+ * Categories with large_purchase_spend_cents > 0 are split into two entries:
+ * - Original category with reduced spend (annual_spend_cents only)
+ * - Virtual >$5k portion with large_purchase_spend_cents as its spend
+ * 
+ * The >$5k portions are marked with is_large_purchase_portion=true so the
+ * allocation logic can use MAX(parent_rate, >$5k_rate) when ranking cards.
+ */
+function expandSpendingForLargePurchases(
+  spending: CategorySpending[],
+  largePurchaseCategoryId?: number
+): CategorySpending[] {
+  const expanded: CategorySpending[] = [];
+  
+  for (const cat of spending) {
+    const largePurchaseAmount = cat.large_purchase_spend_cents ?? 0;
+    
+    if (largePurchaseAmount > 0 && largePurchaseCategoryId) {
+      // Add the <$5k portion (original category with reduced spend)
+      expanded.push({
+        ...cat,
+        // annual_spend_cents already represents the <$5k portion from the view
+        large_purchase_spend_cents: 0,
+      });
+      
+      // Add the >$5k portion as a virtual category
+      // This will compete for card allocation independently
+      expanded.push({
+        category_id: cat.category_id, // Keep original category_id for display
+        category_name: `${cat.category_name} (>$5k)`,
+        category_slug: `${cat.category_slug}-large-purchases`,
+        annual_spend_cents: largePurchaseAmount,
+        large_purchase_spend_cents: 0,
+        excluded_by_default: cat.excluded_by_default,
+        parent_category_id: cat.parent_category_id,
+        is_large_purchase_portion: true,
+        original_category_id: cat.category_id,
+      });
+    } else {
+      // No >$5k tracking, pass through as-is
+      expanded.push(cat);
+    }
+  }
+  
+  return expanded;
+}
+
 // ============================================================================
 // Main Calculator
 // ============================================================================
@@ -229,6 +282,7 @@ export interface CalculatorInput {
   multiplierPrograms?: MultiplierProgram[]; // earning multipliers (e.g., BoA Preferred Rewards)
   mobilePayCategories?: Set<number>; // category_ids where user uses mobile pay
   mobilePayCategoryId?: number; // the category_id for "Mobile Pay" itself
+  largePurchaseCategoryId?: number; // the category_id for ">$5k Purchases"
   userSelections: Map<string, number>; // cap_id -> selected_category_id
   travelPreferences: TravelPreference[];
   enabledSecondaryCards: Set<string>; // card IDs with secondary currency enabled
@@ -241,7 +295,7 @@ export interface CalculatorInput {
 export function calculatePortfolioReturns(input: CalculatorInput): PortfolioReturns {
   const {
     cards,
-    spending,
+    spending: rawSpending,
     earningRules,
     categoryBonuses,
     userCurrencyValues,
@@ -252,11 +306,16 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     multiplierPrograms = [],
     mobilePayCategories = new Set(),
     mobilePayCategoryId,
+    largePurchaseCategoryId,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
     earningsGoal,
   } = input;
+
+  // Expand spending to handle >$5k tracking
+  // Categories with large_purchase_spend_cents are split into <$5k and >$5k portions
+  const spending = expandSpendingForLargePurchases(rawSpending, largePurchaseCategoryId);
 
   // Build a map of card_id -> multiplier (for earning multiplier programs like BoA Preferred Rewards)
   const cardMultipliers = new Map<string, number>();
@@ -426,7 +485,10 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         getCardCurrencyInfo,
         debitPayValues,
         cardMultipliers,
-        categorySpend.excluded_by_default ?? false
+        categorySpend.excluded_by_default ?? false,
+        categorySpend.is_large_purchase_portion ?? false,
+        categorySpend.original_category_id,
+        largePurchaseCategoryId
       );
       
       // Calculate marginal benefit: difference between best and second-best
@@ -448,6 +510,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     const allocations: AllocationEntry[] = [];
 
     // Rank cards by effective value for this category (with current cap usage)
+    // For >$5k portions, this uses MAX(parent category rate, >$5k rate)
     const rankedCards = rankCardsForCategory(
       cards,
       categorySpend.category_id,
@@ -456,7 +519,10 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       getCardCurrencyInfo,
       debitPayValues,
       cardMultipliers,
-      categorySpend.excluded_by_default ?? false
+      categorySpend.excluded_by_default ?? false,
+      categorySpend.is_large_purchase_portion ?? false,
+      categorySpend.original_category_id,
+      largePurchaseCategoryId
     );
 
     // Allocate spending to cards in order of value
@@ -1002,7 +1068,11 @@ function rankCardsForCategory(
   getCardCurrencyInfo: (card: CardInput) => { valueCents: number; isCashback: boolean; excluded: boolean },
   debitPayValues: Map<string, number> = new Map(),
   cardMultipliers: Map<string, number> = new Map(),
-  isCategoryExcluded: boolean = false
+  isCategoryExcluded: boolean = false,
+  // For >$5k portions: also consider rates from the >$5k category and use MAX
+  isLargePurchasePortion: boolean = false,
+  originalCategoryId?: number,
+  largePurchaseCategoryId?: number
 ): RankedCard[] {
   const ranked: RankedCard[] = [];
 
@@ -1012,7 +1082,21 @@ function rankCardsForCategory(
     // Skip excluded cards entirely (they shouldn't receive any spending)
     if (currencyInfo.excluded) continue;
     
-    const cardRates = earningRateMap.get(card.id)?.get(categoryId) ?? [];
+    // Get rates for the category
+    let cardRates = earningRateMap.get(card.id)?.get(categoryId) ?? [];
+    
+    // For >$5k portions, also check the >$5k category rates and use MAX
+    if (isLargePurchasePortion && largePurchaseCategoryId && originalCategoryId) {
+      // Get both parent category rates and >$5k rates
+      const parentRates = earningRateMap.get(card.id)?.get(originalCategoryId) ?? [];
+      const largePurchaseRates = earningRateMap.get(card.id)?.get(largePurchaseCategoryId) ?? [];
+      
+      // Combine: we want to consider both options and pick the best
+      // If card has >$5k rate, it can use that. If card has parent category rate, it can use that.
+      // The allocation will sort by value and pick the best.
+      cardRates = [...parentRates, ...largePurchaseRates];
+    }
+    
     // Debit pay bonus adds a flat % return on all spend with this card
     const debitPayBonus = (debitPayValues.get(card.id) ?? 0) / 100;
     // Earning multiplier (e.g., BoA Preferred Rewards 1.75x)
