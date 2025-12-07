@@ -7,6 +7,7 @@ import { CardCategorySelector } from "@/app/wallet/card-category-selector";
 import { MultiplierSelector } from "@/app/wallet/multiplier-selector";
 import { TravelPreferences } from "@/app/wallet/travel-preferences";
 import { MobilePayCategories } from "@/app/wallet/mobile-pay-categories";
+import { LargePurchaseCategories } from "./large-purchase-categories";
 import { isAdminEmail } from "@/lib/admin";
 
 export default async function SettingsPage() {
@@ -27,6 +28,8 @@ export default async function SettingsPage() {
     allCategoriesResult,
     mobilePayCategoriesResult,
     debitPayFlagsResult,
+    largePurchaseCategoriesResult,
+    everythingElseCategoryResult,
   ] = await Promise.all([
     supabase
       .from("user_wallets")
@@ -69,6 +72,15 @@ export default async function SettingsPage() {
       .select("debit_pay_enabled")
       .eq("user_id", user.id)
       .single(),
+    supabase
+      .from("user_large_purchase_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "everything-else")
+      .single(),
   ]);
 
   const walletCards = walletCardsResult.data;
@@ -78,6 +90,8 @@ export default async function SettingsPage() {
   const allCategories = allCategoriesResult.data;
   const mobilePayCategories = mobilePayCategoriesResult.data;
   const debitPayEnabled = debitPayFlagsResult.data?.debit_pay_enabled ?? false;
+  const largePurchaseCategories = largePurchaseCategoriesResult.data;
+  const everythingElseCategoryId = everythingElseCategoryResult.data?.id ?? null;
 
   // Process wallet cards
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
@@ -281,6 +295,30 @@ export default async function SettingsPage() {
     // No revalidatePath - using optimistic updates for instant UI
   }
 
+  async function toggleLargePurchaseCategory(categoryId: number, selected: boolean) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    if (selected) {
+      await supabase.from("user_large_purchase_categories").upsert(
+        {
+          user_id: user.id,
+          category_id: categoryId,
+        },
+        { onConflict: "user_id,category_id" }
+      );
+    } else {
+      await supabase
+        .from("user_large_purchase_categories")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("category_id", categoryId);
+    }
+    // No revalidatePath - using optimistic updates for instant UI
+  }
+
   async function disableDebitPay() {
     "use server";
     const user = await currentUser();
@@ -465,6 +503,29 @@ export default async function SettingsPage() {
                   }))}
                   selectedCategoryIds={(mobilePayCategories ?? []).map((m) => m.category_id)}
                   onToggleCategory={toggleMobilePayCategory}
+                />
+              </div>
+            )}
+
+            {/* Large Purchase Categories (>$5k tracking) */}
+            {(allCategories ?? []).length > 0 && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+                <h2 className="text-lg font-semibold text-white mb-2">
+                  Large Purchase Tracking (&gt;$5k)
+                </h2>
+                <LargePurchaseCategories
+                  categories={(allCategories ?? []).map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    slug: c.slug,
+                  }))}
+                  selectedCategoryIds={
+                    (largePurchaseCategories ?? []).length > 0
+                      ? (largePurchaseCategories ?? []).map((l) => l.category_id)
+                      : everythingElseCategoryId ? [everythingElseCategoryId] : []
+                  }
+                  everythingElseCategoryId={everythingElseCategoryId}
+                  onToggleCategory={toggleLargePurchaseCategory}
                 />
               </div>
             )}

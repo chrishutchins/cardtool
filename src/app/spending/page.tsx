@@ -6,6 +6,9 @@ import { SpendingEditor } from "@/components/spending-editor";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 
+// Categories to hide from the spending page (derived, not directly trackable)
+const HIDDEN_CATEGORY_SLUGS = ["mobile-pay", "large-purchases-5k"];
+
 export default async function SpendingPage() {
   const user = await currentUser();
 
@@ -16,45 +19,81 @@ export default async function SpendingPage() {
   const supabase = await createClient();
 
   // Get all categories with defaults and user's custom values
-  const { data: categories } = await supabase
-    .from("earning_categories")
-    .select("id, name, slug")
-    .order("name");
+  const [categoriesResult, spendingDefaultsResult, userSpendingResult, largePurchaseCategoriesResult, everythingElseResult] = await Promise.all([
+    supabase
+      .from("earning_categories")
+      .select("id, name, slug")
+      .order("name"),
+    supabase
+      .from("spending_defaults")
+      .select("category_id, annual_spend_cents, large_purchase_spend_cents"),
+    supabase
+      .from("user_category_spend")
+      .select("category_id, annual_spend_cents, large_purchase_spend_cents")
+      .eq("user_id", user.id),
+    supabase
+      .from("user_large_purchase_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "everything-else")
+      .single(),
+  ]);
 
-  const { data: spendingDefaults } = await supabase
-    .from("spending_defaults")
-    .select("category_id, annual_spend_cents");
+  const categories = categoriesResult.data;
+  const spendingDefaults = spendingDefaultsResult.data;
+  const userSpending = userSpendingResult.data;
+  const largePurchaseCategories = largePurchaseCategoriesResult.data;
+  const everythingElseCategoryId = everythingElseResult.data?.id ?? null;
 
-  const { data: userSpending } = await supabase
-    .from("user_category_spend")
-    .select("category_id, annual_spend_cents")
-    .eq("user_id", user.id);
+  // Determine which categories have >$5k tracking enabled
+  // If user has no explicit selections, default to "Everything Else"
+  const largePurchaseEnabledIds = new Set(
+    (largePurchaseCategories ?? []).length > 0
+      ? (largePurchaseCategories ?? []).map((l) => l.category_id)
+      : everythingElseCategoryId ? [everythingElseCategoryId] : []
+  );
 
-  // Build spending data with effective values
-  const spendingData = categories?.map((category) => {
-    const defaultSpend = spendingDefaults?.find(
-      (sd) => sd.category_id === category.id
-    );
-    const userSpend = userSpending?.find(
-      (us) => us.category_id === category.id
-    );
-    return {
-      ...category,
-      default_annual_spend_cents: defaultSpend?.annual_spend_cents ?? 0,
-      effective_annual_spend_cents:
-        userSpend?.annual_spend_cents ?? defaultSpend?.annual_spend_cents ?? 0,
-      is_custom: !!userSpend,
-    };
-  }) ?? [];
+  // Build spending data with effective values, filtering out hidden categories
+  const spendingData = (categories ?? [])
+    .filter((category) => !HIDDEN_CATEGORY_SLUGS.includes(category.slug))
+    .map((category) => {
+      const defaultSpend = spendingDefaults?.find(
+        (sd) => sd.category_id === category.id
+      );
+      const userSpend = userSpending?.find(
+        (us) => us.category_id === category.id
+      );
+      
+      // Determine effective values
+      const effectiveAnnualSpend = userSpend?.annual_spend_cents ?? defaultSpend?.annual_spend_cents ?? 0;
+      const effectiveLargePurchaseSpend = userSpend?.large_purchase_spend_cents ?? defaultSpend?.large_purchase_spend_cents ?? 0;
+      
+      return {
+        ...category,
+        default_annual_spend_cents: defaultSpend?.annual_spend_cents ?? 0,
+        default_large_purchase_spend_cents: defaultSpend?.large_purchase_spend_cents ?? 0,
+        effective_annual_spend_cents: effectiveAnnualSpend,
+        effective_large_purchase_spend_cents: effectiveLargePurchaseSpend,
+        is_custom: !!userSpend,
+        has_large_purchase_tracking: largePurchaseEnabledIds.has(category.id),
+      };
+    });
 
-  async function updateCategorySpend(categoryId: number, annualSpendCents: number | null) {
+  async function updateCategorySpend(
+    categoryId: number, 
+    annualSpendCents: number | null,
+    largePurchaseSpendCents?: number | null
+  ) {
     "use server";
     const user = await currentUser();
     if (!user) return;
 
     const supabase = await createClient();
 
-    if (annualSpendCents === null) {
+    if (annualSpendCents === null && largePurchaseSpendCents === undefined) {
       // Delete custom value (revert to default)
       await supabase
         .from("user_category_spend")
@@ -62,13 +101,25 @@ export default async function SpendingPage() {
         .eq("user_id", user.id)
         .eq("category_id", categoryId);
     } else {
+      // Build the update object - annual_spend_cents is required
+      const updateData: {
+        user_id: string;
+        category_id: number;
+        annual_spend_cents: number;
+        large_purchase_spend_cents?: number;
+      } = {
+        user_id: user.id,
+        category_id: categoryId,
+        annual_spend_cents: annualSpendCents ?? 0,
+      };
+      
+      if (largePurchaseSpendCents !== undefined && largePurchaseSpendCents !== null) {
+        updateData.large_purchase_spend_cents = largePurchaseSpendCents;
+      }
+      
       // Upsert custom value
       await supabase.from("user_category_spend").upsert(
-        {
-          user_id: user.id,
-          category_id: categoryId,
-          annual_spend_cents: annualSpendCents,
-        },
+        updateData,
         { onConflict: "user_id,category_id" }
       );
     }
