@@ -1344,6 +1344,17 @@ export function calculateCardRecommendations(
       ? (improvement / Math.abs(currentNetEarnings)) * 100 
       : 0;
 
+    // Debug: Log Bilt and Citi Custom Cash
+    if (candidate.name.toLowerCase().includes('bilt') || candidate.name.toLowerCase().includes('custom cash')) {
+      console.log(`[REC DEBUG] ${candidate.name}:`, {
+        currentNet: currentNetEarnings,
+        newNet: newNetEarnings,
+        improvement,
+        currentValue: currentReturns.totalValue,
+        newValue: returnsWithCard.totalValue,
+      });
+    }
+
     // Only consider cards that would improve earnings
     if (improvement > 0) {
       recommendations.push({
