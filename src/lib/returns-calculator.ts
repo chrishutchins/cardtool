@@ -459,6 +459,16 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       categorySpend.excluded_by_default ?? false
     );
 
+    // Debug: Log Rent allocation to trace the bug
+    if (categorySpend.category_slug === 'rent') {
+      console.log('[CALC DEBUG] Rent allocation:', {
+        excluded: categorySpend.excluded_by_default,
+        cardCount: cards.length,
+        rankedCount: rankedCards.length,
+        ranked: rankedCards.map(r => ({ name: r.card.name, rate: r.rate })),
+      });
+    }
+
     // Allocate spending to cards in order of value
     for (const rankedCard of rankedCards) {
       if (remainingSpend <= 0) break;
