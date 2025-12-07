@@ -1236,6 +1236,54 @@ export interface RecommendationsInput extends CalculatorInput {
 }
 
 /**
+ * Helper: Find the optimal category for a selected_category bonus based on marginal value.
+ */
+function findOptimalCategoryForBonus(
+  bonus: CategoryBonusInput,
+  candidate: CardInput,
+  categoryMap: Map<number, CategorySpending>,
+  currencyValues: Map<string, number>,
+  currentReturns: PortfolioReturns,
+  enabledSecondaryCards: Set<string>
+): number | null {
+  let bestCategoryId: number | null = null;
+  let bestMarginalValue = -Infinity;
+  
+  const candidateCurrency = enabledSecondaryCards.has(candidate.id) && candidate.secondary_currency
+    ? candidate.secondary_currency
+    : candidate.primary_currency;
+  const isCashback = candidateCurrency?.currency_type === 'cash_back' || candidateCurrency?.currency_type === 'crypto';
+  const currencyValue = candidateCurrency?.id 
+    ? currencyValues.get(candidateCurrency.id) ?? 1.0
+    : 1.0;
+  
+  for (const catId of bonus.category_ids) {
+    const categorySpend = categoryMap.get(catId);
+    if (!categorySpend || categorySpend.annual_spend_cents <= 0) continue;
+    
+    // Calculate value per dollar from this bonus
+    const bonusValuePerDollar = isCashback 
+      ? bonus.elevated_rate / 100
+      : bonus.elevated_rate * (currencyValue / 100);
+    
+    // Find current best card for this category
+    const currentAlloc = currentReturns.categoryBreakdown.find(c => c.categoryId === catId);
+    const currentBestValue = currentAlloc?.allocations[0]?.earnedValue 
+      ? currentAlloc.allocations[0].earnedValue / (currentAlloc.allocations[0].spend || 1)
+      : 0;
+    
+    const marginalValue = (bonusValuePerDollar - currentBestValue) * (categorySpend.annual_spend_cents / 100);
+    
+    if (marginalValue > bestMarginalValue) {
+      bestMarginalValue = marginalValue;
+      bestCategoryId = catId;
+    }
+  }
+  
+  return bestCategoryId;
+}
+
+/**
  * Calculates the top N card recommendations based on net earnings improvement.
  * For each card not in the user's wallet, this calculates what the net earnings
  * would be if they added it, using the card's default perks value.
@@ -1330,55 +1378,73 @@ export function calculateCardRecommendations(
     const categoryBonusesWithCandidate = allCategoryBonuses.filter(b => cardIdsWithCandidate.has(b.card_id));
 
     // For selected_category bonuses on the candidate card, simulate the optimal selection
-    // This allows cards like Citi Custom Cash to be properly evaluated
+    // This allows cards like BoA Business Customized Cash to be properly evaluated
     const userSelectionsWithCandidate = new Map(baseInput.userSelections);
-    const candidateBonuses = allCategoryBonuses.filter(b => b.card_id === candidate.id && b.cap_type === 'selected_category');
-    for (const bonus of candidateBonuses) {
+    const candidateSelectedBonuses = allCategoryBonuses.filter(b => b.card_id === candidate.id && b.cap_type === 'selected_category');
+    for (const bonus of candidateSelectedBonuses) {
       // Find the optimal category: the one where this card's bonus provides the most marginal value
-      // (i.e., the category where the bonus beats the current best alternative by the most)
-      let bestCategoryId: number | null = null;
-      let bestMarginalValue = -Infinity;
-      
-      const bonusRate = bonus.elevated_rate;
-      const candidateCurrency = baseInput.enabledSecondaryCards?.has(candidate.id) && candidate.secondary_currency
-        ? candidate.secondary_currency
-        : candidate.primary_currency;
-      const isCashback = candidateCurrency?.currency_type === 'cash_back' || candidateCurrency?.currency_type === 'crypto';
-      const currencyValue = candidateCurrency?.id 
-        ? combinedCurrencyValues.get(candidateCurrency.id) ?? 1.0
-        : 1.0;
-      
-      for (const catId of bonus.category_ids) {
-        const categorySpend = categoryMap.get(catId);
-        if (!categorySpend || categorySpend.annual_spend_cents <= 0) continue;
-        
-        // Calculate value per dollar from this bonus
-        const bonusValuePerDollar = isCashback 
-          ? bonusRate / 100
-          : bonusRate * (currencyValue / 100);
-        
-        // Find current best card for this category (from existing user cards)
-        // Simplified: check what the current allocation shows
-        const currentAlloc = currentReturns.categoryBreakdown.find(c => c.categoryId === catId);
-        const currentBestValue = currentAlloc?.allocations[0]?.earnedValue 
-          ? currentAlloc.allocations[0].earnedValue / (currentAlloc.allocations[0].spend || 1)
-          : 0;
-        
-        const marginalValue = (bonusValuePerDollar - currentBestValue) * (categorySpend.annual_spend_cents / 100);
-        
-        if (marginalValue > bestMarginalValue) {
-          bestMarginalValue = marginalValue;
-          bestCategoryId = catId;
-        }
-      }
-      
+      const bestCategoryId = findOptimalCategoryForBonus(bonus, candidate, categoryMap, combinedCurrencyValues, currentReturns, enabledSecondaryCardsNew);
       if (bestCategoryId !== null) {
         userSelectionsWithCandidate.set(bonus.id, bestCategoryId);
       }
     }
+    
+    // For top_category bonuses on the candidate card, compute and add to the preComputed map
+    // This allows cards like Citi Custom Cash to be properly evaluated
+    const topCategoriesWithCandidate = new Map(preComputedTopCategories);
+    const candidateTopBonuses = allCategoryBonuses.filter(b => 
+      b.card_id === candidate.id && 
+      ['top_category', 'top_two_categories', 'top_three_categories'].includes(b.cap_type)
+    );
+    if (candidateTopBonuses.length > 0) {
+      // Calculate top categories for this candidate card based on marginal value
+      const candidateTopCategories = new Set<number>();
+      
+      for (const bonus of candidateTopBonuses) {
+        const numCategories = bonus.cap_type === 'top_category' ? 1 
+          : bonus.cap_type === 'top_two_categories' ? 2 
+          : 3;
+        
+        // Rank eligible categories by marginal value
+        const rankedCategories: { catId: number; marginalValue: number }[] = [];
+        
+        const candidateCurrency = enabledSecondaryCardsNew.has(candidate.id) && candidate.secondary_currency
+          ? candidate.secondary_currency
+          : candidate.primary_currency;
+        const isCashback = candidateCurrency?.currency_type === 'cash_back' || candidateCurrency?.currency_type === 'crypto';
+        const currencyValue = candidateCurrency?.id 
+          ? combinedCurrencyValues.get(candidateCurrency.id) ?? 1.0
+          : 1.0;
+        
+        for (const catId of bonus.category_ids) {
+          const categorySpend = categoryMap.get(catId);
+          if (!categorySpend || categorySpend.annual_spend_cents <= 0) continue;
+          
+          // Calculate value per dollar from this bonus
+          const bonusValuePerDollar = isCashback 
+            ? bonus.elevated_rate / 100
+            : bonus.elevated_rate * (currencyValue / 100);
+          
+          // Find current best card for this category
+          const currentAlloc = currentReturns.categoryBreakdown.find(c => c.categoryId === catId);
+          const currentBestValue = currentAlloc?.allocations[0]?.earnedValue 
+            ? currentAlloc.allocations[0].earnedValue / (currentAlloc.allocations[0].spend || 1)
+            : 0;
+          
+          const marginalValue = (bonusValuePerDollar - currentBestValue) * (categorySpend.annual_spend_cents / 100);
+          rankedCategories.push({ catId, marginalValue });
+        }
+        
+        // Sort by marginal value (highest first) and take top N
+        rankedCategories.sort((a, b) => b.marginalValue - a.marginalValue);
+        rankedCategories.slice(0, numCategories).forEach(r => candidateTopCategories.add(r.catId));
+      }
+      
+      topCategoriesWithCandidate.set(candidate.id, candidateTopCategories);
+    }
 
     // Calculate returns with this card added
-    // Pass preComputedTopCategories to prevent candidate from affecting existing cards' top category selections
+    // Pass topCategoriesWithCandidate which includes both user's cards AND the candidate's optimal categories
     const returnsWithCard = calculatePortfolioReturns({
       ...baseInput,
       cards: cardsWithCandidate,
@@ -1386,7 +1452,7 @@ export function calculateCardRecommendations(
       categoryBonuses: categoryBonusesWithCandidate,
       perksValues: perksWithCandidate,
       enabledSecondaryCards: enabledSecondaryCardsNew,
-      preComputedTopCategories,
+      preComputedTopCategories: topCategoriesWithCandidate,
       userSelections: userSelectionsWithCandidate,
     });
 
