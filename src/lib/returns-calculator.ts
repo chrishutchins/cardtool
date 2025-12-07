@@ -454,6 +454,16 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       categorySpend.excluded_by_default ?? false
     );
 
+    // Debug: Log Rent allocation
+    if (categorySpend.category_slug === 'rent') {
+      console.log('[ALLOC DEBUG] Rent category:', {
+        spend: spendDollars,
+        excluded: categorySpend.excluded_by_default,
+        rankedCardsCount: rankedCards.length,
+        topCards: rankedCards.slice(0, 3).map(rc => ({ name: rc.card.name, rate: rc.rate, value: rc.effectiveValue })),
+      });
+    }
+
     // Allocate spending to cards in order of value
     for (const rankedCard of rankedCards) {
       if (remainingSpend <= 0) break;
@@ -1250,6 +1260,13 @@ export function calculateCardRecommendations(
   const currentNetEarnings = currentReturns.netValueEarned;
   const recommendations: CardRecommendation[] = [];
 
+  // Debug: Check if Rent spending is being included
+  const rentSpending = baseInput.spending?.find((s: CategorySpending) => s.category_slug === 'rent');
+  console.log('[REC DEBUG] Rent in spending:', rentSpending ? {
+    amount: rentSpending.annual_spend_cents / 100,
+    excluded: rentSpending.excluded_by_default
+  } : 'NOT FOUND');
+
   for (const candidate of candidateCards) {
     // Add this card to the user's wallet
     const cardsWithCandidate = [...userCards, candidate];
@@ -1295,6 +1312,16 @@ export function calculateCardRecommendations(
     const improvementPercent = currentNetEarnings !== 0 
       ? (improvement / Math.abs(currentNetEarnings)) * 100 
       : 0;
+
+    // Debug: Log Bilt specifically
+    if (candidate.name.toLowerCase().includes('bilt')) {
+      console.log('[REC DEBUG] Bilt calculation:', {
+        currentNet: currentNetEarnings,
+        newNet: newNetEarnings,
+        improvement,
+        candidateRulesCount: earningRulesWithCandidate.filter(r => r.card_id === candidate.id).length,
+      });
+    }
 
     // Only consider cards that would improve earnings
     if (improvement > 0) {
