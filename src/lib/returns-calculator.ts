@@ -1329,6 +1329,54 @@ export function calculateCardRecommendations(
     const earningRulesWithCandidate = allEarningRules.filter(r => cardIdsWithCandidate.has(r.card_id));
     const categoryBonusesWithCandidate = allCategoryBonuses.filter(b => cardIdsWithCandidate.has(b.card_id));
 
+    // For selected_category bonuses on the candidate card, simulate the optimal selection
+    // This allows cards like Citi Custom Cash to be properly evaluated
+    const userSelectionsWithCandidate = new Map(baseInput.userSelections);
+    const candidateBonuses = allCategoryBonuses.filter(b => b.card_id === candidate.id && b.cap_type === 'selected_category');
+    for (const bonus of candidateBonuses) {
+      // Find the optimal category: the one where this card's bonus provides the most marginal value
+      // (i.e., the category where the bonus beats the current best alternative by the most)
+      let bestCategoryId: number | null = null;
+      let bestMarginalValue = -Infinity;
+      
+      const bonusRate = bonus.elevated_rate;
+      const candidateCurrency = baseInput.enabledSecondaryCards?.has(candidate.id) && candidate.secondary_currency
+        ? candidate.secondary_currency
+        : candidate.primary_currency;
+      const isCashback = candidateCurrency?.currency_type === 'cash_back' || candidateCurrency?.currency_type === 'crypto';
+      const currencyValue = candidateCurrency?.id 
+        ? combinedCurrencyValues.get(candidateCurrency.id) ?? 1.0
+        : 1.0;
+      
+      for (const catId of bonus.category_ids) {
+        const categorySpend = categoryMap.get(catId);
+        if (!categorySpend || categorySpend.annual_spend_cents <= 0) continue;
+        
+        // Calculate value per dollar from this bonus
+        const bonusValuePerDollar = isCashback 
+          ? bonusRate / 100
+          : bonusRate * (currencyValue / 100);
+        
+        // Find current best card for this category (from existing user cards)
+        // Simplified: check what the current allocation shows
+        const currentAlloc = currentReturns.categoryBreakdown.find(c => c.categoryId === catId);
+        const currentBestValue = currentAlloc?.allocations[0]?.earnedValue 
+          ? currentAlloc.allocations[0].earnedValue / (currentAlloc.allocations[0].spend || 1)
+          : 0;
+        
+        const marginalValue = (bonusValuePerDollar - currentBestValue) * (categorySpend.annual_spend_cents / 100);
+        
+        if (marginalValue > bestMarginalValue) {
+          bestMarginalValue = marginalValue;
+          bestCategoryId = catId;
+        }
+      }
+      
+      if (bestCategoryId !== null) {
+        userSelectionsWithCandidate.set(bonus.id, bestCategoryId);
+      }
+    }
+
     // Calculate returns with this card added
     // Pass preComputedTopCategories to prevent candidate from affecting existing cards' top category selections
     const returnsWithCard = calculatePortfolioReturns({
@@ -1339,6 +1387,7 @@ export function calculateCardRecommendations(
       perksValues: perksWithCandidate,
       enabledSecondaryCards: enabledSecondaryCardsNew,
       preComputedTopCategories,
+      userSelections: userSelectionsWithCandidate,
     });
 
     const newNetEarnings = returnsWithCard.netValueEarned;
@@ -1346,28 +1395,6 @@ export function calculateCardRecommendations(
     const improvementPercent = currentNetEarnings !== 0 
       ? (improvement / Math.abs(currentNetEarnings)) * 100 
       : 0;
-
-    // Debug: Log Bilt and Citi Custom Cash
-    if (candidate.name.toLowerCase().includes('bilt')) {
-      // Find Rent category allocations specifically
-      const currentRent = currentReturns.categoryBreakdown.find(c => c.categoryName === 'Rent');
-      const newRent = returnsWithCard.categoryBreakdown.find(c => c.categoryName === 'Rent');
-      
-      console.log(`[REC DEBUG] ${candidate.name}:`, {
-        improvement,
-        rentBefore: currentRent?.allocations.map(a => ({ 
-          card: a.cardName, 
-          rate: a.rate, 
-          earned: a.earnedValue 
-        })),
-        rentAfter: newRent?.allocations.map(a => ({ 
-          card: a.cardName, 
-          rate: a.rate, 
-          earned: a.earnedValue 
-        })),
-        userCards: userCards.map(c => c.name),
-      });
-    }
 
     // Only consider cards that would improve earnings
     if (improvement > 0) {
