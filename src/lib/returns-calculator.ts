@@ -233,6 +233,9 @@ export interface CalculatorInput {
   travelPreferences: TravelPreference[];
   enabledSecondaryCards: Set<string>; // card IDs with secondary currency enabled
   earningsGoal: EarningsGoal; // Which optimization mode to use
+  // For recommendations: pre-computed top categories using ONLY user's original cards
+  // This prevents candidate cards from affecting existing cards' top category selections
+  preComputedTopCategories?: Map<string, Set<number>>;
 }
 
 export function calculatePortfolioReturns(input: CalculatorInput): PortfolioReturns {
@@ -288,7 +291,9 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
   // Determine which categories are "top N" for each card's category bonuses
   // This now picks categories based on MARGINAL VALUE (where the bonus beats alternatives most)
   // rather than just highest spending
-  const topCategoriesMap = calculateTopCategories(
+  // If preComputedTopCategories is provided (for recommendations), use that instead
+  // to prevent candidate cards from affecting existing cards' top category selections
+  const topCategoriesMap = input.preComputedTopCategories ?? calculateTopCategories(
     cards, 
     categoryBonuses, 
     spending, 
@@ -453,16 +458,6 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       cardMultipliers,
       categorySpend.excluded_by_default ?? false
     );
-
-    // Debug: Log Rent allocation
-    if (categorySpend.category_slug === 'rent') {
-      console.log('[ALLOC DEBUG] Rent category:', {
-        spend: spendDollars,
-        excluded: categorySpend.excluded_by_default,
-        rankedCardsCount: rankedCards.length,
-        topCards: rankedCards.slice(0, 3).map(rc => ({ name: rc.card.name, rate: rc.rate, value: rc.effectiveValue })),
-      });
-    }
 
     // Allocate spending to cards in order of value
     for (const rankedCard of rankedCards) {
@@ -1260,12 +1255,46 @@ export function calculateCardRecommendations(
   const currentNetEarnings = currentReturns.netValueEarned;
   const recommendations: CardRecommendation[] = [];
 
-  // Debug: Check if Rent spending is being included
-  const rentSpending = baseInput.spending?.find((s: CategorySpending) => s.category_slug === 'rent');
-  console.log('[REC DEBUG] Rent in spending:', rentSpending ? {
-    amount: rentSpending.annual_spend_cents / 100,
-    excluded: rentSpending.excluded_by_default
-  } : 'NOT FOUND');
+  // Pre-compute top categories using ONLY user's original cards
+  // This prevents candidate cards from affecting existing cards' top category selections
+  const categoryMap = new Map<number, CategorySpending>();
+  baseInput.spending?.forEach(s => categoryMap.set(s.category_id, s));
+  
+  // Build combined currency values
+  const combinedCurrencyValues = new Map<string, number>();
+  baseInput.defaultCurrencyValues?.forEach((v, k) => combinedCurrencyValues.set(k, v));
+  baseInput.userCurrencyValues?.forEach((v, k) => combinedCurrencyValues.set(k, v));
+  
+  // Build card multipliers for user's cards
+  const cardMultipliers = new Map<string, number>();
+  for (const program of (baseInput.multiplierPrograms ?? [])) {
+    for (const card of userCards) {
+      const currencyId = baseInput.enabledSecondaryCards?.has(card.id) && card.secondary_currency
+        ? card.secondary_currency.id
+        : card.primary_currency?.id;
+      const isEligible = 
+        program.applicableCardIds.includes(card.id) ||
+        (currencyId && program.applicableCurrencyIds.includes(currencyId));
+      if (isEligible) {
+        const existing = cardMultipliers.get(card.id) ?? 1;
+        cardMultipliers.set(card.id, Math.max(existing, program.multiplier));
+      }
+    }
+  }
+  
+  // Calculate top categories using only user's original cards
+  const userEarningRules = allEarningRules.filter(r => userCardIds.has(r.card_id));
+  const userCategoryBonuses = allCategoryBonuses.filter(b => userCardIds.has(b.card_id));
+  const preComputedTopCategories = calculateTopCategories(
+    userCards,
+    userCategoryBonuses,
+    baseInput.spending ?? [],
+    categoryMap,
+    userEarningRules,
+    combinedCurrencyValues,
+    baseInput.enabledSecondaryCards ?? new Set(),
+    cardMultipliers
+  );
 
   for (const candidate of candidateCards) {
     // Add this card to the user's wallet
@@ -1298,6 +1327,7 @@ export function calculateCardRecommendations(
     const categoryBonusesWithCandidate = allCategoryBonuses.filter(b => cardIdsWithCandidate.has(b.card_id));
 
     // Calculate returns with this card added
+    // Pass preComputedTopCategories to prevent candidate from affecting existing cards' top category selections
     const returnsWithCard = calculatePortfolioReturns({
       ...baseInput,
       cards: cardsWithCandidate,
@@ -1305,6 +1335,7 @@ export function calculateCardRecommendations(
       categoryBonuses: categoryBonusesWithCandidate,
       perksValues: perksWithCandidate,
       enabledSecondaryCards: enabledSecondaryCardsNew,
+      preComputedTopCategories,
     });
 
     const newNetEarnings = returnsWithCard.netValueEarned;
@@ -1312,28 +1343,6 @@ export function calculateCardRecommendations(
     const improvementPercent = currentNetEarnings !== 0 
       ? (improvement / Math.abs(currentNetEarnings)) * 100 
       : 0;
-
-    // Debug: Log Bilt specifically
-    if (candidate.name.toLowerCase().includes('bilt')) {
-      console.log('[REC DEBUG] Bilt calculation:', {
-        currentNet: currentNetEarnings,
-        newNet: newNetEarnings,
-        improvement,
-        candidateRulesCount: earningRulesWithCandidate.filter(r => r.card_id === candidate.id).length,
-        biltRules: earningRulesWithCandidate.filter(r => r.card_id === candidate.id).map(r => ({
-          cat: r.category_id,
-          rate: r.rate,
-        })),
-        // Check returns breakdown
-        currentTotalValue: currentReturns.totalValue,
-        currentTotalFees: currentReturns.netAnnualFees,
-        newTotalValue: returnsWithCard.totalValue,
-        newTotalFees: returnsWithCard.netAnnualFees,
-        // Check card count
-        cardsInCurrent: userCards.length,
-        cardsWithBilt: cardsWithCandidate.length,
-      });
-    }
 
     // Only consider cards that would improve earnings
     if (improvement > 0) {
