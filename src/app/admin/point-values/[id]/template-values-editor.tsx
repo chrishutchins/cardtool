@@ -24,11 +24,11 @@ export function TemplateValuesEditor({ currencies, onUpdate }: Props) {
 
   const handleEdit = (currency: Currency) => {
     setEditingId(currency.id);
-    setEditValue((currency.template_value_cents / 100).toFixed(2));
+    setEditValue(currency.template_value_cents.toFixed(2));
   };
 
   const handleSave = async (currencyId: string) => {
-    const valueCents = Math.round(parseFloat(editValue) * 100);
+    const valueCents = parseFloat(editValue);
     if (isNaN(valueCents) || valueCents < 0) return;
     
     startTransition(async () => {
@@ -125,7 +125,7 @@ export function TemplateValuesEditor({ currencies, onUpdate }: Props) {
                           />
                         ) : (
                           <span className="text-sm text-white">
-                            {(currency.template_value_cents / 100).toFixed(2)}
+                            {currency.template_value_cents.toFixed(2)}
                           </span>
                         )}
                       </td>

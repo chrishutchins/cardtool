@@ -79,7 +79,8 @@ export function UrlImporter({ currencies, sourceUrl, onImport }: Props) {
         if (scraped.matchedCode) {
           const currency = codeToCurrency.get(scraped.matchedCode);
           if (currency) {
-            const newValueCents = Math.round(scraped.value * 100);
+            // Scraped value is in cents (e.g., 1.55 = 1.55¢), store directly
+            const newValueCents = scraped.value;
             const oldValueCents = currency.template_value_cents ?? null;
             
             let change: ValueChange["change"] = "same";
@@ -142,7 +143,7 @@ export function UrlImporter({ currencies, sourceUrl, onImport }: Props) {
 
   const formatValue = (cents: number | null) => {
     if (cents === null) return "—";
-    return `${(cents / 100).toFixed(2)}¢`;
+    return `${cents.toFixed(2)}¢`;
   };
 
   return (
@@ -242,7 +243,7 @@ export function UrlImporter({ currencies, sourceUrl, onImport }: Props) {
               <tbody className="divide-y divide-zinc-700">
                 {changes.map((change) => {
                   const diff = change.oldValue !== null 
-                    ? ((change.newValue - change.oldValue) / 100).toFixed(2)
+                    ? (change.newValue - change.oldValue).toFixed(2)
                     : null;
                   
                   return (
