@@ -1326,11 +1326,11 @@ export function calculateCardRecommendations(
         })),
         // Check returns breakdown
         currentTotalValue: currentReturns.totalValue,
-        currentTotalFees: currentReturns.totalNetFees,
+        currentTotalFees: currentReturns.netAnnualFees,
         newTotalValue: returnsWithCard.totalValue,
-        newTotalFees: returnsWithCard.totalNetFees,
+        newTotalFees: returnsWithCard.netAnnualFees,
         // Check card count
-        cardsInCurrent: baseInput.cards?.length,
+        cardsInCurrent: userCards.length,
         cardsWithBilt: cardsWithCandidate.length,
       });
     }
