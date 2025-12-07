@@ -537,6 +537,7 @@ export type Database = {
           category_id: number
           created_at: string | null
           id: number
+          large_purchase_spend_cents: number | null
           source: string | null
           updated_at: string | null
         }
@@ -545,6 +546,7 @@ export type Database = {
           category_id: number
           created_at?: string | null
           id?: number
+          large_purchase_spend_cents?: number | null
           source?: string | null
           updated_at?: string | null
         }
@@ -553,6 +555,7 @@ export type Database = {
           category_id?: number
           created_at?: string | null
           id?: number
+          large_purchase_spend_cents?: number | null
           source?: string | null
           updated_at?: string | null
         }
@@ -712,6 +715,7 @@ export type Database = {
           category_id: number
           created_at: string | null
           id: string
+          large_purchase_spend_cents: number | null
           updated_at: string | null
           user_id: string
         }
@@ -720,6 +724,7 @@ export type Database = {
           category_id: number
           created_at?: string | null
           id?: string
+          large_purchase_spend_cents?: number | null
           updated_at?: string | null
           user_id: string
         }
@@ -728,6 +733,7 @@ export type Database = {
           category_id?: number
           created_at?: string | null
           id?: string
+          large_purchase_spend_cents?: number | null
           updated_at?: string | null
           user_id?: string
         }
@@ -885,6 +891,42 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_large_purchase_categories: {
+        Row: {
+          category_id: number
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          category_id: number
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: number
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_large_purchase_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "earning_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_large_purchase_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
+          },
+        ]
       }
       user_mobile_pay_categories: {
         Row: {
