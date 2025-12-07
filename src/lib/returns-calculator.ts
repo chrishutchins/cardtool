@@ -1320,6 +1320,18 @@ export function calculateCardRecommendations(
         newNet: newNetEarnings,
         improvement,
         candidateRulesCount: earningRulesWithCandidate.filter(r => r.card_id === candidate.id).length,
+        biltRules: earningRulesWithCandidate.filter(r => r.card_id === candidate.id).map(r => ({
+          cat: r.category_id,
+          rate: r.rate,
+        })),
+        // Check returns breakdown
+        currentTotalValue: currentReturns.totalValue,
+        currentTotalFees: currentReturns.totalNetFees,
+        newTotalValue: returnsWithCard.totalValue,
+        newTotalFees: returnsWithCard.totalNetFees,
+        // Check card count
+        cardsInCurrent: baseInput.cards?.length,
+        cardsWithBilt: cardsWithCandidate.length,
       });
     }
 
