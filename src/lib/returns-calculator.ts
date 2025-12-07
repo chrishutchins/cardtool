@@ -459,16 +459,6 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       categorySpend.excluded_by_default ?? false
     );
 
-    // Debug: Log Rent allocation to trace the bug
-    if (categorySpend.category_slug === 'rent') {
-      console.log('[CALC DEBUG] Rent allocation:', {
-        excluded: categorySpend.excluded_by_default,
-        cardCount: cards.length,
-        rankedCount: rankedCards.length,
-        ranked: rankedCards.map(r => ({ name: r.card.name, rate: r.rate })),
-      });
-    }
-
     // Allocate spending to cards in order of value
     for (const rankedCard of rankedCards) {
       if (remainingSpend <= 0) break;
@@ -555,7 +545,10 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     }
 
     // If still have remaining spend, allocate to best uncapped card at default rate
-    if (remainingSpend > 0 && cards.length > 0) {
+    // BUT: Skip this for excluded_by_default categories (like Rent/Mortgage) - 
+    // cards without explicit earning rules should NOT earn on these categories
+    const isCategoryExcluded = categorySpend.excluded_by_default ?? false;
+    if (remainingSpend > 0 && cards.length > 0 && !isCategoryExcluded) {
       let bestCard: CardInput | null = null;
       let bestValue = -1;
       
@@ -677,15 +670,6 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       pointsValue: data.value,
     }))
     .sort((a, b) => b.pointsValue - a.pointsValue);
-
-  // Debug: Check final Rent allocations before returning
-  const rentAlloc = categoryAllocations.find(c => c.categoryName === 'Rent');
-  if (rentAlloc && rentAlloc.allocations.length > 0) {
-    console.log('[CALC FINAL] Rent in result:', {
-      cardCount: cards.length,
-      allocations: rentAlloc.allocations.map(a => ({ card: a.cardName, rate: a.rate })),
-    });
-  }
 
   return {
     totalSpend,
@@ -1273,12 +1257,6 @@ export function calculateCardRecommendations(
   
   const currentNetEarnings = currentReturns.netValueEarned;
   const recommendations: CardRecommendation[] = [];
-
-  // Debug: Check what currentReturns contains for Rent
-  const rentInCurrentReturns = currentReturns.categoryBreakdown.find(c => c.categoryName === 'Rent');
-  console.log('[REC DEBUG] currentReturns Rent:', rentInCurrentReturns ? {
-    allocations: rentInCurrentReturns.allocations.map(a => ({ card: a.cardName, rate: a.rate, value: a.earnedValue })),
-  } : 'NOT IN BREAKDOWN');
 
   // Pre-compute top categories using ONLY user's original cards
   // This prevents candidate cards from affecting existing cards' top category selections
