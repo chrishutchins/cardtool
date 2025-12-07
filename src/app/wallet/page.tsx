@@ -44,6 +44,8 @@ export default async function WalletPage() {
     featureFlagsResult,
     debitPayResult,
     multiplierTiersResult,
+    mobilePayCategoriesResult,
+    mobilePayCategoryResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -174,6 +176,19 @@ export default async function WalletPage() {
         )
       `)
       .eq("user_id", user.id),
+    
+    // Mobile pay categories (for bonus calculation)
+    supabase
+      .from("user_mobile_pay_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    
+    // Mobile Pay category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "mobile-pay")
+      .single(),
   ]);
 
   // Type assertion for wallet cards since Supabase types don't infer relations correctly
@@ -362,6 +377,13 @@ export default async function WalletPage() {
     }
   });
 
+  // Build mobile pay categories set
+  const mobilePayCategories = new Set<number>();
+  mobilePayCategoriesResult.data?.forEach((m) => {
+    mobilePayCategories.add(m.category_id);
+  });
+  const mobilePayCategoryId = mobilePayCategoryResult.data?.id;
+
   // Calculate returns (only if user has cards)
   const calculatorInput = {
     cards,
@@ -374,6 +396,8 @@ export default async function WalletPage() {
     perksValues: perksMap,
     debitPayValues: debitPayMap,
     multiplierPrograms,
+    mobilePayCategories,
+    mobilePayCategoryId,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
