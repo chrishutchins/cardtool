@@ -420,7 +420,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         new Map(), // Empty cap usage for initial ranking
         getCardCurrencyInfo,
         debitPayValues,
-        cardMultipliers
+        cardMultipliers,
+        categorySpend.excluded_by_default ?? false
       );
       
       // Calculate marginal benefit: difference between best and second-best
@@ -449,7 +450,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       capUsage,
       getCardCurrencyInfo,
       debitPayValues,
-      cardMultipliers
+      cardMultipliers,
+      categorySpend.excluded_by_default ?? false
     );
 
     // Allocate spending to cards in order of value
@@ -991,7 +993,8 @@ function rankCardsForCategory(
   capUsage: Map<string, number>,
   getCardCurrencyInfo: (card: CardInput) => { valueCents: number; isCashback: boolean; excluded: boolean },
   debitPayValues: Map<string, number> = new Map(),
-  cardMultipliers: Map<string, number> = new Map()
+  cardMultipliers: Map<string, number> = new Map(),
+  isCategoryExcluded: boolean = false
 ): RankedCard[] {
   const ranked: RankedCard[] = [];
 
@@ -1008,6 +1011,13 @@ function rankCardsForCategory(
     const multiplier = cardMultipliers.get(card.id) ?? 1;
 
     if (cardRates.length === 0) {
+      // For excluded_by_default categories (like Rent/Mortgage), cards without
+      // explicit earning rules should NOT earn their default rate - they earn 0%
+      // Only cards with explicit rules (like Bilt for Rent) should earn on these.
+      if (isCategoryExcluded) {
+        continue; // Skip this card - it has no earning rule for an excluded category
+      }
+      
       // Use default rate
       const baseRate = card.default_earn_rate;
       const rate = baseRate * multiplier;
