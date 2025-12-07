@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TemplateValuesEditor } from "./template-values-editor";
+import { UrlImporter } from "./url-importer";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -56,6 +57,24 @@ export default async function TemplateDetailPage({ params }: Props) {
         currency_id: currencyId,
         value_cents: valueCents,
       },
+      { onConflict: "template_id,currency_id" }
+    );
+    
+    revalidatePath(`/admin/point-values/${id}`);
+  }
+
+  async function bulkUpdateTemplateValues(updates: Array<{ currencyId: string; valueCents: number }>) {
+    "use server";
+    const supabase = await createClient();
+    
+    const upsertData = updates.map((u) => ({
+      template_id: id,
+      currency_id: u.currencyId,
+      value_cents: u.valueCents,
+    }));
+    
+    await supabase.from("template_currency_values").upsert(
+      upsertData,
       { onConflict: "template_id,currency_id" }
     );
     
@@ -149,6 +168,22 @@ export default async function TemplateDetailPage({ params }: Props) {
         </form>
       </div>
 
+      {/* Import from URL */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+        <h2 className="text-lg font-semibold text-white mb-2">Import from URL</h2>
+        <p className="text-sm text-zinc-400 mb-4">
+          Automatically pull point values from sites like{" "}
+          <a href="https://frequentmiler.com/reasonable-redemption-values-rrvs/" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300">
+            Frequent Miler
+          </a>.
+        </p>
+        <UrlImporter
+          currencies={currencies}
+          sourceUrl={template.source_url}
+          onImport={bulkUpdateTemplateValues}
+        />
+      </div>
+
       {/* Currency Values */}
       <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
         <h2 className="text-lg font-semibold text-white mb-2">Currency Values</h2>
@@ -163,4 +198,3 @@ export default async function TemplateDetailPage({ params }: Props) {
     </div>
   );
 }
-
