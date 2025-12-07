@@ -678,6 +678,15 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     }))
     .sort((a, b) => b.pointsValue - a.pointsValue);
 
+  // Debug: Check final Rent allocations before returning
+  const rentAlloc = categoryAllocations.find(c => c.categoryName === 'Rent');
+  if (rentAlloc && rentAlloc.allocations.length > 0) {
+    console.log('[CALC FINAL] Rent in result:', {
+      cardCount: cards.length,
+      allocations: rentAlloc.allocations.map(a => ({ card: a.cardName, rate: a.rate })),
+    });
+  }
+
   return {
     totalSpend,
     cashbackSpend,
