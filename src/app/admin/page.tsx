@@ -11,12 +11,13 @@ export default async function AdminDashboard() {
 
   const supabase = await createClient();
 
-  const [issuersResult, currenciesResult, categoriesResult, cardsResult] =
+  const [issuersResult, currenciesResult, categoriesResult, cardsResult, templatesResult] =
     await Promise.all([
       supabase.from("issuers").select("*", { count: "exact", head: true }),
       supabase.from("reward_currencies").select("*", { count: "exact", head: true }),
       supabase.from("earning_categories").select("*", { count: "exact", head: true }),
       supabase.from("cards").select("*", { count: "exact", head: true }),
+      supabase.from("point_value_templates").select("*", { count: "exact", head: true }),
     ]);
 
   const stats = [
@@ -43,6 +44,12 @@ export default async function AdminDashboard() {
       count: cardsResult.count ?? 0,
       href: "/admin/cards",
       color: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    },
+    {
+      name: "Point Value Templates",
+      count: templatesResult.count ?? 0,
+      href: "/admin/point-values",
+      color: "bg-rose-500/10 text-rose-400 border-rose-500/20",
     },
   ];
 

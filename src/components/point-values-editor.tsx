@@ -9,6 +9,7 @@ interface Currency {
   currency_type: string;
   base_value_cents: number | null;
   effective_value_cents: number | null;
+  template_value_cents?: number; // Value from the selected template
   is_custom: boolean;
 }
 
@@ -112,7 +113,7 @@ export function PointValuesEditor({
               Type
             </th>
             <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase">
-              Default Value
+              Template Value
             </th>
             <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase">
               Your Value
@@ -144,7 +145,7 @@ export function PointValuesEditor({
                 })()}
               </td>
               <td className="px-4 py-3 text-right text-zinc-400 font-mono text-sm">
-                {formatValue(currency.base_value_cents)}
+                {formatValue(currency.template_value_cents ?? currency.base_value_cents)}
               </td>
               <td className="px-4 py-3 text-right">
                 {editingId === currency.id ? (
@@ -160,12 +161,12 @@ export function PointValuesEditor({
                 ) : (
                   <span
                     className={`font-mono text-sm ${
-                      currency.is_custom ? "text-blue-400" : "text-zinc-400"
+                      currency.is_custom ? "text-amber-400 font-semibold" : "text-zinc-400"
                     }`}
                   >
                     {formatValue(currency.effective_value_cents)}
                     {currency.is_custom && (
-                      <span className="ml-1 text-xs text-blue-400">(custom)</span>
+                      <span className="ml-1 text-xs text-amber-500">(override)</span>
                     )}
                   </span>
                 )}

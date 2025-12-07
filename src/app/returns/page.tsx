@@ -53,6 +53,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     mobilePayCategoriesResult,
     mobilePayCategoryResult,
     largePurchaseCategoryResult,
+    userPointValueSettingsResult,
+    templatesResult,
     allCardsResult,
   ] = await Promise.all([
     // User's wallet cards with full details
@@ -181,6 +183,22 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .eq("slug", "large-purchases-5k")
       .single(),
     
+    // User's selected point value template
+    supabase
+      .from("user_point_value_settings")
+      .select("selected_template_id")
+      .eq("user_id", user.id)
+      .single(),
+    
+    // All templates with their values
+    supabase
+      .from("point_value_templates")
+      .select(`
+        id,
+        is_default,
+        template_currency_values (currency_id, value_cents)
+      `),
+    
     // All cards for recommendations
     supabase
       .from("cards")
@@ -266,11 +284,30 @@ export default async function ReturnsPage({ searchParams }: Props) {
     parent_category_id: categoryParentMap.get(s.category_id!) ?? null,
   }));
 
+  // Determine user's selected template
+  const templates = templatesResult.data ?? [];
+  const defaultTemplate = templates.find((t) => t.is_default) ?? templates[0];
+  const selectedTemplateId = userPointValueSettingsResult.data?.selected_template_id ?? defaultTemplate?.id ?? null;
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+  
+  // Build template value map
+  const templateValueMap = new Map<string, number>();
+  if (selectedTemplate?.template_currency_values) {
+    for (const tv of selectedTemplate.template_currency_values) {
+      templateValueMap.set(tv.currency_id, tv.value_cents);
+    }
+  }
+
   // Build currency value maps
+  // Default values come from: template value > base currency value
   const defaultCurrencyValues = new Map<string, number>();
   const cashOutValues = new Map<string, number>();
   currenciesResult.data?.forEach((c) => {
-    if (c.base_value_cents) {
+    // Use template value if available, otherwise fall back to base value
+    const templateValue = templateValueMap.get(c.id);
+    if (templateValue !== undefined) {
+      defaultCurrencyValues.set(c.id, templateValue);
+    } else if (c.base_value_cents) {
       defaultCurrencyValues.set(c.id, c.base_value_cents);
     }
     if (c.cash_out_value_cents) {

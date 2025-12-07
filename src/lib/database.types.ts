@@ -495,6 +495,42 @@ export type Database = {
         }
         Relationships: []
       }
+      point_value_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_default: boolean | null
+          name: string
+          slug: string
+          source_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          slug: string
+          source_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          slug?: string
+          source_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       reward_currencies: {
         Row: {
           base_value_cents: number | null
@@ -573,6 +609,55 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "user_effective_spending"
             referencedColumns: ["category_id"]
+          },
+        ]
+      }
+      template_currency_values: {
+        Row: {
+          created_at: string | null
+          currency_id: string
+          id: string
+          template_id: string
+          updated_at: string | null
+          value_cents: number
+        }
+        Insert: {
+          created_at?: string | null
+          currency_id: string
+          id?: string
+          template_id: string
+          updated_at?: string | null
+          value_cents: number
+        }
+        Update: {
+          created_at?: string | null
+          currency_id?: string
+          id?: string
+          template_id?: string
+          updated_at?: string | null
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_currency_values_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "reward_currencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_currency_values_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
+          },
+          {
+            foreignKeyName: "template_currency_values_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "point_value_templates"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1002,6 +1087,38 @@ export type Database = {
             columns: ["tier_id"]
             isOneToOne: false
             referencedRelation: "earning_multiplier_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_point_value_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          selected_template_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          selected_template_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          selected_template_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_point_value_settings_selected_template_id_fkey"
+            columns: ["selected_template_id"]
+            isOneToOne: false
+            referencedRelation: "point_value_templates"
             referencedColumns: ["id"]
           },
         ]
