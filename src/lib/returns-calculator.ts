@@ -1346,33 +1346,23 @@ export function calculateCardRecommendations(
 
     // Debug: Log Bilt and Citi Custom Cash
     if (candidate.name.toLowerCase().includes('bilt')) {
-      // Find category differences
-      const currentCatMap = new Map(currentReturns.categoryBreakdown.map(c => [c.categoryId, c]));
-      const newCatMap = new Map(returnsWithCard.categoryBreakdown.map(c => [c.categoryId, c]));
-      
-      // Find categories where value changed significantly
-      const changes: { cat: string; before: number; after: number; diff: number }[] = [];
-      currentCatMap.forEach((curr, catId) => {
-        const newCat = newCatMap.get(catId);
-        const before = curr.allocations.reduce((sum, a) => sum + a.earnedValue, 0);
-        const after = newCat ? newCat.allocations.reduce((sum, a) => sum + a.earnedValue, 0) : 0;
-        if (Math.abs(after - before) > 1) {
-          changes.push({ cat: curr.categoryName, before, after, diff: after - before });
-        }
-      });
-      // Check for new categories (like Rent)
-      newCatMap.forEach((newCat, catId) => {
-        if (!currentCatMap.has(catId)) {
-          const after = newCat.allocations.reduce((sum, a) => sum + a.earnedValue, 0);
-          changes.push({ cat: newCat.categoryName, before: 0, after, diff: after });
-        }
-      });
+      // Find Rent category allocations specifically
+      const currentRent = currentReturns.categoryBreakdown.find(c => c.categoryName === 'Rent');
+      const newRent = returnsWithCard.categoryBreakdown.find(c => c.categoryName === 'Rent');
       
       console.log(`[REC DEBUG] ${candidate.name}:`, {
-        currentNet: currentNetEarnings,
-        newNet: newNetEarnings,
         improvement,
-        changes: changes.sort((a, b) => a.diff - b.diff), // Sort by biggest loss first
+        rentBefore: currentRent?.allocations.map(a => ({ 
+          card: a.cardName, 
+          rate: a.rate, 
+          earned: a.earnedValue 
+        })),
+        rentAfter: newRent?.allocations.map(a => ({ 
+          card: a.cardName, 
+          rate: a.rate, 
+          earned: a.earnedValue 
+        })),
+        userCards: userCards.map(c => c.name),
       });
     }
 
