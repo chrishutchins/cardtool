@@ -159,7 +159,14 @@ export default async function ComparePage() {
   }
 
   // Get user's category spending and spending defaults
-  const [{ data: userSpendingData }, { data: spendingDefaults }] = await Promise.all([
+  const [
+    { data: userSpendingData }, 
+    { data: spendingDefaults },
+    { data: userLargePurchaseSpending },
+    { data: userMobilePayCategories },
+    { data: mobilePayCategory },
+    { data: over5kCategory },
+  ] = await Promise.all([
     supabase
       .from("user_category_spend")
       .select("category_id, annual_spend_cents")
@@ -167,6 +174,29 @@ export default async function ComparePage() {
     supabase
       .from("spending_defaults")
       .select("category_id, annual_spend_cents"),
+    // Get large purchase spending amounts
+    supabase
+      .from("user_category_spend")
+      .select("category_id, large_purchase_spend_cents")
+      .eq("user_id", user.id)
+      .not("large_purchase_spend_cents", "is", null),
+    // Get user's mobile pay category selections
+    supabase
+      .from("user_mobile_pay_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    // Get mobile pay category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "mobile-pay")
+      .single(),
+    // Get >5k category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "over-5k")
+      .single(),
   ]);
 
   // Build spending map: user values override defaults
@@ -178,6 +208,29 @@ export default async function ComparePage() {
   // Then override with user-specific values
   for (const spend of userSpendingData ?? []) {
     userSpending[spend.category_id] = spend.annual_spend_cents;
+  }
+
+  // Calculate Mobile Pay spending (sum of spending in categories user selected for mobile pay)
+  if (mobilePayCategory?.id) {
+    const mobilePayCategoryIds = new Set((userMobilePayCategories ?? []).map((c) => c.category_id));
+    let mobilePayTotal = 0;
+    for (const [catId, spend] of Object.entries(userSpending)) {
+      if (mobilePayCategoryIds.has(Number(catId))) {
+        mobilePayTotal += spend;
+      }
+    }
+    userSpending[mobilePayCategory.id] = mobilePayTotal;
+  }
+
+  // Calculate >$5k spending (sum of all large_purchase_spend_cents)
+  if (over5kCategory?.id) {
+    let over5kTotal = 0;
+    for (const lp of userLargePurchaseSpending ?? []) {
+      if (lp.large_purchase_spend_cents) {
+        over5kTotal += lp.large_purchase_spend_cents;
+      }
+    }
+    userSpending[over5kCategory.id] = over5kTotal;
   }
 
   // Get user's saved compare preferences
