@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import Link from "next/link";
+import { headers } from "next/headers";
 
 interface Template {
   id: string;
@@ -60,16 +62,82 @@ export default async function AdminPointValuesPage() {
     
     const displayOrder = (maxOrder?.display_order ?? 0) + 1;
     
-    await supabase.from("point_value_templates").insert({
-      name,
-      slug,
-      description: description || null,
-      source_url: sourceUrl || null,
-      is_default: false,
-      display_order: displayOrder,
-    });
+    // Insert the template and get the ID
+    const { data: newTemplate, error: insertError } = await supabase
+      .from("point_value_templates")
+      .insert({
+        name,
+        slug,
+        description: description || null,
+        source_url: sourceUrl || null,
+        is_default: false,
+        display_order: displayOrder,
+      })
+      .select("id")
+      .single();
+    
+    if (insertError || !newTemplate) {
+      console.error("Failed to create template:", insertError);
+      revalidatePath("/admin/point-values");
+      return;
+    }
+    
+    const templateId = newTemplate.id;
+    
+    // Get all currencies to build the code->id mapping
+    const { data: allCurrencies } = await supabase
+      .from("reward_currencies")
+      .select("id, code");
+    
+    const codeToId = new Map((allCurrencies ?? []).map((c) => [c.code, c.id]));
+    
+    // If source URL provided, auto-fetch values
+    if (sourceUrl) {
+      try {
+        // Get the host from headers for the API call
+        const headersList = await headers();
+        const host = headersList.get("host") || "localhost:3000";
+        const protocol = host.includes("localhost") ? "http" : "https";
+        
+        const response = await fetch(`${protocol}://${host}/api/scrape-point-values`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: sourceUrl }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const scrapedValues = data.values as Array<{
+            sourceName: string;
+            value: number;
+            matchedCode: string | null;
+          }>;
+          
+          // Build upsert data for matched values
+          const upsertData = scrapedValues
+            .filter((v) => v.matchedCode && codeToId.has(v.matchedCode))
+            .map((v) => ({
+              template_id: templateId,
+              currency_id: codeToId.get(v.matchedCode!)!,
+              value_cents: v.value,
+            }));
+          
+          if (upsertData.length > 0) {
+            await supabase.from("template_currency_values").upsert(
+              upsertData,
+              { onConflict: "template_id,currency_id" }
+            );
+            console.log(`[CREATE_TEMPLATE] Auto-imported ${upsertData.length} values from ${sourceUrl}`);
+          }
+        }
+      } catch (err) {
+        console.error("[CREATE_TEMPLATE] Failed to auto-fetch values:", err);
+        // Don't fail template creation if scraping fails
+      }
+    }
     
     revalidatePath("/admin/point-values");
+    redirect(`/admin/point-values/${templateId}`);
   }
 
   async function deleteTemplate(formData: FormData) {

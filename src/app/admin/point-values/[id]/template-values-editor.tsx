@@ -100,63 +100,72 @@ export function TemplateValuesEditor({ currencies, onUpdate }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                  {typeCurrencies.map((currency) => (
-                    <tr key={currency.id} className="hover:bg-zinc-800/30">
-                      <td className="px-4 py-2 text-sm text-white">
-                        {currency.name}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-zinc-400">
-                        {currency.code}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        {editingId === currency.id ? (
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-sm text-white focus:border-amber-500 focus:outline-none"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleSave(currency.id);
-                              if (e.key === "Escape") handleCancel();
-                            }}
-                          />
-                        ) : (
-                          <span className="text-sm text-white">
-                            {currency.template_value_cents.toFixed(2)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        {editingId === currency.id ? (
-                          <div className="flex items-center justify-end gap-2">
+                  {typeCurrencies.map((currency) => {
+                    const isZero = currency.template_value_cents === 0;
+                    return (
+                      <tr 
+                        key={currency.id} 
+                        className={`hover:bg-zinc-800/30 ${isZero ? "bg-red-900/10" : ""}`}
+                      >
+                        <td className="px-4 py-2 text-sm text-white">
+                          {currency.name}
+                          {isZero && (
+                            <span className="ml-2 text-xs text-red-400">(not set)</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-zinc-400">
+                          {currency.code}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {editingId === currency.id ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-sm text-white focus:border-amber-500 focus:outline-none"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSave(currency.id);
+                                if (e.key === "Escape") handleCancel();
+                              }}
+                            />
+                          ) : (
+                            <span className={`text-sm ${isZero ? "text-red-400" : "text-white"}`}>
+                              {currency.template_value_cents.toFixed(2)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {editingId === currency.id ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleSave(currency.id)}
+                                disabled={isPending}
+                                className="text-emerald-400 hover:text-emerald-300 text-xs font-medium"
+                              >
+                                {isPending ? "..." : "Save"}
+                              </button>
+                              <button
+                                onClick={handleCancel}
+                                className="text-zinc-400 hover:text-zinc-300 text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
                             <button
-                              onClick={() => handleSave(currency.id)}
-                              disabled={isPending}
-                              className="text-emerald-400 hover:text-emerald-300 text-xs font-medium"
+                              onClick={() => handleEdit(currency)}
+                              className="text-amber-400 hover:text-amber-300 text-xs font-medium"
                             >
-                              {isPending ? "..." : "Save"}
+                              Edit
                             </button>
-                            <button
-                              onClick={handleCancel}
-                              className="text-zinc-400 hover:text-zinc-300 text-xs"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleEdit(currency)}
-                            className="text-amber-400 hover:text-amber-300 text-xs font-medium"
-                          >
-                            Edit
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

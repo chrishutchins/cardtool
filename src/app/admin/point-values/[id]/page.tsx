@@ -42,9 +42,11 @@ export default async function TemplateDetailPage({ params }: Props) {
   const valueMap = new Map(templateValues.map((v) => [v.currency_id, parseFloat(String(v.value_cents))]));
 
   // Build currency data with template values
+  // Default to 0¢ if no value set (makes it clear which weren't fetched)
   const currencyData = currencies.map((currency) => ({
     ...currency,
-    template_value_cents: valueMap.get(currency.id) ?? parseFloat(String(currency.base_value_cents)) ?? 100,
+    template_value_cents: valueMap.get(currency.id) ?? 0,
+    base_value_cents: parseFloat(String(currency.base_value_cents)) || 0,
     has_template_value: valueMap.has(currency.id),
   }));
 
