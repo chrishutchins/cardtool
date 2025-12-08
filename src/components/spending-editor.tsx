@@ -104,7 +104,11 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
 
-  const handleEdit = (category: Category) => {
+  // Get flat list of categories in display order for auto-advance
+  const groupedCategories = groupCategories(categories);
+  const flatCategories = groupedCategories.flatMap((g) => g.categories);
+
+  const handleEdit = (category: Category, selectAll = false) => {
     setEditingId(category.id);
     if (category.has_large_purchase_tracking) {
       // Editing the <$5k portion
@@ -116,9 +120,17 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
       // Regular category - edit the total
       setEditValue((category.effective_annual_spend_cents / 100).toString());
     }
+    
+    // Select all text in the input after a short delay (to let React render)
+    if (selectAll) {
+      setTimeout(() => {
+        const input = document.querySelector('input[type="number"]:focus') as HTMLInputElement;
+        if (input) input.select();
+      }, 10);
+    }
   };
 
-  const handleSave = async (category: Category) => {
+  const handleSave = async (category: Category, advance = false) => {
     setSaving(true);
     const dollars = parseFloat(editValue);
     const cents = isNaN(dollars) ? null : Math.round(dollars * 100);
@@ -131,8 +143,20 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
       await onUpdate(category.id, cents);
     }
     
-    setEditingId(null);
     setSaving(false);
+    
+    // Auto-advance to next category on Enter
+    if (advance) {
+      const currentIndex = flatCategories.findIndex((c) => c.id === category.id);
+      const nextCategory = flatCategories[currentIndex + 1];
+      if (nextCategory) {
+        handleEdit(nextCategory, true);
+      } else {
+        setEditingId(null);
+      }
+    } else {
+      setEditingId(null);
+    }
   };
 
   const handleReset = async (categoryId: number) => {
@@ -150,7 +174,7 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
   const handleKeyDown = (e: React.KeyboardEvent, category: Category) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      handleSave(category);
+      handleSave(category, true); // Advance to next on Enter
     } else if (e.key === "Escape") {
       handleCancel();
     }
@@ -176,9 +200,6 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
       maximumFractionDigits: 0,
     }).format(cents / 100);
   };
-
-  // Group categories for organized display
-  const groupedCategories = groupCategories(categories);
 
   // Calculate totals (including both regular and >$5k portions)
   const totalDefault = categories.reduce(
@@ -325,7 +346,7 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
           {editingId === category.id ? (
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => handleSave(category)}
+                onClick={() => handleSave(category, false)}
                 disabled={saving}
                 className="px-2 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
               >
