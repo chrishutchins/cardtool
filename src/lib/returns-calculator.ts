@@ -795,6 +795,7 @@ function calculateTopCategories(
   };
 
   // Helper to get best rate from OTHER cards for a category
+  // This considers both earning rules AND category bonuses (like Ink Preferred's 3x on Ads)
   const getBestOtherCardValue = (excludeCardId: string, categoryId: number): number => {
     let bestValue = 0;
     
@@ -806,9 +807,26 @@ function calculateTopCategories(
       const isCashback = isCashbackCurrency(currencyType);
       const multiplier = cardMultipliers.get(card.id) ?? 1;
       
-      // Get this card's rate for the category
+      // Get this card's rate for the category from earning rules
       const rule = earningRules.find(r => r.card_id === card.id && r.category_id === categoryId && r.booking_method === "any");
-      const rate = (rule?.rate ?? card.default_earn_rate) * multiplier;
+      let rate = rule?.rate ?? card.default_earn_rate;
+      
+      // Also check category bonuses (card_caps) for this card and category
+      // This includes combined_categories, single_category, all_categories bonuses
+      for (const bonus of categoryBonuses) {
+        if (bonus.card_id !== card.id) continue;
+        
+        // Check if this bonus applies to the category
+        const appliesToCategory = 
+          bonus.cap_type === "all_categories" || 
+          bonus.category_ids.includes(categoryId);
+        
+        if (appliesToCategory && bonus.elevated_rate > rate) {
+          rate = bonus.elevated_rate;
+        }
+      }
+      
+      rate *= multiplier;
       
       // Calculate effective value per dollar spent
       const effectiveValue = isCashback 
