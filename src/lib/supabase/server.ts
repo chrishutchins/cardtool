@@ -1,5 +1,4 @@
 import { createServerClient } from "@supabase/ssr";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { Database } from "@/lib/database.types";
 
@@ -26,14 +25,6 @@ export async function createClient() {
         },
       },
     }
-  );
-}
-
-// Admin client that bypasses RLS - use for server actions where we verify user ID ourselves
-export function createAdminClient() {
-  return createSupabaseClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
 
