@@ -25,6 +25,68 @@ function getDisplayName(category: Category): string {
   return DISPLAY_NAME_OVERRIDES[category.slug] || category.name;
 }
 
+// Category groupings for organized display
+const CATEGORY_GROUPS: { name: string; slugs: string[] }[] = [
+  {
+    name: "Everyday",
+    slugs: ["grocery", "dining", "gas-ev", "drugstore", "wholesale-clubs"],
+  },
+  {
+    name: "Shopping",
+    slugs: ["amazon", "online-retail", "apparel", "home-improvement", "home-decor", "pet-supply"],
+  },
+  {
+    name: "Travel",
+    slugs: ["flights", "hotels", "rental-car", "transit", "all-travel"],
+  },
+  {
+    name: "Entertainment & Lifestyle",
+    slugs: ["entertainment", "streaming", "fitness", "personal-care"],
+  },
+  {
+    name: "Bills & Utilities",
+    slugs: ["phone", "internet-cable", "utilities", "insurance", "rent", "mortgage", "daycare"],
+  },
+  {
+    name: "Business",
+    slugs: ["business-services", "office-supply", "software", "ads", "shipping", "contractors"],
+  },
+  {
+    name: "Other",
+    slugs: ["foreign-currency", "taxes", "paypal", "everything-else"],
+  },
+];
+
+function groupCategories(categories: Category[]): { name: string; categories: Category[] }[] {
+  const slugToCategory = new Map(categories.map((c) => [c.slug, c]));
+  const usedSlugs = new Set<string>();
+  
+  const groups = CATEGORY_GROUPS.map((group) => {
+    const groupCategories = group.slugs
+      .map((slug) => {
+        const cat = slugToCategory.get(slug);
+        if (cat) usedSlugs.add(slug);
+        return cat;
+      })
+      .filter((c): c is Category => c !== undefined);
+    
+    return { name: group.name, categories: groupCategories };
+  }).filter((g) => g.categories.length > 0);
+  
+  // Add any uncategorized items to "Other"
+  const uncategorized = categories.filter((c) => !usedSlugs.has(c.slug));
+  if (uncategorized.length > 0) {
+    const otherGroup = groups.find((g) => g.name === "Other");
+    if (otherGroup) {
+      otherGroup.categories.push(...uncategorized);
+    } else {
+      groups.push({ name: "Other", categories: uncategorized });
+    }
+  }
+  
+  return groups;
+}
+
 interface SpendingEditorProps {
   categories: Category[];
   onUpdate: (
@@ -105,6 +167,9 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
     }).format(cents / 100);
   };
 
+  // Group categories for organized display
+  const groupedCategories = groupCategories(categories);
+
   // Calculate totals (including both regular and >$5k portions)
   const totalDefault = categories.reduce(
     (sum, c) => sum + c.default_annual_spend_cents + c.default_large_purchase_spend_cents,
@@ -114,6 +179,176 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
     (sum, c) => sum + c.effective_annual_spend_cents + c.effective_large_purchase_spend_cents,
     0
   );
+
+  const renderCategoryRow = (category: Category) => {
+    const isExpanded = expandedIds.has(category.id);
+    const totalSpend = category.effective_annual_spend_cents + category.effective_large_purchase_spend_cents;
+    const catTotalDefault = category.default_annual_spend_cents + category.default_large_purchase_spend_cents;
+    
+    return (
+      <tr key={category.id} className="hover:bg-zinc-800/30">
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2">
+            {category.has_large_purchase_tracking && (
+              <button
+                onClick={() => toggleExpanded(category.id)}
+                className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                <svg
+                  className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+            <span className="text-white">{getDisplayName(category)}</span>
+            {category.has_large_purchase_tracking && !isExpanded && (
+              <span className="text-xs text-zinc-500">(has &gt;$5k)</span>
+            )}
+          </div>
+          
+          {/* Expanded view for >$5k tracking */}
+          {category.has_large_purchase_tracking && isExpanded && (
+            <div className="mt-2 ml-6 space-y-1 text-sm">
+              <div className="text-zinc-400">Transactions &lt;$5k</div>
+              <div className="text-zinc-400">Transactions &gt;$5k</div>
+            </div>
+          )}
+        </td>
+        <td className="px-4 py-3 text-right text-zinc-400 font-mono text-sm align-top">
+          {category.has_large_purchase_tracking && isExpanded ? (
+            <div className="space-y-1">
+              <div>{formatDollars(catTotalDefault)}</div>
+              <div className="text-xs">{formatDollars(category.default_annual_spend_cents)}</div>
+              <div className="text-xs">{formatDollars(category.default_large_purchase_spend_cents)}</div>
+            </div>
+          ) : (
+            formatDollars(catTotalDefault)
+          )}
+        </td>
+        <td className="px-4 py-3 text-right align-top">
+          {editingId === category.id ? (
+            category.has_large_purchase_tracking ? (
+              <div className="space-y-1">
+                <div className="text-zinc-500 text-sm font-mono">
+                  {formatDollars(parseFloat(editValue || "0") * 100 + parseFloat(editLargePurchaseValue || "0") * 100)}
+                </div>
+                <div className="flex justify-end items-center gap-1">
+                  <span className="text-zinc-500">$</span>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="w-20 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-xs focus:border-blue-500 focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex justify-end items-center gap-1">
+                  <span className="text-zinc-500">$</span>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={editLargePurchaseValue}
+                    onChange={(e) => setEditLargePurchaseValue(e.target.value)}
+                    className="w-20 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-xs focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-end items-center gap-1">
+                <span className="text-zinc-500">$</span>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-blue-500 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+            )
+          ) : (
+            category.has_large_purchase_tracking && isExpanded ? (
+              <div className="space-y-1">
+                <span
+                  className={`font-mono text-sm ${
+                    category.is_custom ? "text-blue-400" : "text-zinc-400"
+                  }`}
+                >
+                  {formatDollars(totalSpend)}
+                  {category.is_custom && (
+                    <span className="ml-1 text-xs text-blue-400">(custom)</span>
+                  )}
+                </span>
+                <div className="text-xs font-mono text-zinc-500">
+                  {formatDollars(category.effective_annual_spend_cents)}
+                </div>
+                <div className="text-xs font-mono text-zinc-500">
+                  {formatDollars(category.effective_large_purchase_spend_cents)}
+                </div>
+              </div>
+            ) : (
+              <span
+                className={`font-mono text-sm ${
+                  category.is_custom ? "text-blue-400" : "text-zinc-400"
+                }`}
+              >
+                {formatDollars(totalSpend)}
+                {category.is_custom && (
+                  <span className="ml-1 text-xs text-blue-400">(custom)</span>
+                )}
+              </span>
+            )
+          )}
+        </td>
+        <td className="px-4 py-3 text-right align-top">
+          {editingId === category.id ? (
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => handleSave(category)}
+                disabled={saving}
+                className="px-2 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={saving}
+                className="px-2 py-1 text-xs text-zinc-400 hover:text-zinc-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => handleEdit(category)}
+                className="px-2 py-1 text-xs text-zinc-400 hover:text-white"
+              >
+                Edit
+              </button>
+              {category.is_custom && (
+                <button
+                  onClick={() => handleReset(category.id)}
+                  disabled={saving}
+                  className="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          )}
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -136,175 +371,20 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-700">
-            {categories.map((category) => {
-              const isExpanded = expandedIds.has(category.id);
-              const totalSpend = category.effective_annual_spend_cents + category.effective_large_purchase_spend_cents;
-              const totalDefault = category.default_annual_spend_cents + category.default_large_purchase_spend_cents;
-              
-              return (
-                <tr key={category.id} className="hover:bg-zinc-800/30">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {category.has_large_purchase_tracking && (
-                        <button
-                          onClick={() => toggleExpanded(category.id)}
-                          className="text-zinc-500 hover:text-zinc-300 transition-colors"
-                        >
-                          <svg
-                            className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      )}
-                      <span className="text-white">{getDisplayName(category)}</span>
-                      {category.has_large_purchase_tracking && !isExpanded && (
-                        <span className="text-xs text-zinc-500">(has &gt;$5k)</span>
-                      )}
-                    </div>
-                    
-                    {/* Expanded view for >$5k tracking */}
-                    {category.has_large_purchase_tracking && isExpanded && (
-                      <div className="mt-2 ml-6 space-y-1 text-sm">
-                        <div className="text-zinc-400">Transactions &lt;$5k</div>
-                        <div className="text-zinc-400">Transactions &gt;$5k</div>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right text-zinc-400 font-mono text-sm align-top">
-                    {category.has_large_purchase_tracking && isExpanded ? (
-                      <div className="space-y-1">
-                        <div>{formatDollars(totalDefault)}</div>
-                        <div className="text-xs">{formatDollars(category.default_annual_spend_cents)}</div>
-                        <div className="text-xs">{formatDollars(category.default_large_purchase_spend_cents)}</div>
-                      </div>
-                    ) : (
-                      formatDollars(totalDefault)
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right align-top">
-                    {editingId === category.id ? (
-                      category.has_large_purchase_tracking ? (
-                        <div className="space-y-1">
-                          <div className="text-zinc-500 text-sm font-mono">
-                            {formatDollars(parseFloat(editValue || "0") * 100 + parseFloat(editLargePurchaseValue || "0") * 100)}
-                          </div>
-                          <div className="flex justify-end items-center gap-1">
-                            <span className="text-zinc-500">$</span>
-                            <input
-                              type="number"
-                              step="1"
-                              min="0"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-20 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-xs focus:border-blue-500 focus:outline-none"
-                              autoFocus
-                            />
-                          </div>
-                          <div className="flex justify-end items-center gap-1">
-                            <span className="text-zinc-500">$</span>
-                            <input
-                              type="number"
-                              step="1"
-                              min="0"
-                              value={editLargePurchaseValue}
-                              onChange={(e) => setEditLargePurchaseValue(e.target.value)}
-                              className="w-20 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-xs focus:border-blue-500 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex justify-end items-center gap-1">
-                          <span className="text-zinc-500">$</span>
-                          <input
-                            type="number"
-                            step="1"
-                            min="0"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-blue-500 focus:outline-none"
-                            autoFocus
-                          />
-                        </div>
-                      )
-                    ) : (
-                      category.has_large_purchase_tracking && isExpanded ? (
-                        <div className="space-y-1">
-                          <span
-                            className={`font-mono text-sm ${
-                              category.is_custom ? "text-blue-400" : "text-zinc-400"
-                            }`}
-                          >
-                            {formatDollars(totalSpend)}
-                            {category.is_custom && (
-                              <span className="ml-1 text-xs text-blue-400">(custom)</span>
-                            )}
-                          </span>
-                          <div className="text-xs font-mono text-zinc-500">
-                            {formatDollars(category.effective_annual_spend_cents)}
-                          </div>
-                          <div className="text-xs font-mono text-zinc-500">
-                            {formatDollars(category.effective_large_purchase_spend_cents)}
-                          </div>
-                        </div>
-                      ) : (
-                        <span
-                          className={`font-mono text-sm ${
-                            category.is_custom ? "text-blue-400" : "text-zinc-400"
-                          }`}
-                        >
-                          {formatDollars(totalSpend)}
-                          {category.is_custom && (
-                            <span className="ml-1 text-xs text-blue-400">(custom)</span>
-                          )}
-                        </span>
-                      )
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right align-top">
-                    {editingId === category.id ? (
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleSave(category)}
-                          disabled={saving}
-                          className="px-2 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={handleCancel}
-                          disabled={saving}
-                          className="px-2 py-1 text-xs text-zinc-400 hover:text-zinc-300 disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleEdit(category)}
-                          className="px-2 py-1 text-xs text-zinc-400 hover:text-white"
-                        >
-                          Edit
-                        </button>
-                        {category.is_custom && (
-                          <button
-                            onClick={() => handleReset(category.id)}
-                            disabled={saving}
-                            className="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50"
-                          >
-                            Reset
-                          </button>
-                        )}
-                      </div>
-                    )}
+            {groupedCategories.map((group) => (
+              <>
+                {/* Group header */}
+                <tr key={`group-${group.name}`} className="bg-zinc-800/30">
+                  <td colSpan={4} className="px-4 py-2">
+                    <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">
+                      {group.name}
+                    </span>
                   </td>
                 </tr>
-              );
-            })}
+                {/* Categories in group */}
+                {group.categories.map((category) => renderCategoryRow(category))}
+              </>
+            ))}
           </tbody>
           <tfoot>
             <tr className="bg-zinc-800/50 border-t border-zinc-700">
