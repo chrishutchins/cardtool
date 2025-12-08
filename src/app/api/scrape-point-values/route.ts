@@ -78,26 +78,112 @@ function findCurrencyCode(name: string): string | null {
 function parseFrequentMilerPage(html: string): ScrapedValue[] {
   const results: ScrapedValue[] = [];
   
-  // Match table rows - FM uses markdown tables that render as HTML
-  // Looking for patterns like: | Program Name | 1.5 | Source text |
-  // Or HTML: <td>Program Name</td><td>1.5</td>
+  // Parse all tables looking for program name + value pairs
+  const tableRegex = /<table[\s\S]*?<\/table>/gi;
+  const tables = html.match(tableRegex) || [];
   
-  // Try HTML table parsing
-  const tableRowRegex = /<tr[^>]*>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<td[^>]*>([\d.]+)<\/td>/gi;
-  let match;
-  
-  while ((match = tableRowRegex.exec(html)) !== null) {
-    const programName = match[1].replace(/<[^>]*>/g, '').trim();
-    const valueStr = match[2].trim();
-    const value = parseFloat(valueStr);
+  for (const table of tables) {
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
     
-    if (programName && !isNaN(value) && value > 0 && value < 10) {
-      const matchedCode = findCurrencyCode(programName);
-      results.push({
-        sourceName: programName,
-        value: value,
-        matchedCode,
-      });
+    while ((rowMatch = rowRegex.exec(table)) !== null) {
+      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      const cells: string[] = [];
+      let cellMatch;
+      
+      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
+        // Strip HTML tags and clean up whitespace
+        const cellText = cellMatch[1]
+          .replace(/<[^>]*>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        cells.push(cellText);
+      }
+      
+      // Need at least 2 cells (name + value)
+      if (cells.length >= 2) {
+        const programName = cells[0];
+        const valueStr = cells[1];
+        const value = parseFloat(valueStr);
+        
+        if (programName && !isNaN(value) && value > 0 && value < 10) {
+          const matchedCode = findCurrencyCode(programName);
+          results.push({
+            sourceName: programName,
+            value: value,
+            matchedCode,
+          });
+        }
+      }
+    }
+  }
+  
+  return results;
+}
+
+function parseAwardWalletPage(html: string): ScrapedValue[] {
+  const results: ScrapedValue[] = [];
+  
+  // AwardWallet has columns: Loyalty Program | Average Value | Regional... | Global...
+  // We want to use the "Average Value" column (index 1, or find by header)
+  
+  const tableRegex = /<table[\s\S]*?<\/table>/gi;
+  const tables = html.match(tableRegex) || [];
+  
+  for (const table of tables) {
+    // First, try to find the header row to identify the "Average Value" column
+    let avgValueColIndex = 1; // Default to second column
+    
+    const headerMatch = /<thead[\s\S]*?<\/thead>/i.exec(table);
+    if (headerMatch) {
+      const headerCellRegex = /<th[^>]*>([\s\S]*?)<\/th>/gi;
+      let headerIndex = 0;
+      let headerCellMatch;
+      
+      while ((headerCellMatch = headerCellRegex.exec(headerMatch[0])) !== null) {
+        const headerText = headerCellMatch[1].replace(/<[^>]*>/g, '').toLowerCase().trim();
+        if (headerText.includes("average value")) {
+          avgValueColIndex = headerIndex;
+          break;
+        }
+        headerIndex++;
+      }
+    }
+    
+    // Parse body rows
+    const bodyMatch = /<tbody[\s\S]*?<\/tbody>/i.exec(table) || [table];
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    
+    while ((rowMatch = rowRegex.exec(bodyMatch[0])) !== null) {
+      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      const cells: string[] = [];
+      let cellMatch;
+      
+      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
+        const cellText = cellMatch[1]
+          .replace(/<[^>]*>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        cells.push(cellText);
+      }
+      
+      // Get program name (first column) and value from average value column
+      if (cells.length > avgValueColIndex) {
+        const programName = cells[0];
+        // Value might have "¢" suffix, so extract just the number
+        const valueStr = cells[avgValueColIndex].replace(/[¢%]/g, '').trim();
+        const value = parseFloat(valueStr);
+        
+        if (programName && !isNaN(value) && value > 0 && value < 10) {
+          const matchedCode = findCurrencyCode(programName);
+          results.push({
+            sourceName: programName,
+            value: value,
+            matchedCode,
+          });
+        }
+      }
     }
   }
   
@@ -124,13 +210,19 @@ function parseGenericPage(html: string): ScrapedValue[] {
       let cellMatch;
       
       while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
-        cells.push(cellMatch[1].replace(/<[^>]*>/g, '').trim());
+        const cellText = cellMatch[1]
+          .replace(/<[^>]*>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        cells.push(cellText);
       }
       
       // Look for a cell with a program name and a cell with a value
       for (let i = 0; i < cells.length - 1; i++) {
         const potentialName = cells[i];
-        const potentialValue = parseFloat(cells[i + 1]);
+        // Handle values with ¢ suffix
+        const valueStr = cells[i + 1].replace(/[¢%]/g, '').trim();
+        const potentialValue = parseFloat(valueStr);
         
         if (potentialName && !isNaN(potentialValue) && potentialValue > 0 && potentialValue < 10) {
           const matchedCode = findCurrencyCode(potentialName);
@@ -187,15 +279,28 @@ export async function POST(request: NextRequest) {
     
     if (parsedUrl.hostname.includes("frequentmiler")) {
       values = parseFrequentMilerPage(html);
+    } else if (parsedUrl.hostname.includes("awardwallet")) {
+      values = parseAwardWalletPage(html);
     } else {
       values = parseGenericPage(html);
     }
     
-    // Deduplicate by matched code, keeping the first occurrence
-    const seen = new Set<string>();
+    // Deduplicate matched values by code, keeping the first occurrence
+    const seenCodes = new Set<string>();
+    const seenNames = new Set<string>();
+    
     const deduped = values.filter((v) => {
-      if (!v.matchedCode || seen.has(v.matchedCode)) return false;
-      seen.add(v.matchedCode);
+      // Skip duplicates by name (case-insensitive)
+      const normalizedName = v.sourceName.toLowerCase();
+      if (seenNames.has(normalizedName)) return false;
+      seenNames.add(normalizedName);
+      
+      // For matched codes, skip if we've already seen this code
+      if (v.matchedCode) {
+        if (seenCodes.has(v.matchedCode)) return false;
+        seenCodes.add(v.matchedCode);
+      }
+      
       return true;
     });
     
@@ -203,7 +308,7 @@ export async function POST(request: NextRequest) {
       success: true,
       values: deduped,
       totalFound: values.length,
-      matched: deduped.length,
+      matched: deduped.filter(v => v.matchedCode).length,
     });
     
   } catch (error) {
