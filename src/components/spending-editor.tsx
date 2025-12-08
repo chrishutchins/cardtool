@@ -147,6 +147,15 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
     setEditLargePurchaseValue("");
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent, category: Category) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave(category);
+    } else if (e.key === "Escape") {
+      handleCancel();
+    }
+  };
+
   const toggleExpanded = (categoryId: number) => {
     setExpandedIds((prev) => {
       const newSet = new Set(prev);
@@ -245,6 +254,7 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
                     min="0"
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, category)}
                     className="w-20 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-xs focus:border-blue-500 focus:outline-none"
                     autoFocus
                   />
@@ -257,6 +267,7 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
                     min="0"
                     value={editLargePurchaseValue}
                     onChange={(e) => setEditLargePurchaseValue(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, category)}
                     className="w-20 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-xs focus:border-blue-500 focus:outline-none"
                   />
                 </div>
@@ -270,6 +281,7 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
                   min="0"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, category)}
                   className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-blue-500 focus:outline-none"
                   autoFocus
                 />
