@@ -605,7 +605,8 @@ export function ComparisonTable({
             </thead>
             <tbody className="divide-y divide-zinc-800">
               {sortedCards.map((card) => {
-                const isEvaluating = !card.isOwned && evaluationCardIds.has(card.id);
+                // Only show evaluation styling when in evaluate mode
+                const isEvaluating = filterMode === "evaluate" && !card.isOwned && evaluationCardIds.has(card.id);
                 return (
                   <tr
                     key={card.id}
@@ -653,9 +654,9 @@ export function ComparisonTable({
                             className={`px-3 py-3 text-center text-sm ${colorClass}`}
                           >
                             <div className="font-mono">
-                              ${Math.round(earnings)}
+                              ${Math.round(earnings).toLocaleString()}
                               {debitPayEarnings > 0 && (
-                                <span className="text-pink-400"> +${Math.round(debitPayEarnings)}</span>
+                                <span className="text-pink-400"> +${Math.round(debitPayEarnings).toLocaleString()}</span>
                               )}
                             </div>
                             {cap && (
