@@ -68,17 +68,29 @@ export default async function TemplateDetailPage({ params }: Props) {
     "use server";
     const supabase = await createClient();
     
+    console.log("[IMPORT] Bulk updating template values:", {
+      templateId: id,
+      updateCount: updates.length,
+      sample: updates.slice(0, 3),
+    });
+    
     const upsertData = updates.map((u) => ({
       template_id: id,
       currency_id: u.currencyId,
       value_cents: u.valueCents,
     }));
     
-    await supabase.from("template_currency_values").upsert(
+    const { error } = await supabase.from("template_currency_values").upsert(
       upsertData,
       { onConflict: "template_id,currency_id" }
     );
     
+    if (error) {
+      console.error("[IMPORT] Error upserting values:", error);
+      throw new Error(`Failed to save values: ${error.message}`);
+    }
+    
+    console.log("[IMPORT] Successfully saved", updates.length, "values");
     revalidatePath(`/admin/point-values/${id}`);
   }
 

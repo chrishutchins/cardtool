@@ -125,14 +125,25 @@ export function UrlImporter({ currencies, sourceUrl, onImport }: Props) {
         valueCents: c.newValue,
       }));
     
+    console.log("[URL_IMPORTER] Preparing to import:", {
+      totalChanges: changes.length,
+      nonSameChanges: updates.length,
+      updates: updates.slice(0, 5),
+    });
+    
     if (updates.length === 0) {
       setError("No changes to import");
       return;
     }
     
     startTransition(async () => {
-      await onImport(updates);
-      setImportSuccess(true);
+      try {
+        await onImport(updates);
+        setImportSuccess(true);
+      } catch (err) {
+        console.error("[URL_IMPORTER] Import failed:", err);
+        setError(err instanceof Error ? err.message : "Import failed");
+      }
     });
   };
 
