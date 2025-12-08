@@ -348,7 +348,7 @@ export default async function SettingsPage() {
         .eq("user_id", user.id)
         .eq("category_id", categoryId);
     }
-    // No revalidatePath - using optimistic updates for instant UI
+    revalidatePath("/settings");
   }
 
   async function disableDebitPay() {
