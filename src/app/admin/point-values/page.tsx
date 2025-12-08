@@ -116,7 +116,7 @@ export default async function AdminPointValuesPage() {
             matchedCode: string | null;
           }>;
           
-          // Build upsert data for matched values
+          // Build upsert data for matched values (imported = is_manual: false)
           const upsertData = scrapedValues
             .filter((v) => v.matchedCode && codeToId.has(v.matchedCode))
             .map((v) => {
@@ -126,6 +126,7 @@ export default async function AdminPointValuesPage() {
                 template_id: templateId,
                 currency_id: currencyId,
                 value_cents: v.value,
+                is_manual: false,
               };
             });
           
@@ -144,7 +145,7 @@ export default async function AdminPointValuesPage() {
     }
     
     // Auto-set 1¢ for cash_back, crypto, and non_transferable_points currencies
-    // (only if not already set by scraping)
+    // (only if not already set by scraping) - these are system defaults, not manual
     const defaultOneCentTypes = ["cash_back", "crypto", "non_transferable_points"];
     const defaultValues = (allCurrencies ?? [])
       .filter((c) => defaultOneCentTypes.includes(c.currency_type) && !setValueIds.has(c.id))
@@ -152,6 +153,7 @@ export default async function AdminPointValuesPage() {
         template_id: templateId,
         currency_id: c.id,
         value_cents: 1.0,
+        is_manual: false,
       }));
     
     if (defaultValues.length > 0) {

@@ -25,7 +25,7 @@ export default async function TemplateDetailPage({ params }: Props) {
       .order("name"),
     supabase
       .from("template_currency_values")
-      .select("currency_id, value_cents")
+      .select("currency_id, value_cents, is_manual")
       .eq("template_id", id),
   ]);
 
@@ -39,26 +39,35 @@ export default async function TemplateDetailPage({ params }: Props) {
 
   // Build a map of currency values for this template
   // Note: Supabase returns NUMERIC as strings, so we parse them explicitly
-  const valueMap = new Map(templateValues.map((v) => [v.currency_id, parseFloat(String(v.value_cents))]));
+  const valueMap = new Map(templateValues.map((v) => [
+    v.currency_id, 
+    { value: parseFloat(String(v.value_cents)), isManual: v.is_manual }
+  ]));
 
   // Build currency data with template values
   // Default to 0¢ if no value set (makes it clear which weren't fetched)
-  const currencyData = currencies.map((currency) => ({
-    ...currency,
-    template_value_cents: valueMap.get(currency.id) ?? 0,
-    base_value_cents: parseFloat(String(currency.base_value_cents)) || 0,
-    has_template_value: valueMap.has(currency.id),
-  }));
+  const currencyData = currencies.map((currency) => {
+    const valueInfo = valueMap.get(currency.id);
+    return {
+      ...currency,
+      template_value_cents: valueInfo?.value ?? 0,
+      base_value_cents: parseFloat(String(currency.base_value_cents)) || 0,
+      has_template_value: valueMap.has(currency.id),
+      is_manual: valueInfo?.isManual ?? false,
+    };
+  });
 
   async function updateTemplateValue(currencyId: string, valueCents: number) {
     "use server";
     const supabase = await createClient();
     
+    // Manual edits are marked as is_manual = true
     await supabase.from("template_currency_values").upsert(
       {
         template_id: id,
         currency_id: currencyId,
         value_cents: valueCents,
+        is_manual: true,
       },
       { onConflict: "template_id,currency_id" }
     );
@@ -76,10 +85,12 @@ export default async function TemplateDetailPage({ params }: Props) {
       sample: updates.slice(0, 3),
     });
     
+    // Imported values are marked as is_manual = false
     const upsertData = updates.map((u) => ({
       template_id: id,
       currency_id: u.currencyId,
       value_cents: u.valueCents,
+      is_manual: false,
     }));
     
     const { error } = await supabase.from("template_currency_values").upsert(

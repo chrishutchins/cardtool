@@ -617,6 +617,7 @@ export type Database = {
           created_at: string | null
           currency_id: string
           id: string
+          is_manual: boolean
           template_id: string
           updated_at: string | null
           value_cents: number
@@ -625,6 +626,7 @@ export type Database = {
           created_at?: string | null
           currency_id: string
           id?: string
+          is_manual?: boolean
           template_id: string
           updated_at?: string | null
           value_cents: number
@@ -633,6 +635,7 @@ export type Database = {
           created_at?: string | null
           currency_id?: string
           id?: string
+          is_manual?: boolean
           template_id?: string
           updated_at?: string | null
           value_cents?: number
