@@ -8,10 +8,10 @@ const currencyMappings: Record<string, string[]> = {
   "MR": ["amex membership rewards", "membership rewards", "amex mr", "mr points", "american express membership rewards", "amex (membership rewards)"],
   "BILT": ["bilt", "bilt rewards"],
   "TYP": ["citi thankyou", "thankyou rewards", "thankyou points", "citi ty", "thank you", "citi thankyou rewards", "citibank (thankyou rewards)"],
-  "C1": ["capital one", "capital one miles", "c1 miles"],
+  "C1": ["capital one", "capital one miles", "c1 miles", "capital one venture"],
   "WF": ["wells fargo", "wells fargo rewards", "wells fargo (go far rewards)"],
-  "BOA": ["bank of america", "boa points", "preferred rewards"],
-  "USB": ["us bank", "us bank rewards"],
+  "BOA": ["bank of america", "boa points", "preferred rewards", "bank of america travel rewards"],
+  "USB": ["us bank", "us bank rewards", "u.s. bank flexperks", "us bank flexperks", "flexperks"],
   "MESA": ["mesa"],
   
   // Airline Miles
@@ -181,6 +181,68 @@ function parseNerdWalletPage(html: string): ScrapedValue[] {
   return results;
 }
 
+function parseBankratePage(html: string): ScrapedValue[] {
+  const results: ScrapedValue[] = [];
+  
+  // Bankrate has tables with 3 columns:
+  // 1. Rewards program
+  // 2. Baseline value (1 cent, etc.)
+  // 3. Bankrate value* (the one we want - e.g., "2.0 cents")
+  
+  console.log("[BANKRATE] Parsing page, HTML length:", html.length);
+  
+  const tableRegex = /<table[\s\S]*?<\/table>/gi;
+  const tables = html.match(tableRegex) || [];
+  
+  console.log("[BANKRATE] Found", tables.length, "tables");
+  
+  for (const table of tables) {
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    
+    while ((rowMatch = rowRegex.exec(table)) !== null) {
+      const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+      const cells: string[] = [];
+      let cellMatch;
+      
+      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
+        const cellText = cellMatch[1]
+          .replace(/<[^>]*>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        cells.push(cellText);
+      }
+      
+      // Bankrate tables have at least 3 columns: Program, Baseline, Bankrate value
+      // We want column index 2 (the 3rd column - Bankrate value)
+      if (cells.length >= 3) {
+        const programName = cells[0];
+        const bankrateValueStr = cells[2]; // 3rd column is the Bankrate value
+        
+        // Parse value like "2.0 cents" or "1.7 cents"
+        const valueMatch = bankrateValueStr.match(/([\d.]+)\s*cents?/i);
+        
+        if (valueMatch) {
+          const value = parseFloat(valueMatch[1]);
+          
+          if (programName && !isNaN(value) && value > 0 && value < 10) {
+            const matchedCode = findCurrencyCode(programName);
+            console.log("[BANKRATE] Found:", programName, "=", value, "→", matchedCode || "NO MATCH");
+            results.push({
+              sourceName: programName,
+              value: value,
+              matchedCode,
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  console.log("[BANKRATE] Total results:", results.length);
+  return results;
+}
+
 function parseAwardWalletPage(html: string): ScrapedValue[] {
   const results: ScrapedValue[] = [];
   
@@ -319,6 +381,8 @@ export async function POST(request: NextRequest) {
       values = parseAwardWalletPage(html);
     } else if (parsedUrl.hostname.includes("nerdwallet")) {
       values = parseNerdWalletPage(html);
+    } else if (parsedUrl.hostname.includes("bankrate")) {
+      values = parseBankratePage(html);
     } else {
       values = parseGenericPage(html);
     }
