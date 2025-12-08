@@ -48,6 +48,7 @@ export default async function WalletPage() {
     mobilePayCategoryResult,
     paypalCategoriesResult,
     paypalCategoryResult,
+    largePurchaseCategoryResult,
     userPointValueSettingsResult,
     pointValueTemplatesResult,
   ] = await Promise.all([
@@ -95,10 +96,10 @@ export default async function WalletPage() {
       .eq("is_active", true)
       .order("name"),
     
-    // User's spending per category
+    // User's spending per category (including >$5k portions)
     supabase
       .from("user_effective_spending")
-      .select("category_id, category_name, category_slug, annual_spend_cents")
+      .select("category_id, category_name, category_slug, annual_spend_cents, large_purchase_spend_cents")
       .eq("user_id", user.id),
     
     // All earning rules
@@ -205,6 +206,13 @@ export default async function WalletPage() {
       .from("earning_categories")
       .select("id")
       .eq("slug", "paypal")
+      .single(),
+    
+    // Large purchase (>$5k) category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "over-5k")
       .single(),
     
     // User's point value settings
@@ -350,12 +358,13 @@ export default async function WalletPage() {
     categoryParentMap.set(c.id, c.parent_category_id);
   });
 
-  // Process spending
+  // Process spending with >$5k tracking
   const spending: CategorySpending[] = (spendingResult.data ?? []).map((s) => ({
     category_id: s.category_id!,
     category_name: s.category_name!,
     category_slug: s.category_slug!,
     annual_spend_cents: s.annual_spend_cents!,
+    large_purchase_spend_cents: s.large_purchase_spend_cents ?? 0,
     excluded_by_default: categoryExclusionMap.get(s.category_id!) ?? false,
     parent_category_id: categoryParentMap.get(s.category_id!) ?? null,
   }));
@@ -446,6 +455,9 @@ export default async function WalletPage() {
     paypalCategories.add(p.category_id);
   });
   const paypalCategoryId = paypalCategoryResult.data?.id;
+  
+  // Large purchase category ID
+  const largePurchaseCategoryId = largePurchaseCategoryResult.data?.id;
 
   // Calculate returns (only if user has cards)
   const calculatorInput = {
@@ -463,6 +475,7 @@ export default async function WalletPage() {
     mobilePayCategoryId,
     paypalCategories,
     paypalCategoryId,
+    largePurchaseCategoryId,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,
