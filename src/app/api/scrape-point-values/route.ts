@@ -15,19 +15,19 @@ const currencyMappings: Record<string, string[]> = {
   "MESA": ["mesa"],
   
   // Airline Miles
-  "AC": ["air canada aeroplan", "aeroplan"],
-  "AS": ["alaska mileageplan", "alaska miles", "alaska", "alaska airlines mileage plan", "alaska airlines atmos rewards"],
-  "AA": ["american aadvantage", "aadvantage", "american airlines", "american airlines aadvantage", "american"],
-  "DL": ["delta skymiles", "skymiles", "delta", "delta air lines skymiles"],
-  "B6": ["jetblue trueblue", "trueblue", "jetblue"],
-  "SW": ["southwest rapid rewards", "rapid rewards", "southwest", "southwest airlines rapid rewards"],
-  "UA": ["united mileageplus", "mileageplus", "united", "united airlines mileageplus"],
+  "AC": ["air canada aeroplan", "aeroplan", "air canada (aeroplan)"],
+  "AS": ["alaska mileageplan", "alaska miles", "alaska", "alaska airlines mileage plan", "alaska airlines atmos rewards", "alaska airlines (atmos rewards)"],
+  "AA": ["american aadvantage", "aadvantage", "american airlines", "american airlines aadvantage", "american", "american airlines (aadvantage)"],
+  "DL": ["delta skymiles", "skymiles", "delta", "delta air lines skymiles", "delta air lines (skymiles)"],
+  "B6": ["jetblue trueblue", "trueblue", "jetblue", "jetblue airways (trueblue)"],
+  "SW": ["southwest rapid rewards", "rapid rewards", "southwest", "southwest airlines rapid rewards", "southwest airlines (rapid rewards)"],
+  "UA": ["united mileageplus", "mileageplus", "united", "united airlines mileageplus", "united airlines (mileage plus)"],
   
   // Hotel Points
   "MB": ["marriott bonvoy", "bonvoy", "marriott"],
-  "WOH": ["world of hyatt", "hyatt"],
-  "HH": ["hilton honors", "hilton"],
-  "IHG": ["ihg rewards", "ihg one rewards", "ihg"],
+  "WOH": ["world of hyatt", "hyatt", "hyatt (world of hyatt)"],
+  "HH": ["hilton honors", "hilton", "hilton (honors)"],
+  "IHG": ["ihg rewards", "ihg one rewards", "ihg", "ihg hotels & resorts (one rewards)"],
   
   // These currencies don't exist in our DB yet, but keeping mappings for future:
   // "FLYING_BLUE": ["air france klm", "flying blue"],
@@ -175,67 +175,43 @@ function parseNerdWalletPage(html: string): ScrapedValue[] {
 function parseAwardWalletPage(html: string): ScrapedValue[] {
   const results: ScrapedValue[] = [];
   
-  // AwardWallet has columns: Loyalty Program | Average Value | Regional... | Global...
-  // We want to use the "Average Value" column (index 1, or find by header)
+  // AwardWallet embeds data in a script tag as: window.mileValueDatas = {...}
+  const jsonMatch = html.match(/window\.mileValueDatas\s*=\s*\/\*\s*DATA START\s*\*\/([\s\S]*?)\/\*\s*DATA END\s*\*\//);
   
-  const tableRegex = /<table[\s\S]*?<\/table>/gi;
-  const tables = html.match(tableRegex) || [];
+  if (!jsonMatch) {
+    console.log("[AWARDWALLET] Could not find embedded JSON data");
+    return results;
+  }
   
-  for (const table of tables) {
-    // First, try to find the header row to identify the "Average Value" column
-    let avgValueColIndex = 1; // Default to second column
+  try {
+    const data = JSON.parse(jsonMatch[1]);
     
-    const headerMatch = /<thead[\s\S]*?<\/thead>/i.exec(table);
-    if (headerMatch) {
-      const headerCellRegex = /<th[^>]*>([\s\S]*?)<\/th>/gi;
-      let headerIndex = 0;
-      let headerCellMatch;
-      
-      while ((headerCellMatch = headerCellRegex.exec(headerMatch[0])) !== null) {
-        const headerText = headerCellMatch[1].replace(/<[^>]*>/g, '').toLowerCase().trim();
-        if (headerText.includes("average value")) {
-          avgValueColIndex = headerIndex;
-          break;
-        }
-        headerIndex++;
-      }
-    }
+    // Process each category: transfers, airlines, hotels
+    const categories = ['transfers', 'airlines', 'hotels'];
     
-    // Parse body rows
-    const bodyMatch = /<tbody[\s\S]*?<\/tbody>/i.exec(table) || [table];
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    let rowMatch;
-    
-    while ((rowMatch = rowRegex.exec(bodyMatch[0])) !== null) {
-      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-      const cells: string[] = [];
-      let cellMatch;
+    for (const category of categories) {
+      const categoryData = data[category]?.data;
+      if (!Array.isArray(categoryData)) continue;
       
-      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
-        const cellText = cellMatch[1]
-          .replace(/<[^>]*>/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        cells.push(cellText);
-      }
-      
-      // Get program name (first column) and value from average value column
-      if (cells.length > avgValueColIndex) {
-        const programName = cells[0];
-        // Value might have "¢" suffix, so extract just the number
-        const valueStr = cells[avgValueColIndex].replace(/[¢%]/g, '').trim();
-        const value = parseFloat(valueStr);
+      for (const item of categoryData) {
+        const displayName = item.DisplayName;
+        const avgValue = item.show?.AvgPointValue;
         
-        if (programName && !isNaN(value) && value > 0 && value < 10) {
-          const matchedCode = findCurrencyCode(programName);
+        if (displayName && typeof avgValue === 'number' && avgValue > 0 && avgValue < 10) {
+          const matchedCode = findCurrencyCode(displayName);
           results.push({
-            sourceName: programName,
-            value: value,
+            sourceName: displayName,
+            value: avgValue,
             matchedCode,
           });
         }
       }
     }
+    
+    console.log(`[AWARDWALLET] Parsed ${results.length} values from embedded JSON`);
+    
+  } catch (err) {
+    console.error("[AWARDWALLET] Failed to parse JSON:", err);
   }
   
   return results;
