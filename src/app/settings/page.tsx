@@ -55,9 +55,10 @@ export default async function SettingsPage() {
       .from("user_travel_booking_preferences")
       .select("category_slug, preference_type, brand_name, portal_issuer_id")
       .eq("user_id", user.id),
+    // Get travel subcategories (Flights, Hotels, Rental Car - children of All Travel)
     supabase
       .from("earning_categories")
-      .select("id, name, slug, parent_category_id")
+      .select("id, name, slug, parent_category_id, parent:earning_categories!parent_category_id(slug)")
       .not("parent_category_id", "is", null),
     supabase
       .from("earning_categories")
@@ -408,11 +409,18 @@ export default async function SettingsPage() {
     .filter((i) => portalIssuerIds.has(i.id))
     .map((i) => ({ issuerId: i.id, issuerName: i.name }));
 
-  // Build travel subcategories
-  const travelSubcategories = (travelCategories ?? []).map((c) => ({
-    slug: c.slug,
-    name: c.name,
-  }));
+  // Build travel subcategories (only those whose parent is "All Travel")
+  type TravelCategoryData = {
+    slug: string;
+    name: string;
+    parent: { slug: string } | null;
+  };
+  const travelSubcategories = ((travelCategories ?? []) as unknown as TravelCategoryData[])
+    .filter((c) => c.parent?.slug === "all-travel")
+    .map((c) => ({
+      slug: c.slug,
+      name: c.name,
+    }));
 
   // Build programs with tiers
   type TierData = {
