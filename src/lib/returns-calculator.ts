@@ -876,18 +876,10 @@ function calculateTopCategories(
           // (per dollar spent, times total spend for ranking purposes)
           const marginalValue = (cardValue - bestOtherValue) * (spend / 100);
           
-          return { categoryId: catId, categoryName: catName, marginalValue, spend, cardValue, bestOtherValue };
+          return { categoryId: catId, marginalValue, spend };
         })
         .filter(s => s.spend > 0)
         .sort((a, b) => b.marginalValue - a.marginalValue); // Sort by marginal value, not spend!
-      
-      // Debug logging for Amex Business Gold
-      if (card.name.includes("Business Gold")) {
-        console.error(`[TOP CATEGORY DEBUG] ${card.name} - ${bonus.cap_type}:`);
-        eligibleCategories.forEach((ec, idx) => {
-          console.error(`  ${idx + 1}. ${ec.categoryName}: spend=$${ec.spend/100}, cardValue=${ec.cardValue.toFixed(2)}¢, bestOther=${ec.bestOtherValue.toFixed(2)}¢, marginal=$${ec.marginalValue.toFixed(0)}`);
-        });
-      }
 
       let qualifyingCategories: number[] = [];
       
@@ -914,12 +906,6 @@ function calculateTopCategories(
         result.set(card.id, new Set());
       }
       qualifyingCategories.forEach(catId => result.get(card.id)!.add(catId));
-      
-      // Debug: Log selected categories
-      if (card.name.includes("Business Gold")) {
-        const selectedNames = qualifyingCategories.map(id => categoryMap.get(id)?.category_name ?? id);
-        console.error(`  => Selected: ${selectedNames.join(", ")}`);
-      }
     }
   }
 
