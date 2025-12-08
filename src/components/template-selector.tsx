@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 interface Template {
   id: string;
@@ -21,12 +20,6 @@ interface Props {
 export function TemplateSelector({ templates, selectedTemplateId, onSelect }: Props) {
   const [isPending, startTransition] = useTransition();
   const [localSelectedId, setLocalSelectedId] = useState(selectedTemplateId);
-  const router = useRouter();
-
-  // Sync local state with prop when it changes (after server action completes)
-  useEffect(() => {
-    setLocalSelectedId(selectedTemplateId);
-  }, [selectedTemplateId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const templateId = e.target.value;
@@ -34,8 +27,8 @@ export function TemplateSelector({ templates, selectedTemplateId, onSelect }: Pr
     
     startTransition(async () => {
       await onSelect(templateId);
-      // Force a full page refresh to get new template values
-      router.refresh();
+      // Force a full page reload to get new template values
+      window.location.reload();
     });
   };
 

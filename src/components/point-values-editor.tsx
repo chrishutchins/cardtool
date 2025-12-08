@@ -95,34 +95,28 @@ export function PointValuesEditor({
               {typeLabels[type] || type}
             </h3>
             <div className="overflow-hidden rounded-lg border border-zinc-800">
-              <table className="w-full">
+              <table className="w-full table-fixed">
                 <thead className="bg-zinc-800/50">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500">
+                    <th className="w-1/2 px-4 py-2 text-left text-xs font-medium text-zinc-500">
                       Currency
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500">
-                      Code
-                    </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500">
+                    <th className="w-1/6 px-4 py-2 text-right text-xs font-medium text-zinc-500">
                       Template
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500">
+                    <th className="w-1/6 px-4 py-2 text-right text-xs font-medium text-zinc-500">
                       Your Value
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500">
-                      Actions
+                    <th className="w-1/6 px-4 py-2 text-right text-xs font-medium text-zinc-500">
+                      
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
                   {typeCurrencies.map((currency) => (
                     <tr key={currency.id} className="hover:bg-zinc-800/30">
-                      <td className="px-4 py-2 text-sm text-white">
+                      <td className="px-4 py-2 text-sm text-white truncate">
                         {currency.name}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-zinc-400">
-                        {currency.code}
                       </td>
                       <td className="px-4 py-2 text-right text-zinc-500 font-mono text-sm">
                         {formatValue(currency.template_value_cents ?? currency.base_value_cents)}
@@ -135,7 +129,7 @@ export function PointValuesEditor({
                             min="0"
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
-                            className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-sm text-white focus:border-amber-500 focus:outline-none"
+                            className="w-20 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-sm text-white focus:border-amber-500 focus:outline-none"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Enter") handleSave(currency.id);
@@ -166,7 +160,7 @@ export function PointValuesEditor({
                               onClick={handleCancel}
                               className="text-zinc-400 hover:text-zinc-300 text-xs"
                             >
-                              Cancel
+                              ✕
                             </button>
                           </div>
                         ) : (
