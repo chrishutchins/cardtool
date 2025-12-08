@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 interface Template {
   id: string;
@@ -20,6 +21,7 @@ interface Props {
 export function TemplateSelector({ templates, selectedTemplateId, onSelect }: Props) {
   const [isPending, startTransition] = useTransition();
   const [localSelectedId, setLocalSelectedId] = useState(selectedTemplateId);
+  const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const templateId = e.target.value;
@@ -27,8 +29,8 @@ export function TemplateSelector({ templates, selectedTemplateId, onSelect }: Pr
     
     startTransition(async () => {
       await onSelect(templateId);
-      // Force a full page reload to get new template values
-      window.location.reload();
+      // Use Next.js router refresh for smoother update
+      router.refresh();
     });
   };
 

@@ -83,23 +83,36 @@ export default async function PointValuesPage() {
   async function updateSelectedTemplate(templateId: string | null) {
     "use server";
     const user = await currentUser();
-    if (!user) return;
+    if (!user) {
+      console.error("[updateSelectedTemplate] No user found");
+      return;
+    }
 
     const supabase = await createClient();
 
     if (templateId === null) {
-      await supabase
+      const { error } = await supabase
         .from("user_point_value_settings")
         .delete()
         .eq("user_id", user.id);
+      
+      if (error) {
+        console.error("[updateSelectedTemplate] Delete error:", error);
+      }
     } else {
-      await supabase.from("user_point_value_settings").upsert(
+      const { error } = await supabase.from("user_point_value_settings").upsert(
         {
           user_id: user.id,
           selected_template_id: templateId,
         },
         { onConflict: "user_id" }
       );
+      
+      if (error) {
+        console.error("[updateSelectedTemplate] Upsert error:", error);
+      } else {
+        console.log("[updateSelectedTemplate] Saved template:", templateId, "for user:", user.id);
+      }
     }
 
     revalidatePath("/point-values");
