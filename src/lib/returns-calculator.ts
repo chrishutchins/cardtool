@@ -1417,10 +1417,6 @@ export function calculateCardRecommendations(
     }
   }
   
-  // NOTE: We intentionally do NOT pre-compute top categories here.
-  // When a card is added, all cards recalculate their optimal top categories dynamically.
-  // The simulation should match this behavior to accurately predict outcomes.
-
   for (const candidate of candidateCards) {
     // Add this card to the user's wallet
     const cardsWithCandidate = [...userCards, candidate];
@@ -1464,8 +1460,9 @@ export function calculateCardRecommendations(
     }
     
     // Calculate returns with this card added
-    // Let the system dynamically compute top categories for ALL cards (including existing ones)
-    // This accurately simulates what happens when the card is actually added to the wallet
+    // Don't pass preComputedTopCategories - let calculatePortfolioReturns compute optimal
+    // top categories for ALL cards together (including the candidate)
+    // This matches what actually happens when the card is added to the wallet
     const returnsWithCard = calculatePortfolioReturns({
       ...baseInput,
       cards: cardsWithCandidate,
@@ -1474,6 +1471,7 @@ export function calculateCardRecommendations(
       perksValues: perksWithCandidate,
       enabledSecondaryCards: enabledSecondaryCardsNew,
       userSelections: userSelectionsWithCandidate,
+      // No preComputedTopCategories - compute dynamically for all cards together
     });
 
     const newNetEarnings = returnsWithCard.netValueEarned;
