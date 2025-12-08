@@ -1,47 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Mapping of common source names to our currency codes
+// The keys are our actual database currency codes (from reward_currencies table)
 const currencyMappings: Record<string, string[]> = {
-  // Transferable Points
-  "CHASE_UR": ["chase ultimate rewards", "chase ur", "ultimate rewards"],
-  "AMEX_MR": ["amex membership rewards", "membership rewards", "amex mr", "mr points"],
+  // Transferable Points (using actual DB codes)
+  "UR": ["chase ultimate rewards", "chase ur", "ultimate rewards"],
+  "MR": ["amex membership rewards", "membership rewards", "amex mr", "mr points", "american express membership rewards"],
   "BILT": ["bilt", "bilt rewards"],
-  "CITI_TY": ["citi thankyou", "thankyou rewards", "citi ty", "thank you"],
-  "CAP1": ["capital one", "capital one miles", "c1 miles"],
-  "WELLS_FARGO": ["wells fargo", "wells fargo rewards"],
+  "TYP": ["citi thankyou", "thankyou rewards", "thankyou points", "citi ty", "thank you", "citi thankyou rewards"],
+  "C1": ["capital one", "capital one miles", "c1 miles"],
+  "WF": ["wells fargo", "wells fargo rewards"],
+  "BOA": ["bank of america", "boa points", "preferred rewards"],
+  "USB": ["us bank", "us bank rewards"],
   
   // Airline Miles
-  "AEROPLAN": ["air canada aeroplan", "aeroplan"],
-  "FLYING_BLUE": ["air france klm", "flying blue", "air france", "klm"],
-  "ALASKA": ["alaska mileageplan", "alaska miles", "alaska"],
-  "AADVANTAGE": ["american aadvantage", "aadvantage", "american airlines"],
-  "LIFEMILES": ["avianca lifemiles", "lifemiles"],
-  "AVIOS": ["british airways avios", "avios", "british airways"],
-  "DELTA": ["delta skymiles", "skymiles", "delta"],
-  "EMIRATES": ["emirates skywards", "skywards", "emirates"],
-  "ETIHAD": ["etihad guest", "etihad"],
-  "EVA": ["eva infinity", "eva air", "eva"],
-  "FRONTIER": ["frontier miles", "frontier"],
-  "HAWAIIAN": ["hawaiianmiles", "hawaiian miles", "hawaiian"],
-  "JETBLUE": ["jetblue trueblue", "trueblue", "jetblue"],
-  "LATAM": ["latam pass", "latam"],
-  "SPIRIT": ["spirit free spirit", "free spirit", "spirit"],
-  "SOUTHWEST": ["southwest rapid rewards", "rapid rewards", "southwest"],
-  "TURKISH": ["turkish miles&smiles", "miles and smiles", "turkish"],
-  "UNITED": ["united mileageplus", "mileageplus", "united"],
-  "VIRGIN_ATLANTIC": ["virgin atlantic", "flying club"],
-  "VIRGIN_AUSTRALIA": ["virgin australia", "velocity"],
+  "AC": ["air canada aeroplan", "aeroplan"],
+  "AS": ["alaska mileageplan", "alaska miles", "alaska", "alaska airlines mileage plan", "alaska airlines atmos rewards"],
+  "AA": ["american aadvantage", "aadvantage", "american airlines", "american airlines aadvantage", "american"],
+  "DL": ["delta skymiles", "skymiles", "delta"],
+  "B6": ["jetblue trueblue", "trueblue", "jetblue"],
+  "SW": ["southwest rapid rewards", "rapid rewards", "southwest"],
+  "UA": ["united mileageplus", "mileageplus", "united"],
   
   // Hotel Points
-  "MARRIOTT": ["marriott bonvoy", "bonvoy", "marriott"],
-  "HYATT": ["world of hyatt", "hyatt"],
-  "HILTON": ["hilton honors", "hilton"],
+  "MB": ["marriott bonvoy", "bonvoy", "marriott"],
+  "WOH": ["world of hyatt", "hyatt"],
+  "HH": ["hilton honors", "hilton"],
   "IHG": ["ihg rewards", "ihg one rewards", "ihg"],
-  "WYNDHAM": ["wyndham rewards", "wyndham"],
-  "CHOICE": ["choice privileges", "choice"],
-  "BEST_WESTERN": ["best western rewards", "best western"],
-  "RADISSON": ["radisson rewards", "radisson"],
-  "ACCOR": ["accor live limitless", "accor", "all accor"],
+  
+  // These currencies don't exist in our DB yet, but keeping mappings for future:
+  // "FLYING_BLUE": ["air france klm", "flying blue"],
+  // "LIFEMILES": ["avianca lifemiles", "lifemiles"],
+  // "AVIOS": ["british airways avios", "avios"],
+  // "EMIRATES": ["emirates skywards", "emirates"],
+  // "ETIHAD": ["etihad guest", "etihad"],
+  // "FRONTIER": ["frontier miles", "frontier"],
+  // "SPIRIT": ["spirit free spirit", "spirit"],
+  // "TURKISH": ["turkish miles&smiles", "turkish"],
+  // "VIRGIN_ATLANTIC": ["virgin atlantic", "flying club"],
+  // "WYNDHAM": ["wyndham rewards", "wyndham"],
+  // "CHOICE": ["choice privileges", "choice"],
+  // "BEST_WESTERN": ["best western rewards", "best western"],
+  // "ACCOR": ["accor live limitless", "accor"],
 };
 
 interface ScrapedValue {
@@ -50,8 +50,18 @@ interface ScrapedValue {
   matchedCode: string | null;
 }
 
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
 function findCurrencyCode(name: string): string | null {
-  const normalizedName = name.toLowerCase().trim();
+  const normalizedName = decodeHtmlEntities(name.toLowerCase().trim());
   
   for (const [code, aliases] of Object.entries(currencyMappings)) {
     for (const alias of aliases) {
