@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -91,7 +91,8 @@ export default async function PointValuesPage() {
       return;
     }
 
-    const supabase = await createClient();
+    // Use admin client to bypass RLS (we verify user ID ourselves)
+    const supabase = createAdminClient();
 
     if (templateId === null) {
       const { error } = await supabase
