@@ -4,12 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 // The keys are our actual database currency codes (from reward_currencies table)
 const currencyMappings: Record<string, string[]> = {
   // Transferable Points (using actual DB codes)
-  "UR": ["chase ultimate rewards", "chase ur", "ultimate rewards"],
-  "MR": ["amex membership rewards", "membership rewards", "amex mr", "mr points", "american express membership rewards"],
+  "UR": ["chase ultimate rewards", "chase ur", "ultimate rewards", "chase (ultimate rewards)"],
+  "MR": ["amex membership rewards", "membership rewards", "amex mr", "mr points", "american express membership rewards", "amex (membership rewards)"],
   "BILT": ["bilt", "bilt rewards"],
-  "TYP": ["citi thankyou", "thankyou rewards", "thankyou points", "citi ty", "thank you", "citi thankyou rewards"],
+  "TYP": ["citi thankyou", "thankyou rewards", "thankyou points", "citi ty", "thank you", "citi thankyou rewards", "citibank (thankyou rewards)"],
   "C1": ["capital one", "capital one miles", "c1 miles"],
-  "WF": ["wells fargo", "wells fargo rewards"],
+  "WF": ["wells fargo", "wells fargo rewards", "wells fargo (go far rewards)"],
   "BOA": ["bank of america", "boa points", "preferred rewards"],
   "USB": ["us bank", "us bank rewards"],
   "MESA": ["mesa"],
