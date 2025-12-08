@@ -828,10 +828,12 @@ function calculateTopCategories(
       
       rate *= multiplier;
       
-      // Calculate effective value per dollar spent
+      // Calculate effective value per dollar spent (in dollars)
+      // Cash back: rate is percentage (e.g., 2 = 2%), so divide by 100
+      // Points: rate is multiplier × point value in cents, so divide by 100
       const effectiveValue = isCashback 
-        ? rate // Cash back: rate IS the percentage
-        : rate * (pointValue / 100); // Points: rate × point value in cents
+        ? rate / 100  // 2% = 0.02 dollars per dollar
+        : rate * (pointValue / 100); // 2x × 1.5¢ = 0.03 dollars per dollar
       
       if (effectiveValue > bestValue) {
         bestValue = effectiveValue;
@@ -864,9 +866,10 @@ function calculateTopCategories(
           if (spend === 0) return { categoryId: catId, categoryName: catName, marginalValue: -Infinity, spend: 0, cardValue: 0, bestOtherValue: 0 };
           
           const bonusRate = bonus.elevated_rate * multiplier;
+          // Value in dollars per dollar spent
           const cardValue = isCashback 
-            ? bonusRate 
-            : bonusRate * (pointValue / 100);
+            ? bonusRate / 100  // 4% = 0.04 dollars per dollar
+            : bonusRate * (pointValue / 100); // 4x × 2¢ = 0.08 dollars per dollar
           const bestOtherValue = getBestOtherCardValue(card.id, catId);
           
           // Marginal value = how much BETTER this card's bonus is than the best alternative
