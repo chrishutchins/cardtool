@@ -7,7 +7,7 @@ import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 
 // Categories to hide from the spending page (derived, not directly trackable)
-const HIDDEN_CATEGORY_SLUGS = ["mobile-pay", "large-purchases-5k"];
+const HIDDEN_CATEGORY_SLUGS = ["mobile-pay", "over-5k"];
 
 export default async function SpendingPage() {
   const user = await currentUser();

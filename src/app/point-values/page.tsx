@@ -7,6 +7,9 @@ import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 import { TemplateSelector } from "@/components/template-selector";
 
+// Force dynamic rendering to ensure fresh data on each request
+export const dynamic = "force-dynamic";
+
 export default async function PointValuesPage() {
   const user = await currentUser();
 
@@ -215,6 +218,7 @@ export default async function PointValuesPage() {
             )}
           </div>
           <PointValuesEditor
+            key={selectedTemplateId}
             currencies={currencyData}
             onUpdate={updateCurrencyValue}
           />
