@@ -127,14 +127,20 @@ function parseNerdWalletPage(html: string): ScrapedValue[] {
   // NerdWallet has tables with "Program" and "Value per point" columns
   // Values are formatted as "1.2 cents." or "0.8 cent."
   
+  console.log("[NERDWALLET] Parsing page, HTML length:", html.length);
+  
   const tableRegex = /<table[\s\S]*?<\/table>/gi;
   const tables = html.match(tableRegex) || [];
+  
+  console.log("[NERDWALLET] Found", tables.length, "tables");
   
   for (const table of tables) {
     const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
     let rowMatch;
+    let rowCount = 0;
     
     while ((rowMatch = rowRegex.exec(table)) !== null) {
+      rowCount++;
       const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
       const cells: string[] = [];
       let cellMatch;
@@ -158,6 +164,7 @@ function parseNerdWalletPage(html: string): ScrapedValue[] {
           
           if (programName && !isNaN(value) && value > 0 && value < 10) {
             const matchedCode = findCurrencyCode(programName);
+            console.log("[NERDWALLET] Found:", programName, "=", value, "→", matchedCode || "NO MATCH");
             results.push({
               sourceName: programName,
               value: value,
@@ -167,8 +174,10 @@ function parseNerdWalletPage(html: string): ScrapedValue[] {
         }
       }
     }
+    console.log("[NERDWALLET] Table had", rowCount, "rows");
   }
   
+  console.log("[NERDWALLET] Total results:", results.length);
   return results;
 }
 
