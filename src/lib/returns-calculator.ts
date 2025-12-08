@@ -282,6 +282,8 @@ export interface CalculatorInput {
   multiplierPrograms?: MultiplierProgram[]; // earning multipliers (e.g., BoA Preferred Rewards)
   mobilePayCategories?: Set<number>; // category_ids where user uses mobile pay
   mobilePayCategoryId?: number; // the category_id for "Mobile Pay" itself
+  paypalCategories?: Set<number>; // category_ids where user pays via PayPal
+  paypalCategoryId?: number; // the category_id for "Paypal" itself
   largePurchaseCategoryId?: number; // the category_id for ">$5k Purchases"
   userSelections: Map<string, number>; // cap_id -> selected_category_id
   travelPreferences: TravelPreference[];
@@ -306,6 +308,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     multiplierPrograms = [],
     mobilePayCategories = new Set(),
     mobilePayCategoryId,
+    paypalCategories = new Set(),
+    paypalCategoryId,
     largePurchaseCategoryId,
     userSelections,
     travelPreferences,
@@ -373,7 +377,9 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     topCategoriesMap,
     travelPreferences,
     mobilePayCategories,
-    mobilePayCategoryId
+    mobilePayCategoryId,
+    paypalCategories,
+    paypalCategoryId
   );
 
   // Track cap usage per card per category (for rules with caps)
@@ -903,7 +909,9 @@ function buildEarningRateMap(
   topCategoriesMap: Map<string, Set<number>>,
   travelPreferences: TravelPreference[],
   mobilePayCategories: Set<number> = new Set(),
-  mobilePayCategoryId?: number
+  mobilePayCategoryId?: number,
+  paypalCategories: Set<number> = new Set(),
+  paypalCategoryId?: number
 ): Map<string, Map<number, RateInfo[]>> {
   // card_id -> category_id -> array of RateInfo (multiple rates possible with different caps)
   const result = new Map<string, Map<number, RateInfo[]>>();
@@ -915,6 +923,22 @@ function buildEarningRateMap(
       if (rule.category_id === mobilePayCategoryId && rule.booking_method === "any") {
         const annualCap = rule.has_cap ? annualizeCap(rule.cap_amount, rule.cap_period) : Infinity;
         mobilePayRates.set(rule.card_id, {
+          rate: Number(rule.rate),
+          cap: annualCap,
+          postCapRate: rule.post_cap_rate !== null ? Number(rule.post_cap_rate) : null,
+          ruleId: rule.id,
+        });
+      }
+    }
+  }
+
+  // Build a map of card_id -> PayPal rate info (for applying to user's paypal categories)
+  const paypalRates = new Map<string, { rate: number; cap: number; postCapRate: number | null; ruleId: string }>();
+  if (paypalCategoryId) {
+    for (const rule of earningRules) {
+      if (rule.category_id === paypalCategoryId && rule.booking_method === "any") {
+        const annualCap = rule.has_cap ? annualizeCap(rule.cap_amount, rule.cap_period) : Infinity;
+        paypalRates.set(rule.card_id, {
           rate: Number(rule.rate),
           cap: annualCap,
           postCapRate: rule.post_cap_rate !== null ? Number(rule.post_cap_rate) : null,
@@ -973,6 +997,35 @@ function buildEarningRateMap(
         rate: mobilePayRate.rate,
         annualCap: mobilePayRate.cap,
         postCapRate: mobilePayRate.postCapRate,
+        capKey,
+      });
+    }
+  }
+
+  // Apply PayPal rates to categories user has selected for PayPal
+  for (const categoryId of paypalCategories) {
+    // Skip the PayPal category itself (it already has the rule)
+    if (categoryId === paypalCategoryId) continue;
+
+    for (const [cardId, paypalRate] of paypalRates) {
+      if (!result.has(cardId)) {
+        result.set(cardId, new Map());
+      }
+      const cardMap = result.get(cardId)!;
+      
+      if (!cardMap.has(categoryId)) {
+        cardMap.set(categoryId, []);
+      }
+
+      // Add PayPal rate as an option for this category
+      // IMPORTANT: Use the same cap key as the PayPal rule itself so all
+      // PayPal spending shares the same cap
+      const capKey = `${cardId}:rule:${paypalRate.ruleId}`;
+      
+      cardMap.get(categoryId)!.push({
+        rate: paypalRate.rate,
+        annualCap: paypalRate.cap,
+        postCapRate: paypalRate.postCapRate,
         capKey,
       });
     }

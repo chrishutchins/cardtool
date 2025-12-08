@@ -6,8 +6,8 @@ import { SpendingEditor } from "@/components/spending-editor";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 
-// Categories to hide from the spending page (derived, not directly trackable)
-const HIDDEN_CATEGORY_SLUGS = ["mobile-pay", "over-5k"];
+// Categories to hide from the spending page (derived/payment overlay, not directly trackable)
+const HIDDEN_CATEGORY_SLUGS = ["mobile-pay", "over-5k", "paypal"];
 
 export default async function SpendingPage() {
   const user = await currentUser();

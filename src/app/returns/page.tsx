@@ -52,6 +52,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     userMultiplierTiersResult,
     mobilePayCategoriesResult,
     mobilePayCategoryResult,
+    paypalCategoriesResult,
+    paypalCategoryResult,
     largePurchaseCategoryResult,
     userPointValueSettingsResult,
     templatesResult,
@@ -176,11 +178,24 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .eq("slug", "mobile-pay")
       .single(),
     
+    // User's PayPal categories
+    supabase
+      .from("user_paypal_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    
+    // Get the PayPal category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "paypal")
+      .single(),
+    
     // Get the >$5k Purchases category ID
     supabase
       .from("earning_categories")
       .select("id")
-      .eq("slug", "large-purchases-5k")
+      .eq("slug", "over-5k")
       .single(),
     
     // User's selected point value template
@@ -396,6 +411,14 @@ export default async function ReturnsPage({ searchParams }: Props) {
     mobilePayCategories.add(m.category_id);
   });
   const mobilePayCategoryId = mobilePayCategoryResult.data?.id;
+  
+  // Build PayPal categories set
+  const paypalCategories = new Set<number>();
+  paypalCategoriesResult.data?.forEach((p) => {
+    paypalCategories.add(p.category_id);
+  });
+  const paypalCategoryId = paypalCategoryResult.data?.id;
+  
   const largePurchaseCategoryId = largePurchaseCategoryResult.data?.id;
 
   // Calculate returns
@@ -412,6 +435,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     multiplierPrograms,
     mobilePayCategories,
     mobilePayCategoryId,
+    paypalCategories,
+    paypalCategoryId,
     largePurchaseCategoryId,
     userSelections,
     travelPreferences,

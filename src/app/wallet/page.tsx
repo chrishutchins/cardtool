@@ -46,6 +46,8 @@ export default async function WalletPage() {
     multiplierTiersResult,
     mobilePayCategoriesResult,
     mobilePayCategoryResult,
+    paypalCategoriesResult,
+    paypalCategoryResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -188,6 +190,19 @@ export default async function WalletPage() {
       .from("earning_categories")
       .select("id")
       .eq("slug", "mobile-pay")
+      .single(),
+    
+    // PayPal categories (for bonus calculation)
+    supabase
+      .from("user_paypal_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    
+    // PayPal category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "paypal")
       .single(),
   ]);
 
@@ -383,6 +398,13 @@ export default async function WalletPage() {
     mobilePayCategories.add(m.category_id);
   });
   const mobilePayCategoryId = mobilePayCategoryResult.data?.id;
+  
+  // Build PayPal categories set
+  const paypalCategories = new Set<number>();
+  paypalCategoriesResult.data?.forEach((p) => {
+    paypalCategories.add(p.category_id);
+  });
+  const paypalCategoryId = paypalCategoryResult.data?.id;
 
   // Calculate returns (only if user has cards)
   const calculatorInput = {
@@ -398,6 +420,8 @@ export default async function WalletPage() {
     multiplierPrograms,
     mobilePayCategories,
     mobilePayCategoryId,
+    paypalCategories,
+    paypalCategoryId,
     userSelections,
     travelPreferences,
     enabledSecondaryCards,

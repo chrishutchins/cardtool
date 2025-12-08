@@ -28,6 +28,9 @@ const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
   "foreign-currency": "Foreign Transactions",
 };
 
+// Virtual/payment overlay categories to hide (don't need spending defaults)
+const HIDDEN_CATEGORY_SLUGS = ["mobile-pay", "over-5k", "paypal"];
+
 // Category groupings for organized display
 const CATEGORY_GROUPS: { name: string; slugs: string[] }[] = [
   {
@@ -56,7 +59,7 @@ const CATEGORY_GROUPS: { name: string; slugs: string[] }[] = [
   },
   {
     name: "Other",
-    slugs: ["taxes", "paypal", "everything-else", "mobile-pay", "over-5k"],
+    slugs: ["taxes", "everything-else"],
   },
 ];
 
@@ -65,7 +68,9 @@ function getDisplayName(category: CategoryWithSpending): string {
 }
 
 function groupCategories(categories: CategoryWithSpending[]): { name: string; categories: CategoryWithSpending[] }[] {
-  const slugToCategory = new Map(categories.map((c) => [c.slug, c]));
+  // Filter out hidden/virtual categories first
+  const filteredCategories = categories.filter((c) => !HIDDEN_CATEGORY_SLUGS.includes(c.slug));
+  const slugToCategory = new Map(filteredCategories.map((c) => [c.slug, c]));
   const usedSlugs = new Set<string>();
   
   const groups = CATEGORY_GROUPS.map((group) => {
@@ -81,7 +86,7 @@ function groupCategories(categories: CategoryWithSpending[]): { name: string; ca
   }).filter((g) => g.categories.length > 0);
   
   // Add any uncategorized items to "Other"
-  const uncategorized = categories.filter((c) => !usedSlugs.has(c.slug));
+  const uncategorized = filteredCategories.filter((c) => !usedSlugs.has(c.slug));
   if (uncategorized.length > 0) {
     const otherGroup = groups.find((g) => g.name === "Other");
     if (otherGroup) {

@@ -7,6 +7,7 @@ import { CardCategorySelector } from "@/app/wallet/card-category-selector";
 import { MultiplierSelector } from "@/app/wallet/multiplier-selector";
 import { TravelPreferences } from "@/app/wallet/travel-preferences";
 import { MobilePayCategories } from "@/app/wallet/mobile-pay-categories";
+import { PaypalCategories } from "@/app/wallet/paypal-categories";
 import { LargePurchaseCategories } from "./large-purchase-categories";
 import { isAdminEmail } from "@/lib/admin";
 
@@ -27,6 +28,7 @@ export default async function SettingsPage() {
     travelCategoriesResult,
     allCategoriesResult,
     mobilePayCategoriesResult,
+    paypalCategoriesResult,
     debitPayFlagsResult,
     largePurchaseCategoriesResult,
     everythingElseCategoryResult,
@@ -68,6 +70,10 @@ export default async function SettingsPage() {
       .select("category_id")
       .eq("user_id", user.id),
     supabase
+      .from("user_paypal_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    supabase
       .from("user_feature_flags")
       .select("debit_pay_enabled")
       .eq("user_id", user.id)
@@ -89,6 +95,7 @@ export default async function SettingsPage() {
   const travelCategories = travelCategoriesResult.data;
   const allCategories = allCategoriesResult.data;
   const mobilePayCategories = mobilePayCategoriesResult.data;
+  const paypalCategories = paypalCategoriesResult.data;
   const debitPayEnabled = debitPayFlagsResult.data?.debit_pay_enabled ?? false;
   const largePurchaseCategories = largePurchaseCategoriesResult.data;
   const everythingElseCategoryId = everythingElseCategoryResult.data?.id ?? null;
@@ -288,6 +295,30 @@ export default async function SettingsPage() {
     } else {
       await supabase
         .from("user_mobile_pay_categories")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("category_id", categoryId);
+    }
+    // No revalidatePath - using optimistic updates for instant UI
+  }
+
+  async function togglePaypalCategory(categoryId: number, selected: boolean) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    if (selected) {
+      await supabase.from("user_paypal_categories").upsert(
+        {
+          user_id: user.id,
+          category_id: categoryId,
+        },
+        { onConflict: "user_id,category_id" }
+      );
+    } else {
+      await supabase
+        .from("user_paypal_categories")
         .delete()
         .eq("user_id", user.id)
         .eq("category_id", categoryId);
@@ -503,6 +534,24 @@ export default async function SettingsPage() {
                   }))}
                   selectedCategoryIds={(mobilePayCategories ?? []).map((m) => m.category_id)}
                   onToggleCategory={toggleMobilePayCategory}
+                />
+              </div>
+            )}
+
+            {/* PayPal Categories */}
+            {(allCategories ?? []).length > 0 && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+                <h2 className="text-lg font-semibold text-white mb-2">
+                  PayPal Categories
+                </h2>
+                <PaypalCategories
+                  categories={(allCategories ?? []).map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    slug: c.slug,
+                  }))}
+                  selectedCategoryIds={(paypalCategories ?? []).map((p) => p.category_id)}
+                  onToggleCategory={togglePaypalCategory}
                 />
               </div>
             )}
