@@ -14,6 +14,17 @@ interface Category {
   has_large_purchase_tracking: boolean;
 }
 
+// Display names for spending UI to clarify mutually exclusive categories
+const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
+  "all-travel": "Other Travel (excl. Flights, Hotels, Cars)",
+  "online-retail": "Online Retail (excl. Amazon)",
+  "entertainment": "Entertainment (excl. Streaming)",
+};
+
+function getDisplayName(category: Category): string {
+  return DISPLAY_NAME_OVERRIDES[category.slug] || category.name;
+}
+
 interface SpendingEditorProps {
   categories: Category[];
   onUpdate: (
@@ -149,7 +160,7 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
                           </svg>
                         </button>
                       )}
-                      <span className="text-white">{category.name}</span>
+                      <span className="text-white">{getDisplayName(category)}</span>
                       {category.has_large_purchase_tracking && !isExpanded && (
                         <span className="text-xs text-zinc-500">(has &gt;$5k)</span>
                       )}
