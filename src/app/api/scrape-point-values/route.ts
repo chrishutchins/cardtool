@@ -18,10 +18,10 @@ const currencyMappings: Record<string, string[]> = {
   "AC": ["air canada aeroplan", "aeroplan"],
   "AS": ["alaska mileageplan", "alaska miles", "alaska", "alaska airlines mileage plan", "alaska airlines atmos rewards"],
   "AA": ["american aadvantage", "aadvantage", "american airlines", "american airlines aadvantage", "american"],
-  "DL": ["delta skymiles", "skymiles", "delta"],
+  "DL": ["delta skymiles", "skymiles", "delta", "delta air lines skymiles"],
   "B6": ["jetblue trueblue", "trueblue", "jetblue"],
-  "SW": ["southwest rapid rewards", "rapid rewards", "southwest"],
-  "UA": ["united mileageplus", "mileageplus", "united"],
+  "SW": ["southwest rapid rewards", "rapid rewards", "southwest", "southwest airlines rapid rewards"],
+  "UA": ["united mileageplus", "mileageplus", "united", "united airlines mileageplus"],
   
   // Hotel Points
   "MB": ["marriott bonvoy", "bonvoy", "marriott"],
@@ -113,6 +113,57 @@ function parseFrequentMilerPage(html: string): ScrapedValue[] {
             value: value,
             matchedCode,
           });
+        }
+      }
+    }
+  }
+  
+  return results;
+}
+
+function parseNerdWalletPage(html: string): ScrapedValue[] {
+  const results: ScrapedValue[] = [];
+  
+  // NerdWallet has tables with "Program" and "Value per point" columns
+  // Values are formatted as "1.2 cents." or "0.8 cent."
+  
+  const tableRegex = /<table[\s\S]*?<\/table>/gi;
+  const tables = html.match(tableRegex) || [];
+  
+  for (const table of tables) {
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    
+    while ((rowMatch = rowRegex.exec(table)) !== null) {
+      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      const cells: string[] = [];
+      let cellMatch;
+      
+      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
+        const cellText = cellMatch[1]
+          .replace(/<[^>]*>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        cells.push(cellText);
+      }
+      
+      // NerdWallet has Program in first column, Value in second
+      if (cells.length >= 2) {
+        const programName = cells[0];
+        // Extract number from "1.2 cents." or "0.8 cent." format
+        const valueMatch = cells[1].match(/([\d.]+)\s*cents?/i);
+        
+        if (valueMatch) {
+          const value = parseFloat(valueMatch[1]);
+          
+          if (programName && !isNaN(value) && value > 0 && value < 10) {
+            const matchedCode = findCurrencyCode(programName);
+            results.push({
+              sourceName: programName,
+              value: value,
+              matchedCode,
+            });
+          }
         }
       }
     }
@@ -281,6 +332,8 @@ export async function POST(request: NextRequest) {
       values = parseFrequentMilerPage(html);
     } else if (parsedUrl.hostname.includes("awardwallet")) {
       values = parseAwardWalletPage(html);
+    } else if (parsedUrl.hostname.includes("nerdwallet")) {
+      values = parseNerdWalletPage(html);
     } else {
       values = parseGenericPage(html);
     }
