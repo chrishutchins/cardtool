@@ -182,10 +182,17 @@ export default async function AdminPointValuesPage() {
     const supabase = await createClient();
     const templateId = formData.get("template_id") as string;
     
-    // Clear all defaults first
-    await supabase.from("point_value_templates").update({ is_default: false }).neq("id", "");
+    // Clear all defaults first (set all templates to non-default)
+    await supabase
+      .from("point_value_templates")
+      .update({ is_default: false })
+      .eq("is_default", true);
+    
     // Set the new default
-    await supabase.from("point_value_templates").update({ is_default: true }).eq("id", templateId);
+    await supabase
+      .from("point_value_templates")
+      .update({ is_default: true })
+      .eq("id", templateId);
     
     revalidatePath("/admin/point-values");
   }
