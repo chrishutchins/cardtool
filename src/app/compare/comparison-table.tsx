@@ -213,8 +213,8 @@ export function ComparisonTable({
     return { earnings, debitPayEarnings };
   };
 
-  // Get min/max values per category for color scaling (always use all cards)
-  const categoryStats = useMemo(() => {
+  // Get min/max values per category for color scaling (rate-based, for non-spending view)
+  const categoryRateStats = useMemo(() => {
     const stats: Record<number, { min: number; max: number }> = {};
 
     for (const category of selectedCategories) {
@@ -227,9 +227,29 @@ export function ComparisonTable({
     return stats;
   }, [cards, selectedCategories, debitPayValues]);
 
+  // Get min/max earnings per category for color scaling (earnings-based, for spending view)
+  const categoryEarningsStats = useMemo(() => {
+    const stats: Record<number, { min: number; max: number }> = {};
+
+    for (const category of selectedCategories) {
+      const spendCents = userSpending[category.id] ?? 0;
+      if (spendCents > 0) {
+        const values = cards.map((card) => {
+          const { earnings, debitPayEarnings } = calculateEarnings(card, category.id, spendCents);
+          return earnings + debitPayEarnings;
+        });
+        stats[category.id] = {
+          min: Math.min(...values),
+          max: Math.max(...values),
+        };
+      }
+    }
+    return stats;
+  }, [cards, selectedCategories, userSpending, debitPayValues]);
+
   // Get color class based on value position in range
-  const getColorStyle = (value: number, categoryId: number): string => {
-    const stats = categoryStats[categoryId];
+  const getColorStyle = (value: number, categoryId: number, useEarnings: boolean = false): string => {
+    const stats = useEarnings ? categoryEarningsStats[categoryId] : categoryRateStats[categoryId];
     if (!stats || stats.min === stats.max) {
       return "text-zinc-400";
     }
@@ -654,8 +674,8 @@ export function ComparisonTable({
                       if (showSpending && spendCents > 0) {
                         // Show earnings in dollars
                         const { earnings, debitPayEarnings } = calculateEarnings(card, cat.id, spendCents);
-                        const totalValue = getEffectiveValueWithDebit(card, cat.id);
-                        const colorClass = getColorStyle(totalValue, cat.id);
+                        const totalEarnings = earnings + debitPayEarnings;
+                        const colorClass = getColorStyle(totalEarnings, cat.id, true);
                         
                         return (
                           <td
