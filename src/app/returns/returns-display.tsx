@@ -1,14 +1,88 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PortfolioReturns, EarningsGoal, CardRecommendation } from "@/lib/returns-calculator";
+import { PortfolioReturns, EarningsGoal, CardRecommendation, CategoryAllocation } from "@/lib/returns-calculator";
 import { CardRecommendations } from "@/app/wallet/card-recommendations";
 
 interface ReturnsDisplayProps {
   returns: PortfolioReturns;
   earningsGoal: EarningsGoal;
   recommendations?: CardRecommendation[];
+}
+
+// Display names for clarity in earnings breakdown
+const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
+  "all-travel": "Other Travel (excl. Flights, Hotels, Cars)",
+  "online-retail": "Online Retail (excl. Amazon)",
+  "entertainment": "Entertainment (excl. Streaming)",
+  "foreign-currency": "Foreign Transactions",
+};
+
+// Category groupings for organized display (same as spending editor)
+const CATEGORY_GROUPS: { name: string; slugs: string[] }[] = [
+  {
+    name: "Everyday",
+    slugs: ["grocery", "dining", "gas-ev", "drugstore", "wholesale-clubs"],
+  },
+  {
+    name: "Shopping",
+    slugs: ["amazon", "online-retail", "apparel", "home-improvement", "home-decor", "pet-supply"],
+  },
+  {
+    name: "Travel",
+    slugs: ["flights", "hotels", "rental-car", "transit", "all-travel", "foreign-currency"],
+  },
+  {
+    name: "Entertainment & Lifestyle",
+    slugs: ["entertainment", "streaming", "fitness", "personal-care"],
+  },
+  {
+    name: "Bills & Utilities",
+    slugs: ["phone", "internet-cable", "utilities", "insurance", "rent", "mortgage", "daycare"],
+  },
+  {
+    name: "Business",
+    slugs: ["business-services", "office-supply", "software", "ads", "shipping", "contractors"],
+  },
+  {
+    name: "Other",
+    slugs: ["taxes", "paypal", "everything-else"],
+  },
+];
+
+function getDisplayName(category: CategoryAllocation): string {
+  return DISPLAY_NAME_OVERRIDES[category.categorySlug] || category.categoryName;
+}
+
+function groupCategories(categories: CategoryAllocation[]): { name: string; categories: CategoryAllocation[] }[] {
+  const slugToCategory = new Map(categories.map((c) => [c.categorySlug, c]));
+  const usedSlugs = new Set<string>();
+  
+  const groups = CATEGORY_GROUPS.map((group) => {
+    const groupCategories = group.slugs
+      .map((slug) => {
+        const cat = slugToCategory.get(slug);
+        if (cat) usedSlugs.add(slug);
+        return cat;
+      })
+      .filter((c): c is CategoryAllocation => c !== undefined);
+    
+    return { name: group.name, categories: groupCategories };
+  }).filter((g) => g.categories.length > 0);
+  
+  // Add any uncategorized items to "Other"
+  const uncategorized = categories.filter((c) => !usedSlugs.has(c.categorySlug));
+  if (uncategorized.length > 0) {
+    const otherGroup = groups.find((g) => g.name === "Other");
+    if (otherGroup) {
+      otherGroup.categories.push(...uncategorized);
+    } else {
+      groups.push({ name: "Other", categories: uncategorized });
+    }
+  }
+  
+  return groups;
 }
 
 function formatCurrency(value: number): string {
@@ -292,56 +366,66 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-700/50">
-                {returns.categoryBreakdown
-                  .filter(c => c.totalSpend > 0)
-                  .sort((a, b) => b.totalSpend - a.totalSpend)
-                  .map((category) => (
-                    <tr key={category.categoryId} className="hover:bg-zinc-800/30">
-                      <td className="px-4 py-3 text-white font-medium">{category.categoryName}</td>
-                      <td className="px-4 py-3 text-right text-zinc-400">{formatCurrency(category.totalSpend)}</td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          {category.allocations.map((alloc, idx) => (
-                            <div key={idx} className="text-sm">
-                              <span className="text-zinc-300">{alloc.cardName}</span>
-                              <span className="text-zinc-500 ml-1">
-                                ({formatCurrency(alloc.spend)} @ {formatRate(alloc.rate, alloc.isCashback ? "%" : "x")}
-                                {alloc.debitPayBonus > 0 && (
-                                  <span className="text-pink-400"> +{((alloc.debitPayBonus / alloc.spend) * 100).toFixed(0)}%</span>
-                                )})
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {category.allocations.map((alloc, idx) => (
-                          <div key={idx} className="text-sm text-zinc-300">
-                            {alloc.isCashback 
-                              ? formatCurrency(alloc.earned)
-                              : formatNumber(alloc.earned, 0) + " pts"
-                            }
-                            {alloc.debitPayBonus > 0 && (
-                              <span className="text-pink-400"> + {formatCurrency(alloc.debitPayBonus)}</span>
-                            )}
-                          </div>
-                        ))}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {category.allocations.map((alloc, idx) => (
-                          <div key={idx} className="text-sm text-emerald-400">
-                            {formatCurrency(alloc.earnedValue)}
-                          </div>
-                        ))}
-                      </td>
-                      <td className="px-4 py-3 text-right text-amber-400 font-medium">
-                        {category.totalSpend > 0 
-                          ? formatPercent((category.allocations.reduce((sum, a) => sum + a.earnedValue, 0) / category.totalSpend) * 100)
-                          : "—"
-                        }
+                {groupCategories(returns.categoryBreakdown.filter(c => c.totalSpend > 0)).map((group) => (
+                  <React.Fragment key={group.name}>
+                    {/* Group header */}
+                    <tr className="bg-zinc-800/30">
+                      <td colSpan={6} className="px-4 py-2">
+                        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                          {group.name}
+                        </span>
                       </td>
                     </tr>
-                  ))}
+                    {/* Categories in this group */}
+                    {group.categories.map((category) => (
+                      <tr key={category.categoryId} className="hover:bg-zinc-800/30">
+                        <td className="px-4 py-3 text-white font-medium">{getDisplayName(category)}</td>
+                        <td className="px-4 py-3 text-right text-zinc-400">{formatCurrency(category.totalSpend)}</td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            {category.allocations.map((alloc, idx) => (
+                              <div key={idx} className="text-sm">
+                                <span className="text-zinc-300">{alloc.cardName}</span>
+                                <span className="text-zinc-500 ml-1">
+                                  ({formatCurrency(alloc.spend)} @ {formatRate(alloc.rate, alloc.isCashback ? "%" : "x")}
+                                  {alloc.debitPayBonus > 0 && (
+                                    <span className="text-pink-400"> +{((alloc.debitPayBonus / alloc.spend) * 100).toFixed(0)}%</span>
+                                  )})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {category.allocations.map((alloc, idx) => (
+                            <div key={idx} className="text-sm text-zinc-300">
+                              {alloc.isCashback 
+                                ? formatCurrency(alloc.earned)
+                                : formatNumber(alloc.earned, 0) + " pts"
+                              }
+                              {alloc.debitPayBonus > 0 && (
+                                <span className="text-pink-400"> + {formatCurrency(alloc.debitPayBonus)}</span>
+                              )}
+                            </div>
+                          ))}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {category.allocations.map((alloc, idx) => (
+                            <div key={idx} className="text-sm text-emerald-400">
+                              {formatCurrency(alloc.earnedValue)}
+                            </div>
+                          ))}
+                        </td>
+                        <td className="px-4 py-3 text-right text-amber-400 font-medium">
+                          {category.totalSpend > 0 
+                            ? formatPercent((category.allocations.reduce((sum, a) => sum + a.earnedValue, 0) / category.totalSpend) * 100)
+                            : "—"
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
               </tbody>
             </table>
           </div>

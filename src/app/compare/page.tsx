@@ -102,12 +102,45 @@ export default async function ComparePage() {
 
   const userCardIds = new Set(userWallet?.map((w) => w.card_id) ?? []);
 
-  // Get user's custom currency values
-  const { data: userCurrencyValues } = await supabase
-    .from("user_currency_values")
-    .select("currency_id, value_cents")
-    .eq("user_id", user.id);
+  // Get user's custom currency values and template values
+  const [
+    { data: userCurrencyValues },
+    { data: userPointSettings },
+    { data: defaultTemplate },
+  ] = await Promise.all([
+    supabase
+      .from("user_currency_values")
+      .select("currency_id, value_cents")
+      .eq("user_id", user.id),
+    supabase
+      .from("user_point_value_settings")
+      .select("selected_template_id")
+      .eq("user_id", user.id)
+      .single(),
+    supabase
+      .from("point_value_templates")
+      .select("id")
+      .eq("is_default", true)
+      .single(),
+  ]);
 
+  // Get the user's selected template (or default)
+  const selectedTemplateId = userPointSettings?.selected_template_id ?? defaultTemplate?.id;
+  
+  // Fetch template values if a template is selected
+  let templateValuesByCurrency = new Map<string, number>();
+  if (selectedTemplateId) {
+    const { data: templateValues } = await supabase
+      .from("template_currency_values")
+      .select("currency_id, value_cents")
+      .eq("template_id", selectedTemplateId);
+    
+    templateValuesByCurrency = new Map(
+      templateValues?.map((v) => [v.currency_id, parseFloat(String(v.value_cents))]) ?? []
+    );
+  }
+
+  // User overrides take precedence over template values
   const userValuesByCurrency = new Map(
     userCurrencyValues?.map((v) => [v.currency_id, v.value_cents]) ?? []
   );
@@ -337,8 +370,12 @@ export default async function ComparePage() {
   };
   const cardsForTable = ((allCards ?? []) as unknown as CardData[]).map((card) => {
     const currency = card.primary_currency;
+    // Priority: user override > template value > base value
     const pointValue = currency?.id 
-      ? userValuesByCurrency.get(currency.id) ?? currency.base_value_cents ?? 1
+      ? userValuesByCurrency.get(currency.id) 
+        ?? templateValuesByCurrency.get(currency.id) 
+        ?? currency.base_value_cents 
+        ?? 1
       : 1;
 
     // Build earning rates using "highest rate wins" logic
