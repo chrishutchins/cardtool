@@ -84,12 +84,15 @@ export default async function AdminPointValuesPage() {
     
     const templateId = newTemplate.id;
     
-    // Get all currencies to build the code->id mapping
+    // Get all currencies with their types
     const { data: allCurrencies } = await supabase
       .from("reward_currencies")
-      .select("id, code");
+      .select("id, code, currency_type");
     
     const codeToId = new Map((allCurrencies ?? []).map((c) => [c.code, c.id]));
+    
+    // Track which currency IDs we've set values for
+    const setValueIds = new Set<string>();
     
     // If source URL provided, auto-fetch values
     if (sourceUrl) {
@@ -116,11 +119,15 @@ export default async function AdminPointValuesPage() {
           // Build upsert data for matched values
           const upsertData = scrapedValues
             .filter((v) => v.matchedCode && codeToId.has(v.matchedCode))
-            .map((v) => ({
-              template_id: templateId,
-              currency_id: codeToId.get(v.matchedCode!)!,
-              value_cents: v.value,
-            }));
+            .map((v) => {
+              const currencyId = codeToId.get(v.matchedCode!)!;
+              setValueIds.add(currencyId);
+              return {
+                template_id: templateId,
+                currency_id: currencyId,
+                value_cents: v.value,
+              };
+            });
           
           if (upsertData.length > 0) {
             await supabase.from("template_currency_values").upsert(
@@ -134,6 +141,25 @@ export default async function AdminPointValuesPage() {
         console.error("[CREATE_TEMPLATE] Failed to auto-fetch values:", err);
         // Don't fail template creation if scraping fails
       }
+    }
+    
+    // Auto-set 1¢ for cash_back, crypto, and non_transferable_points currencies
+    // (only if not already set by scraping)
+    const defaultOneCentTypes = ["cash_back", "crypto", "non_transferable_points"];
+    const defaultValues = (allCurrencies ?? [])
+      .filter((c) => defaultOneCentTypes.includes(c.currency_type) && !setValueIds.has(c.id))
+      .map((c) => ({
+        template_id: templateId,
+        currency_id: c.id,
+        value_cents: 1.0,
+      }));
+    
+    if (defaultValues.length > 0) {
+      await supabase.from("template_currency_values").upsert(
+        defaultValues,
+        { onConflict: "template_id,currency_id" }
+      );
+      console.log(`[CREATE_TEMPLATE] Auto-set ${defaultValues.length} currencies to 1¢ default`);
     }
     
     revalidatePath("/admin/point-values");
@@ -167,7 +193,7 @@ export default async function AdminPointValuesPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Point Value Templates</h1>
         <p className="text-zinc-400 mt-1">
-          Manage different sources for point valuations (e.g., TPG, NerdWallet)
+          Manage different sources for point valuations (e.g., TPG, Frequent Miler)
         </p>
       </div>
 

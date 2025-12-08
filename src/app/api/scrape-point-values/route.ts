@@ -12,6 +12,7 @@ const currencyMappings: Record<string, string[]> = {
   "WF": ["wells fargo", "wells fargo rewards"],
   "BOA": ["bank of america", "boa points", "preferred rewards"],
   "USB": ["us bank", "us bank rewards"],
+  "MESA": ["mesa"],
   
   // Airline Miles
   "AC": ["air canada aeroplan", "aeroplan"],
