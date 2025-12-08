@@ -134,8 +134,23 @@ export default async function PointValuesPage() {
     revalidatePath("/point-values");
   }
 
+  async function resetAllOverrides() {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+
+    // Delete all user currency overrides
+    await supabase
+      .from("user_currency_values")
+      .delete()
+      .eq("user_id", user.id);
+
+    revalidatePath("/point-values");
+  }
+
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
-  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -150,37 +165,42 @@ export default async function PointValuesPage() {
 
         {/* Template Selector */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-white mb-3">Valuation Source</h2>
-          <p className="text-sm text-zinc-400 mb-4">
-            Select a baseline valuation source. Your personal overrides will apply on top of the selected template.
-          </p>
-          <TemplateSelector
-            templates={templates}
-            selectedTemplateId={selectedTemplateId}
-            onSelect={updateSelectedTemplate}
-          />
-          {selectedTemplate?.source_url && (
-            <p className="mt-3 text-sm text-zinc-500">
-              Source:{" "}
-              <a
-                href={selectedTemplate.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-amber-400 hover:text-amber-300"
-              >
-                {selectedTemplate.name} ↗
-              </a>
-            </p>
-          )}
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold text-white mb-1">Valuation Source</h2>
+              <p className="text-sm text-zinc-400 mb-4">
+                Select a baseline valuation source. Your personal overrides will apply on top.
+              </p>
+              <TemplateSelector
+                templates={templates}
+                selectedTemplateId={selectedTemplateId}
+                onSelect={updateSelectedTemplate}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Currency Values Editor */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-          <h2 className="text-lg font-semibold text-white mb-2">Currency Values</h2>
-          <p className="text-sm text-zinc-400 mb-6">
-            Values are in cents per point. Click to override the template value. 
-            <span className="text-amber-400"> Highlighted values</span> are your personal overrides.
-          </p>
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-lg font-semibold text-white mb-2">Currency Values</h2>
+              <p className="text-sm text-zinc-400">
+                Values are in cents per point. Click to override the template value. 
+                <span className="text-amber-400"> Highlighted values</span> are your personal overrides.
+              </p>
+            </div>
+            {userOverrides.length > 0 && (
+              <form action={resetAllOverrides}>
+                <button
+                  type="submit"
+                  className="text-sm text-red-400 hover:text-red-300 whitespace-nowrap transition-colors"
+                >
+                  Reset all overrides ({userOverrides.length})
+                </button>
+              </form>
+            )}
+          </div>
           <PointValuesEditor
             currencies={currencyData}
             onUpdate={updateCurrencyValue}
