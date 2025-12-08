@@ -48,6 +48,8 @@ export default async function WalletPage() {
     mobilePayCategoryResult,
     paypalCategoriesResult,
     paypalCategoryResult,
+    userPointValueSettingsResult,
+    pointValueTemplatesResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -204,6 +206,22 @@ export default async function WalletPage() {
       .select("id")
       .eq("slug", "paypal")
       .single(),
+    
+    // User's point value settings
+    supabase
+      .from("user_point_value_settings")
+      .select("selected_template_id")
+      .eq("user_id", user.id)
+      .single(),
+    
+    // Point value templates with their currency values
+    supabase
+      .from("point_value_templates")
+      .select(`
+        id,
+        is_default,
+        template_currency_values (currency_id, value_cents)
+      `),
   ]);
 
   // Type assertion for wallet cards since Supabase types don't infer relations correctly
@@ -342,11 +360,34 @@ export default async function WalletPage() {
     parent_category_id: categoryParentMap.get(s.category_id!) ?? null,
   }));
 
+  // Get user's selected template (or default template)
+  type TemplateData = {
+    id: string;
+    is_default: boolean;
+    template_currency_values: { currency_id: string; value_cents: number }[];
+  };
+  const templates = (pointValueTemplatesResult.data ?? []) as unknown as TemplateData[];
+  const defaultTemplate = templates.find((t) => t.is_default) ?? templates[0];
+  const selectedTemplateId = userPointValueSettingsResult.data?.selected_template_id ?? defaultTemplate?.id ?? null;
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+  
+  // Build template value map
+  const templateValueMap = new Map<string, number>();
+  if (selectedTemplate?.template_currency_values) {
+    for (const tv of selectedTemplate.template_currency_values) {
+      templateValueMap.set(tv.currency_id, parseFloat(String(tv.value_cents)));
+    }
+  }
+
   // Build currency value maps
+  // Default values come from: template value > base currency value
   const defaultCurrencyValues = new Map<string, number>();
   currenciesResult.data?.forEach((c) => {
-    if (c.base_value_cents) {
-      defaultCurrencyValues.set(c.id, c.base_value_cents);
+    const templateValue = templateValueMap.get(c.id);
+    if (templateValue !== undefined) {
+      defaultCurrencyValues.set(c.id, templateValue);
+    } else if (c.base_value_cents) {
+      defaultCurrencyValues.set(c.id, parseFloat(String(c.base_value_cents)));
     }
   });
 
