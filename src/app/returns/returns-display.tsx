@@ -377,8 +377,8 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
                       </td>
                     </tr>
                     {/* Categories in this group */}
-                    {group.categories.map((category) => (
-                      <tr key={category.categoryId} className="hover:bg-zinc-800/30">
+                    {group.categories.map((category, idx) => (
+                      <tr key={`${category.categoryId}-${category.categorySlug}-${idx}`} className="hover:bg-zinc-800/30">
                         <td className="px-4 py-3 text-white font-medium">{getDisplayName(category)}</td>
                         <td className="px-4 py-3 text-right text-zinc-400">{formatCurrency(category.totalSpend)}</td>
                         <td className="px-4 py-3">
