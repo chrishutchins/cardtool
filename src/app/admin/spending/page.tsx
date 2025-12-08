@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 interface Category {
@@ -240,9 +240,9 @@ export default function AdminSpendingPage() {
           </thead>
           <tbody className="divide-y divide-zinc-800">
             {groupedCategories.map((group) => (
-              <>
+              <React.Fragment key={`group-${group.name}`}>
                 {/* Group header */}
-                <tr key={`group-${group.name}`} className="bg-zinc-800/30">
+                <tr className="bg-zinc-800/30">
                   <td colSpan={2} className="px-6 py-2">
                     <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">
                       {group.name}
@@ -293,7 +293,7 @@ export default function AdminSpendingPage() {
                     </td>
                   </tr>
                 ))}
-              </>
+              </React.Fragment>
             ))}
           </tbody>
         </table>
