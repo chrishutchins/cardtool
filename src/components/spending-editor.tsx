@@ -19,6 +19,7 @@ const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
   "all-travel": "Other Travel (excl. Flights, Hotels, Cars)",
   "online-retail": "Online Retail (excl. Amazon)",
   "entertainment": "Entertainment (excl. Streaming)",
+  "foreign-currency": "Foreign Transactions",
 };
 
 function getDisplayName(category: Category): string {
@@ -37,7 +38,7 @@ const CATEGORY_GROUPS: { name: string; slugs: string[] }[] = [
   },
   {
     name: "Travel",
-    slugs: ["flights", "hotels", "rental-car", "transit", "all-travel"],
+    slugs: ["flights", "hotels", "rental-car", "transit", "all-travel", "foreign-currency"],
   },
   {
     name: "Entertainment & Lifestyle",
@@ -53,7 +54,7 @@ const CATEGORY_GROUPS: { name: string; slugs: string[] }[] = [
   },
   {
     name: "Other",
-    slugs: ["foreign-currency", "taxes", "paypal", "everything-else"],
+    slugs: ["taxes", "paypal", "everything-else"],
   },
 ];
 

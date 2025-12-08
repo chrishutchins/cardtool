@@ -20,6 +20,80 @@ interface CategoryWithSpending extends Category {
   spending?: SpendingDefault;
 }
 
+// Display names for spending UI to clarify mutually exclusive categories
+const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
+  "all-travel": "Other Travel (excl. Flights, Hotels, Cars)",
+  "online-retail": "Online Retail (excl. Amazon)",
+  "entertainment": "Entertainment (excl. Streaming)",
+  "foreign-currency": "Foreign Transactions",
+};
+
+// Category groupings for organized display
+const CATEGORY_GROUPS: { name: string; slugs: string[] }[] = [
+  {
+    name: "Everyday",
+    slugs: ["grocery", "dining", "gas-ev", "drugstore", "wholesale-clubs"],
+  },
+  {
+    name: "Shopping",
+    slugs: ["amazon", "online-retail", "apparel", "home-improvement", "home-decor", "pet-supply"],
+  },
+  {
+    name: "Travel",
+    slugs: ["flights", "hotels", "rental-car", "transit", "all-travel", "foreign-currency"],
+  },
+  {
+    name: "Entertainment & Lifestyle",
+    slugs: ["entertainment", "streaming", "fitness", "personal-care"],
+  },
+  {
+    name: "Bills & Utilities",
+    slugs: ["phone", "internet-cable", "utilities", "insurance", "rent", "mortgage", "daycare"],
+  },
+  {
+    name: "Business",
+    slugs: ["business-services", "office-supply", "software", "ads", "shipping", "contractors"],
+  },
+  {
+    name: "Other",
+    slugs: ["taxes", "paypal", "everything-else", "mobile-pay", "over-5k"],
+  },
+];
+
+function getDisplayName(category: CategoryWithSpending): string {
+  return DISPLAY_NAME_OVERRIDES[category.slug] || category.name;
+}
+
+function groupCategories(categories: CategoryWithSpending[]): { name: string; categories: CategoryWithSpending[] }[] {
+  const slugToCategory = new Map(categories.map((c) => [c.slug, c]));
+  const usedSlugs = new Set<string>();
+  
+  const groups = CATEGORY_GROUPS.map((group) => {
+    const groupCategories = group.slugs
+      .map((slug) => {
+        const cat = slugToCategory.get(slug);
+        if (cat) usedSlugs.add(slug);
+        return cat;
+      })
+      .filter((c): c is CategoryWithSpending => c !== undefined);
+    
+    return { name: group.name, categories: groupCategories };
+  }).filter((g) => g.categories.length > 0);
+  
+  // Add any uncategorized items to "Other"
+  const uncategorized = categories.filter((c) => !usedSlugs.has(c.slug));
+  if (uncategorized.length > 0) {
+    const otherGroup = groups.find((g) => g.name === "Other");
+    if (otherGroup) {
+      otherGroup.categories.push(...uncategorized);
+    } else {
+      groups.push({ name: "Other", categories: uncategorized });
+    }
+  }
+  
+  return groups;
+}
+
 function formatDollars(cents: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -122,6 +196,8 @@ export default function AdminSpendingPage() {
     0
   );
 
+  const groupedCategories = groupCategories(categories);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -158,48 +234,61 @@ export default function AdminSpendingPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
-            {categories.map((category) => (
-              <tr key={category.id} className="hover:bg-zinc-800/30">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-white font-medium">{category.name}</span>
-                    {category.excluded_by_default && (
-                      <span className="px-1.5 py-0.5 text-xs rounded bg-zinc-700 text-zinc-400">
-                        Excluded
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  {editingId === category.id ? (
-                    <div className="flex items-center justify-end gap-1">
-                      <span className="text-zinc-400">$</span>
-                      <input
-                        type="number"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={() => saveEdit(category.id)}
-                        onKeyDown={(e) => handleKeyDown(e, category.id)}
-                        placeholder="0"
-                        disabled={isPending}
-                        className="w-28 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-right text-white text-sm focus:border-emerald-500 focus:outline-none"
-                        autoFocus
-                      />
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => startEdit(category)}
-                      className="text-right hover:text-emerald-400 transition-colors cursor-pointer"
-                    >
-                      <span className={category.spending?.annual_spend_cents ? "text-white" : "text-zinc-600"}>
-                        {category.spending?.annual_spend_cents 
-                          ? formatDollars(category.spending.annual_spend_cents)
-                          : "$0"}
-                      </span>
-                    </button>
-                  )}
-                </td>
-              </tr>
+            {groupedCategories.map((group) => (
+              <>
+                {/* Group header */}
+                <tr key={`group-${group.name}`} className="bg-zinc-800/30">
+                  <td colSpan={2} className="px-6 py-2">
+                    <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">
+                      {group.name}
+                    </span>
+                  </td>
+                </tr>
+                {/* Categories in group */}
+                {group.categories.map((category) => (
+                  <tr key={category.id} className="hover:bg-zinc-800/30">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-medium">{getDisplayName(category)}</span>
+                        {category.excluded_by_default && (
+                          <span className="px-1.5 py-0.5 text-xs rounded bg-zinc-700 text-zinc-400">
+                            Excluded
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {editingId === category.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-zinc-400">$</span>
+                          <input
+                            type="number"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={() => saveEdit(category.id)}
+                            onKeyDown={(e) => handleKeyDown(e, category.id)}
+                            placeholder="0"
+                            disabled={isPending}
+                            className="w-28 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-right text-white text-sm focus:border-emerald-500 focus:outline-none"
+                            autoFocus
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => startEdit(category)}
+                          className="text-right hover:text-emerald-400 transition-colors cursor-pointer"
+                        >
+                          <span className={category.spending?.annual_spend_cents ? "text-white" : "text-zinc-600"}>
+                            {category.spending?.annual_spend_cents 
+                              ? formatDollars(category.spending.annual_spend_cents)
+                              : "$0"}
+                          </span>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </>
             ))}
           </tbody>
         </table>
