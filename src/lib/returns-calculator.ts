@@ -1083,8 +1083,10 @@ function buildEarningRateMap(
         cardMap.set(categoryId, []);
       }
 
-      // For combined categories, use shared cap key
-      const capKey = bonus.cap_type === "combined_categories" 
+      // For combined_categories and all_categories, use shared cap key
+      // (cap is shared across all applicable categories)
+      // For other types, each category has its own cap
+      const capKey = (bonus.cap_type === "combined_categories" || bonus.cap_type === "all_categories")
         ? baseCapKey 
         : `${baseCapKey}:${categoryId}`;
 
