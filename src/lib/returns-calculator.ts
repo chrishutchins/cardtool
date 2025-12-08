@@ -1417,19 +1417,9 @@ export function calculateCardRecommendations(
     }
   }
   
-  // Calculate top categories using only user's original cards
-  const userEarningRules = allEarningRules.filter(r => userCardIds.has(r.card_id));
-  const userCategoryBonuses = allCategoryBonuses.filter(b => userCardIds.has(b.card_id));
-  const preComputedTopCategories = calculateTopCategories(
-    userCards,
-    userCategoryBonuses,
-    baseInput.spending ?? [],
-    categoryMap,
-    userEarningRules,
-    combinedCurrencyValues,
-    baseInput.enabledSecondaryCards ?? new Set(),
-    cardMultipliers
-  );
+  // NOTE: We intentionally do NOT pre-compute top categories here.
+  // When a card is added, all cards recalculate their optimal top categories dynamically.
+  // The simulation should match this behavior to accurately predict outcomes.
 
   for (const candidate of candidateCards) {
     // Add this card to the user's wallet
@@ -1473,62 +1463,9 @@ export function calculateCardRecommendations(
       }
     }
     
-    // For top_category bonuses on the candidate card, compute and add to the preComputed map
-    // This allows cards like Citi Custom Cash to be properly evaluated
-    const topCategoriesWithCandidate = new Map(preComputedTopCategories);
-    const candidateTopBonuses = allCategoryBonuses.filter(b => 
-      b.card_id === candidate.id && 
-      ['top_category', 'top_two_categories', 'top_three_categories'].includes(b.cap_type)
-    );
-    if (candidateTopBonuses.length > 0) {
-      // Calculate top categories for this candidate card based on marginal value
-      const candidateTopCategories = new Set<number>();
-      
-      for (const bonus of candidateTopBonuses) {
-        const numCategories = bonus.cap_type === 'top_category' ? 1 
-          : bonus.cap_type === 'top_two_categories' ? 2 
-          : 3;
-        
-        // Rank eligible categories by marginal value
-        const rankedCategories: { catId: number; marginalValue: number }[] = [];
-        
-        const candidateCurrency = enabledSecondaryCardsNew.has(candidate.id) && candidate.secondary_currency
-          ? candidate.secondary_currency
-          : candidate.primary_currency;
-        const isCashback = candidateCurrency?.currency_type === 'cash_back' || candidateCurrency?.currency_type === 'crypto';
-        const currencyValue = candidateCurrency?.id 
-          ? combinedCurrencyValues.get(candidateCurrency.id) ?? 1.0
-          : 1.0;
-        
-        for (const catId of bonus.category_ids) {
-          const categorySpend = categoryMap.get(catId);
-          if (!categorySpend || categorySpend.annual_spend_cents <= 0) continue;
-          
-          // Calculate value per dollar from this bonus
-          const bonusValuePerDollar = isCashback 
-            ? bonus.elevated_rate / 100
-            : bonus.elevated_rate * (currencyValue / 100);
-          
-          // Find current best card for this category
-          const currentAlloc = currentReturns.categoryBreakdown.find(c => c.categoryId === catId);
-          const currentBestValue = currentAlloc?.allocations[0]?.earnedValue 
-            ? currentAlloc.allocations[0].earnedValue / (currentAlloc.allocations[0].spend || 1)
-            : 0;
-          
-          const marginalValue = (bonusValuePerDollar - currentBestValue) * (categorySpend.annual_spend_cents / 100);
-          rankedCategories.push({ catId, marginalValue });
-        }
-        
-        // Sort by marginal value (highest first) and take top N
-        rankedCategories.sort((a, b) => b.marginalValue - a.marginalValue);
-        rankedCategories.slice(0, numCategories).forEach(r => candidateTopCategories.add(r.catId));
-      }
-      
-      topCategoriesWithCandidate.set(candidate.id, candidateTopCategories);
-    }
-
     // Calculate returns with this card added
-    // Pass topCategoriesWithCandidate which includes both user's cards AND the candidate's optimal categories
+    // Let the system dynamically compute top categories for ALL cards (including existing ones)
+    // This accurately simulates what happens when the card is actually added to the wallet
     const returnsWithCard = calculatePortfolioReturns({
       ...baseInput,
       cards: cardsWithCandidate,
@@ -1536,7 +1473,6 @@ export function calculateCardRecommendations(
       categoryBonuses: categoryBonusesWithCandidate,
       perksValues: perksWithCandidate,
       enabledSecondaryCards: enabledSecondaryCardsNew,
-      preComputedTopCategories: topCategoriesWithCandidate,
       userSelections: userSelectionsWithCandidate,
     });
 
