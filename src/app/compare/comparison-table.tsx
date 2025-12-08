@@ -289,7 +289,16 @@ export function ComparisonTable({
           ? calculateEarnings(b, sortConfig.categoryId, spendCents).earnings + calculateEarnings(b, sortConfig.categoryId, spendCents).debitPayEarnings
           : getEffectiveValueWithDebit(b, sortConfig.categoryId);
         const cmp = aVal - bVal;
-        return sortConfig.direction === "asc" ? cmp : -cmp;
+        const primarySort = sortConfig.direction === "asc" ? cmp : -cmp;
+        
+        // Secondary sort: when values are equal, owned cards come first
+        if (primarySort === 0) {
+          if (a.isOwned && !b.isOwned) return -1;
+          if (!a.isOwned && b.isOwned) return 1;
+          // If both owned or both not owned, sort by name
+          return a.name.localeCompare(b.name);
+        }
+        return primarySort;
       }
       return 0;
     });
