@@ -136,13 +136,13 @@ export function PointValuesEditor({
                               if (e.key === "Escape") handleCancel();
                             }}
                           />
-                        ) : (
-                          <span
-                            className={`font-mono text-sm ${
-                              currency.is_custom ? "text-amber-400 font-semibold" : "text-white"
-                            }`}
-                          >
+                        ) : currency.is_custom ? (
+                          <span className="font-mono text-sm text-amber-400 font-semibold">
                             {formatValue(currency.effective_value_cents)}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-500 text-sm">
+                            ← same
                           </span>
                         )}
                       </td>
