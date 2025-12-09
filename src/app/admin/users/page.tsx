@@ -106,7 +106,7 @@ export default async function UsersPage() {
       supabase.from("user_mobile_pay_categories").delete().eq("user_id", userId),
       supabase.from("user_paypal_categories").delete().eq("user_id", userId),
       supabase.from("user_large_purchase_categories").delete().eq("user_id", userId),
-      supabase.from("user_travel_preferences").delete().eq("user_id", userId),
+      supabase.from("user_travel_booking_preferences").delete().eq("user_id", userId),
       supabase.from("user_multiplier_tiers").delete().eq("user_id", userId),
       supabase.from("user_feature_flags").delete().eq("user_id", userId),
       supabase.from("user_card_debit_pay").delete().eq("user_id", userId),
