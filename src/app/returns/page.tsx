@@ -16,6 +16,9 @@ import {
   EarningsGoal,
   MultiplierProgram,
   CardRecommendation,
+  WelcomeBonusInput,
+  WelcomeBonusSettings,
+  SpendBonusInput,
 } from "@/lib/returns-calculator";
 
 interface Props {
@@ -58,6 +61,12 @@ export default async function ReturnsPage({ searchParams }: Props) {
     userPointValueSettingsResult,
     templatesResult,
     allCardsResult,
+    welcomeBonusesResult,
+    userWelcomeBonusSettingsResult,
+    userWelcomeBonusValueOverridesResult,
+    spendBonusesResult,
+    userSpendBonusValuesResult,
+    userBonusDisplaySettingsResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -232,6 +241,41 @@ export default async function ReturnsPage({ searchParams }: Props) {
         secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
       `)
       .eq("is_active", true),
+    
+    // Welcome bonuses for all cards
+    supabase
+      .from("card_welcome_bonuses")
+      .select("id, card_id, spend_requirement_cents, time_period_months, component_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_benefit_value_cents"),
+    
+    // User's welcome bonus settings
+    supabase
+      .from("user_welcome_bonus_settings")
+      .select("card_id, is_active, spend_requirement_override, time_period_override")
+      .eq("user_id", user.id),
+    
+    // User's welcome bonus value overrides
+    supabase
+      .from("user_welcome_bonus_value_overrides")
+      .select("welcome_bonus_id, value_cents")
+      .eq("user_id", user.id),
+    
+    // Spend bonuses for all cards
+    supabase
+      .from("card_spend_bonuses")
+      .select("id, card_id, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_value_cents, period, per_spend_cents, elite_unit_name, default_unit_value_cents, cap_amount, cap_period"),
+    
+    // User's spend bonus value overrides
+    supabase
+      .from("user_spend_bonus_values")
+      .select("spend_bonus_id, value_cents")
+      .eq("user_id", user.id),
+    
+    // User's bonus display settings
+    supabase
+      .from("user_bonus_display_settings")
+      .select("include_welcome_bonuses, include_spend_bonuses")
+      .eq("user_id", user.id)
+      .single(),
   ]);
 
   // Process wallet cards
@@ -421,6 +465,69 @@ export default async function ReturnsPage({ searchParams }: Props) {
   
   const largePurchaseCategoryId = largePurchaseCategoryResult.data?.id;
 
+  // Process welcome bonuses
+  const welcomeBonuses: WelcomeBonusInput[] = (welcomeBonusesResult.data ?? []).map((wb) => ({
+    id: wb.id,
+    card_id: wb.card_id,
+    spend_requirement_cents: wb.spend_requirement_cents,
+    time_period_months: wb.time_period_months,
+    component_type: wb.component_type as "points" | "cash" | "benefit",
+    points_amount: wb.points_amount,
+    currency_id: wb.currency_id,
+    cash_amount_cents: wb.cash_amount_cents,
+    benefit_description: wb.benefit_description,
+    default_benefit_value_cents: wb.default_benefit_value_cents,
+  }));
+
+  // Build welcome bonus settings map
+  const welcomeBonusSettings = new Map<string, WelcomeBonusSettings>();
+  userWelcomeBonusSettingsResult.data?.forEach((s) => {
+    welcomeBonusSettings.set(s.card_id, {
+      card_id: s.card_id,
+      is_active: s.is_active,
+      spend_requirement_override: s.spend_requirement_override,
+      time_period_override: s.time_period_override,
+    });
+  });
+
+  // Build welcome bonus value overrides map
+  const welcomeBonusValueOverrides = new Map<string, number>();
+  userWelcomeBonusValueOverridesResult.data?.forEach((o) => {
+    welcomeBonusValueOverrides.set(o.welcome_bonus_id, o.value_cents);
+  });
+
+  // Process spend bonuses
+  const spendBonuses: SpendBonusInput[] = (spendBonusesResult.data ?? []).map((sb) => ({
+    id: sb.id,
+    card_id: sb.card_id,
+    name: sb.name,
+    bonus_type: sb.bonus_type as "threshold" | "elite_earning",
+    spend_threshold_cents: sb.spend_threshold_cents,
+    reward_type: sb.reward_type as "points" | "cash" | "benefit" | null,
+    points_amount: sb.points_amount,
+    currency_id: sb.currency_id,
+    cash_amount_cents: sb.cash_amount_cents,
+    benefit_description: sb.benefit_description,
+    default_value_cents: sb.default_value_cents,
+    period: sb.period as "year" | "calendar_year" | "lifetime" | null,
+    per_spend_cents: sb.per_spend_cents,
+    elite_unit_name: sb.elite_unit_name,
+    default_unit_value_cents: sb.default_unit_value_cents,
+    cap_amount: sb.cap_amount,
+    cap_period: sb.cap_period as "year" | "calendar_year" | null,
+  }));
+
+  // Build spend bonus values map
+  const spendBonusValues = new Map<string, number>();
+  userSpendBonusValuesResult.data?.forEach((v) => {
+    spendBonusValues.set(v.spend_bonus_id, v.value_cents);
+  });
+
+  // Bonus display settings
+  const includeBonusesInCalculation = 
+    (userBonusDisplaySettingsResult.data?.include_welcome_bonuses ?? false) ||
+    (userBonusDisplaySettingsResult.data?.include_spend_bonuses ?? false);
+
   // Calculate returns
   const calculatorInput = {
     cards,
@@ -442,6 +549,13 @@ export default async function ReturnsPage({ searchParams }: Props) {
     travelPreferences,
     enabledSecondaryCards,
     earningsGoal,
+    // Bonus inputs
+    welcomeBonuses,
+    welcomeBonusSettings,
+    welcomeBonusValueOverrides,
+    spendBonuses,
+    spendBonusValues,
+    includeBonusesInCalculation,
   };
   
   const returns = calculatePortfolioReturns(calculatorInput);
@@ -505,6 +619,17 @@ export default async function ReturnsPage({ searchParams }: Props) {
         </div>
 
         <ReturnsDisplay returns={returns} earningsGoal={earningsGoal} recommendations={recommendations} />
+        
+        {/* Bonus Settings Note */}
+        {includeBonusesInCalculation && (
+          <div className="mt-6 p-4 rounded-lg bg-blue-900/20 border border-blue-700/50">
+            <p className="text-sm text-blue-300">
+              <span className="font-medium">Bonus calculations included.</span>{" "}
+              Manage your welcome bonus and spend bonus settings in{" "}
+              <a href="/wallet" className="underline hover:text-blue-200">My Wallet</a>.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

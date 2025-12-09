@@ -492,6 +492,10 @@ export default async function ComparePage() {
           <p className="text-zinc-400 mt-1">
             See effective earning rates across all your cards
           </p>
+          <p className="text-sm text-zinc-500 mt-2">
+            Welcome bonuses and spend bonuses can be configured in{" "}
+            <a href="/wallet" className="text-blue-400 hover:text-blue-300 underline">My Wallet</a>.
+          </p>
         </div>
 
         <ComparisonTable

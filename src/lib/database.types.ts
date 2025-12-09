@@ -185,6 +185,175 @@ export type Database = {
           },
         ]
       }
+      card_spend_bonuses: {
+        Row: {
+          benefit_description: string | null
+          bonus_type: string
+          cap_amount: number | null
+          cap_period: string | null
+          card_id: string
+          cash_amount_cents: number | null
+          created_at: string | null
+          currency_id: string | null
+          default_unit_value_cents: number | null
+          default_value_cents: number | null
+          elite_unit_name: string | null
+          id: string
+          name: string
+          per_spend_cents: number | null
+          period: string | null
+          points_amount: number | null
+          reward_type: string | null
+          spend_threshold_cents: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          benefit_description?: string | null
+          bonus_type: string
+          cap_amount?: number | null
+          cap_period?: string | null
+          card_id: string
+          cash_amount_cents?: number | null
+          created_at?: string | null
+          currency_id?: string | null
+          default_unit_value_cents?: number | null
+          default_value_cents?: number | null
+          elite_unit_name?: string | null
+          id?: string
+          name: string
+          per_spend_cents?: number | null
+          period?: string | null
+          points_amount?: number | null
+          reward_type?: string | null
+          spend_threshold_cents?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          benefit_description?: string | null
+          bonus_type?: string
+          cap_amount?: number | null
+          cap_period?: string | null
+          card_id?: string
+          cash_amount_cents?: number | null
+          created_at?: string | null
+          currency_id?: string | null
+          default_unit_value_cents?: number | null
+          default_value_cents?: number | null
+          elite_unit_name?: string | null
+          id?: string
+          name?: string
+          per_spend_cents?: number | null
+          period?: string | null
+          points_amount?: number | null
+          reward_type?: string | null
+          spend_threshold_cents?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_spend_bonuses_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_spend_bonuses_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_spend_bonuses_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "reward_currencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_spend_bonuses_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
+          },
+        ]
+      }
+      card_welcome_bonuses: {
+        Row: {
+          benefit_description: string | null
+          card_id: string
+          cash_amount_cents: number | null
+          component_type: string
+          created_at: string | null
+          currency_id: string | null
+          default_benefit_value_cents: number | null
+          id: string
+          points_amount: number | null
+          spend_requirement_cents: number
+          time_period_months: number
+          updated_at: string | null
+        }
+        Insert: {
+          benefit_description?: string | null
+          card_id: string
+          cash_amount_cents?: number | null
+          component_type: string
+          created_at?: string | null
+          currency_id?: string | null
+          default_benefit_value_cents?: number | null
+          id?: string
+          points_amount?: number | null
+          spend_requirement_cents: number
+          time_period_months?: number
+          updated_at?: string | null
+        }
+        Update: {
+          benefit_description?: string | null
+          card_id?: string
+          cash_amount_cents?: number | null
+          component_type?: string
+          created_at?: string | null
+          currency_id?: string | null
+          default_benefit_value_cents?: number | null
+          id?: string
+          points_amount?: number | null
+          spend_requirement_cents?: number
+          time_period_months?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_welcome_bonuses_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_welcome_bonuses_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_welcome_bonuses_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "reward_currencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_welcome_bonuses_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
+          },
+        ]
+      }
       cards: {
         Row: {
           annual_fee: number
@@ -663,6 +832,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_bonus_display_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          include_spend_bonuses: boolean
+          include_welcome_bonuses: boolean
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          include_spend_bonuses?: boolean
+          include_welcome_bonuses?: boolean
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          include_spend_bonuses?: boolean
+          include_welcome_bonuses?: boolean
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_card_debit_pay: {
         Row: {
@@ -1162,6 +1358,41 @@ export type Database = {
           },
         ]
       }
+      user_spend_bonus_values: {
+        Row: {
+          created_at: string | null
+          id: string
+          spend_bonus_id: string
+          updated_at: string | null
+          user_id: string
+          value_cents: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          spend_bonus_id: string
+          updated_at?: string | null
+          user_id: string
+          value_cents: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          spend_bonus_id?: string
+          updated_at?: string | null
+          user_id?: string
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_spend_bonus_values_spend_bonus_id_fkey"
+            columns: ["spend_bonus_id"]
+            isOneToOne: false
+            referencedRelation: "card_spend_bonuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_travel_booking_preferences: {
         Row: {
           brand_name: string | null
@@ -1235,6 +1466,89 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_welcome_bonus_settings: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          id: string
+          is_active: boolean
+          spend_requirement_override: number | null
+          time_period_override: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          spend_requirement_override?: number | null
+          time_period_override?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          spend_requirement_override?: number | null
+          time_period_override?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_welcome_bonus_settings_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_welcome_bonus_settings_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_welcome_bonus_value_overrides: {
+        Row: {
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+          value_cents: number
+          welcome_bonus_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+          value_cents: number
+          welcome_bonus_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+          value_cents?: number
+          welcome_bonus_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_welcome_bonus_value_overrides_welcome_bonus_id_fkey"
+            columns: ["welcome_bonus_id"]
+            isOneToOne: false
+            referencedRelation: "card_welcome_bonuses"
             referencedColumns: ["id"]
           },
         ]

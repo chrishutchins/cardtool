@@ -47,12 +47,20 @@ export default async function CardsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-white">Cards</h1>
-        <Link
-          href="/admin/cards/new"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          + Add Card
-        </Link>
+        <div className="flex gap-3">
+          <Link
+            href="/admin/cards/import-bonuses"
+            className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-600 transition-colors"
+          >
+            Import Bonuses
+          </Link>
+          <Link
+            href="/admin/cards/new"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            + Add Card
+          </Link>
+        </div>
       </div>
 
       <CardsTable 

@@ -96,6 +96,50 @@ export interface MultiplierProgram {
   applicableCardIds: string[]; // specific cards this multiplier applies to
 }
 
+// Welcome Bonus Types
+export interface WelcomeBonusInput {
+  id: string;
+  card_id: string;
+  spend_requirement_cents: number;
+  time_period_months: number;
+  component_type: "points" | "cash" | "benefit";
+  points_amount: number | null;
+  currency_id: string | null;
+  cash_amount_cents: number | null;
+  benefit_description: string | null;
+  default_benefit_value_cents: number | null;
+}
+
+export interface WelcomeBonusSettings {
+  card_id: string;
+  is_active: boolean;
+  spend_requirement_override: number | null;
+  time_period_override: number | null;
+}
+
+// Spend Bonus Types (threshold rewards and elite earning)
+export interface SpendBonusInput {
+  id: string;
+  card_id: string;
+  name: string;
+  bonus_type: "threshold" | "elite_earning";
+  // Threshold fields
+  spend_threshold_cents: number | null;
+  reward_type: "points" | "cash" | "benefit" | null;
+  points_amount: number | null;
+  currency_id: string | null;
+  cash_amount_cents: number | null;
+  benefit_description: string | null;
+  default_value_cents: number | null;
+  period: "year" | "calendar_year" | "lifetime" | null;
+  // Elite earning fields
+  per_spend_cents: number | null;
+  elite_unit_name: string | null;
+  default_unit_value_cents: number | null;
+  cap_amount: number | null;
+  cap_period: "year" | "calendar_year" | null;
+}
+
 // Output Types
 export interface AllocationEntry {
   cardId: string;
@@ -216,6 +260,103 @@ function getCurrencyValueCents(
 }
 
 /**
+ * Calculate bonus rate for a card from welcome bonuses and spend bonuses.
+ * Returns extra return rate as a decimal (e.g., 0.30 for 30% extra return).
+ * 
+ * Welcome Bonus Rate: Calculated as bonus_value / spend_requirement
+ * - 100k points at 1.5cpp for $5k spend = $1500 / $5000 = 0.30 (30%)
+ * 
+ * Spend Bonus (Threshold): Calculated as reward_value / spend_threshold
+ * - Free night worth $500 for $30k spend = $500 / $30000 = 0.0167 (1.67%)
+ * 
+ * Spend Bonus (Elite Earning): Calculated as unit_value / per_spend
+ * - 1 elite mile (1cpp) per $2 = $0.01 / $2 = 0.005 (0.5%)
+ */
+function calculateCardBonusRate(
+  cardId: string,
+  welcomeBonuses: WelcomeBonusInput[],
+  welcomeBonusSettings: Map<string, WelcomeBonusSettings>,
+  welcomeBonusValueOverrides: Map<string, number>,
+  spendBonuses: SpendBonusInput[],
+  spendBonusValues: Map<string, number>,
+  userCurrencyValues: Map<string, number>,
+  defaultCurrencyValues: Map<string, number>
+): number {
+  let totalBonusRate = 0;
+
+  // Get welcome bonus settings for this card
+  const settings = welcomeBonusSettings.get(cardId);
+  
+  // Calculate welcome bonus rate if active
+  if (settings?.is_active) {
+    const cardWelcomeBonuses = welcomeBonuses.filter(wb => wb.card_id === cardId);
+    
+    // Use override spend requirement if set, otherwise use first bonus's requirement
+    const spendRequirementCents = settings.spend_requirement_override ?? 
+      (cardWelcomeBonuses[0]?.spend_requirement_cents ?? 0);
+    
+    if (spendRequirementCents > 0) {
+      let totalWelcomeBonusValue = 0;
+      
+      for (const wb of cardWelcomeBonuses) {
+        let componentValue = 0;
+        
+        if (wb.component_type === "points" && wb.points_amount && wb.currency_id) {
+          const currencyValue = getCurrencyValueCents(wb.currency_id, userCurrencyValues, defaultCurrencyValues);
+          componentValue = (wb.points_amount * currencyValue) / 100; // Convert cents to dollars
+        } else if (wb.component_type === "cash" && wb.cash_amount_cents) {
+          componentValue = wb.cash_amount_cents / 100; // Convert cents to dollars
+        } else if (wb.component_type === "benefit") {
+          // Use user override if available, otherwise use default
+          const valueCents = welcomeBonusValueOverrides.get(wb.id) ?? wb.default_benefit_value_cents ?? 0;
+          componentValue = valueCents / 100; // Convert cents to dollars
+        }
+        
+        totalWelcomeBonusValue += componentValue;
+      }
+      
+      // Welcome bonus rate = total_value / spend_requirement
+      const welcomeBonusRate = totalWelcomeBonusValue / (spendRequirementCents / 100);
+      totalBonusRate += welcomeBonusRate;
+    }
+  }
+
+  // Calculate spend bonus rates
+  const cardSpendBonuses = spendBonuses.filter(sb => sb.card_id === cardId);
+  
+  for (const sb of cardSpendBonuses) {
+    let bonusRate = 0;
+    
+    if (sb.bonus_type === "threshold" && sb.spend_threshold_cents) {
+      // Threshold: reward_value / spend_threshold
+      let rewardValue = 0;
+      
+      if (sb.reward_type === "points" && sb.points_amount && sb.currency_id) {
+        const currencyValue = getCurrencyValueCents(sb.currency_id, userCurrencyValues, defaultCurrencyValues);
+        rewardValue = (sb.points_amount * currencyValue) / 100;
+      } else if (sb.reward_type === "cash" && sb.cash_amount_cents) {
+        rewardValue = sb.cash_amount_cents / 100;
+      } else if (sb.reward_type === "benefit") {
+        // Use user override if available, otherwise use default
+        const valueCents = spendBonusValues.get(sb.id) ?? sb.default_value_cents ?? 0;
+        rewardValue = valueCents / 100;
+      }
+      
+      bonusRate = rewardValue / (sb.spend_threshold_cents / 100);
+    } else if (sb.bonus_type === "elite_earning" && sb.per_spend_cents) {
+      // Elite earning: unit_value / per_spend
+      // Use user override if available, otherwise use default
+      const unitValueCents = spendBonusValues.get(sb.id) ?? sb.default_unit_value_cents ?? 0;
+      bonusRate = (unitValueCents / 100) / (sb.per_spend_cents / 100);
+    }
+    
+    totalBonusRate += bonusRate;
+  }
+
+  return totalBonusRate;
+}
+
+/**
  * Expands spending into virtual sub-categories for >$5k tracking.
  * Categories with large_purchase_spend_cents > 0 are split into two entries:
  * - Original category with reduced spend (annual_spend_cents only)
@@ -292,6 +433,13 @@ export interface CalculatorInput {
   // For recommendations: pre-computed top categories using ONLY user's original cards
   // This prevents candidate cards from affecting existing cards' top category selections
   preComputedTopCategories?: Map<string, Set<number>>;
+  // Welcome bonus and spend bonus inputs
+  welcomeBonuses?: WelcomeBonusInput[];
+  welcomeBonusSettings?: Map<string, WelcomeBonusSettings>; // card_id -> settings
+  welcomeBonusValueOverrides?: Map<string, number>; // welcome_bonus_id -> value_cents
+  spendBonuses?: SpendBonusInput[];
+  spendBonusValues?: Map<string, number>; // spend_bonus_id -> value_cents (user valuations)
+  includeBonusesInCalculation?: boolean; // Global toggle for including bonuses
 }
 
 export function calculatePortfolioReturns(input: CalculatorInput): PortfolioReturns {
@@ -315,11 +463,38 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     travelPreferences,
     enabledSecondaryCards,
     earningsGoal,
+    // Bonus inputs
+    welcomeBonuses = [],
+    welcomeBonusSettings = new Map(),
+    welcomeBonusValueOverrides = new Map(),
+    spendBonuses = [],
+    spendBonusValues = new Map(),
+    includeBonusesInCalculation = false,
   } = input;
 
   // Expand spending to handle >$5k tracking
   // Categories with large_purchase_spend_cents are split into <$5k and >$5k portions
   const spending = expandSpendingForLargePurchases(rawSpending, largePurchaseCategoryId);
+
+  // Calculate bonus rates for each card (if bonuses are enabled)
+  const cardBonusRates = new Map<string, number>();
+  if (includeBonusesInCalculation) {
+    for (const card of cards) {
+      const bonusRate = calculateCardBonusRate(
+        card.id,
+        welcomeBonuses,
+        welcomeBonusSettings,
+        welcomeBonusValueOverrides,
+        spendBonuses,
+        spendBonusValues,
+        userCurrencyValues,
+        defaultCurrencyValues
+      );
+      if (bonusRate > 0) {
+        cardBonusRates.set(card.id, bonusRate);
+      }
+    }
+  }
 
   // Build a map of card_id -> multiplier (for earning multiplier programs like BoA Preferred Rewards)
   const cardMultipliers = new Map<string, number>();
@@ -494,7 +669,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         categorySpend.excluded_by_default ?? false,
         categorySpend.is_large_purchase_portion ?? false,
         categorySpend.original_category_id,
-        largePurchaseCategoryId
+        largePurchaseCategoryId,
+        cardBonusRates
       );
       
       // Calculate marginal benefit: difference between best and second-best
@@ -528,7 +704,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       categorySpend.excluded_by_default ?? false,
       categorySpend.is_large_purchase_portion ?? false,
       categorySpend.original_category_id,
-      largePurchaseCategoryId
+      largePurchaseCategoryId,
+      cardBonusRates
     );
 
     // Allocate spending to cards in order of value
@@ -1150,7 +1327,9 @@ function rankCardsForCategory(
   // For >$5k portions: also consider rates from the >$5k category and use MAX
   isLargePurchasePortion: boolean = false,
   originalCategoryId?: number,
-  largePurchaseCategoryId?: number
+  largePurchaseCategoryId?: number,
+  // Bonus rates from welcome bonuses and spend bonuses (card_id -> rate as decimal)
+  cardBonusRates: Map<string, number> = new Map()
 ): RankedCard[] {
   const ranked: RankedCard[] = [];
 
@@ -1191,11 +1370,13 @@ function rankCardsForCategory(
       // Use default rate
       const baseRate = card.default_earn_rate;
       const rate = baseRate * multiplier;
-      const baseValue = currencyInfo.isCashback 
-        ? rate / 100 
+      const baseValue = currencyInfo.isCashback
+        ? rate / 100
         : rate * (currencyInfo.valueCents / 100);
-      const effectiveValue = baseValue + debitPayBonus;
-      
+      // Add bonus rate from welcome/spend bonuses
+      const bonusRate = cardBonusRates.get(card.id) ?? 0;
+      const effectiveValue = baseValue + debitPayBonus + bonusRate;
+
       ranked.push({
         card,
         rate,
@@ -1213,11 +1394,13 @@ function rankCardsForCategory(
         // Apply multiplier to rates
         const effectiveRate = rateInfo.rate * multiplier;
         const effectivePostCapRate = rateInfo.postCapRate !== null ? rateInfo.postCapRate * multiplier : null;
-        
-        const baseValue = currencyInfo.isCashback 
-          ? effectiveRate / 100 
+
+        const baseValue = currencyInfo.isCashback
+          ? effectiveRate / 100
           : effectiveRate * (currencyInfo.valueCents / 100);
-        const effectiveValue = baseValue + debitPayBonus;
+        // Add bonus rate from welcome/spend bonuses
+        const bonusRate = cardBonusRates.get(card.id) ?? 0;
+        const effectiveValue = baseValue + debitPayBonus + bonusRate;
 
         // Only add if there's room in cap or there's a post-cap rate
         if (hasRoomInCap || effectivePostCapRate !== null) {
@@ -1227,7 +1410,7 @@ function rankCardsForCategory(
             annualCap: rateInfo.annualCap,
             postCapRate: effectivePostCapRate,
             capKey: rateInfo.capKey,
-            effectiveValue: hasRoomInCap ? effectiveValue : debitPayBonus, // If cap exhausted, only debit pay value for sorting
+            effectiveValue: hasRoomInCap ? effectiveValue : (debitPayBonus + bonusRate), // If cap exhausted, use debit pay + bonus for sorting
           });
         }
       }
