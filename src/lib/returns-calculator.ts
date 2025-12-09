@@ -731,7 +731,9 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           : earned * (currencyInfo.valueCents / 100);
         // Add debit pay bonus (extra % of spend)
         const debitPayBonus = spendAmount * ((debitPayValues.get(card.id) ?? 0) / 100);
-        const earnedValue = baseEarnedValue + debitPayBonus;
+        // Add spend bonus (extra return from welcome/spend bonuses as % of spend)
+        const spendBonusValue = spendAmount * (cardBonusRates.get(card.id) ?? 0);
+        const earnedValue = baseEarnedValue + debitPayBonus + spendBonusValue;
 
         allocations.push({
           cardId: card.id,
@@ -766,7 +768,9 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           : earned * (currencyInfo.valueCents / 100);
         // Add debit pay bonus (extra % of spend)
         const debitPayBonus = spendAtElevated * ((debitPayValues.get(card.id) ?? 0) / 100);
-        const earnedValue = baseEarnedValue + debitPayBonus;
+        // Add spend bonus (extra return from welcome/spend bonuses as % of spend)
+        const spendBonusValue = spendAtElevated * (cardBonusRates.get(card.id) ?? 0);
+        const earnedValue = baseEarnedValue + debitPayBonus + spendBonusValue;
 
         allocations.push({
           cardId: card.id,
@@ -837,7 +841,9 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
           : earned * (currencyInfo.valueCents / 100);
         // Add debit pay bonus (extra % of spend)
         const debitPayBonus = remainingSpend * ((debitPayValues.get(bestCard.id) ?? 0) / 100);
-        const earnedValue = baseEarnedValue + debitPayBonus;
+        // Add spend bonus (extra return from welcome/spend bonuses as % of spend)
+        const spendBonusValue = remainingSpend * (cardBonusRates.get(bestCard.id) ?? 0);
+        const earnedValue = baseEarnedValue + debitPayBonus + spendBonusValue;
 
         allocations.push({
           cardId: bestCard.id,
