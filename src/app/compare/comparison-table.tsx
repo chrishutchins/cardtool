@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useTransition } from "react";
 
 interface Card {
   id: string;
@@ -14,6 +14,9 @@ interface Card {
   pointValue: number;
   isOwned: boolean;
   earningRates: Record<number, number>;
+  multiplier: number;
+  spendBonusRate: number;
+  welcomeBonusRate: number;
 }
 
 interface Category {
@@ -31,6 +34,11 @@ interface CapInfo {
   elevatedRate: number;
 }
 
+interface BonusDisplaySettings {
+  includeWelcomeBonuses: boolean;
+  includeSpendBonuses: boolean;
+}
+
 interface ComparisonTableProps {
   cards: Card[];
   categories: Category[];
@@ -40,8 +48,10 @@ interface ComparisonTableProps {
   debitPayValues: Record<string, number>;
   userSpending: Record<number, number>;
   capInfo: Record<string, Record<number, CapInfo>>;
+  bonusDisplaySettings: BonusDisplaySettings;
   onSaveCategories?: (categoryIds: number[]) => Promise<void>;
   onSaveEvalCards?: (cardIds: string[]) => Promise<void>;
+  onUpdateBonusSettings?: (includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) => Promise<void>;
 }
 
 type SortConfig = {
@@ -93,8 +103,10 @@ export function ComparisonTable({
   debitPayValues,
   userSpending,
   capInfo,
+  bonusDisplaySettings,
   onSaveCategories,
   onSaveEvalCards,
+  onUpdateBonusSettings,
 }: ComparisonTableProps) {
   // State
   const [selectedCategorySlugs, setSelectedCategorySlugs] = useState<Set<string>>(
@@ -114,6 +126,11 @@ export function ComparisonTable({
   );
   const [showCardSelector, setShowCardSelector] = useState(false);
   const [cardSearchQuery, setCardSearchQuery] = useState("");
+  const [isPending, startTransition] = useTransition();
+  
+  // Local state for bonus toggles (optimistic updates)
+  const [includeWelcomeBonuses, setIncludeWelcomeBonuses] = useState(bonusDisplaySettings.includeWelcomeBonuses);
+  const [includeSpendBonuses, setIncludeSpendBonuses] = useState(bonusDisplaySettings.includeSpendBonuses);
 
   // Track if this is the initial mount (to avoid saving on first render)
   const isInitialMount = useRef(true);
@@ -155,9 +172,21 @@ export function ComparisonTable({
   }, [categories, selectedCategorySlugs]);
 
   // Calculate effective value for a card and category (rate in cents)
+  // Includes bonus rates if enabled (converted from decimal to cents)
   const getEffectiveValue = (card: Card, categoryId: number): number => {
     const rate = card.earningRates[categoryId] ?? card.defaultEarnRate;
-    return rate * card.pointValue;
+    let value = rate * card.pointValue;
+    
+    // Add bonus rates (they're stored as decimals representing return rate, convert to cents)
+    // e.g., 0.01 = 1% = 1 cent per dollar
+    if (includeSpendBonuses && card.spendBonusRate > 0) {
+      value += card.spendBonusRate * 100; // Convert decimal to cents
+    }
+    if (includeWelcomeBonuses && card.welcomeBonusRate > 0) {
+      value += card.welcomeBonusRate * 100; // Convert decimal to cents
+    }
+    
+    return value;
   };
 
   // Calculate effective value including debit pay (for display and sorting)
@@ -166,6 +195,18 @@ export function ComparisonTable({
     const debitPay = debitPayValues[card.id] ?? 0;
     // Debit pay is a percentage, convert to cents (1% = 1 cent per dollar)
     return baseValue + debitPay;
+  };
+
+  // Get the bonus rate in cents for a card (for display purposes)
+  const getBonusValueCents = (card: Card): number => {
+    let bonusValue = 0;
+    if (includeSpendBonuses && card.spendBonusRate > 0) {
+      bonusValue += card.spendBonusRate * 100;
+    }
+    if (includeWelcomeBonuses && card.welcomeBonusRate > 0) {
+      bonusValue += card.welcomeBonusRate * 100;
+    }
+    return bonusValue;
   };
 
   // Helper to annualize cap amount based on period
@@ -179,7 +220,7 @@ export function ComparisonTable({
   };
 
   // Calculate earnings for a spend amount considering caps
-  const calculateEarnings = (card: Card, categoryId: number, spendCents: number): { earnings: number; debitPayEarnings: number } => {
+  const calculateEarnings = (card: Card, categoryId: number, spendCents: number): { earnings: number; debitPayEarnings: number; bonusEarnings: number } => {
     const rate = card.earningRates[categoryId] ?? card.defaultEarnRate;
     const pointValue = card.pointValue;
     const cap = capInfo[card.id]?.[categoryId];
@@ -210,7 +251,16 @@ export function ComparisonTable({
     // Debit pay earnings (flat % of spend)
     const debitPayEarnings = spendDollars * (debitPayPercent / 100);
     
-    return { earnings, debitPayEarnings };
+    // Bonus earnings (spend bonus + welcome bonus as % of spend)
+    let bonusEarnings = 0;
+    if (includeSpendBonuses && card.spendBonusRate > 0) {
+      bonusEarnings += spendDollars * card.spendBonusRate;
+    }
+    if (includeWelcomeBonuses && card.welcomeBonusRate > 0) {
+      bonusEarnings += spendDollars * card.welcomeBonusRate;
+    }
+    
+    return { earnings, debitPayEarnings, bonusEarnings };
   };
 
   // Get min/max values per category for color scaling (rate-based, for non-spending view)
@@ -225,7 +275,7 @@ export function ComparisonTable({
       };
     }
     return stats;
-  }, [cards, selectedCategories, debitPayValues]);
+  }, [cards, selectedCategories, debitPayValues, includeSpendBonuses, includeWelcomeBonuses]);
 
   // Get min/max earnings per category for color scaling (earnings-based, for spending view)
   const categoryEarningsStats = useMemo(() => {
@@ -235,8 +285,8 @@ export function ComparisonTable({
       const spendCents = userSpending[category.id] ?? 0;
       if (spendCents > 0) {
         const values = cards.map((card) => {
-          const { earnings, debitPayEarnings } = calculateEarnings(card, category.id, spendCents);
-          return earnings + debitPayEarnings;
+          const { earnings, debitPayEarnings, bonusEarnings } = calculateEarnings(card, category.id, spendCents);
+          return earnings + debitPayEarnings + bonusEarnings;
         });
         stats[category.id] = {
           min: Math.min(...values),
@@ -245,7 +295,7 @@ export function ComparisonTable({
       }
     }
     return stats;
-  }, [cards, selectedCategories, userSpending, debitPayValues]);
+  }, [cards, selectedCategories, userSpending, debitPayValues, includeSpendBonuses, includeWelcomeBonuses]);
 
   // Get color class based on value position in range
   const getColorStyle = (value: number, categoryId: number, useEarnings: boolean = false): string => {
@@ -302,12 +352,17 @@ export function ComparisonTable({
       } else if (sortConfig.categoryId !== undefined) {
         const spendCents = userSpending[sortConfig.categoryId] ?? 0;
         // Only sort by earnings if there's actual spending; otherwise sort by rate
-        const aVal = showSpending && spendCents > 0
-          ? calculateEarnings(a, sortConfig.categoryId, spendCents).earnings + calculateEarnings(a, sortConfig.categoryId, spendCents).debitPayEarnings
-          : getEffectiveValueWithDebit(a, sortConfig.categoryId);
-        const bVal = showSpending && spendCents > 0
-          ? calculateEarnings(b, sortConfig.categoryId, spendCents).earnings + calculateEarnings(b, sortConfig.categoryId, spendCents).debitPayEarnings
-          : getEffectiveValueWithDebit(b, sortConfig.categoryId);
+        let aVal: number;
+        let bVal: number;
+        if (showSpending && spendCents > 0) {
+          const aEarnings = calculateEarnings(a, sortConfig.categoryId, spendCents);
+          const bEarnings = calculateEarnings(b, sortConfig.categoryId, spendCents);
+          aVal = aEarnings.earnings + aEarnings.debitPayEarnings + aEarnings.bonusEarnings;
+          bVal = bEarnings.earnings + bEarnings.debitPayEarnings + bEarnings.bonusEarnings;
+        } else {
+          aVal = getEffectiveValueWithDebit(a, sortConfig.categoryId);
+          bVal = getEffectiveValueWithDebit(b, sortConfig.categoryId);
+        }
         const cmp = aVal - bVal;
         const primarySort = sortConfig.direction === "asc" ? cmp : -cmp;
         
@@ -324,7 +379,7 @@ export function ComparisonTable({
     });
 
     return filtered;
-  }, [cards, filterMode, sortConfig, evaluationCardIds, showSpending, userSpending]);
+  }, [cards, filterMode, sortConfig, evaluationCardIds, showSpending, userSpending, includeSpendBonuses, includeWelcomeBonuses]);
 
   // Handle sort click
   const handleSort = (type: "card" | "category", categoryId?: number) => {
@@ -513,6 +568,40 @@ export function ComparisonTable({
           My Spending
         </button>
 
+        {/* Bonus Toggles */}
+        <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800/50">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeWelcomeBonuses}
+              disabled={isPending}
+              onChange={(e) => {
+                setIncludeWelcomeBonuses(e.target.checked);
+                startTransition(() => {
+                  onUpdateBonusSettings?.(e.target.checked, includeSpendBonuses);
+                });
+              }}
+              className="rounded border-zinc-600 bg-zinc-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+            />
+            <span className="text-sm text-zinc-300">SUBs</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeSpendBonuses}
+              disabled={isPending}
+              onChange={(e) => {
+                setIncludeSpendBonuses(e.target.checked);
+                startTransition(() => {
+                  onUpdateBonusSettings?.(includeWelcomeBonuses, e.target.checked);
+                });
+              }}
+              className="rounded border-zinc-600 bg-zinc-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+            />
+            <span className="text-sm text-zinc-300">Spend Bonuses</span>
+          </label>
+        </div>
+
         {/* Category Selector */}
         <div className="relative">
           <button
@@ -670,11 +759,12 @@ export function ComparisonTable({
                       const debitPay = debitPayValues[card.id] ?? 0;
                       const cap = capInfo[card.id]?.[cat.id];
                       const spendCents = userSpending[cat.id] ?? 0;
+                      const bonusCents = getBonusValueCents(card);
                       
                       if (showSpending && spendCents > 0) {
                         // Show earnings in dollars
-                        const { earnings, debitPayEarnings } = calculateEarnings(card, cat.id, spendCents);
-                        const totalEarnings = earnings + debitPayEarnings;
+                        const { earnings, debitPayEarnings, bonusEarnings } = calculateEarnings(card, cat.id, spendCents);
+                        const totalEarnings = earnings + debitPayEarnings + bonusEarnings;
                         const colorClass = getColorStyle(totalEarnings, cat.id, true);
                         
                         return (
@@ -684,6 +774,9 @@ export function ComparisonTable({
                           >
                             <div className="font-mono">
                               ${Math.round(earnings).toLocaleString()}
+                              {bonusEarnings > 0 && (
+                                <span className="text-emerald-400"> +${Math.round(bonusEarnings).toLocaleString()}</span>
+                              )}
                               {debitPayEarnings > 0 && (
                                 <span className="text-pink-400"> +${Math.round(debitPayEarnings).toLocaleString()}</span>
                               )}
@@ -699,8 +792,10 @@ export function ComparisonTable({
                           </td>
                         );
                       } else {
-                        // Show rate in cents
-                        const value = getEffectiveValue(card, cat.id);
+                        // Show rate in cents (excluding bonuses in the base display, but include in value for sorting)
+                        // Get base value without bonuses for display
+                        const rate = card.earningRates[cat.id] ?? card.defaultEarnRate;
+                        const baseValue = rate * card.pointValue;
                         const totalValue = getEffectiveValueWithDebit(card, cat.id);
                         const colorClass = getColorStyle(totalValue, cat.id);
                         
@@ -709,7 +804,10 @@ export function ComparisonTable({
                             key={cat.id}
                             className={`px-3 py-3 text-center text-sm font-mono ${colorClass}`}
                           >
-                            {value.toFixed(1)}¢
+                            {baseValue.toFixed(1)}¢
+                            {bonusCents > 0 && (
+                              <span className="text-emerald-400"> +{bonusCents.toFixed(1)}¢</span>
+                            )}
                             {debitPay > 0 && (
                               <span className="text-pink-400"> +{debitPay}¢</span>
                             )}
@@ -753,6 +851,12 @@ export function ComparisonTable({
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-amber-500" />
             <span>Evaluating</span>
+          </div>
+        )}
+        {(includeWelcomeBonuses || includeSpendBonuses) && (
+          <div className="flex items-center gap-1">
+            <span className="text-emerald-400">+X¢</span>
+            <span>Bonuses</span>
           </div>
         )}
         {Object.keys(debitPayValues).length > 0 && (

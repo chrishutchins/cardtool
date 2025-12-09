@@ -48,6 +48,23 @@ async function saveCompareEvalCards(cardIds: string[]) {
   }
 }
 
+async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) {
+  "use server";
+  const user = await currentUser();
+  if (!user) return;
+
+  const supabase = await createClient();
+  await supabase.from("user_bonus_display_settings").upsert(
+    {
+      user_id: user.id,
+      include_welcome_bonuses: includeWelcomeBonuses,
+      include_spend_bonuses: includeSpendBonuses,
+    },
+    { onConflict: "user_id" }
+  );
+  revalidatePath("/compare");
+}
+
 export default async function ComparePage() {
   const user = await currentUser();
   
@@ -157,6 +174,172 @@ export default async function ComparePage() {
       debitPayMap[dp.card_id] = Number(dp.debit_pay_percent) || 0;
     }
   }
+
+  // Get multiplier programs, spend bonuses, and bonus display settings
+  const [
+    { data: multiplierProgramsData },
+    { data: userMultiplierTiers },
+    { data: spendBonusesData },
+    { data: userSpendBonusValuesData },
+    { data: welcomeBonusesData },
+    { data: userWelcomeBonusSettings },
+    { data: bonusDisplaySettingsData },
+  ] = await Promise.all([
+    supabase
+      .from("earning_multiplier_programs")
+      .select(`
+        id,
+        name,
+        earning_multiplier_tiers (id, name, multiplier),
+        earning_multiplier_currencies (currency_id),
+        earning_multiplier_cards (card_id)
+      `),
+    supabase
+      .from("user_multiplier_tiers")
+      .select("program_id, tier_id")
+      .eq("user_id", user.id),
+    supabase
+      .from("card_spend_bonuses")
+      .select("id, card_id, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_value_cents, period, per_spend_cents, elite_unit_name, default_unit_value_cents, cap_amount, cap_period"),
+    supabase
+      .from("user_spend_bonus_values")
+      .select("spend_bonus_id, value_cents")
+      .eq("user_id", user.id),
+    supabase
+      .from("card_welcome_bonuses")
+      .select("id, card_id, spend_requirement_cents, time_period_months, component_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_benefit_value_cents"),
+    supabase
+      .from("user_welcome_bonus_settings")
+      .select("card_id, is_active, spend_requirement_override, time_period_override")
+      .eq("user_id", user.id),
+    supabase
+      .from("user_bonus_display_settings")
+      .select("include_welcome_bonuses, include_spend_bonuses")
+      .eq("user_id", user.id)
+      .single(),
+  ]);
+
+  // Build multiplier map: cardId -> multiplier
+  const cardMultipliers: Record<string, number> = {};
+  const userTierMap = new Map<string, string>();
+  (userMultiplierTiers ?? []).forEach((t) => {
+    if (t.program_id && t.tier_id) {
+      userTierMap.set(t.program_id, t.tier_id);
+    }
+  });
+
+  type MultiplierProgramData = {
+    id: string;
+    name: string;
+    earning_multiplier_tiers: { id: string; name: string; multiplier: number }[] | null;
+    earning_multiplier_currencies: { currency_id: string }[] | null;
+    earning_multiplier_cards: { card_id: string }[] | null;
+  };
+
+  for (const program of (multiplierProgramsData ?? []) as unknown as MultiplierProgramData[]) {
+    const selectedTierId = userTierMap.get(program.id);
+    if (!selectedTierId) continue;
+    
+    const selectedTier = program.earning_multiplier_tiers?.find((t) => t.id === selectedTierId);
+    if (!selectedTier) continue;
+    
+    const applicableCurrencyIds = (program.earning_multiplier_currencies ?? []).map((c) => c.currency_id);
+    const applicableCardIds = (program.earning_multiplier_cards ?? []).map((c) => c.card_id);
+    
+    // Apply to cards based on currency or direct card link
+    for (const card of (allCards ?? [])) {
+      const currencyId = card.primary_currency_id;
+      const isEligible = 
+        applicableCardIds.includes(card.id) ||
+        (currencyId && applicableCurrencyIds.includes(currencyId));
+      
+      if (isEligible) {
+        const existing = cardMultipliers[card.id] ?? 1;
+        cardMultipliers[card.id] = Math.max(existing, selectedTier.multiplier);
+      }
+    }
+  }
+
+  // Calculate spend bonus rates per card
+  const spendBonusValues = new Map<string, number>();
+  (userSpendBonusValuesData ?? []).forEach((v) => {
+    spendBonusValues.set(v.spend_bonus_id, parseFloat(String(v.value_cents)));
+  });
+
+  const cardSpendBonusRates: Record<string, number> = {};
+  for (const sb of (spendBonusesData ?? [])) {
+    let bonusRate = 0;
+    
+    if (sb.bonus_type === "threshold" && sb.spend_threshold_cents) {
+      // Threshold: reward_value / spend_threshold
+      let rewardValue = 0;
+      
+      if (sb.reward_type === "points" && sb.points_amount && sb.currency_id) {
+        const currencyValue = userValuesByCurrency.get(sb.currency_id) 
+          ?? templateValuesByCurrency.get(sb.currency_id) 
+          ?? 1;
+        rewardValue = (sb.points_amount * currencyValue) / 100;
+      } else if (sb.reward_type === "cash" && sb.cash_amount_cents) {
+        rewardValue = sb.cash_amount_cents / 100;
+      } else if (sb.reward_type === "benefit") {
+        const valueCents = spendBonusValues.get(sb.id) ?? sb.default_value_cents ?? 0;
+        rewardValue = valueCents / 100;
+      }
+      
+      bonusRate = rewardValue / (sb.spend_threshold_cents / 100);
+    } else if (sb.bonus_type === "elite_earning" && sb.per_spend_cents) {
+      // Elite earning: unit_value / per_spend
+      const unitValueCents = spendBonusValues.get(sb.id) ?? sb.default_unit_value_cents ?? 0;
+      bonusRate = (unitValueCents / 100) / (sb.per_spend_cents / 100);
+    }
+    
+    if (bonusRate > 0) {
+      cardSpendBonusRates[sb.card_id] = (cardSpendBonusRates[sb.card_id] ?? 0) + bonusRate;
+    }
+  }
+
+  // Calculate welcome bonus rates per card (for active bonuses)
+  const welcomeBonusSettings = new Map<string, { is_active: boolean; spend_requirement_override: number | null; time_period_override: number | null }>();
+  (userWelcomeBonusSettings ?? []).forEach((s) => {
+    welcomeBonusSettings.set(s.card_id, {
+      is_active: s.is_active,
+      spend_requirement_override: s.spend_requirement_override,
+      time_period_override: s.time_period_override,
+    });
+  });
+
+  const cardWelcomeBonusRates: Record<string, number> = {};
+  for (const wb of (welcomeBonusesData ?? [])) {
+    const settings = welcomeBonusSettings.get(wb.card_id);
+    if (!settings?.is_active) continue;
+    
+    // Calculate bonus value
+    let bonusValue = 0;
+    if (wb.component_type === "points" && wb.points_amount && wb.currency_id) {
+      const currencyValue = userValuesByCurrency.get(wb.currency_id) 
+        ?? templateValuesByCurrency.get(wb.currency_id) 
+        ?? 1;
+      bonusValue = (wb.points_amount * currencyValue) / 100;
+    } else if (wb.component_type === "cash" && wb.cash_amount_cents) {
+      bonusValue = wb.cash_amount_cents / 100;
+    } else if (wb.component_type === "benefit" && wb.default_benefit_value_cents) {
+      bonusValue = wb.default_benefit_value_cents / 100;
+    }
+    
+    // Calculate spend requirement
+    const spendRequirement = (settings.spend_requirement_override ?? wb.spend_requirement_cents) / 100;
+    
+    if (spendRequirement > 0) {
+      const bonusRate = bonusValue / spendRequirement;
+      cardWelcomeBonusRates[wb.card_id] = (cardWelcomeBonusRates[wb.card_id] ?? 0) + bonusRate;
+    }
+  }
+
+  // Bonus display settings
+  const bonusDisplaySettings = {
+    includeWelcomeBonuses: bonusDisplaySettingsData?.include_welcome_bonuses ?? false,
+    includeSpendBonuses: bonusDisplaySettingsData?.include_spend_bonuses ?? false,
+  };
 
   // Get user's category spending and spending defaults
   const [
@@ -379,6 +562,7 @@ export default async function ComparePage() {
   }
 
   // Helper: Get the best rate for a card + category using "highest rate wins"
+  // Applies multiplier if available
   const getBestRate = (cardId: string, categoryId: number, defaultRate: number): number => {
     const rates: number[] = [defaultRate];
     
@@ -401,8 +585,10 @@ export default async function ComparePage() {
     const allCatBonus = allCategoriesBonusMap[cardId];
     if (allCatBonus) rates.push(allCatBonus);
     
-    // Return the highest applicable rate
-    return Math.max(...rates);
+    // Apply multiplier (e.g., BoA Preferred Rewards, Alaska Checking Bonus)
+    const baseRate = Math.max(...rates);
+    const multiplier = cardMultipliers[cardId] ?? 1;
+    return baseRate * multiplier;
   };
 
   // Get non-excluded category IDs for computing earning rates
@@ -431,10 +617,10 @@ export default async function ComparePage() {
         ?? 1
       : 1;
 
-    // Build earning rates using "highest rate wins" logic
+    // Build earning rates using "highest rate wins" logic (with multiplier applied)
     const earningRates: Record<number, number> = {};
     for (const categoryId of nonExcludedCategoryIds) {
-      earningRates[categoryId] = getBestRate(card.id, categoryId, card.default_earn_rate ?? 1);
+      earningRates[categoryId] = getBestRate(card.id, categoryId, (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1));
     }
 
     return {
@@ -442,13 +628,16 @@ export default async function ComparePage() {
       name: card.name,
       slug: card.slug,
       annualFee: card.annual_fee,
-      defaultEarnRate: card.default_earn_rate ?? 1,
+      defaultEarnRate: (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1),
       issuerName: card.issuers?.name ?? "Unknown",
       currencyCode: currency?.code ?? "???",
       currencyName: currency?.name ?? "Unknown",
       pointValue,
       isOwned: userCardIds.has(card.id),
       earningRates,
+      multiplier: cardMultipliers[card.id] ?? 1,
+      spendBonusRate: cardSpendBonusRates[card.id] ?? 0,
+      welcomeBonusRate: cardWelcomeBonusRates[card.id] ?? 0,
     };
   });
 
@@ -492,10 +681,6 @@ export default async function ComparePage() {
           <p className="text-zinc-400 mt-1">
             See effective earning rates across all your cards
           </p>
-          <p className="text-sm text-zinc-500 mt-2">
-            Welcome bonuses and spend bonuses can be configured in{" "}
-            <a href="/wallet" className="text-blue-400 hover:text-blue-300 underline">My Wallet</a>.
-          </p>
         </div>
 
         <ComparisonTable
@@ -507,11 +692,12 @@ export default async function ComparePage() {
           debitPayValues={debitPayMap}
           userSpending={userSpending}
           capInfo={capInfoMap}
+          bonusDisplaySettings={bonusDisplaySettings}
           onSaveCategories={saveCompareCategories}
           onSaveEvalCards={saveCompareEvalCards}
+          onUpdateBonusSettings={updateBonusDisplaySettings}
         />
       </div>
     </div>
   );
 }
-
