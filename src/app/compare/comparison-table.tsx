@@ -197,16 +197,11 @@ export function ComparisonTable({
     return baseValue + debitPay;
   };
 
-  // Get the bonus rate in cents for a card (for display purposes)
-  const getBonusValueCents = (card: Card): number => {
-    let bonusValue = 0;
-    if (includeSpendBonuses && card.spendBonusRate > 0) {
-      bonusValue += card.spendBonusRate * 100;
-    }
-    if (includeWelcomeBonuses && card.welcomeBonusRate > 0) {
-      bonusValue += card.welcomeBonusRate * 100;
-    }
-    return bonusValue;
+  // Get the bonus rates in cents for a card (for display purposes)
+  const getBonusValueCents = (card: Card): { subCents: number; spendBonusCents: number } => {
+    const subCents = includeWelcomeBonuses && card.welcomeBonusRate > 0 ? card.welcomeBonusRate * 100 : 0;
+    const spendBonusCents = includeSpendBonuses && card.spendBonusRate > 0 ? card.spendBonusRate * 100 : 0;
+    return { subCents, spendBonusCents };
   };
 
   // Helper to annualize cap amount based on period
@@ -220,7 +215,7 @@ export function ComparisonTable({
   };
 
   // Calculate earnings for a spend amount considering caps
-  const calculateEarnings = (card: Card, categoryId: number, spendCents: number): { earnings: number; debitPayEarnings: number; bonusEarnings: number } => {
+  const calculateEarnings = (card: Card, categoryId: number, spendCents: number): { earnings: number; debitPayEarnings: number; subEarnings: number; spendBonusEarnings: number } => {
     const rate = card.earningRates[categoryId] ?? card.defaultEarnRate;
     const pointValue = card.pointValue;
     const cap = capInfo[card.id]?.[categoryId];
@@ -251,16 +246,17 @@ export function ComparisonTable({
     // Debit pay earnings (flat % of spend)
     const debitPayEarnings = spendDollars * (debitPayPercent / 100);
     
-    // Bonus earnings (spend bonus + welcome bonus as % of spend)
-    let bonusEarnings = 0;
-    if (includeSpendBonuses && card.spendBonusRate > 0) {
-      bonusEarnings += spendDollars * card.spendBonusRate;
-    }
-    if (includeWelcomeBonuses && card.welcomeBonusRate > 0) {
-      bonusEarnings += spendDollars * card.welcomeBonusRate;
-    }
+    // SUB earnings (welcome bonus as % of spend)
+    const subEarnings = includeWelcomeBonuses && card.welcomeBonusRate > 0 
+      ? spendDollars * card.welcomeBonusRate 
+      : 0;
     
-    return { earnings, debitPayEarnings, bonusEarnings };
+    // Spend bonus earnings (as % of spend)
+    const spendBonusEarnings = includeSpendBonuses && card.spendBonusRate > 0 
+      ? spendDollars * card.spendBonusRate 
+      : 0;
+    
+    return { earnings, debitPayEarnings, subEarnings, spendBonusEarnings };
   };
 
   // Get min/max values per category for color scaling (rate-based, for non-spending view)
@@ -285,8 +281,8 @@ export function ComparisonTable({
       const spendCents = userSpending[category.id] ?? 0;
       if (spendCents > 0) {
         const values = cards.map((card) => {
-          const { earnings, debitPayEarnings, bonusEarnings } = calculateEarnings(card, category.id, spendCents);
-          return earnings + debitPayEarnings + bonusEarnings;
+          const { earnings, debitPayEarnings, subEarnings, spendBonusEarnings } = calculateEarnings(card, category.id, spendCents);
+          return earnings + debitPayEarnings + subEarnings + spendBonusEarnings;
         });
         stats[category.id] = {
           min: Math.min(...values),
@@ -357,8 +353,8 @@ export function ComparisonTable({
         if (showSpending && spendCents > 0) {
           const aEarnings = calculateEarnings(a, sortConfig.categoryId, spendCents);
           const bEarnings = calculateEarnings(b, sortConfig.categoryId, spendCents);
-          aVal = aEarnings.earnings + aEarnings.debitPayEarnings + aEarnings.bonusEarnings;
-          bVal = bEarnings.earnings + bEarnings.debitPayEarnings + bEarnings.bonusEarnings;
+          aVal = aEarnings.earnings + aEarnings.debitPayEarnings + aEarnings.subEarnings + aEarnings.spendBonusEarnings;
+          bVal = bEarnings.earnings + bEarnings.debitPayEarnings + bEarnings.subEarnings + bEarnings.spendBonusEarnings;
         } else {
           aVal = getEffectiveValueWithDebit(a, sortConfig.categoryId);
           bVal = getEffectiveValueWithDebit(b, sortConfig.categoryId);
@@ -581,9 +577,9 @@ export function ComparisonTable({
                   onUpdateBonusSettings?.(e.target.checked, includeSpendBonuses);
                 });
               }}
-              className="rounded border-zinc-600 bg-zinc-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+              className="rounded border-zinc-600 bg-zinc-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
             />
-            <span className="text-sm text-zinc-300">SUBs</span>
+            <span className={`text-sm ${includeWelcomeBonuses ? "text-cyan-400" : "text-zinc-300"}`}>SUBs</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -596,9 +592,9 @@ export function ComparisonTable({
                   onUpdateBonusSettings?.(includeWelcomeBonuses, e.target.checked);
                 });
               }}
-              className="rounded border-zinc-600 bg-zinc-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+              className="rounded border-zinc-600 bg-zinc-700 text-lime-500 focus:ring-lime-500 focus:ring-offset-0"
             />
-            <span className="text-sm text-zinc-300">Spend Bonuses</span>
+            <span className={`text-sm ${includeSpendBonuses ? "text-lime-400" : "text-zinc-300"}`}>Spend Bonuses</span>
           </label>
         </div>
 
@@ -759,12 +755,12 @@ export function ComparisonTable({
                       const debitPay = debitPayValues[card.id] ?? 0;
                       const cap = capInfo[card.id]?.[cat.id];
                       const spendCents = userSpending[cat.id] ?? 0;
-                      const bonusCents = getBonusValueCents(card);
+                      const { subCents, spendBonusCents } = getBonusValueCents(card);
                       
                       if (showSpending && spendCents > 0) {
                         // Show earnings in dollars
-                        const { earnings, debitPayEarnings, bonusEarnings } = calculateEarnings(card, cat.id, spendCents);
-                        const totalEarnings = earnings + debitPayEarnings + bonusEarnings;
+                        const { earnings, debitPayEarnings, subEarnings, spendBonusEarnings } = calculateEarnings(card, cat.id, spendCents);
+                        const totalEarnings = earnings + debitPayEarnings + subEarnings + spendBonusEarnings;
                         const colorClass = getColorStyle(totalEarnings, cat.id, true);
                         
                         return (
@@ -774,8 +770,11 @@ export function ComparisonTable({
                           >
                             <div className="font-mono">
                               ${Math.round(earnings).toLocaleString()}
-                              {bonusEarnings > 0 && (
-                                <span className="text-emerald-400"> +${Math.round(bonusEarnings).toLocaleString()}</span>
+                              {subEarnings > 0 && (
+                                <span className="text-cyan-400"> +${Math.round(subEarnings).toLocaleString()}</span>
+                              )}
+                              {spendBonusEarnings > 0 && (
+                                <span className="text-lime-400"> +${Math.round(spendBonusEarnings).toLocaleString()}</span>
                               )}
                               {debitPayEarnings > 0 && (
                                 <span className="text-pink-400"> +${Math.round(debitPayEarnings).toLocaleString()}</span>
@@ -805,8 +804,11 @@ export function ComparisonTable({
                             className={`px-3 py-3 text-center text-sm font-mono ${colorClass}`}
                           >
                             {baseValue.toFixed(1)}¢
-                            {bonusCents > 0 && (
-                              <span className="text-emerald-400"> +{bonusCents.toFixed(1)}¢</span>
+                            {subCents > 0 && (
+                              <span className="text-cyan-400"> +{subCents.toFixed(1)}¢</span>
+                            )}
+                            {spendBonusCents > 0 && (
+                              <span className="text-lime-400"> +{spendBonusCents.toFixed(1)}¢</span>
                             )}
                             {debitPay > 0 && (
                               <span className="text-pink-400"> +{debitPay}¢</span>
@@ -853,10 +855,16 @@ export function ComparisonTable({
             <span>Evaluating</span>
           </div>
         )}
-        {(includeWelcomeBonuses || includeSpendBonuses) && (
+        {includeWelcomeBonuses && (
           <div className="flex items-center gap-1">
-            <span className="text-emerald-400">+X¢</span>
-            <span>Bonuses</span>
+            <span className="text-cyan-400">+X¢</span>
+            <span>SUBs</span>
+          </div>
+        )}
+        {includeSpendBonuses && (
+          <div className="flex items-center gap-1">
+            <span className="text-lime-400">+X¢</span>
+            <span>Spend Bonuses</span>
           </div>
         )}
         {Object.keys(debitPayValues).length > 0 && (
