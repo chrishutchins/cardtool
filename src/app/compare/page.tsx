@@ -661,6 +661,7 @@ export default async function ComparePage() {
     "hotels",
     "streaming",
     "amazon",
+    "everything-else",
   ];
 
   // Convert saved category IDs to slugs, or use defaults if none saved
