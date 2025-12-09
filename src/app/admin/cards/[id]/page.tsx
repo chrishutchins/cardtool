@@ -300,7 +300,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
         name,
         per_spend_cents: parseInt(formData.get("per_spend_cents") as string) || null,
         elite_unit_name: formData.get("elite_unit_name") as string || null,
-        default_unit_value_cents: parseInt(formData.get("default_unit_value_cents") as string) || null,
+        default_unit_value_cents: parseFloat(formData.get("default_unit_value_cents") as string) || null,
         cap_amount: capAmount ? parseInt(capAmount) || null : null,
         cap_period: capAmount ? formData.get("cap_period") as string || "year" : null,
       });
@@ -348,7 +348,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
         name,
         per_spend_cents: parseInt(formData.get("per_spend_cents") as string) || null,
         elite_unit_name: formData.get("elite_unit_name") as string || null,
-        default_unit_value_cents: parseInt(formData.get("default_unit_value_cents") as string) || null,
+        default_unit_value_cents: parseFloat(formData.get("default_unit_value_cents") as string) || null,
         cap_amount: capAmount ? parseInt(capAmount) || null : null,
         cap_period: capAmount ? formData.get("cap_period") as string || "year" : null,
         // Clear threshold fields
