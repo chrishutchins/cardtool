@@ -370,19 +370,29 @@ function SpendBonusValueEditor({
   disabled: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [value, setValue] = useState(((currentValue ?? defaultValue) / 100).toString());
+  // For threshold bonuses: value is in cents, display in dollars (divide by 100)
+  // For elite_earning bonuses: value is already in cents (e.g., 1.25 = 1.25¢), display as-is
+  const displayValue = bonusType === "threshold" 
+    ? ((currentValue ?? defaultValue) / 100) 
+    : (currentValue ?? defaultValue);
+  const [value, setValue] = useState(displayValue.toString());
   const [isPending, startTransition] = useTransition();
 
   const handleSave = () => {
-    const cents = Math.round(parseFloat(value) * 100);
-    if (cents === defaultValue) {
+    // For threshold: convert dollars back to cents
+    // For elite_earning: value is already in cents, store as-is
+    const valueToStore = bonusType === "threshold" 
+      ? Math.round(parseFloat(value) * 100)
+      : parseFloat(value);
+    
+    if (valueToStore === defaultValue) {
       startTransition(async () => {
         await onUpdate(bonusId, null);
         setIsEditing(false);
       });
     } else {
       startTransition(async () => {
-        await onUpdate(bonusId, cents);
+        await onUpdate(bonusId, valueToStore);
         setIsEditing(false);
       });
     }
@@ -397,7 +407,7 @@ function SpendBonusValueEditor({
         onClick={() => setIsEditing(true)}
         className="text-xs text-zinc-400 hover:text-zinc-300"
       >
-        {label}: {bonusType === "threshold" ? "$" : ""}{((currentValue ?? defaultValue) / 100).toLocaleString()}{bonusType === "elite_earning" ? "¢" : ""}
+        {label}: {bonusType === "threshold" ? "$" : ""}{displayValue.toLocaleString()}{bonusType === "elite_earning" ? "¢" : ""}
         {currentValue !== undefined && currentValue !== defaultValue && (
           <span className="text-blue-400 ml-1">(custom)</span>
         )}
@@ -436,3 +446,4 @@ function SpendBonusValueEditor({
     </div>
   );
 }
+
