@@ -661,6 +661,8 @@ export default async function ComparePage() {
     "hotels",
     "streaming",
     "amazon",
+    "online-retail",
+    "entertainment",
     "everything-else",
   ];
 
