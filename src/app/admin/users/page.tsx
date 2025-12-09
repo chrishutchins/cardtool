@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { clerkClient } from "@clerk/nextjs/server";
+import { UserRow } from "./user-row";
 
 interface UserStats {
   userId: string;
@@ -164,76 +165,6 @@ export default async function UsersPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function UserRow({
-  user,
-  onDelete,
-}: {
-  user: UserStats;
-  onDelete: (userId: string) => Promise<void>;
-}) {
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "—";
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  return (
-    <tr className="hover:bg-zinc-800/30">
-      <td className="px-6 py-4">
-        <div>
-          {user.email ? (
-            <div className="text-white font-medium">{user.email}</div>
-          ) : (
-            <div className="text-zinc-500 italic">No email found</div>
-          )}
-          {(user.firstName || user.lastName) && (
-            <div className="text-sm text-zinc-400">
-              {[user.firstName, user.lastName].filter(Boolean).join(" ")}
-            </div>
-          )}
-          <div className="text-xs text-zinc-600 font-mono">{user.userId}</div>
-        </div>
-      </td>
-      <td className="px-6 py-4 text-center">
-        <span className={`font-mono ${user.cardsAdded > 0 ? "text-white" : "text-zinc-600"}`}>
-          {user.cardsAdded}
-        </span>
-      </td>
-      <td className="px-6 py-4 text-center">
-        <span className={`font-mono ${user.spendingEdits > 0 ? "text-white" : "text-zinc-600"}`}>
-          {user.spendingEdits}
-        </span>
-      </td>
-      <td className="px-6 py-4 text-zinc-400 text-sm">
-        {formatDate(user.createdAt)}
-      </td>
-      <td className="px-6 py-4 text-right">
-        <form
-          action={async () => {
-            "use server";
-            await onDelete(user.userId);
-          }}
-        >
-          <button
-            type="submit"
-            className="text-red-400 hover:text-red-300 text-sm"
-            onClick={(e) => {
-              if (!confirm(`Delete all data for ${user.email || user.userId}? This cannot be undone.`)) {
-                e.preventDefault();
-              }
-            }}
-          >
-            Delete
-          </button>
-        </form>
-      </td>
-    </tr>
   );
 }
 
