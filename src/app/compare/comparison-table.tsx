@@ -132,6 +132,10 @@ export function ComparisonTable({
   const [includeWelcomeBonuses, setIncludeWelcomeBonuses] = useState(bonusDisplaySettings.includeWelcomeBonuses);
   const [includeSpendBonuses, setIncludeSpendBonuses] = useState(bonusDisplaySettings.includeSpendBonuses);
 
+  // Check if any cards have bonuses configured (only show toggles if there are bonuses)
+  const hasAnySubs = useMemo(() => cards.some((c) => c.welcomeBonusRate > 0), [cards]);
+  const hasAnySpendBonuses = useMemo(() => cards.some((c) => c.spendBonusRate > 0), [cards]);
+
   // Track if this is the initial mount (to avoid saving on first render)
   const isInitialMount = useRef(true);
   const categoriesInitialMount = useRef(true);
@@ -564,39 +568,45 @@ export function ComparisonTable({
           My Spending
         </button>
 
-        {/* Bonus Toggles */}
-        <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800/50">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includeWelcomeBonuses}
-              disabled={isPending}
-              onChange={(e) => {
-                setIncludeWelcomeBonuses(e.target.checked);
-                startTransition(() => {
-                  onUpdateBonusSettings?.(e.target.checked, includeSpendBonuses);
-                });
-              }}
-              className="rounded border-zinc-600 bg-zinc-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
-            />
-            <span className={`text-sm ${includeWelcomeBonuses ? "text-cyan-400" : "text-zinc-300"}`}>SUBs</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includeSpendBonuses}
-              disabled={isPending}
-              onChange={(e) => {
-                setIncludeSpendBonuses(e.target.checked);
-                startTransition(() => {
-                  onUpdateBonusSettings?.(includeWelcomeBonuses, e.target.checked);
-                });
-              }}
-              className="rounded border-zinc-600 bg-zinc-700 text-lime-500 focus:ring-lime-500 focus:ring-offset-0"
-            />
-            <span className={`text-sm ${includeSpendBonuses ? "text-lime-400" : "text-zinc-300"}`}>Spend Bonuses</span>
-          </label>
-        </div>
+        {/* Bonus Toggles - Only show if user has any bonuses configured */}
+        {(hasAnySubs || hasAnySpendBonuses) && (
+          <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800/50">
+            {hasAnySubs && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeWelcomeBonuses}
+                  disabled={isPending}
+                  onChange={(e) => {
+                    setIncludeWelcomeBonuses(e.target.checked);
+                    startTransition(() => {
+                      onUpdateBonusSettings?.(e.target.checked, includeSpendBonuses);
+                    });
+                  }}
+                  className="rounded border-zinc-600 bg-zinc-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
+                />
+                <span className={`text-sm ${includeWelcomeBonuses ? "text-cyan-400" : "text-zinc-300"}`}>SUBs</span>
+              </label>
+            )}
+            {hasAnySpendBonuses && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeSpendBonuses}
+                  disabled={isPending}
+                  onChange={(e) => {
+                    setIncludeSpendBonuses(e.target.checked);
+                    startTransition(() => {
+                      onUpdateBonusSettings?.(includeWelcomeBonuses, e.target.checked);
+                    });
+                  }}
+                  className="rounded border-zinc-600 bg-zinc-700 text-lime-500 focus:ring-lime-500 focus:ring-offset-0"
+                />
+                <span className={`text-sm ${includeSpendBonuses ? "text-lime-400" : "text-zinc-300"}`}>Spend Bonuses</span>
+              </label>
+            )}
+          </div>
+        )}
 
         {/* Category Selector */}
         <div className="relative">
