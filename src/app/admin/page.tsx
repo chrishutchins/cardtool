@@ -11,16 +11,32 @@ export default async function AdminDashboard() {
 
   const supabase = await createClient();
 
-  const [issuersResult, currenciesResult, categoriesResult, cardsResult, templatesResult] =
+  const [issuersResult, currenciesResult, categoriesResult, cardsResult, templatesResult, usersResult] =
     await Promise.all([
       supabase.from("issuers").select("*", { count: "exact", head: true }),
       supabase.from("reward_currencies").select("*", { count: "exact", head: true }),
       supabase.from("earning_categories").select("*", { count: "exact", head: true }),
       supabase.from("cards").select("*", { count: "exact", head: true }),
       supabase.from("point_value_templates").select("*", { count: "exact", head: true }),
+      supabase.from("user_wallets").select("user_id"),
     ]);
 
+  // Count unique users
+  const uniqueUserIds = new Set((usersResult.data ?? []).map((u) => u.user_id));
+
   const stats = [
+    {
+      name: "Users",
+      count: uniqueUserIds.size,
+      href: "/admin/users",
+      color: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    },
+    {
+      name: "Cards",
+      count: cardsResult.count ?? 0,
+      href: "/admin/cards",
+      color: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    },
     {
       name: "Issuers",
       count: issuersResult.count ?? 0,
@@ -38,12 +54,6 @@ export default async function AdminDashboard() {
       count: categoriesResult.count ?? 0,
       href: "/admin/categories",
       color: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    },
-    {
-      name: "Cards",
-      count: cardsResult.count ?? 0,
-      href: "/admin/cards",
-      color: "bg-purple-500/10 text-purple-400 border-purple-500/20",
     },
     {
       name: "Point Value Templates",
