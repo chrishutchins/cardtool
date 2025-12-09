@@ -478,6 +478,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
 
   // Calculate bonus rates for each card (if bonuses are enabled)
   const cardBonusRates = new Map<string, number>();
+  console.log(`[BONUS] includeBonusesInCalculation=${includeBonusesInCalculation}, spendBonuses.length=${spendBonuses.length}`);
   if (includeBonusesInCalculation) {
     for (const card of cards) {
       const bonusRate = calculateCardBonusRate(
@@ -490,15 +491,19 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         userCurrencyValues,
         defaultCurrencyValues
       );
+      console.log(`[BONUS] Card ${card.name}: bonusRate=${bonusRate}`);
       if (bonusRate > 0) {
         cardBonusRates.set(card.id, bonusRate);
       }
     }
   }
+  console.log(`[BONUS] Final bonus rates:`, Object.fromEntries(cardBonusRates));
 
   // Build a map of card_id -> multiplier (for earning multiplier programs like BoA Preferred Rewards)
   const cardMultipliers = new Map<string, number>();
+  console.log(`[MULTIPLIERS] Processing ${multiplierPrograms.length} multiplier programs for ${cards.length} cards`);
   for (const program of multiplierPrograms) {
+    console.log(`[MULTIPLIERS] Program ${program.programId}: multiplier=${program.multiplier}, cardIds=${program.applicableCardIds.join(',')}, currencyIds=${program.applicableCurrencyIds.join(',')}`);
     for (const card of cards) {
       // Check if this card is eligible for this multiplier program
       const currencyId = enabledSecondaryCards.has(card.id) && card.secondary_currency
@@ -510,12 +515,14 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
         (currencyId && program.applicableCurrencyIds.includes(currencyId));
       
       if (isEligible) {
+        console.log(`[MULTIPLIERS] Card ${card.name} (${card.id}) is eligible for ${program.multiplier}x`);
         // If multiple programs apply, use the highest multiplier
         const existing = cardMultipliers.get(card.id) ?? 1;
         cardMultipliers.set(card.id, Math.max(existing, program.multiplier));
       }
     }
   }
+  console.log(`[MULTIPLIERS] Final multipliers:`, Object.fromEntries(cardMultipliers));
 
   // Build category map for parent lookups
   const categoryMap = new Map<number, CategorySpending>();
