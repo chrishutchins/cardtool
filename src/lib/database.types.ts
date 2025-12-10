@@ -1154,6 +1154,7 @@ export type Database = {
       }
       user_feature_flags: {
         Row: {
+          account_linking_enabled: boolean | null
           created_at: string | null
           debit_pay_enabled: boolean | null
           id: string
@@ -1161,6 +1162,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_linking_enabled?: boolean | null
           created_at?: string | null
           debit_pay_enabled?: boolean | null
           id?: string
@@ -1168,6 +1170,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_linking_enabled?: boolean | null
           created_at?: string | null
           debit_pay_enabled?: boolean | null
           id?: string
@@ -1209,6 +1212,71 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_effective_spending"
             referencedColumns: ["category_id"]
+          },
+        ]
+      }
+      user_linked_accounts: {
+        Row: {
+          available_balance: number | null
+          created_at: string | null
+          credit_limit: number | null
+          current_balance: number | null
+          id: string
+          iso_currency_code: string | null
+          last_balance_update: string | null
+          mask: string | null
+          name: string
+          official_name: string | null
+          plaid_account_id: string
+          plaid_item_id: string
+          subtype: string | null
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          available_balance?: number | null
+          created_at?: string | null
+          credit_limit?: number | null
+          current_balance?: number | null
+          id?: string
+          iso_currency_code?: string | null
+          last_balance_update?: string | null
+          mask?: string | null
+          name: string
+          official_name?: string | null
+          plaid_account_id: string
+          plaid_item_id: string
+          subtype?: string | null
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          available_balance?: number | null
+          created_at?: string | null
+          credit_limit?: number | null
+          current_balance?: number | null
+          id?: string
+          iso_currency_code?: string | null
+          last_balance_update?: string | null
+          mask?: string | null
+          name?: string
+          official_name?: string | null
+          plaid_account_id?: string
+          plaid_item_id?: string
+          subtype?: string | null
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_linked_accounts_plaid_item_id_fkey"
+            columns: ["plaid_item_id"]
+            isOneToOne: false
+            referencedRelation: "user_plaid_items"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1325,6 +1393,39 @@ export type Database = {
             referencedColumns: ["category_id"]
           },
         ]
+      }
+      user_plaid_items: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          id: string
+          institution_id: string | null
+          institution_name: string | null
+          item_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string | null
+          id?: string
+          institution_id?: string | null
+          institution_name?: string | null
+          item_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          id?: string
+          institution_id?: string | null
+          institution_name?: string | null
+          item_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_point_value_settings: {
         Row: {
@@ -1842,3 +1943,4 @@ export const Constants = {
     },
   },
 } as const
+

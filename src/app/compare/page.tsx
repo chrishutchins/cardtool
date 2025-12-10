@@ -620,7 +620,8 @@ export default async function ComparePage() {
     // Build earning rates using "highest rate wins" logic (with multiplier applied)
     const earningRates: Record<number, number> = {};
     for (const categoryId of nonExcludedCategoryIds) {
-      earningRates[categoryId] = getBestRate(card.id, categoryId, (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1));
+      // Pass raw default_earn_rate - getBestRate applies the multiplier
+      earningRates[categoryId] = getBestRate(card.id, categoryId, card.default_earn_rate ?? 1);
     }
 
     return {
@@ -628,6 +629,7 @@ export default async function ComparePage() {
       name: card.name,
       slug: card.slug,
       annualFee: card.annual_fee,
+      // Multiplier is already applied in earningRates via getBestRate
       defaultEarnRate: (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1),
       issuerName: card.issuers?.name ?? "Unknown",
       currencyCode: currency?.code ?? "???",
