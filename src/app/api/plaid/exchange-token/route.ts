@@ -53,13 +53,23 @@ export async function POST(request: NextRequest) {
     console.log('Metadata accounts from Link:', JSON.stringify(metadata?.accounts, null, 2));
     
     // Helper function to fetch balances with retries
+    // Some institutions (like Capital One) require min_last_updated_datetime
     async function fetchBalancesWithRetry(token: string, maxRetries = 3, delayMs = 1000) {
       let lastError: unknown;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`Balance fetch attempt ${attempt}/${maxRetries}`);
+          
+          // Set min_last_updated_datetime to 24 hours ago
+          // Required for some institutions like Capital One (ins_128026)
+          const minLastUpdated = new Date();
+          minLastUpdated.setHours(minLastUpdated.getHours() - 24);
+          
           const response = await plaidClient.accountsBalanceGet({
             access_token: token,
+            options: {
+              min_last_updated_datetime: minLastUpdated.toISOString(),
+            },
           });
           console.log('Balance fetch successful on attempt', attempt);
           return response;

@@ -37,8 +37,17 @@ export async function POST() {
     for (const item of plaidItems) {
       try {
         console.log('Refreshing balances for item:', item.id);
+        
+        // Set min_last_updated_datetime to 24 hours ago
+        // Required for some institutions like Capital One (ins_128026)
+        const minLastUpdated = new Date();
+        minLastUpdated.setHours(minLastUpdated.getHours() - 24);
+        
         const balanceResponse = await plaidClient.accountsBalanceGet({
           access_token: item.access_token,
+          options: {
+            min_last_updated_datetime: minLastUpdated.toISOString(),
+          },
         });
 
         console.log('Received accounts:', balanceResponse.data.accounts.map(a => ({
