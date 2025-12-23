@@ -1291,14 +1291,7 @@ export type Database = {
             foreignKeyName: "user_linked_accounts_wallet_card_id_fkey"
             columns: ["wallet_card_id"]
             isOneToOne: false
-            referencedRelation: "card_with_currency"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_linked_accounts_wallet_card_id_fkey"
-            columns: ["wallet_card_id"]
-            isOneToOne: false
-            referencedRelation: "cards"
+            referencedRelation: "user_wallets"
             referencedColumns: ["id"]
           },
         ]

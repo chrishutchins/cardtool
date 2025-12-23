@@ -796,9 +796,10 @@ export function ComparisonTable({
                     {/* Available Credit Cell */}
                     {showAvailableCredit && (
                       <td className="px-3 py-3 text-center text-sm font-mono">
-                        {availableCredit[card.cardId] != null ? (
+                        {/* For owned cards, use card.id (wallet ID) since linking is by wallet instance */}
+                        {availableCredit[card.id] != null ? (
                           <span className="text-orange-400">
-                            ${Math.round(availableCredit[card.cardId]).toLocaleString()}
+                            ${Math.round(availableCredit[card.id]).toLocaleString()}
                           </span>
                         ) : (
                           <span className="text-zinc-600">—</span>

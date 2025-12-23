@@ -734,45 +734,17 @@ export default async function SettingsPage() {
                   user_plaid_items: account.user_plaid_items as { institution_name: string | null } | null,
                 }))}
                 walletCards={
-                  // De-duplicate by card_id since pairing is by card definition
-                  // Show all custom names for cards with multiple instances
-                  (() => {
-                    const cardMap = new Map<string, { 
-                      id: string; 
-                      baseName: string;
-                      customNames: string[]; 
-                      issuer_name: string | null 
-                    }>();
-                    
-                    for (const wc of typedWalletCards) {
-                      if (!wc.cards?.id) continue;
-                      const cardId = wc.cards.id;
-                      const customName = (wc as unknown as { custom_name?: string | null }).custom_name;
-                      const existing = cardMap.get(cardId);
-                      
-                      if (!existing) {
-                        cardMap.set(cardId, {
-                          id: cardId,
-                          baseName: wc.cards.name,
-                          customNames: customName ? [customName] : [],
-                          issuer_name: (wc.cards as unknown as { issuers?: { name: string } | null })?.issuers?.name ?? null,
-                        });
-                      } else if (customName && !existing.customNames.includes(customName)) {
-                        existing.customNames.push(customName);
-                      }
-                    }
-                    
-                    return Array.from(cardMap.values())
-                      .map(card => ({
-                        id: card.id,
-                        // Show all custom names if any, otherwise base name
-                        name: card.customNames.length > 0 
-                          ? card.customNames.join(", ")
-                          : card.baseName,
-                        issuer_name: card.issuer_name,
-                      }))
-                      .sort((a, b) => a.name.localeCompare(b.name));
-                  })()
+                  // Show each wallet instance separately - linking is now by wallet instance, not card type
+                  typedWalletCards
+                    .filter(wc => wc.cards?.id)
+                    .map(wc => ({
+                      // Use wallet instance ID (user_wallets.id) for pairing
+                      id: wc.id,
+                      // Use custom name if set, otherwise card name
+                      name: (wc as unknown as { custom_name?: string | null }).custom_name ?? wc.cards!.name,
+                      issuer_name: (wc.cards as unknown as { issuers?: { name: string } | null })?.issuers?.name ?? null,
+                    }))
+                    .sort((a, b) => a.name.localeCompare(b.name))
                 }
                 onPairCard={pairLinkedAccount}
                 onUnlinkCard={unlinkLinkedAccount}
