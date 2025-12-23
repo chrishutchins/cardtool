@@ -50,21 +50,37 @@ const CURRENCY_KEYWORDS: Record<string, string[]> = {
   "bilt": ["bilt rewards"],
 };
 
-// Build reverse lookup: keyword -> list of values it should match
-function buildKeywordLookup(mapping: Record<string, string[]>): Map<string, string[]> {
+// Build bidirectional lookup: maps keywords to values AND values to keywords
+// So "amex" -> ["american express"] AND "american express" -> ["amex"]
+function buildBidirectionalLookup(mapping: Record<string, string[]>): Map<string, string[]> {
   const lookup = new Map<string, string[]>();
+  
   for (const [value, keywords] of Object.entries(mapping)) {
+    const valueLower = value.toLowerCase();
+    
+    // Map each keyword -> value (e.g., "amex" -> "american express")
     for (const keyword of keywords) {
-      const existing = lookup.get(keyword.toLowerCase()) ?? [];
-      existing.push(value.toLowerCase());
-      lookup.set(keyword.toLowerCase(), existing);
+      const keywordLower = keyword.toLowerCase();
+      const existing = lookup.get(keywordLower) ?? [];
+      if (!existing.includes(valueLower)) existing.push(valueLower);
+      lookup.set(keywordLower, existing);
     }
+    
+    // Map value -> all keywords (e.g., "american express" -> ["amex", "americanexpress"])
+    // This enables reverse lookups
+    const existingForValue = lookup.get(valueLower) ?? [];
+    for (const keyword of keywords) {
+      const keywordLower = keyword.toLowerCase();
+      if (!existingForValue.includes(keywordLower)) existingForValue.push(keywordLower);
+    }
+    lookup.set(valueLower, existingForValue);
   }
+  
   return lookup;
 }
 
-const issuerKeywordLookup = buildKeywordLookup(ISSUER_KEYWORDS);
-const currencyKeywordLookup = buildKeywordLookup(CURRENCY_KEYWORDS);
+const issuerKeywordLookup = buildBidirectionalLookup(ISSUER_KEYWORDS);
+const currencyKeywordLookup = buildBidirectionalLookup(CURRENCY_KEYWORDS);
 
 export function AddCardModal({ 
   availableCards, 
