@@ -226,7 +226,7 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
                         <option value="">Not paired</option>
                         {walletCards.map((card, index) => (
                           <option key={`${card.id}-${index}`} value={card.id}>
-                            {card.issuer_name ? `${card.issuer_name} ` : ""}{card.name}
+                            {card.name}
                           </option>
                         ))}
                       </select>
