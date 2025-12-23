@@ -11,16 +11,24 @@ interface UserStats {
   cardsAdded: number;
   spendingEdits: number;
   createdAt: string | null;
+  accountLinkingEnabled: boolean;
 }
 
 export default async function UsersPage() {
   const supabase = await createClient();
 
   // Get all unique user IDs from wallet and spending tables
-  const [walletResult, spendingResult] = await Promise.all([
+  const [walletResult, spendingResult, featureFlagsResult] = await Promise.all([
     supabase.from("user_wallets").select("user_id, added_at"),
     supabase.from("user_category_spend").select("user_id, created_at"),
+    supabase.from("user_feature_flags").select("user_id, account_linking_enabled"),
   ]);
+
+  // Build feature flags map
+  const accountLinkingByUser: Record<string, boolean> = {};
+  for (const flag of featureFlagsResult.data ?? []) {
+    accountLinkingByUser[flag.user_id] = flag.account_linking_enabled ?? false;
+  }
 
   // Count cards per user
   const cardsByUser: Record<string, number> = {};
@@ -82,6 +90,7 @@ export default async function UsersPage() {
       cardsAdded: cardsByUser[userId] ?? 0,
       spendingEdits: spendingByUser[userId] ?? 0,
       createdAt,
+      accountLinkingEnabled: accountLinkingByUser[userId] ?? false,
     });
   }
 
@@ -98,6 +107,12 @@ export default async function UsersPage() {
     const supabase = await createClient();
 
     // Delete all user data from all tables
+    // First delete linked accounts (has FK to plaid_items)
+    await supabase.from("user_linked_accounts").delete().eq("user_id", userId);
+    // Then delete plaid items
+    await supabase.from("user_plaid_items").delete().eq("user_id", userId);
+    
+    // Delete remaining user data
     await Promise.all([
       supabase.from("user_wallets").delete().eq("user_id", userId),
       supabase.from("user_category_spend").delete().eq("user_id", userId),
@@ -118,6 +133,21 @@ export default async function UsersPage() {
       supabase.from("user_welcome_bonus_settings").delete().eq("user_id", userId),
       supabase.from("user_welcome_bonus_value_overrides").delete().eq("user_id", userId),
     ]);
+
+    revalidatePath("/admin/users");
+  }
+
+  async function toggleAccountLinking(userId: string, enabled: boolean) {
+    "use server";
+    const supabase = await createClient();
+
+    await supabase.from("user_feature_flags").upsert(
+      {
+        user_id: userId,
+        account_linking_enabled: enabled,
+      },
+      { onConflict: "user_id" }
+    );
 
     revalidatePath("/admin/users");
   }
@@ -146,6 +176,9 @@ export default async function UsersPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 First Activity
               </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                Account Linking
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
                 Actions
               </th>
@@ -153,7 +186,12 @@ export default async function UsersPage() {
           </thead>
           <tbody className="divide-y divide-zinc-800">
             {users.map((user) => (
-              <UserRow key={user.userId} user={user} onDelete={deleteUser} />
+              <UserRow 
+                key={user.userId} 
+                user={user} 
+                onDelete={deleteUser}
+                onToggleAccountLinking={toggleAccountLinking}
+              />
             ))}
           </tbody>
         </table>

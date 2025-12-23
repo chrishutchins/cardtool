@@ -68,6 +68,7 @@ export default async function WalletPage() {
       .select(`
         id,
         card_id,
+        custom_name,
         added_at,
         cards:card_id (
           id,
@@ -281,6 +282,7 @@ export default async function WalletPage() {
   type WalletCardData = {
     id: string;
     card_id: string;
+    custom_name: string | null;
     added_at: string | null;
     cards: {
       id: string;
@@ -323,7 +325,7 @@ export default async function WalletPage() {
 
   // Check if debit pay is enabled
   const debitPayEnabled = featureFlagsResult.data?.debit_pay_enabled ?? false;
-
+  
   // Build debit pay map
   const debitPayMap = new Map<string, number>();
   debitPayResult.data?.forEach((dp) => {
@@ -348,17 +350,30 @@ export default async function WalletPage() {
   };
   const allCards = (allCardsResult.data ?? []) as unknown as AllCardData[];
   
-  const cardsNotInWallet = allCards.filter(
-    (card) => card.id && !userCardIds.includes(card.id)
-  );
+  // All cards are available to add (users can add duplicates)
+  const availableCardsForModal = allCards.filter((card) => card.id);
 
   // Calculate portfolio returns
   const userCardIdsSet = new Set(userCardIds);
   
   // Process cards for returns calculator
-  const cards: CardInput[] = walletCards
-    .filter(w => w.cards)
-    .map(w => w.cards as unknown as CardInput);
+  // De-duplicate cards (users may have multiple instances of the same card)
+  // but track instance counts for fee calculation
+  const cardInstanceCounts = new Map<string, number>();
+  walletCards.forEach(w => {
+    if (w.cards) {
+      cardInstanceCounts.set(w.cards.id, (cardInstanceCounts.get(w.cards.id) ?? 0) + 1);
+    }
+  });
+  
+  // De-duplicated cards for spend allocation (same card earns the same)
+  const cards: CardInput[] = Array.from(
+    new Map(
+      walletCards
+        .filter(w => w.cards)
+        .map(w => [w.cards!.id, w.cards as unknown as CardInput])
+    ).values()
+  );
 
   // Process ALL earning rules (needed for recommendations)
   const allEarningRules: EarningRuleInput[] = (rulesResult.data ?? [])
@@ -600,6 +615,8 @@ export default async function WalletPage() {
     spendBonuses,
     spendBonusValues,
     includeBonusesInCalculation,
+    // Multi-instance support: count how many of each card for fee calculation
+    cardInstanceCounts,
   };
   
   const returns = cards.length > 0 ? calculatePortfolioReturns(calculatorInput) : null;
@@ -628,20 +645,35 @@ export default async function WalletPage() {
 
     const supabase = await createClient();
     
-    // Get the card's default perks value
+    // Get the card's name and default perks value
     const { data: card } = await supabase
       .from("cards")
-      .select("default_perks_value")
+      .select("name, default_perks_value")
       .eq("id", cardId)
       .single();
+    
+    // Count how many instances of this card already exist in wallet
+    const { count: existingCount } = await supabase
+      .from("user_wallets")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("card_id", cardId);
+    
+    // If this is a duplicate, set a custom name like "Card Name 2"
+    const customName = (existingCount && existingCount > 0 && card?.name) 
+      ? `${card.name} ${existingCount + 1}` 
+      : null;
     
     // Add card to wallet
     await supabase.from("user_wallets").insert({
       user_id: user.id,
       card_id: cardId,
+      custom_name: customName,
     });
     
     // If card has a default perks value, set it for the user
+    // Note: For now, perks are shared across instances (by card_id)
+    // TODO: Consider per-instance perks in future
     if (card?.default_perks_value && card.default_perks_value > 0) {
       await supabase.from("user_card_perks_values").upsert(
         {
@@ -665,6 +697,20 @@ export default async function WalletPage() {
     await supabase
       .from("user_wallets")
       .delete()
+      .eq("id", walletId)
+      .eq("user_id", user.id);
+    revalidatePath("/wallet");
+  }
+
+  async function updateCustomName(walletId: string, customName: string | null) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase
+      .from("user_wallets")
+      .update({ custom_name: customName })
       .eq("id", walletId)
       .eq("user_id", user.id);
     revalidatePath("/wallet");
@@ -820,7 +866,7 @@ export default async function WalletPage() {
             </p>
           </div>
           <AddCardModal
-            availableCards={cardsNotInWallet.map(c => ({
+            availableCards={availableCardsForModal.map(c => ({
               id: c.id,
               name: c.name,
               slug: c.slug,
@@ -859,6 +905,7 @@ export default async function WalletPage() {
             onRemove={removeFromWallet}
             onUpdatePerks={updatePerksValue}
             onUpdateDebitPay={updateDebitPay}
+            onUpdateCustomName={updateCustomName}
           />
         ) : (
           <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
@@ -871,9 +918,12 @@ export default async function WalletPage() {
 
         {/* Bonus Settings */}
         {walletCards.length > 0 && (
+          <div className="mt-8">
           <BonusSettings
             walletCards={walletCards.map(wc => ({
+              wallet_id: wc.id,
               card_id: wc.card_id,
+              display_name: wc.custom_name ?? wc.cards?.name ?? "",
               card_name: wc.cards?.name ?? "",
               currency_name: wc.cards?.primary_currency?.name ?? null,
             }))}
@@ -888,6 +938,7 @@ export default async function WalletPage() {
             onUpdateWelcomeBonusValueOverride={updateWelcomeBonusValueOverride}
             onUpdateSpendBonusValue={updateSpendBonusValue}
           />
+          </div>
         )}
       </div>
     </div>

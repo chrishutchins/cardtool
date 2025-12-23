@@ -1,0 +1,107 @@
+﻿Issuer,Rewards Currency,Card,Gas,Grocery,Flights,Hotels,RentalCar,Travel,Transit,Dining,Drugstore,Ads,Office Supply,Internet/Cable,Phone,Amazon,Streaming,Entertainment,Wholesale Clubs,Home Improvement,Mobile Pay,>5k,Else,Rent,Annual Fee
+Amex,Membership Rewards,Blue Buesiness Plus,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$0 
+Amex,Membership Rewards,Business Gold,1,1,1,1,1,1,1,1,1,4,1,1,1,1,1,1,1,1,1,1,1,0,$295 
+Amex,Membership Rewards,Business Platinum,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1.5,1,0,$695 
+Amex,Membership Rewards,Everyday,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Amex,Membership Rewards,Everyday Pref,2,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$95 
+Amex,Membership Rewards,Gold,1,4,3,1,1,1,1,4,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$250 
+Amex,Membership Rewards,Green,1,1,3,3,3,3,3,3,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$150 
+Amex,Membership Rewards,Platinum,1,1,5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$695 
+Amex,Membership Rewards,Schwab Platinum,1,1,5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$695 
+Amex,Membership Rewards,Blue Cash Everyday,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Amex,Membership Rewards,Blue Cash Pref,3,6,1,1,1,1,3,1,1,1,1,1,1,1,6,1,1,1,1,1,1,0,$95 
+Amex,Delta,Delta Blue,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Amex,Delta,Delta Gold,1,2,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$150 
+Amex,Delta,Delta Gold Business,1,1,1,1,1,1,1,2,1,2,1,1,1,1,1,1,1,1,1,1,1,0,$150 
+Amex,Delta,Delta Platinum,1,2,1,3,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$350 
+Amex,Delta,Delta Platinum Business,1,1,1,3,1,1,1.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$350 
+Amex,Delta,Delta Reserve,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$650 
+Amex,Delta,Delta Reserve Business,1,1,1,1,1,1,1,1,1,1,1.5,1,1,1,1,1,1,1,1,1,1,0,$650 
+Amex,Hilton,Hilton Business,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,0,$195 
+Amex,Hilton,Hilton Aspire,3,3,7,3,7,3,3,7,3,3,3,3,3,3,3,3,3,3,3,3,3,0,$550 
+Amex,Hilton,Hilton Card,5,5,3,3,3,3,3,5,3,3,3,3,3,3,3,3,3,3,3,3,3,0,$0 
+Amex,Hilton,Hilton Surpass,6,6,3,3,3,3,3,6,3,3,3,3,3,3,3,3,3,3,3,3,3,0,$150 
+Amex,Bonvoy,Bonvoy Business,4,2,2,6,2,2,2,4,2,2,2,2,4,2,2,2,2,2,2,2,2,0,$125 
+Amex,Bonvoy,Bonvoy Bevy,2,4,2,6,2,2,2,4,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$250 
+Amex,Bonvoy,Bonvoy Brilliant,2,2,3,6,2,2,2,3,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$650 
+Apple,Cash Back,Apple Card,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,0,$0 
+Barclays,JetBlue,JetBlue Business,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,0,$99 
+Barclays,JetBlue,JetBlue Card,1,2,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Barclays,JetBlue,JetBlue Plus,1,2,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$95 
+Barclays,JetBlue,JetBlue Premier,1,2,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$499 
+Bilt,Bilt Rewards,Bilt Card,1,1,2,2,2,2,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,$0 
+Bank of America,Cash Back,Business Travel Rewards,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Bank of America,Cash Back,Business Unlimited Cash,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Bank of America,Cash Back,Premium Rewards,1.5,1.5,2,2,2,2,2,2,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$95 
+Bank of America,Cash Back,Premium Rewards Elite,1.5,1.5,2,2,2,2,2,2,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$550 
+Bank of America,Cash Back,Travel Rewards,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Bank of America,Cash Back,Unlimited Cash,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Bank of America,Cash Back,Business Customized Cash,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Bank of America,Cash Back,Customized Cash,1,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Bank of America,Alaska,Alaska Business,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$95 
+Bank of America,Alaska,Alaska Personal,2,1,1,1,1,1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,0,$95 
+Bank of America,Alaska,Summit,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$395 
+Capital One,Cash Back,Spark Cash Plus,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$150 
+Capital One,Capital One Miles,Spark Miles 2x,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$95 
+Capital One,Capital One Miles,Venture,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$95 
+Capital One,Capital One Miles,Venture X,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$395 
+Capital One,Capital One Miles,Venture X Business,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$395 
+Capital One,Cash Back,Quicksilver,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Capital One,Capital One Miles,VentureOne,1.25,1.25,1.25,2,2,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,1.25,0,$0 
+Capital One,Cash Back,Savor,1,3,1,1,1,1,1,3,1,1,1,1,1,1,3,3,1,1,1,1,1,0,$95 
+Chase,Ultimate Rewards,Ink Business Preferred,1,1,3,3,3,3,3,1,1,3,1,3,3,1,1,1,1,1,1,1,1,0,$95 
+Chase,Cash Back,Freedom Unlimited,1.5,1.5,1.5,1.5,1.5,1.5,1.5,3,3,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Chase,Cash Back,Ink Unlimited,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Chase,Cash Back,Freedom Flex,1,1,1,1,1,1,1,3,3,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Chase,Cash Back,Ink Cash,1,1,1,1,1,1,1,1,1,1,1,5,1,1,1,1,1,1,1,1,1,0,$0 
+Chase,Ultimate Rewards,Sapphire Preferred,1,1,2,2,2,2,2,3,1,1,1,1,1,1,3,1,1,1,1,1,1,0,$95 
+Chase,Ultimate Rewards,Sapphire Reserve,1,1,4,4,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$795 
+Chase,Ultimate Rewards,Sapphire Reserve Business,1,1,4,4,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,0,$795 
+Chase,Cash Back,Ink Premier,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2.5,2,0,$195 
+Chase,Cash Back,Amazon Prime,2,1,1,1,1,1,2,2,1,1,1,1,1,5,1,1,1,1,1,1,1,0,$0 
+Chase,IHG,IHG Premier,5,3,5,5,5,5,5,5,3,3,3,3,3,3,3,3,3,3,3,3,3,0,$99 
+Chase,IHG,IHG Premier Business,5,3,5,5,5,5,5,5,3,3,3,3,3,3,3,3,3,3,3,3,3,0,$99 
+Chase,IHG,IHG Traveler,3,2,2,2,2,2,2,3,2,2,2,2,2,2,3,2,2,2,2,2,2,0,$0 
+Chase,Bonvoy,Bonvoy Bold,1,2,1,1,1,1,2,2,1,1,1,2,2,1,2,1,1,1,1,1,1,0,$0 
+Chase,Bonvoy,Bonvoy Boundless,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$95 
+Chase,Bonvoy,Bonvoy Bountiful,2,2,2,2,2,2,2,4,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$250 
+Chase,Bonvoy,Ritz Carlton,2,2,3,2,3,2,2,3,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$450 
+Chase,Southwest,SW Performance Business,1,1,1,1,1,1,2,1,1,2,1,2,2,1,1,1,1,1,1,1,1,0,$199 
+Chase,Southwest,SW Plus,1,1,1,1,1,1,2,1,1,1,1,2,2,1,1,1,1,1,1,1,1,0,$69 
+Chase,Southwest,SW Premier,1,1,1,1,1,1,2,1,1,1,1,2,2,1,1,1,1,1,1,1,1,0,$99 
+Chase,Southwest,SW Priority,1,1,1,1,1,1,2,1,1,1,1,2,2,1,1,1,1,1,1,1,1,0,$149 
+Chase,Southwest,SW Preferred Business,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$99 
+Chase,United,United Club Business,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$695 
+Chase,United,United Business,2,1,1,1,1,1,2,2,1,1,2,1,1,1,1,1,1,1,1,1,1,0,$150 
+Chase,United,United Club,1,1,1,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$695 
+Chase,United,United Explorer,1,1,1,2,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$150 
+Chase,United,United Gateway,2,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Chase,United,United Quest,1,1,2,2,2,2,2,2,1,1,1,1,1,1,2,1,1,1,1,1,1,0,$350 
+Chase,Hyatt,Hyatt Business,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$199 
+Chase,Hyatt,Hyatt Personal,1,1,2,1,1,1,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$95 
+Citi,ThankYou Points,Strata Elite,1.5,1.5,1.5,1.5,1.5,1.5,1.5,6,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$595 
+Citi,Cash Back,Double Cash,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$0 
+Citi,ThankYou Points,Strata Premier,3,3,3,3,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$95 
+Citi,Cash Back,Costco Visa,4,1,3,3,3,3,1,3,1,1,1,1,1,1,1,1,2,1,1,1,1,0,$0 
+Citi,Cash Back,Custom Cash,1,1,1,1,1,1,1,5,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Citi,Cash Back,Strata+,3,3,1,2,2,1,3,2,1,1,1,1,1,1,3,1,1,1,1,1,1,0,$0 
+Citi,American,AA Business,2,1,1,1,2,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,0,$0 
+Citi,American,AA Executive,1,1,1,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$595 
+Citi,American,AA MileUp,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Citi,American,AA Platinum,2,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$99 
+Discover,Cash Back,DiscoverIt Miles,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Discover,Cash Back,DiscoverIt Cash Back,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Mesa,Mesa Points,Homeowners Card,2,2,1,1,1,1,1,1,1,1,1,3,3,1,3,1,1,3,1,1,1,0,$0 
+Paypal,Cash Back,Mastercard,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,0,$0 
+Paypal,Cash Back,Debit Card,5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Robinhood,Cash Back,Robinhood Card,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,0,$50 
+Sam's Club,Cash Back,Mastercard,5,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,3,1,1,1,1,0,$0 
+US Bank,Cash Back,Smartly Visa,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$0 
+US Bank,US Bank Points,Altitude Reserve,1,1,3,3,3,3,3,1,1,1,1,1,1,1,1,1,1,1,3,1,1,0,$400 
+Synchrony,Cash Back,Venmo Card,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,1,1,1,1,0,$0 
+Verizon,Cash Back,VZW Visa,4,4,1,1,1,1,1,3,1,1,1,1,2,1,1,1,1,1,1,1,1,0,$0 
+Webbank,Cash Back,Gemini Card,4,2,1,1,1,1,4,3,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Wells Fargo,Wells Fargo Rewards,Autograph,3,1,3,3,3,3,3,3,1,1,1,1,3,1,3,1,1,1,1,1,1,0,$0 
+Wells Fargo,Cash Back,Active Cash,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,$0 
+Wells Fargo,Cash Back,Attune,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$0 
+Wells Fargo,Wells Fargo Rewards,Autograph Journey,1,1,4,5,3,3,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,0,$95 

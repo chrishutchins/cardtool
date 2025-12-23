@@ -440,6 +440,9 @@ export interface CalculatorInput {
   spendBonuses?: SpendBonusInput[];
   spendBonusValues?: Map<string, number>; // spend_bonus_id -> value_cents (user valuations)
   includeBonusesInCalculation?: boolean; // Global toggle for including bonuses
+  // Multi-instance support: how many wallet instances of each card (for fee calculation)
+  // If not provided, assumes 1 instance per card
+  cardInstanceCounts?: Map<string, number>;
 }
 
 export function calculatePortfolioReturns(input: CalculatorInput): PortfolioReturns {
@@ -470,6 +473,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     spendBonuses = [],
     spendBonusValues = new Map(),
     includeBonusesInCalculation = false,
+    cardInstanceCounts = new Map(),
   } = input;
 
   // Expand spending to handle >$5k tracking
@@ -629,17 +633,23 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
   const currencyEarningsMap = new Map<string, { name: string; type: string; earned: number; value: number }>();
 
   // Initialize card earnings for all cards
+  // Note: fees are multiplied by instance count (for users with multiple of the same card)
   cards.forEach(card => {
     const currencyInfo = getCardCurrencyInfo(card);
+    const instanceCount = cardInstanceCounts.get(card.id) ?? 1;
+    const perksPerCard = perksValues.get(card.id) ?? 0;
+    // Total fees = fee per card × instance count, same for perks
+    const totalAnnualFee = card.annual_fee * instanceCount;
+    const totalPerksValue = perksPerCard * instanceCount;
     cardEarningsMap.set(card.id, {
       cardId: card.id,
       cardName: card.name,
       currencyType: currencyInfo.currencyType,
       currencyName: currencyInfo.currencyName,
       isCashback: currencyInfo.isCashback,
-      annualFee: card.annual_fee,
-      perksValue: perksValues.get(card.id) ?? 0,
-      netFee: card.annual_fee - (perksValues.get(card.id) ?? 0),
+      annualFee: totalAnnualFee,
+      perksValue: totalPerksValue,
+      netFee: totalAnnualFee - totalPerksValue,
       totalSpend: 0,
       totalEarned: 0,
       totalEarnedValue: 0,

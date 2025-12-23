@@ -5,6 +5,7 @@ import { useState, useTransition, useMemo } from "react";
 interface WalletCard {
   id: string;
   card_id: string;
+  custom_name: string | null;
   added_at: string | null;
   cards: {
     id: string;
@@ -29,6 +30,7 @@ interface WalletCardListProps {
   onRemove: (walletId: string) => Promise<void>;
   onUpdatePerks: (cardId: string, perksValue: number) => Promise<void>;
   onUpdateDebitPay?: (cardId: string, percent: number) => Promise<void>;
+  onUpdateCustomName?: (walletId: string, customName: string | null) => Promise<void>;
 }
 
 type SortField = "name" | "issuer" | "currency" | "annual_fee" | "perks" | "net_fee" | "debit_pay";
@@ -87,12 +89,17 @@ export function WalletCardList({
   onRemove,
   onUpdatePerks,
   onUpdateDebitPay,
+  onUpdateCustomName,
 }: WalletCardListProps) {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [editingPerksId, setEditingPerksId] = useState<string | null>(null);
   const [editPerksValue, setEditPerksValue] = useState<string>("");
   const [editingDebitPayId, setEditingDebitPayId] = useState<string | null>(null);
   const [editDebitPayValue, setEditDebitPayValue] = useState<string>("");
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState<string>("");
+  // Optimistic custom names - immediately show updated names while server action runs
+  const [optimisticNames, setOptimisticNames] = useState<Map<string, string | null>>(new Map());
   const [isPending, startTransition] = useTransition();
   
   // Filter and sort state
@@ -127,12 +134,16 @@ export function WalletCardList({
       if (!wc.cards) return false;
       const card = wc.cards;
       
-      // Search filter
+      // Search filter - include custom_name in search
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        const matchesName = card.name.toLowerCase().includes(query);
+        const optimisticName = optimisticNames.get(wc.id);
+        const effectiveCustomName = optimisticName !== undefined ? optimisticName : wc.custom_name;
+        const displayName = effectiveCustomName ?? card.name;
+        const matchesName = displayName.toLowerCase().includes(query);
+        const matchesCardName = card.name.toLowerCase().includes(query);
         const matchesIssuer = card.issuers?.name.toLowerCase().includes(query);
-        if (!matchesName && !matchesIssuer) return false;
+        if (!matchesName && !matchesCardName && !matchesIssuer) return false;
       }
       
       // Issuer filter
@@ -167,10 +178,18 @@ export function WalletCardList({
       const aDebitPay = debitPayMap.get(a.cards.id) ?? 0;
       const bDebitPay = debitPayMap.get(b.cards.id) ?? 0;
       
+      // Use optimistic name, then custom_name, then card name
+      const aOptimistic = optimisticNames.get(a.id);
+      const bOptimistic = optimisticNames.get(b.id);
+      const aEffective = aOptimistic !== undefined ? aOptimistic : a.custom_name;
+      const bEffective = bOptimistic !== undefined ? bOptimistic : b.custom_name;
+      const aDisplayName = aEffective ?? a.cards.name;
+      const bDisplayName = bEffective ?? b.cards.name;
+      
       let comparison = 0;
       switch (sortField) {
         case "name":
-          comparison = a.cards.name.localeCompare(b.cards.name);
+          comparison = aDisplayName.localeCompare(bDisplayName);
           break;
         case "issuer":
           comparison = (a.cards.issuers?.name ?? "").localeCompare(b.cards.issuers?.name ?? "");
@@ -196,7 +215,7 @@ export function WalletCardList({
     });
     
     return result;
-  }, [walletCards, searchQuery, issuerFilter, currencyFilter, sortField, sortDirection, perksMap, debitPayMap, enabledSecondaryCards]);
+  }, [walletCards, searchQuery, issuerFilter, currencyFilter, sortField, sortDirection, perksMap, debitPayMap, enabledSecondaryCards, optimisticNames]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -260,6 +279,41 @@ export function WalletCardList({
   const handleCancelDebitPay = () => {
     setEditingDebitPayId(null);
     setEditDebitPayValue("");
+  };
+
+  const handleEditName = (walletId: string, currentName: string) => {
+    setEditingNameId(walletId);
+    setEditNameValue(currentName);
+  };
+
+  const handleSaveName = (walletId: string) => {
+    const trimmedValue = editNameValue.trim();
+    if (onUpdateCustomName) {
+      // Optimistically update the name immediately
+      const newValue = trimmedValue || null;
+      setOptimisticNames(prev => {
+        const next = new Map(prev);
+        next.set(walletId, newValue);
+        return next;
+      });
+      setEditingNameId(null);
+      
+      startTransition(async () => {
+        // If empty, clear the custom name (will show card name instead)
+        await onUpdateCustomName(walletId, newValue);
+        // Clear optimistic state after server confirms (revalidatePath will update props)
+        setOptimisticNames(prev => {
+          const next = new Map(prev);
+          next.delete(walletId);
+          return next;
+        });
+      });
+    }
+  };
+
+  const handleCancelName = () => {
+    setEditingNameId(null);
+    setEditNameValue("");
   };
 
   return (
@@ -376,11 +430,60 @@ export function WalletCardList({
               const netFee = card.annual_fee - perksValue;
               const currencyConfig = currencyTypeConfig[activeCurrency?.currency_type ?? "other"] ?? currencyTypeConfig.other;
 
+              // Check optimistic name first, then fall back to server data
+              const optimisticName = optimisticNames.get(wc.id);
+              const effectiveCustomName = optimisticName !== undefined ? optimisticName : wc.custom_name;
+              const displayName = effectiveCustomName ?? card.name;
+              const hasCustomName = !!effectiveCustomName;
+
               return (
                 <tr key={wc.id} className="hover:bg-zinc-800/30">
                   {/* Card Name */}
                   <td className="px-4 py-3">
-                    <div className="font-medium text-white">{card.name}</div>
+                    {editingNameId === wc.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={editNameValue}
+                          onChange={(e) => setEditNameValue(e.target.value)}
+                          placeholder={card.name}
+                          className="w-40 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-white text-sm focus:border-blue-500 focus:outline-none"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveName(wc.id);
+                            if (e.key === "Escape") handleCancelName();
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSaveName(wc.id)}
+                          disabled={isPending}
+                          className="px-1.5 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={handleCancelName}
+                          disabled={isPending}
+                          className="px-1.5 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleEditName(wc.id, displayName)}
+                        className="text-left group"
+                        title="Click to edit name"
+                      >
+                        <div className="font-medium text-white group-hover:text-blue-400 transition-colors">
+                          {displayName}
+                          <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
+                        </div>
+                        {hasCustomName && (
+                          <div className="text-xs text-zinc-500">{card.name}</div>
+                        )}
+                      </button>
+                    )}
                     {hasSecondaryEnabled && card.secondary_currency && card.primary_currency && (
                       <div className="text-xs text-amber-400 mt-0.5">
                         ↑ {card.secondary_currency.name}

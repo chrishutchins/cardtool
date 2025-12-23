@@ -9,6 +9,7 @@ import { TravelPreferences } from "@/app/wallet/travel-preferences";
 import { MobilePayCategories } from "@/app/wallet/mobile-pay-categories";
 import { PaypalCategories } from "@/app/wallet/paypal-categories";
 import { LargePurchaseCategories } from "./large-purchase-categories";
+import { LinkedAccounts } from "@/app/wallet/linked-accounts";
 import { isAdminEmail } from "@/lib/admin";
 
 export default async function SettingsPage() {
@@ -29,15 +30,17 @@ export default async function SettingsPage() {
     allCategoriesResult,
     mobilePayCategoriesResult,
     paypalCategoriesResult,
-    debitPayFlagsResult,
+    featureFlagsResult,
     largePurchaseCategoriesResult,
     everythingElseCategoryResult,
+    linkedAccountsResult,
   ] = await Promise.all([
     supabase
       .from("user_wallets")
       .select(`
         id,
         card_id,
+        custom_name,
         cards:card_id (
           id,
           name,
@@ -76,7 +79,7 @@ export default async function SettingsPage() {
       .eq("user_id", user.id),
     supabase
       .from("user_feature_flags")
-      .select("debit_pay_enabled")
+      .select("debit_pay_enabled, account_linking_enabled")
       .eq("user_id", user.id)
       .single(),
     supabase
@@ -88,6 +91,27 @@ export default async function SettingsPage() {
       .select("id")
       .eq("slug", "everything-else")
       .single(),
+    supabase
+      .from("user_linked_accounts")
+      .select(`
+        id,
+        name,
+        official_name,
+        type,
+        subtype,
+        mask,
+        current_balance,
+        available_balance,
+        credit_limit,
+        iso_currency_code,
+        last_balance_update,
+        wallet_card_id,
+        user_plaid_items:plaid_item_id (
+          institution_name
+        )
+      `)
+      .eq("user_id", user.id)
+      .order("name"),
   ]);
 
   const walletCards = walletCardsResult.data;
@@ -97,9 +121,11 @@ export default async function SettingsPage() {
   const allCategories = allCategoriesResult.data;
   const mobilePayCategories = mobilePayCategoriesResult.data;
   const paypalCategories = paypalCategoriesResult.data;
-  const debitPayEnabled = debitPayFlagsResult.data?.debit_pay_enabled ?? false;
+  const debitPayEnabled = featureFlagsResult.data?.debit_pay_enabled ?? false;
+  const accountLinkingEnabled = featureFlagsResult.data?.account_linking_enabled ?? false;
   const largePurchaseCategories = largePurchaseCategoriesResult.data;
   const everythingElseCategoryId = everythingElseCategoryResult.data?.id ?? null;
+  const linkedAccounts = linkedAccountsResult.data;
 
   // Process wallet cards
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
@@ -375,6 +401,66 @@ export default async function SettingsPage() {
     revalidatePath("/returns");
   }
 
+  async function pairLinkedAccount(linkedAccountId: string, walletCardId: string | null) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase
+      .from("user_linked_accounts")
+      .update({ wallet_card_id: walletCardId })
+      .eq("id", linkedAccountId)
+      .eq("user_id", user.id);
+
+    revalidatePath("/settings");
+  }
+
+  async function unlinkLinkedAccount(linkedAccountId: string) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    
+    // First, get the plaid_item_id for this account
+    const { data: accountData } = await supabase
+      .from("user_linked_accounts")
+      .select("plaid_item_id")
+      .eq("id", linkedAccountId)
+      .eq("user_id", user.id)
+      .single();
+    
+    if (!accountData) return;
+    
+    const plaidItemId = accountData.plaid_item_id;
+    
+    // Delete the linked account
+    await supabase
+      .from("user_linked_accounts")
+      .delete()
+      .eq("id", linkedAccountId)
+      .eq("user_id", user.id);
+    
+    // Check if there are any remaining accounts for this plaid item
+    const { count } = await supabase
+      .from("user_linked_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("plaid_item_id", plaidItemId)
+      .eq("user_id", user.id);
+    
+    // If no accounts remain, delete the plaid item
+    if ((count ?? 0) === 0) {
+      await supabase
+        .from("user_plaid_items")
+        .delete()
+        .eq("id", plaidItemId)
+        .eq("user_id", user.id);
+    }
+
+    revalidatePath("/settings");
+  }
+
   // Cards that require category selection
   const cardsNeedingSelection = typedWalletCards.filter(
     (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
@@ -609,6 +695,55 @@ export default async function SettingsPage() {
                   </form>
                 </div>
               </div>
+            )}
+
+            {/* Linked Bank Accounts - only show if account linking is enabled */}
+            {accountLinkingEnabled && (
+              <LinkedAccounts
+                initialAccounts={(linkedAccounts ?? []).map(account => ({
+                  id: account.id,
+                  name: account.name,
+                  official_name: account.official_name,
+                  type: account.type,
+                  subtype: account.subtype,
+                  mask: account.mask,
+                  current_balance: account.current_balance != null ? Number(account.current_balance) : null,
+                  available_balance: account.available_balance != null ? Number(account.available_balance) : null,
+                  credit_limit: account.credit_limit != null ? Number(account.credit_limit) : null,
+                  iso_currency_code: account.iso_currency_code,
+                  last_balance_update: account.last_balance_update,
+                  wallet_card_id: account.wallet_card_id,
+                  user_plaid_items: account.user_plaid_items as { institution_name: string | null } | null,
+                }))}
+                walletCards={
+                  // De-duplicate by card_id since pairing is by card definition
+                  // Use custom name if any instance has one set
+                  Array.from(
+                    typedWalletCards
+                      .filter(wc => wc.cards?.id)
+                      .reduce((map, wc) => {
+                        const cardId = wc.cards!.id;
+                        const customName = (wc as unknown as { custom_name?: string | null }).custom_name;
+                        const existing = map.get(cardId);
+                        // Keep the first custom name we find, or use the card name
+                        if (!existing) {
+                          map.set(cardId, {
+                            id: cardId,
+                            name: customName ?? wc.cards!.name,
+                            issuer_name: (wc.cards as unknown as { issuers?: { name: string } | null })?.issuers?.name ?? null,
+                          });
+                        } else if (customName && existing.name === wc.cards!.name) {
+                          // If existing entry uses default name but this one has a custom name, prefer custom
+                          existing.name = customName;
+                        }
+                        return map;
+                      }, new Map<string, { id: string; name: string; issuer_name: string | null }>())
+                      .values()
+                  ).sort((a, b) => a.name.localeCompare(b.name))
+                }
+                onPairCard={pairLinkedAccount}
+                onUnlinkCard={unlinkLinkedAccount}
+              />
             )}
           </div>
         ) : (

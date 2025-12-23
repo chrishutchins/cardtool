@@ -48,7 +48,7 @@ async function saveCompareEvalCards(cardIds: string[]) {
   }
 }
 
-async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) {
+async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean, showAvailableCredit: boolean) {
   "use server";
   const user = await currentUser();
   if (!user) return;
@@ -59,6 +59,7 @@ async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includ
       user_id: user.id,
       include_welcome_bonuses: includeWelcomeBonuses,
       include_spend_bonuses: includeSpendBonuses,
+      show_available_credit: showAvailableCredit,
     },
     { onConflict: "user_id" }
   );
@@ -111,13 +112,21 @@ export default async function ComparePage() {
       card_cap_categories (category_id)
     `);
 
-  // Get user's wallet cards
+  // Get user's wallet cards with custom names
   const { data: userWallet } = await supabase
     .from("user_wallets")
-    .select("card_id")
+    .select("id, card_id, custom_name")
     .eq("user_id", user.id);
 
   const userCardIds = new Set(userWallet?.map((w) => w.card_id) ?? []);
+  
+  // Build a map of card_id to wallet entries for multi-instance support
+  const walletEntriesByCardId = new Map<string, { walletId: string; customName: string | null }[]>();
+  for (const entry of userWallet ?? []) {
+    const existing = walletEntriesByCardId.get(entry.card_id) ?? [];
+    existing.push({ walletId: entry.id, customName: entry.custom_name });
+    walletEntriesByCardId.set(entry.card_id, existing);
+  }
 
   // Get user's custom currency values and template values
   const [
@@ -162,16 +171,28 @@ export default async function ComparePage() {
     userCurrencyValues?.map((v) => [v.currency_id, v.value_cents]) ?? []
   );
 
-  // Get user's debit pay values and feature flag
-  const [{ data: debitPayEnabled }, { data: debitPayValues }] = await Promise.all([
-    supabase.from("user_feature_flags").select("debit_pay_enabled").eq("user_id", user.id).single(),
+  // Get user's debit pay values and feature flags
+  const [{ data: featureFlags }, { data: debitPayValues }, { data: linkedAccountsData }] = await Promise.all([
+    supabase.from("user_feature_flags").select("debit_pay_enabled, account_linking_enabled").eq("user_id", user.id).single(),
     supabase.from("user_card_debit_pay").select("card_id, debit_pay_percent").eq("user_id", user.id),
+    supabase.from("user_linked_accounts").select("wallet_card_id, available_balance").eq("user_id", user.id).not("wallet_card_id", "is", null),
   ]);
 
   const debitPayMap: Record<string, number> = {};
-  if (debitPayEnabled?.debit_pay_enabled) {
+  if (featureFlags?.debit_pay_enabled) {
     for (const dp of debitPayValues ?? []) {
       debitPayMap[dp.card_id] = Number(dp.debit_pay_percent) || 0;
+    }
+  }
+
+  // Build available credit map: cardId -> available_balance (only for linked & paired cards)
+  const accountLinkingEnabled = featureFlags?.account_linking_enabled ?? false;
+  const availableCreditMap: Record<string, number> = {};
+  if (accountLinkingEnabled) {
+    for (const account of linkedAccountsData ?? []) {
+      if (account.wallet_card_id && account.available_balance != null) {
+        availableCreditMap[account.wallet_card_id] = Number(account.available_balance);
+      }
     }
   }
 
@@ -214,7 +235,7 @@ export default async function ComparePage() {
       .eq("user_id", user.id),
     supabase
       .from("user_bonus_display_settings")
-      .select("include_welcome_bonuses, include_spend_bonuses")
+      .select("include_welcome_bonuses, include_spend_bonuses, show_available_credit")
       .eq("user_id", user.id)
       .single(),
   ]);
@@ -339,6 +360,7 @@ export default async function ComparePage() {
   const bonusDisplaySettings = {
     includeWelcomeBonuses: bonusDisplaySettingsData?.include_welcome_bonuses ?? false,
     includeSpendBonuses: bonusDisplaySettingsData?.include_spend_bonuses ?? false,
+    showAvailableCredit: bonusDisplaySettingsData?.show_available_credit ?? false,
   };
 
   // Get user's category spending and spending defaults
@@ -597,6 +619,7 @@ export default async function ComparePage() {
     .map((cat) => cat.id);
 
   // Transform cards for the client component
+  // For owned cards with multiple instances, create one row per wallet entry
   type CardData = {
     id: string;
     name: string;
@@ -607,7 +630,26 @@ export default async function ComparePage() {
     issuers: { id: string; name: string } | null;
     primary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
   };
-  const cardsForTable = ((allCards ?? []) as unknown as CardData[]).map((card) => {
+  
+  const cardsForTable: {
+    id: string;
+    cardId: string; // Original card_id for looking up earning rates, etc.
+    name: string;
+    slug: string;
+    annualFee: number;
+    defaultEarnRate: number;
+    issuerName: string;
+    currencyCode: string;
+    currencyName: string;
+    pointValue: number;
+    isOwned: boolean;
+    earningRates: Record<number, number>;
+    multiplier: number;
+    spendBonusRate: number;
+    welcomeBonusRate: number;
+  }[] = [];
+  
+  for (const card of (allCards ?? []) as unknown as CardData[]) {
     const currency = card.primary_currency;
     // Priority: user override > template value > base value
     const pointValue = currency?.id 
@@ -624,24 +666,43 @@ export default async function ComparePage() {
       earningRates[categoryId] = getBestRate(card.id, categoryId, card.default_earn_rate ?? 1);
     }
 
-    return {
-      id: card.id,
-      name: card.name,
+    const baseCardData = {
+      cardId: card.id, // Keep original card_id for lookups
       slug: card.slug,
       annualFee: card.annual_fee,
-      // Multiplier is already applied in earningRates via getBestRate
       defaultEarnRate: (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1),
       issuerName: card.issuers?.name ?? "Unknown",
       currencyCode: currency?.code ?? "???",
       currencyName: currency?.name ?? "Unknown",
       pointValue,
-      isOwned: userCardIds.has(card.id),
       earningRates,
       multiplier: cardMultipliers[card.id] ?? 1,
       spendBonusRate: cardSpendBonusRates[card.id] ?? 0,
       welcomeBonusRate: cardWelcomeBonusRates[card.id] ?? 0,
     };
-  });
+
+    const walletEntries = walletEntriesByCardId.get(card.id);
+    
+    if (walletEntries && walletEntries.length > 0) {
+      // Card is owned - create one row per wallet instance
+      for (const entry of walletEntries) {
+        cardsForTable.push({
+          ...baseCardData,
+          id: entry.walletId, // Use wallet_id as the unique identifier
+          name: entry.customName ?? card.name, // Use custom name if set
+          isOwned: true,
+        });
+      }
+    } else {
+      // Card is not owned - show once with card_id
+      cardsForTable.push({
+        ...baseCardData,
+        id: card.id,
+        name: card.name,
+        isOwned: false,
+      });
+    }
+  }
 
   // Transform categories for the client component
   const categoriesForTable = (allCategories ?? [])
@@ -698,6 +759,8 @@ export default async function ComparePage() {
           userSpending={userSpending}
           capInfo={capInfoMap}
           bonusDisplaySettings={bonusDisplaySettings}
+          availableCredit={availableCreditMap}
+          accountLinkingEnabled={accountLinkingEnabled}
           onSaveCategories={saveCompareCategories}
           onSaveEvalCards={saveCompareEvalCards}
           onUpdateBonusSettings={updateBonusDisplaySettings}

@@ -279,15 +279,25 @@ export default async function ReturnsPage({ searchParams }: Props) {
   ]);
 
   // Process wallet cards
+  // Track instance counts for fee calculation (users may have multiple of same card)
   const userCardIds = new Set<string>();
-  const cards: CardInput[] = [];
+  const cardInstanceCounts = new Map<string, number>();
   
   walletResult.data?.forEach((w) => {
     if (w.cards) {
       userCardIds.add(w.card_id);
-      cards.push(w.cards as unknown as CardInput);
+      cardInstanceCounts.set(w.card_id, (cardInstanceCounts.get(w.card_id) ?? 0) + 1);
     }
   });
+  
+  // De-duplicate cards for spend allocation (same card earns the same)
+  const cards: CardInput[] = Array.from(
+    new Map(
+      (walletResult.data ?? [])
+        .filter(w => w.cards)
+        .map(w => [w.card_id, w.cards as unknown as CardInput])
+    ).values()
+  );
 
   // Process ALL earning rules (needed for recommendations)
   const allEarningRules: EarningRuleInput[] = (rulesResult.data ?? [])
@@ -556,6 +566,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     spendBonuses,
     spendBonusValues,
     includeBonusesInCalculation,
+    // Multi-instance support: count how many of each card for fee calculation
+    cardInstanceCounts,
   };
   
   const returns = calculatePortfolioReturns(calculatorInput);

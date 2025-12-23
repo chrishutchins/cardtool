@@ -839,6 +839,7 @@ export type Database = {
           id: string
           include_spend_bonuses: boolean
           include_welcome_bonuses: boolean
+          show_available_credit: boolean
           updated_at: string | null
           user_id: string
         }
@@ -847,6 +848,7 @@ export type Database = {
           id?: string
           include_spend_bonuses?: boolean
           include_welcome_bonuses?: boolean
+          show_available_credit?: boolean
           updated_at?: string | null
           user_id: string
         }
@@ -855,6 +857,7 @@ export type Database = {
           id?: string
           include_spend_bonuses?: boolean
           include_welcome_bonuses?: boolean
+          show_available_credit?: boolean
           updated_at?: string | null
           user_id?: string
         }
@@ -1233,6 +1236,7 @@ export type Database = {
           type: string
           updated_at: string | null
           user_id: string
+          wallet_card_id: string | null
         }
         Insert: {
           available_balance?: number | null
@@ -1251,6 +1255,7 @@ export type Database = {
           type: string
           updated_at?: string | null
           user_id: string
+          wallet_card_id?: string | null
         }
         Update: {
           available_balance?: number | null
@@ -1269,6 +1274,7 @@ export type Database = {
           type?: string
           updated_at?: string | null
           user_id?: string
+          wallet_card_id?: string | null
         }
         Relationships: [
           {
@@ -1276,6 +1282,20 @@ export type Database = {
             columns: ["plaid_item_id"]
             isOneToOne: false
             referencedRelation: "user_plaid_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_linked_accounts_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_linked_accounts_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
             referencedColumns: ["id"]
           },
         ]
@@ -1539,18 +1559,21 @@ export type Database = {
         Row: {
           added_at: string | null
           card_id: string
+          custom_name: string | null
           id: string
           user_id: string
         }
         Insert: {
           added_at?: string | null
           card_id: string
+          custom_name?: string | null
           id?: string
           user_id: string
         }
         Update: {
           added_at?: string | null
           card_id?: string
+          custom_name?: string | null
           id?: string
           user_id?: string
         }
@@ -1943,4 +1966,3 @@ export const Constants = {
     },
   },
 } as const
-

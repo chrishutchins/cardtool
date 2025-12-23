@@ -3,7 +3,8 @@
 import { useState, useMemo, useEffect, useRef, useTransition } from "react";
 
 interface Card {
-  id: string;
+  id: string; // wallet_id for owned cards, card_id for non-owned cards
+  cardId: string; // Original card_id for lookups (earning rates, debit pay, etc.)
   name: string;
   slug: string;
   annualFee: number;
@@ -37,6 +38,7 @@ interface CapInfo {
 interface BonusDisplaySettings {
   includeWelcomeBonuses: boolean;
   includeSpendBonuses: boolean;
+  showAvailableCredit: boolean;
 }
 
 interface ComparisonTableProps {
@@ -49,9 +51,11 @@ interface ComparisonTableProps {
   userSpending: Record<number, number>;
   capInfo: Record<string, Record<number, CapInfo>>;
   bonusDisplaySettings: BonusDisplaySettings;
+  availableCredit: Record<string, number>;
+  accountLinkingEnabled: boolean;
   onSaveCategories?: (categoryIds: number[]) => Promise<void>;
   onSaveEvalCards?: (cardIds: string[]) => Promise<void>;
-  onUpdateBonusSettings?: (includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) => Promise<void>;
+  onUpdateBonusSettings?: (includeWelcomeBonuses: boolean, includeSpendBonuses: boolean, showAvailableCredit: boolean) => Promise<void>;
 }
 
 type SortConfig = {
@@ -104,6 +108,8 @@ export function ComparisonTable({
   userSpending,
   capInfo,
   bonusDisplaySettings,
+  availableCredit,
+  accountLinkingEnabled,
   onSaveCategories,
   onSaveEvalCards,
   onUpdateBonusSettings,
@@ -131,10 +137,13 @@ export function ComparisonTable({
   // Local state for bonus toggles (optimistic updates)
   const [includeWelcomeBonuses, setIncludeWelcomeBonuses] = useState(bonusDisplaySettings.includeWelcomeBonuses);
   const [includeSpendBonuses, setIncludeSpendBonuses] = useState(bonusDisplaySettings.includeSpendBonuses);
+  const [showAvailableCredit, setShowAvailableCredit] = useState(bonusDisplaySettings.showAvailableCredit);
 
   // Check if any cards have bonuses configured (only show toggles if there are bonuses)
   const hasAnySubs = useMemo(() => cards.some((c) => c.welcomeBonusRate > 0), [cards]);
   const hasAnySpendBonuses = useMemo(() => cards.some((c) => c.spendBonusRate > 0), [cards]);
+  // Check if any cards have available credit data (linked AND paired)
+  const hasAnyAvailableCredit = useMemo(() => Object.keys(availableCredit).length > 0, [availableCredit]);
 
   // Track if this is the initial mount (to avoid saving on first render)
   const isInitialMount = useRef(true);
@@ -196,7 +205,7 @@ export function ComparisonTable({
   // Calculate effective value including debit pay (for display and sorting)
   const getEffectiveValueWithDebit = (card: Card, categoryId: number): number => {
     const baseValue = getEffectiveValue(card, categoryId);
-    const debitPay = debitPayValues[card.id] ?? 0;
+    const debitPay = debitPayValues[card.cardId] ?? 0;
     // Debit pay is a percentage, convert to cents (1% = 1 cent per dollar)
     return baseValue + debitPay;
   };
@@ -222,8 +231,8 @@ export function ComparisonTable({
   const calculateEarnings = (card: Card, categoryId: number, spendCents: number): { earnings: number; debitPayEarnings: number; subEarnings: number; spendBonusEarnings: number } => {
     const rate = card.earningRates[categoryId] ?? card.defaultEarnRate;
     const pointValue = card.pointValue;
-    const cap = capInfo[card.id]?.[categoryId];
-    const debitPayPercent = debitPayValues[card.id] ?? 0;
+    const cap = capInfo[card.cardId]?.[categoryId];
+    const debitPayPercent = debitPayValues[card.cardId] ?? 0;
     const spendDollars = spendCents / 100;
     
     let earnings: number;
@@ -569,7 +578,7 @@ export function ComparisonTable({
         </button>
 
         {/* Bonus Toggles - Only show if user has any bonuses configured */}
-        {(hasAnySubs || hasAnySpendBonuses) && (
+        {(hasAnySubs || hasAnySpendBonuses || (accountLinkingEnabled && hasAnyAvailableCredit)) && (
           <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800/50">
             {hasAnySubs && (
               <label className="flex items-center gap-2 cursor-pointer">
@@ -580,7 +589,7 @@ export function ComparisonTable({
                   onChange={(e) => {
                     setIncludeWelcomeBonuses(e.target.checked);
                     startTransition(() => {
-                      onUpdateBonusSettings?.(e.target.checked, includeSpendBonuses);
+                      onUpdateBonusSettings?.(e.target.checked, includeSpendBonuses, showAvailableCredit);
                     });
                   }}
                   className="rounded border-zinc-600 bg-zinc-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
@@ -597,12 +606,29 @@ export function ComparisonTable({
                   onChange={(e) => {
                     setIncludeSpendBonuses(e.target.checked);
                     startTransition(() => {
-                      onUpdateBonusSettings?.(includeWelcomeBonuses, e.target.checked);
+                      onUpdateBonusSettings?.(includeWelcomeBonuses, e.target.checked, showAvailableCredit);
                     });
                   }}
                   className="rounded border-zinc-600 bg-zinc-700 text-lime-500 focus:ring-lime-500 focus:ring-offset-0"
                 />
                 <span className={`text-sm ${includeSpendBonuses ? "text-lime-400" : "text-zinc-300"}`}>Spend Bonuses</span>
+              </label>
+            )}
+            {accountLinkingEnabled && hasAnyAvailableCredit && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showAvailableCredit}
+                  disabled={isPending}
+                  onChange={(e) => {
+                    setShowAvailableCredit(e.target.checked);
+                    startTransition(() => {
+                      onUpdateBonusSettings?.(includeWelcomeBonuses, includeSpendBonuses, e.target.checked);
+                    });
+                  }}
+                  className="rounded border-zinc-600 bg-zinc-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-0"
+                />
+                <span className={`text-sm ${showAvailableCredit ? "text-orange-400" : "text-zinc-300"}`}>Available Credit</span>
               </label>
             )}
           </div>
@@ -701,6 +727,13 @@ export function ComparisonTable({
                   </span>
                 </th>
                 
+                {/* Available Credit Column Header */}
+                {showAvailableCredit && (
+                  <th className="px-3 py-3 text-center text-xs font-medium text-orange-400 uppercase tracking-wider whitespace-nowrap min-w-[100px]">
+                    Available Credit
+                  </th>
+                )}
+                
                 {/* Category Headers */}
                 {selectedCategories.map((cat) => {
                   const spendCents = userSpending[cat.id] ?? 0;
@@ -760,10 +793,23 @@ export function ComparisonTable({
                       </div>
                     </td>
 
+                    {/* Available Credit Cell */}
+                    {showAvailableCredit && (
+                      <td className="px-3 py-3 text-center text-sm font-mono">
+                        {availableCredit[card.cardId] != null ? (
+                          <span className="text-orange-400">
+                            ${Math.round(availableCredit[card.cardId]).toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-600">—</span>
+                        )}
+                      </td>
+                    )}
+
                     {/* Category Values */}
                     {selectedCategories.map((cat) => {
-                      const debitPay = debitPayValues[card.id] ?? 0;
-                      const cap = capInfo[card.id]?.[cat.id];
+                      const debitPay = debitPayValues[card.cardId] ?? 0;
+                      const cap = capInfo[card.cardId]?.[cat.id];
                       const spendCents = userSpending[cat.id] ?? 0;
                       const { subCents, spendBonusCents } = getBonusValueCents(card);
                       

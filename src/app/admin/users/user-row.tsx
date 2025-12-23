@@ -10,14 +10,17 @@ interface UserStats {
   cardsAdded: number;
   spendingEdits: number;
   createdAt: string | null;
+  accountLinkingEnabled: boolean;
 }
 
 export function UserRow({
   user,
   onDelete,
+  onToggleAccountLinking,
 }: {
   user: UserStats;
   onDelete: (userId: string) => Promise<void>;
+  onToggleAccountLinking: (userId: string, enabled: boolean) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
 
@@ -36,6 +39,12 @@ export function UserRow({
     }
     startTransition(() => {
       onDelete(user.userId);
+    });
+  };
+
+  const handleToggleAccountLinking = () => {
+    startTransition(() => {
+      onToggleAccountLinking(user.userId, !user.accountLinkingEnabled);
     });
   };
 
@@ -68,6 +77,19 @@ export function UserRow({
       </td>
       <td className="px-6 py-4 text-zinc-400 text-sm">
         {formatDate(user.createdAt)}
+      </td>
+      <td className="px-6 py-4 text-center">
+        <button
+          onClick={handleToggleAccountLinking}
+          disabled={isPending}
+          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
+            user.accountLinkingEnabled
+              ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+              : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
+          }`}
+        >
+          {user.accountLinkingEnabled ? "Enabled" : "Disabled"}
+        </button>
       </td>
       <td className="px-6 py-4 text-right">
         <button

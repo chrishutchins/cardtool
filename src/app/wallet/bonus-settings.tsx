@@ -4,8 +4,10 @@ import { useState, useTransition } from "react";
 import { WelcomeBonusInput, WelcomeBonusSettings as WelcomeBonusSettingsType, SpendBonusInput } from "@/lib/returns-calculator";
 
 interface WalletCard {
+  wallet_id: string;  // Unique identifier for each wallet instance
   card_id: string;
-  card_name: string;
+  display_name: string;  // Custom name or card name
+  card_name: string;  // Original card name (for reference)
   currency_name: string | null;
 }
 
@@ -58,8 +60,9 @@ export function BonusSettings({
     spendBonusesByCard.set(sb.card_id, existing);
   });
 
-  // Filter to only cards in wallet that have bonuses
-  const cardsWithBonuses = walletCards.filter(
+  // Filter to only wallet entries that have bonuses (based on card_id)
+  // This will include duplicates if the same card is in wallet multiple times
+  const walletEntriesWithBonuses = walletCards.filter(
     (wc) => welcomeBonusesByCard.has(wc.card_id) || spendBonusesByCard.has(wc.card_id)
   );
 
@@ -111,7 +114,7 @@ export function BonusSettings({
     }
   };
 
-  if (cardsWithBonuses.length === 0) {
+  if (walletEntriesWithBonuses.length === 0) {
     return null;
   }
 
@@ -169,15 +172,20 @@ export function BonusSettings({
 
           {/* Per-Card Settings */}
           <div className="space-y-4">
-            {cardsWithBonuses.map((card) => {
-              const cardWelcomeBonuses = welcomeBonusesByCard.get(card.card_id) ?? [];
-              const cardSpendBonuses = spendBonusesByCard.get(card.card_id) ?? [];
-              const settings = welcomeBonusSettings.get(card.card_id);
+            {walletEntriesWithBonuses.map((walletEntry) => {
+              const cardWelcomeBonuses = welcomeBonusesByCard.get(walletEntry.card_id) ?? [];
+              const cardSpendBonuses = spendBonusesByCard.get(walletEntry.card_id) ?? [];
+              const settings = welcomeBonusSettings.get(walletEntry.card_id);
               const isActive = settings?.is_active ?? false;
 
               return (
-                <div key={card.card_id} className="border border-zinc-800 rounded-lg p-4">
-                  <h4 className="font-medium text-white mb-3">{card.card_name}</h4>
+                <div key={walletEntry.wallet_id} className="border border-zinc-800 rounded-lg p-4">
+                  <h4 className="font-medium text-white mb-3">
+                    {walletEntry.display_name}
+                    {walletEntry.display_name !== walletEntry.card_name && (
+                      <span className="ml-2 text-sm text-zinc-500 font-normal">({walletEntry.card_name})</span>
+                    )}
+                  </h4>
 
                   {/* Welcome Bonus Section */}
                   {cardWelcomeBonuses.length > 0 && (
@@ -188,7 +196,7 @@ export function BonusSettings({
                           <input
                             type="checkbox"
                             checked={isActive}
-                            onChange={(e) => handleToggleWelcomeBonusActive(card.card_id, e.target.checked)}
+                            onChange={(e) => handleToggleWelcomeBonusActive(walletEntry.card_id, e.target.checked)}
                             disabled={isPending}
                             className="w-4 h-4 rounded border-zinc-600 bg-zinc-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-zinc-900"
                           />
