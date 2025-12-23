@@ -52,6 +52,7 @@ interface ComparisonTableProps {
   capInfo: Record<string, Record<number, CapInfo>>;
   bonusDisplaySettings: BonusDisplaySettings;
   availableCredit: Record<string, number>;
+  creditLimits: Record<string, number>;
   accountLinkingEnabled: boolean;
   onSaveCategories?: (categoryIds: number[]) => Promise<void>;
   onSaveEvalCards?: (cardIds: string[]) => Promise<void>;
@@ -109,6 +110,7 @@ export function ComparisonTable({
   capInfo,
   bonusDisplaySettings,
   availableCredit,
+  creditLimits,
   accountLinkingEnabled,
   onSaveCategories,
   onSaveEvalCards,
@@ -798,9 +800,17 @@ export function ComparisonTable({
                       <td className="px-3 py-3 text-center text-sm font-mono">
                         {/* For owned cards, use card.id (wallet ID) since linking is by wallet instance */}
                         {availableCredit[card.id] != null ? (
-                          <span className="text-orange-400">
-                            ${Math.round(availableCredit[card.id]).toLocaleString()}
-                          </span>
+                          (() => {
+                            const credit = availableCredit[card.id];
+                            const limit = creditLimits[card.id];
+                            // Red if available credit <= 10% of limit
+                            const isLow = limit != null && credit <= limit * 0.1;
+                            return (
+                              <span className={isLow ? "text-red-400" : "text-zinc-300"}>
+                                ${Math.round(credit).toLocaleString()}
+                              </span>
+                            );
+                          })()
                         ) : (
                           <span className="text-zinc-600">—</span>
                         )}

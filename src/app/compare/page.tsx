@@ -187,8 +187,10 @@ export default async function ComparePage() {
 
   // Build available credit map: cardId -> available_balance (only for linked & paired cards)
   // If manual_credit_limit is set, calculate available credit from that
+  // Also build credit limit map for percentage calculation
   const accountLinkingEnabled = featureFlags?.account_linking_enabled ?? false;
   const availableCreditMap: Record<string, number> = {};
+  const creditLimitMap: Record<string, number> = {};
   if (accountLinkingEnabled) {
     for (const account of linkedAccountsData ?? []) {
       if (!account.wallet_card_id) continue;
@@ -208,6 +210,11 @@ export default async function ComparePage() {
       
       if (availableCredit != null) {
         availableCreditMap[account.wallet_card_id] = availableCredit;
+      }
+      
+      // Store the credit limit for percentage calculation
+      if (effectiveLimit != null) {
+        creditLimitMap[account.wallet_card_id] = Number(effectiveLimit);
       }
     }
   }
@@ -776,6 +783,7 @@ export default async function ComparePage() {
           capInfo={capInfoMap}
           bonusDisplaySettings={bonusDisplaySettings}
           availableCredit={availableCreditMap}
+          creditLimits={creditLimitMap}
           accountLinkingEnabled={accountLinkingEnabled}
           onSaveCategories={saveCompareCategories}
           onSaveEvalCards={saveCompareEvalCards}
