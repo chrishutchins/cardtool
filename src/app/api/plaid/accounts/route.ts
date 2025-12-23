@@ -24,8 +24,10 @@ export async function GET() {
         current_balance,
         available_balance,
         credit_limit,
+        manual_credit_limit,
         iso_currency_code,
         last_balance_update,
+        wallet_card_id,
         user_plaid_items:plaid_item_id (
           institution_name
         )

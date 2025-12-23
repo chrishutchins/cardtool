@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CreditCard, Building2, Link2, Unlink } from "lucide-react";
+import { RefreshCw, CreditCard, Building2, Link2, Unlink, Pencil, Check, X } from "lucide-react";
 import { PlaidLinkButton } from "./plaid-link-button";
 
 interface LinkedAccount {
@@ -15,6 +15,7 @@ interface LinkedAccount {
   current_balance: number | null;
   available_balance: number | null;
   credit_limit: number | null;
+  manual_credit_limit: number | null;
   iso_currency_code: string | null;
   last_balance_update: string | null;
   user_plaid_items: { institution_name: string | null } | null;
@@ -32,13 +33,16 @@ interface LinkedAccountsProps {
   walletCards?: WalletCard[];
   onPairCard?: (linkedAccountId: string, walletCardId: string | null) => Promise<void>;
   onUnlinkCard?: (linkedAccountId: string) => Promise<void>;
+  onUpdateCreditLimit?: (linkedAccountId: string, creditLimit: number | null) => Promise<void>;
 }
 
-export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, onUnlinkCard }: LinkedAccountsProps) {
+export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, onUnlinkCard, onUpdateCreditLimit }: LinkedAccountsProps) {
   const [accounts, setAccounts] = useState(initialAccounts);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+  const [editingLimitId, setEditingLimitId] = useState<string | null>(null);
+  const [editLimitValue, setEditLimitValue] = useState<string>("");
 
   const handlePairCard = (linkedAccountId: string, walletCardId: string) => {
     if (!onPairCard) return;
@@ -70,6 +74,43 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
       await onUnlinkCard(linkedAccountId);
       setUnlinkingId(null);
     });
+  };
+
+  const startEditingLimit = (account: LinkedAccount) => {
+    setEditingLimitId(account.id);
+    // Pre-fill with existing manual limit, or Plaid limit, or empty
+    const existingLimit = account.manual_credit_limit ?? account.credit_limit;
+    setEditLimitValue(existingLimit != null ? existingLimit.toString() : "");
+  };
+
+  const cancelEditingLimit = () => {
+    setEditingLimitId(null);
+    setEditLimitValue("");
+  };
+
+  const saveEditingLimit = (linkedAccountId: string) => {
+    if (!onUpdateCreditLimit) return;
+    
+    const numValue = editLimitValue ? parseFloat(editLimitValue.replace(/,/g, "")) : null;
+    
+    // Optimistic update
+    setAccounts(prev => prev.map(acc => 
+      acc.id === linkedAccountId 
+        ? { ...acc, manual_credit_limit: numValue }
+        : acc
+    ));
+    
+    setEditingLimitId(null);
+    setEditLimitValue("");
+    
+    startTransition(() => {
+      onUpdateCreditLimit(linkedAccountId, numValue);
+    });
+  };
+
+  // Get effective credit limit (manual override takes precedence)
+  const getEffectiveCreditLimit = (account: LinkedAccount) => {
+    return account.manual_credit_limit ?? account.credit_limit;
   };
 
   const refreshAccounts = async () => {
@@ -214,20 +255,72 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 uppercase">Credit Limit</p>
-                  <p className="text-lg font-semibold text-zinc-300">
-                    {formatCurrency(account.credit_limit, account.iso_currency_code)}
+                  <p className="text-xs text-zinc-500 uppercase flex items-center gap-1">
+                    Credit Limit
+                    {account.manual_credit_limit != null && (
+                      <span className="text-amber-500 text-[10px]">(manual)</span>
+                    )}
                   </p>
+                  {editingLimitId === account.id ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-zinc-400">$</span>
+                      <input
+                        type="text"
+                        value={editLimitValue}
+                        onChange={(e) => setEditLimitValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEditingLimit(account.id);
+                          if (e.key === "Escape") cancelEditingLimit();
+                        }}
+                        className="w-24 bg-zinc-700 border border-zinc-600 text-zinc-200 text-lg font-semibold rounded px-2 py-0.5 focus:ring-emerald-500 focus:border-emerald-500"
+                        placeholder="0"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => saveEditingLimit(account.id)}
+                        className="p-1 text-emerald-400 hover:bg-zinc-700 rounded"
+                        title="Save"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditingLimit}
+                        className="p-1 text-zinc-400 hover:bg-zinc-700 rounded"
+                        title="Cancel"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <p className="text-lg font-semibold text-zinc-300">
+                        {formatCurrency(getEffectiveCreditLimit(account), account.iso_currency_code)}
+                      </p>
+                      {onUpdateCreditLimit && (
+                        <button
+                          onClick={() => startEditingLimit(account)}
+                          className="p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 rounded"
+                          title="Edit credit limit"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Available Credit</p>
                   <p className="text-lg font-semibold text-emerald-400">
-                    {account.credit_limit != null && account.current_balance != null
-                      ? formatCurrency(
-                          account.credit_limit - account.current_balance,
+                    {(() => {
+                      const effectiveLimit = getEffectiveCreditLimit(account);
+                      if (effectiveLimit != null && account.current_balance != null) {
+                        return formatCurrency(
+                          effectiveLimit - account.current_balance,
                           account.iso_currency_code
-                        )
-                      : formatCurrency(account.available_balance, account.iso_currency_code)}
+                        );
+                      }
+                      return formatCurrency(account.available_balance, account.iso_currency_code);
+                    })()}
                   </p>
                 </div>
               </div>

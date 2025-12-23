@@ -175,7 +175,7 @@ export default async function ComparePage() {
   const [{ data: featureFlags }, { data: debitPayValues }, { data: linkedAccountsData }] = await Promise.all([
     supabase.from("user_feature_flags").select("debit_pay_enabled, account_linking_enabled").eq("user_id", user.id).single(),
     supabase.from("user_card_debit_pay").select("card_id, debit_pay_percent").eq("user_id", user.id),
-    supabase.from("user_linked_accounts").select("wallet_card_id, available_balance").eq("user_id", user.id).not("wallet_card_id", "is", null),
+    supabase.from("user_linked_accounts").select("wallet_card_id, available_balance, current_balance, credit_limit, manual_credit_limit").eq("user_id", user.id).not("wallet_card_id", "is", null),
   ]);
 
   const debitPayMap: Record<string, number> = {};
@@ -186,12 +186,28 @@ export default async function ComparePage() {
   }
 
   // Build available credit map: cardId -> available_balance (only for linked & paired cards)
+  // If manual_credit_limit is set, calculate available credit from that
   const accountLinkingEnabled = featureFlags?.account_linking_enabled ?? false;
   const availableCreditMap: Record<string, number> = {};
   if (accountLinkingEnabled) {
     for (const account of linkedAccountsData ?? []) {
-      if (account.wallet_card_id && account.available_balance != null) {
-        availableCreditMap[account.wallet_card_id] = Number(account.available_balance);
+      if (!account.wallet_card_id) continue;
+      
+      // Priority: Use manual_credit_limit if set, then fall back to Plaid data
+      const effectiveLimit = account.manual_credit_limit ?? account.credit_limit;
+      const currentBalance = account.current_balance;
+      
+      let availableCredit: number | null = null;
+      if (effectiveLimit != null && currentBalance != null) {
+        // Calculate available credit from limit - balance
+        availableCredit = Number(effectiveLimit) - Number(currentBalance);
+      } else if (account.available_balance != null) {
+        // Fall back to Plaid's available_balance
+        availableCredit = Number(account.available_balance);
+      }
+      
+      if (availableCredit != null) {
+        availableCreditMap[account.wallet_card_id] = availableCredit;
       }
     }
   }

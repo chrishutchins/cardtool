@@ -103,6 +103,7 @@ export default async function SettingsPage() {
         current_balance,
         available_balance,
         credit_limit,
+        manual_credit_limit,
         iso_currency_code,
         last_balance_update,
         wallet_card_id,
@@ -461,6 +462,22 @@ export default async function SettingsPage() {
     revalidatePath("/settings");
   }
 
+  async function updateLinkedAccountCreditLimit(linkedAccountId: string, creditLimit: number | null) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase
+      .from("user_linked_accounts")
+      .update({ manual_credit_limit: creditLimit })
+      .eq("id", linkedAccountId)
+      .eq("user_id", user.id);
+
+    revalidatePath("/settings");
+    revalidatePath("/compare");
+  }
+
   // Cards that require category selection
   const cardsNeedingSelection = typedWalletCards.filter(
     (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
@@ -710,6 +727,7 @@ export default async function SettingsPage() {
                   current_balance: account.current_balance != null ? Number(account.current_balance) : null,
                   available_balance: account.available_balance != null ? Number(account.available_balance) : null,
                   credit_limit: account.credit_limit != null ? Number(account.credit_limit) : null,
+                  manual_credit_limit: account.manual_credit_limit != null ? Number(account.manual_credit_limit) : null,
                   iso_currency_code: account.iso_currency_code,
                   last_balance_update: account.last_balance_update,
                   wallet_card_id: account.wallet_card_id,
@@ -743,6 +761,7 @@ export default async function SettingsPage() {
                 }
                 onPairCard={pairLinkedAccount}
                 onUnlinkCard={unlinkLinkedAccount}
+                onUpdateCreditLimit={updateLinkedAccountCreditLimit}
               />
             )}
           </div>
