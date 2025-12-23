@@ -224,7 +224,18 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
                         className="bg-zinc-700 border border-zinc-600 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:ring-emerald-500 focus:border-emerald-500 disabled:opacity-50"
                       >
                         <option value="">Not paired</option>
-                        {walletCards.map((card, index) => (
+                        {walletCards
+                          .filter(card => {
+                            // Include this card if:
+                            // 1. It's the currently paired card for this account, OR
+                            // 2. It's not paired to any other account
+                            if (card.id === account.wallet_card_id) return true;
+                            const pairedToOther = accounts.some(
+                              acc => acc.id !== account.id && acc.wallet_card_id === card.id
+                            );
+                            return !pairedToOther;
+                          })
+                          .map((card, index) => (
                           <option key={`${card.id}-${index}`} value={card.id}>
                             {card.name}
                           </option>
