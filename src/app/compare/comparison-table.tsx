@@ -3,11 +3,12 @@
 import { useState, useMemo, useEffect, useRef, useTransition } from "react";
 
 // Fast tooltip component - appears immediately on hover
+// Wraps text to prevent overflow, max width constrained
 function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
   return (
     <span className="relative group/tooltip inline-flex">
       {children}
-      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-75 z-50">
+      <span className="pointer-events-none absolute bottom-full left-0 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-75 z-50">
         {text}
       </span>
     </span>
@@ -133,7 +134,7 @@ export function ComparisonTable({
     new Set(initialCategorySlugs)
   );
   const [filterMode, setFilterMode] = useState<FilterMode>(
-    initialEvalCardIds.length > 0 ? "evaluate" : "all"
+    initialEvalCardIds.length > 0 ? "evaluate" : "my-cards"
   );
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     type: "card",
@@ -640,9 +641,9 @@ export function ComparisonTable({
                       onUpdateBonusSettings?.(includeWelcomeBonuses, includeSpendBonuses, e.target.checked);
                     });
                   }}
-                  className="rounded border-zinc-600 bg-zinc-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-0"
+                  className="rounded border-zinc-600 bg-zinc-700 text-zinc-300 focus:ring-zinc-500 focus:ring-offset-0"
                 />
-                <span className={`text-sm ${showAvailableCredit ? "text-orange-400" : "text-zinc-300"}`}>Available Credit</span>
+                <span className={`text-sm ${showAvailableCredit ? "text-zinc-200" : "text-zinc-400"}`}>Available Credit</span>
               </label>
             )}
           </div>
@@ -743,7 +744,7 @@ export function ComparisonTable({
                 
                 {/* Available Credit Column Header */}
                 {showAvailableCredit && (
-                  <th className="px-3 py-3 text-center text-xs font-medium text-orange-400 uppercase tracking-wider whitespace-nowrap min-w-[100px]">
+                  <th className="px-3 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap min-w-[100px]">
                     Available Credit
                   </th>
                 )}

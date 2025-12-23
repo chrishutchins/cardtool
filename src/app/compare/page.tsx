@@ -394,6 +394,8 @@ export default async function ComparePage() {
     { data: userMobilePayCategories },
     { data: mobilePayCategory },
     { data: over5kCategory },
+    { data: userPaypalCategories },
+    { data: paypalCategory },
   ] = await Promise.all([
     supabase
       .from("user_category_spend")
@@ -424,6 +426,17 @@ export default async function ComparePage() {
       .from("earning_categories")
       .select("id")
       .eq("slug", "over-5k")
+      .single(),
+    // Get user's PayPal category selections
+    supabase
+      .from("user_paypal_categories")
+      .select("category_id")
+      .eq("user_id", user.id),
+    // Get PayPal category ID
+    supabase
+      .from("earning_categories")
+      .select("id")
+      .eq("slug", "paypal")
       .single(),
   ]);
 
@@ -606,6 +619,43 @@ export default async function ComparePage() {
     }
   }
 
+  // Build mobile pay rates map: cardId -> rate for the Mobile Pay category
+  // This allows us to apply mobile pay rates to categories the user has selected
+  const mobilePayRatesMap: Record<string, number> = {};
+  if (mobilePayCategory?.id) {
+    for (const rule of allEarningRules ?? []) {
+      if (rule.category_id === mobilePayCategory.id && rule.booking_method === "any") {
+        const currentRate = mobilePayRatesMap[rule.card_id] ?? 0;
+        if (rule.rate > currentRate) {
+          mobilePayRatesMap[rule.card_id] = rule.rate;
+        }
+      }
+    }
+  }
+
+  // Build PayPal rates map: cardId -> rate for the PayPal category
+  const paypalRatesMap: Record<string, number> = {};
+  if (paypalCategory?.id) {
+    for (const rule of allEarningRules ?? []) {
+      if (rule.category_id === paypalCategory.id && rule.booking_method === "any") {
+        const currentRate = paypalRatesMap[rule.card_id] ?? 0;
+        if (rule.rate > currentRate) {
+          paypalRatesMap[rule.card_id] = rule.rate;
+        }
+      }
+    }
+  }
+
+  // Build set of user's mobile pay category IDs for quick lookup
+  const userMobilePayCategoryIds = new Set(
+    (userMobilePayCategories ?? []).map((c) => c.category_id)
+  );
+
+  // Build set of user's PayPal category IDs for quick lookup
+  const userPaypalCategoryIds = new Set(
+    (userPaypalCategories ?? []).map((c) => c.category_id)
+  );
+
   // Helper: Get the best rate for a card + category using "highest rate wins"
   // Applies multiplier if available
   const getBestRate = (cardId: string, categoryId: number, defaultRate: number): number => {
@@ -629,6 +679,18 @@ export default async function ComparePage() {
     // 4. Check "all categories" bonus (applies to all non-excluded categories)
     const allCatBonus = allCategoriesBonusMap[cardId];
     if (allCatBonus) rates.push(allCatBonus);
+    
+    // 5. Check mobile pay rate if this category is in user's mobile pay selections
+    if (userMobilePayCategoryIds.has(categoryId)) {
+      const mobilePayRate = mobilePayRatesMap[cardId];
+      if (mobilePayRate) rates.push(mobilePayRate);
+    }
+    
+    // 6. Check PayPal rate if this category is in user's PayPal selections
+    if (userPaypalCategoryIds.has(categoryId)) {
+      const paypalRate = paypalRatesMap[cardId];
+      if (paypalRate) rates.push(paypalRate);
+    }
     
     // Apply multiplier (e.g., BoA Preferred Rewards, Alaska Checking Bonus)
     const baseRate = Math.max(...rates);
