@@ -16,7 +16,7 @@ interface AddCardModalProps {
   onAddCard: (cardId: string) => Promise<void>;
   debitPayEnabled?: boolean;
   onEnableDebitPay?: () => Promise<void>;
-  ownedCardIds?: Set<string>;
+  ownedCardIds?: string[];
 }
 
 const SECRET_CODE = "secretdebitpay";
@@ -26,8 +26,10 @@ export function AddCardModal({
   onAddCard, 
   debitPayEnabled = false,
   onEnableDebitPay,
-  ownedCardIds = new Set(),
+  ownedCardIds = [],
 }: AddCardModalProps) {
+  // Convert array to Set for efficient lookup
+  const ownedCardIdsSet = new Set(ownedCardIds);
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [addingId, setAddingId] = useState<string | null>(null);
@@ -175,7 +177,7 @@ export function AddCardModal({
                         >
                           {addingId === card.id 
                             ? "Adding..." 
-                            : ownedCardIds.has(card.id) 
+                            : ownedCardIdsSet.has(card.id) 
                               ? "Add Another" 
                               : "Add"}
                         </button>
