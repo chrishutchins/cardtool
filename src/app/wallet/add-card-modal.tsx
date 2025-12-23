@@ -16,6 +16,7 @@ interface AddCardModalProps {
   onAddCard: (cardId: string) => Promise<void>;
   debitPayEnabled?: boolean;
   onEnableDebitPay?: () => Promise<void>;
+  ownedCardIds?: Set<string>;
 }
 
 const SECRET_CODE = "secretdebitpay";
@@ -24,7 +25,8 @@ export function AddCardModal({
   availableCards, 
   onAddCard, 
   debitPayEnabled = false,
-  onEnableDebitPay 
+  onEnableDebitPay,
+  ownedCardIds = new Set(),
 }: AddCardModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -171,7 +173,11 @@ export function AddCardModal({
                           disabled={addingId === card.id}
                           className="px-3 py-1 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
                         >
-                          {addingId === card.id ? "Adding..." : "Add"}
+                          {addingId === card.id 
+                            ? "Adding..." 
+                            : ownedCardIds.has(card.id) 
+                              ? "Add Another" 
+                              : "Add"}
                         </button>
                       )}
                     </div>

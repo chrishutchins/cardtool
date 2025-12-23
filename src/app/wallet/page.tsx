@@ -877,6 +877,7 @@ export default async function WalletPage() {
             onAddCard={addToWallet}
             debitPayEnabled={debitPayEnabled}
             onEnableDebitPay={enableDebitPay}
+            ownedCardIds={userCardIdsSet}
           />
         </div>
 
