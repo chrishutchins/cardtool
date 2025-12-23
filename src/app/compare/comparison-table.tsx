@@ -2,6 +2,18 @@
 
 import { useState, useMemo, useEffect, useRef, useTransition } from "react";
 
+// Fast tooltip component - appears immediately on hover
+function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
+  return (
+    <span className="relative group/tooltip inline-flex">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-75 z-50">
+        {text}
+      </span>
+    </span>
+  );
+}
+
 interface Card {
   id: string; // wallet_id for owned cards, card_id for non-owned cards
   cardId: string; // Original card_id for lookups (earning rates, debit pay, etc.)
@@ -775,10 +787,14 @@ export function ComparisonTable({
                     <td className={`sticky left-0 z-10 px-4 py-3 border-r border-zinc-700 ${isEvaluating ? "bg-amber-950" : "bg-zinc-900"}`}>
                       <div className="flex items-center gap-2">
                         {card.isOwned && (
-                          <span className="shrink-0 w-2 h-2 rounded-full bg-blue-500" title="In your wallet" />
+                          <Tooltip text="In your wallet">
+                            <span className="shrink-0 w-2 h-2 rounded-full bg-blue-500" />
+                          </Tooltip>
                         )}
                         {isEvaluating && (
-                          <span className="shrink-0 w-2 h-2 rounded-full bg-amber-500" title="Evaluating" />
+                          <Tooltip text="Evaluating">
+                            <span className="shrink-0 w-2 h-2 rounded-full bg-amber-500" />
+                          </Tooltip>
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="font-medium text-white">{card.name}</div>
@@ -848,12 +864,9 @@ export function ComparisonTable({
                               )}
                             </div>
                             {cap && (
-                              <span 
-                                className="text-amber-500 cursor-help ml-0.5"
-                                title={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}
-                              >
-                                †
-                              </span>
+                              <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
+                                <span className="text-amber-500 cursor-help ml-0.5">†</span>
+                              </Tooltip>
                             )}
                           </td>
                         );
@@ -881,12 +894,9 @@ export function ComparisonTable({
                               <span className="text-pink-400"> +{debitPay}¢</span>
                             )}
                             {cap && (
-                              <span 
-                                className="text-amber-500 cursor-help ml-0.5"
-                                title={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}
-                              >
-                                †
-                              </span>
+                              <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
+                                <span className="text-amber-500 cursor-help ml-0.5">†</span>
+                              </Tooltip>
                             )}
                           </td>
                         );
