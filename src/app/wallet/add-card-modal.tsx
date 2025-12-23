@@ -55,13 +55,18 @@ export function AddCardModal({
     }
   };
 
-  // Group by issuer
+  // Group by issuer and sort cards within each issuer
   const cardsByIssuer = filteredCards.reduce((acc, card) => {
     const issuer = card.issuer_name ?? "Unknown";
     if (!acc[issuer]) acc[issuer] = [];
     acc[issuer].push(card);
     return acc;
   }, {} as Record<string, AvailableCard[]>);
+  
+  // Sort cards within each issuer alphabetically
+  Object.values(cardsByIssuer).forEach(cards => 
+    cards.sort((a, b) => a.name.localeCompare(b.name))
+  );
 
   const handleAdd = async (cardId: string) => {
     setAddingId(cardId);
@@ -150,7 +155,9 @@ export function AddCardModal({
           {/* Normal Card List */}
           {!isSecretCode && !showSecretUnlock && (
             Object.entries(cardsByIssuer).length > 0 ? (
-              Object.entries(cardsByIssuer).map(([issuer, cards]) => (
+              Object.entries(cardsByIssuer)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([issuer, cards]) => (
                 <div key={issuer}>
                   <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase sticky top-0">
                     {issuer}
