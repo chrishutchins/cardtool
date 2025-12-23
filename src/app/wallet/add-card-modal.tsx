@@ -21,6 +21,51 @@ interface AddCardModalProps {
 
 const SECRET_CODE = "secretdebitpay";
 
+// Keyword mappings for search aliases
+// Maps search terms to issuer names or currency names they should match
+const ISSUER_KEYWORDS: Record<string, string[]> = {
+  "american express": ["amex", "americanexpress"],
+  "bank of america": ["bofa", "boa", "bankofamerica"],
+  "capital one": ["capitalone", "cap1", "c1"],
+  "us bank": ["usbank"],
+  "wells fargo": ["wellsfargo", "wf"],
+  "barclays": ["barclaycard"],
+};
+
+const CURRENCY_KEYWORDS: Record<string, string[]> = {
+  "american": ["aa", "aadvantage", "american airlines"],
+  "united": ["mileageplus", "ua"],
+  "delta": ["skymiles", "dl"],
+  "southwest": ["rapid rewards", "wn"],
+  "alaska": ["mileage plan", "as"],
+  "marriott": ["bonvoy"],
+  "hilton": ["honors"],
+  "hyatt": ["world of hyatt", "woh"],
+  "ihg": ["one rewards"],
+  "chase": ["ultimate rewards", "ur"],
+  "amex": ["membership rewards", "mr"],
+  "citi": ["thankyou", "thank you", "typ"],
+  "capital one": ["venture miles"],
+  "wells fargo": ["rewards"],
+  "bilt": ["bilt rewards"],
+};
+
+// Build reverse lookup: keyword -> list of values it should match
+function buildKeywordLookup(mapping: Record<string, string[]>): Map<string, string[]> {
+  const lookup = new Map<string, string[]>();
+  for (const [value, keywords] of Object.entries(mapping)) {
+    for (const keyword of keywords) {
+      const existing = lookup.get(keyword.toLowerCase()) ?? [];
+      existing.push(value.toLowerCase());
+      lookup.set(keyword.toLowerCase(), existing);
+    }
+  }
+  return lookup;
+}
+
+const issuerKeywordLookup = buildKeywordLookup(ISSUER_KEYWORDS);
+const currencyKeywordLookup = buildKeywordLookup(CURRENCY_KEYWORDS);
+
 export function AddCardModal({ 
   availableCards, 
   onAddCard, 
@@ -39,11 +84,41 @@ export function AddCardModal({
   // Check if user typed the secret code
   const isSecretCode = search.toLowerCase() === SECRET_CODE;
 
-  const filteredCards = availableCards.filter(
-    (card) =>
-      card.name?.toLowerCase().includes(search.toLowerCase()) ||
-      card.issuer_name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCards = availableCards.filter((card) => {
+    const query = search.toLowerCase().trim();
+    if (!query) return true;
+    
+    const cardName = card.name?.toLowerCase() ?? "";
+    const issuerName = card.issuer_name?.toLowerCase() ?? "";
+    const currencyName = card.primary_currency_name?.toLowerCase() ?? "";
+    
+    // Direct matches on name, issuer, or currency
+    if (cardName.includes(query)) return true;
+    if (issuerName.includes(query)) return true;
+    if (currencyName.includes(query)) return true;
+    
+    // Check if search term is a keyword that maps to this card's issuer
+    const matchedIssuers = issuerKeywordLookup.get(query) ?? [];
+    if (matchedIssuers.some(issuer => issuerName.includes(issuer))) return true;
+    
+    // Check if search term is a keyword that maps to this card's currency
+    const matchedCurrencies = currencyKeywordLookup.get(query) ?? [];
+    if (matchedCurrencies.some(currency => currencyName.includes(currency))) return true;
+    
+    // Also check partial keyword matches (e.g., "amex" typed as "ame")
+    for (const [keyword, issuers] of issuerKeywordLookup.entries()) {
+      if (keyword.includes(query) || query.includes(keyword)) {
+        if (issuers.some(issuer => issuerName.includes(issuer))) return true;
+      }
+    }
+    for (const [keyword, currencies] of currencyKeywordLookup.entries()) {
+      if (keyword.includes(query) || query.includes(keyword)) {
+        if (currencies.some(currency => currencyName.includes(currency))) return true;
+      }
+    }
+    
+    return false;
+  });
 
   const handleEnableDebitPay = () => {
     if (onEnableDebitPay) {
