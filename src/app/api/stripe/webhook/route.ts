@@ -3,6 +3,14 @@ import Stripe from "stripe";
 import { createUntypedClient } from "@/lib/supabase/server";
 import logger from "@/lib/logger";
 
+// GET handler - just returns info that this is a webhook endpoint
+export async function GET() {
+  return NextResponse.json(
+    { message: "Stripe webhook endpoint. POST requests only." },
+    { status: 200 }
+  );
+}
+
 // Lazy initialization to avoid build-time errors
 let stripeClient: Stripe | null = null;
 
