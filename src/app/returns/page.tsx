@@ -1,3 +1,4 @@
+import { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -19,6 +20,11 @@ import {
   WelcomeBonusInput,
   SpendBonusInput,
 } from "@/lib/returns-calculator";
+
+export const metadata: Metadata = {
+  title: "Total Earnings | CardTool",
+  description: "See your projected annual credit card rewards",
+};
 
 interface Props {
   searchParams: Promise<{ goal?: string }>;

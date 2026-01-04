@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { createClient } from '@/lib/supabase/server';
 import { plaidClient } from '@/lib/plaid';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,27 +42,23 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (itemError || !plaidItem) {
-      console.error('Error storing plaid item:', itemError);
+      logger.error({ err: itemError, userId: user.id }, 'Failed to store plaid item');
       return NextResponse.json(
         { error: 'Failed to store plaid item' },
         { status: 500 }
       );
     }
 
-    // Fetch accounts and balances with retry logic
-    console.log('Fetching balances for item:', plaidItem.id);
-    console.log('Metadata accounts from Link:', JSON.stringify(metadata?.accounts, null, 2));
+    logger.debug({ plaidItemId: plaidItem.id, userId: user.id }, 'Fetching balances for item');
     
     // Helper function to fetch balances with retries
-    // Some institutions (like Capital One) require min_last_updated_datetime
     async function fetchBalancesWithRetry(token: string, maxRetries = 3, delayMs = 1000) {
       let lastError: unknown;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          console.log(`Balance fetch attempt ${attempt}/${maxRetries}`);
+          logger.debug({ attempt, maxRetries }, 'Balance fetch attempt');
           
           // Set min_last_updated_datetime to 24 hours ago
-          // Required for some institutions like Capital One (ins_128026)
           const minLastUpdated = new Date();
           minLastUpdated.setHours(minLastUpdated.getHours() - 24);
           
@@ -71,13 +68,15 @@ export async function POST(request: NextRequest) {
               min_last_updated_datetime: minLastUpdated.toISOString(),
             },
           });
-          console.log('Balance fetch successful on attempt', attempt);
+          logger.debug({ attempt }, 'Balance fetch successful');
           return response;
         } catch (err) {
           lastError = err;
-          console.log(`Balance fetch attempt ${attempt} failed:`, err instanceof Error ? err.message : 'Unknown error');
+          logger.debug(
+            { attempt, err: err instanceof Error ? err.message : 'Unknown error' },
+            'Balance fetch attempt failed'
+          );
           if (attempt < maxRetries) {
-            console.log(`Waiting ${delayMs}ms before retry...`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
             delayMs *= 2; // Exponential backoff
           }
@@ -91,10 +90,10 @@ export async function POST(request: NextRequest) {
       balanceResponse = await fetchBalancesWithRetry(accessToken);
     } catch (balanceError: unknown) {
       const errorMessage = balanceError instanceof Error ? balanceError.message : 'Unknown error';
-      const errorDetails = balanceError && typeof balanceError === 'object' && 'response' in balanceError
-        ? JSON.stringify((balanceError as { response?: { data?: unknown } }).response?.data)
-        : '';
-      console.error('Error fetching balances from Plaid:', errorMessage, errorDetails);
+      logger.error(
+        { err: balanceError, userId: user.id, institution: metadata?.institution?.name },
+        'Failed to fetch balances from Plaid'
+      );
       
       // Try to use accounts from metadata if balance fetch fails
       const metadataAccounts = metadata?.accounts || [];
@@ -103,7 +102,7 @@ export async function POST(request: NextRequest) {
       );
       
       if (creditFromMetadata.length > 0) {
-        console.log('Using', creditFromMetadata.length, 'credit accounts from Link metadata');
+        logger.info({ count: creditFromMetadata.length }, 'Using credit accounts from Link metadata');
         const accountsToInsert = creditFromMetadata.map((account: { id: string; name: string; type: string; subtype?: string; mask?: string }) => ({
           user_id: user.id,
           plaid_item_id: plaidItem.id,
@@ -125,7 +124,7 @@ export async function POST(request: NextRequest) {
           .insert(accountsToInsert);
           
         if (insertError) {
-          console.error('Error inserting from metadata:', insertError);
+          logger.error({ err: insertError, userId: user.id }, 'Failed to insert accounts from metadata');
           // Clean up orphaned plaid_item
           await supabase.from('user_plaid_items').delete().eq('id', plaidItem.id);
           return NextResponse.json({
@@ -153,22 +152,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Log all accounts for debugging (will appear in terminal/Vercel logs)
-    console.log('Plaid accounts received from API:', JSON.stringify(balanceResponse.data.accounts.map(a => ({
-      account_id: a.account_id,
-      name: a.name,
-      type: a.type,
-      subtype: a.subtype,
-      balances: a.balances,
-    })), null, 2));
-
     // Store linked accounts - include both type=credit AND subtype=credit card
-    // Some institutions (like Capital One) may categorize cards differently
     const creditAccounts = balanceResponse.data.accounts.filter(
       (account) => account.type === 'credit' || account.subtype === 'credit card'
     );
 
-    console.log('Credit accounts after filter:', creditAccounts.length);
+    logger.debug({ count: creditAccounts.length }, 'Credit accounts found after filter');
 
     let accountsLinked = 0;
 
@@ -189,25 +178,29 @@ export async function POST(request: NextRequest) {
         last_balance_update: new Date().toISOString(),
       }));
 
-      console.log('Inserting accounts:', JSON.stringify(accountsToInsert, null, 2));
-
       const { error: accountsError } = await supabase
         .from('user_linked_accounts')
         .insert(accountsToInsert);
 
       if (accountsError) {
-        console.error('Error storing linked accounts:', JSON.stringify(accountsError, null, 2));
+        logger.error({ err: accountsError, userId: user.id }, 'Failed to store linked accounts');
         return NextResponse.json(
           { error: 'Failed to store linked accounts', details: accountsError.message, code: accountsError.code },
           { status: 500 }
         );
       }
       
-      console.log('Successfully inserted', creditAccounts.length, 'accounts');
+      logger.info(
+        { count: creditAccounts.length, userId: user.id, institution: metadata?.institution?.name },
+        'Successfully linked accounts'
+      );
       accountsLinked = creditAccounts.length;
     } else {
       // No credit accounts found - delete the plaid_item to avoid orphans
-      console.log('No credit accounts found for institution:', metadata?.institution?.name);
+      logger.info(
+        { userId: user.id, institution: metadata?.institution?.name },
+        'No credit accounts found for institution'
+      );
       await supabase
         .from('user_plaid_items')
         .delete()
@@ -220,12 +213,10 @@ export async function POST(request: NextRequest) {
       accounts_linked: accountsLinked,
     });
   } catch (error) {
-    // Log detailed error info
-    console.error('Error exchanging token:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      error,
-    });
+    logger.error(
+      { err: error },
+      'Failed to exchange Plaid token'
+    );
     return NextResponse.json(
       { error: 'Failed to exchange token', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

@@ -42,3 +42,14 @@ export function createAdminClient() {
   );
 }
 
+/**
+ * Creates an untyped Supabase client for tables not yet in generated types.
+ * Use this sparingly - prefer regenerating types when possible.
+ */
+export function createUntypedClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+

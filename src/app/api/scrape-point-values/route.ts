@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import logger from "@/lib/logger";
 
 // Extra aliases for currency names - keys should match DB currency names (lowercase)
 // These map to alternative names that scraped sites might use
@@ -62,7 +63,6 @@ function buildCurrencyMappings(currencies: Currency[]): Map<string, string> {
   for (const currency of currencies) {
     // Skip excluded currencies
     if (EXCLUDED_CURRENCY_CODES.has(currency.code)) {
-      console.log(`[MAPPING] Skipping excluded currency: ${currency.code} (${currency.name})`);
       continue;
     }
     
@@ -78,26 +78,12 @@ function buildCurrencyMappings(currencies: Currency[]): Map<string, string> {
         // Add all the extra aliases for this currency
         for (const alias of aliases) {
           aliasToCode.set(alias.toLowerCase(), currency.code);
-          console.log(`[MAPPING] ${currency.code}: added alias "${alias}"`);
         }
       }
     }
   }
   
-  console.log(`[MAPPING] Total aliases created: ${aliasToCode.size}`);
-  
-  // Debug: show all aliases for each code
-  const codeToAliases = new Map<string, string[]>();
-  for (const [alias, code] of aliasToCode.entries()) {
-    if (!codeToAliases.has(code)) {
-      codeToAliases.set(code, []);
-    }
-    codeToAliases.get(code)!.push(alias);
-  }
-  for (const [code, aliases] of codeToAliases.entries()) {
-    console.log(`[MAPPING] ${code}: [${aliases.join(", ")}]`);
-  }
-  
+  logger.debug({ aliasCount: aliasToCode.size }, 'Currency alias mapping built');
   return aliasToCode;
 }
 
@@ -106,9 +92,7 @@ function findCurrencyCode(name: string, aliasToCode: Map<string, string>): strin
   
   // Try exact match first
   if (aliasToCode.has(normalizedName)) {
-    const code = aliasToCode.get(normalizedName)!;
-    console.log(`[MATCH] Exact match: "${normalizedName}" → ${code}`);
-    return code;
+    return aliasToCode.get(normalizedName)!;
   }
   
   // Try to find a match by checking if the scraped name contains any known alias
@@ -118,7 +102,6 @@ function findCurrencyCode(name: string, aliasToCode: Map<string, string>): strin
   for (const [alias, code] of sortedAliases) {
     // Only match if the scraped name contains the alias (not the reverse)
     if (normalizedName.includes(alias)) {
-      console.log(`[MATCH] Substring match: "${normalizedName}" contains "${alias}" → ${code}`);
       return code;
     }
   }
@@ -129,13 +112,9 @@ function findCurrencyCode(name: string, aliasToCode: Map<string, string>): strin
 function parseFrequentMilerPage(html: string, aliasToCode: Map<string, string>): ScrapedValue[] {
   const results: ScrapedValue[] = [];
   
-  console.log("[FREQUENTMILER] Parsing page, HTML length:", html.length);
-  
   // Parse all tables looking for program name + value pairs
   const tableRegex = /<table[\s\S]*?<\/table>/gi;
   const tables = html.match(tableRegex) || [];
-  
-  console.log("[FREQUENTMILER] Found", tables.length, "tables");
   
   for (const table of tables) {
     const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -163,7 +142,6 @@ function parseFrequentMilerPage(html: string, aliasToCode: Map<string, string>):
         
         if (programName && !isNaN(value) && value > 0 && value < 10) {
           const matchedCode = findCurrencyCode(programName, aliasToCode);
-          console.log("[FREQUENTMILER] Found:", programName, "=", value, "→", matchedCode || "NO MATCH");
           results.push({
             sourceName: programName,
             value: value,
@@ -174,7 +152,6 @@ function parseFrequentMilerPage(html: string, aliasToCode: Map<string, string>):
     }
   }
   
-  console.log("[FREQUENTMILER] Total results:", results.length);
   return results;
 }
 
@@ -184,12 +161,8 @@ function parseNerdWalletPage(html: string, aliasToCode: Map<string, string>): Sc
   // NerdWallet has tables with "Program" and "Value per point" columns
   // Values are formatted as "1.2 cents." or "0.8 cent."
   
-  console.log("[NERDWALLET] Parsing page, HTML length:", html.length);
-  
   const tableRegex = /<table[\s\S]*?<\/table>/gi;
   const tables = html.match(tableRegex) || [];
-  
-  console.log("[NERDWALLET] Found", tables.length, "tables");
   
   for (const table of tables) {
     const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -221,7 +194,6 @@ function parseNerdWalletPage(html: string, aliasToCode: Map<string, string>): Sc
           
           if (programName && !isNaN(value) && value > 0 && value < 10) {
             const matchedCode = findCurrencyCode(programName, aliasToCode);
-            console.log("[NERDWALLET] Found:", programName, "=", value, "→", matchedCode || "NO MATCH");
             results.push({
               sourceName: programName,
               value: value,
@@ -231,10 +203,8 @@ function parseNerdWalletPage(html: string, aliasToCode: Map<string, string>): Sc
         }
       }
     }
-    console.log("[NERDWALLET] Table had", rowCount, "rows");
   }
   
-  console.log("[NERDWALLET] Total results:", results.length);
   return results;
 }
 
@@ -246,12 +216,8 @@ function parseBankratePage(html: string, aliasToCode: Map<string, string>): Scra
   // 2. Baseline value (1 cent, etc.)
   // 3. Bankrate value* (the one we want - e.g., "2.0 cents")
   
-  console.log("[BANKRATE] Parsing page, HTML length:", html.length);
-  
   const tableRegex = /<table[\s\S]*?<\/table>/gi;
   const tables = html.match(tableRegex) || [];
-  
-  console.log("[BANKRATE] Found", tables.length, "tables");
   
   for (const table of tables) {
     const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -284,7 +250,6 @@ function parseBankratePage(html: string, aliasToCode: Map<string, string>): Scra
           
           if (programName && !isNaN(value) && value > 0 && value < 10) {
             const matchedCode = findCurrencyCode(programName, aliasToCode);
-            console.log("[BANKRATE] Found:", programName, "=", value, "→", matchedCode || "NO MATCH");
             results.push({
               sourceName: programName,
               value: value,
@@ -296,7 +261,6 @@ function parseBankratePage(html: string, aliasToCode: Map<string, string>): Scra
     }
   }
   
-  console.log("[BANKRATE] Total results:", results.length);
   return results;
 }
 
@@ -307,7 +271,7 @@ function parseAwardWalletPage(html: string, aliasToCode: Map<string, string>): S
   const jsonMatch = html.match(/window\.mileValueDatas\s*=\s*\/\*\s*DATA START\s*\*\/([\s\S]*?)\/\*\s*DATA END\s*\*\//);
   
   if (!jsonMatch) {
-    console.log("[AWARDWALLET] Could not find embedded JSON data");
+    logger.debug({}, 'AwardWallet: Could not find embedded JSON data');
     return results;
   }
   
@@ -336,10 +300,10 @@ function parseAwardWalletPage(html: string, aliasToCode: Map<string, string>): S
       }
     }
     
-    console.log(`[AWARDWALLET] Parsed ${results.length} values from embedded JSON`);
+    logger.debug({ count: results.length }, 'AwardWallet: Parsed values from embedded JSON');
     
   } catch (err) {
-    console.error("[AWARDWALLET] Failed to parse JSON:", err);
+    logger.error({ err }, 'AwardWallet: Failed to parse JSON');
   }
   
   return results;
@@ -351,12 +315,8 @@ function parseThePointsGuyPage(html: string, aliasToCode: Map<string, string>): 
   // TPG has tables with program name and cent values
   // Values can be in format "1.9 cents" or "1.9¢" or just "1.9"
   
-  console.log("[TPG] Parsing page, HTML length:", html.length);
-  
   const tableRegex = /<table[\s\S]*?<\/table>/gi;
   const tables = html.match(tableRegex) || [];
-  
-  console.log("[TPG] Found", tables.length, "tables");
   
   for (const table of tables) {
     const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -391,7 +351,6 @@ function parseThePointsGuyPage(html: string, aliasToCode: Map<string, string>): 
             
             if (programName && !isNaN(value) && value > 0 && value < 10) {
               const matchedCode = findCurrencyCode(programName, aliasToCode);
-              console.log("[TPG] Found:", programName, "=", value, "→", matchedCode || "NO MATCH");
               results.push({
                 sourceName: programName,
                 value: value,
@@ -405,7 +364,6 @@ function parseThePointsGuyPage(html: string, aliasToCode: Map<string, string>): 
     }
   }
   
-  console.log("[TPG] Total results:", results.length);
   return results;
 }
 
@@ -483,7 +441,7 @@ export async function POST(request: NextRequest) {
       .select("code, name");
     
     if (currencyError || !currencies) {
-      console.error("Failed to fetch currencies:", currencyError);
+      logger.error({ err: currencyError }, 'Failed to fetch currencies for scraping');
       return NextResponse.json(
         { error: "Failed to fetch currency mappings" },
         { status: 500 }
@@ -492,7 +450,7 @@ export async function POST(request: NextRequest) {
     
     // Build the alias-to-code mapping from database currencies
     const aliasToCode = buildCurrencyMappings(currencies);
-    console.log(`[SCRAPER] Built mappings for ${currencies.length} currencies, ${aliasToCode.size} total aliases`);
+    logger.debug({ currencyCount: currencies.length, aliasCount: aliasToCode.size }, 'Built currency mappings for scraper');
     
     // Fetch the page
     const response = await fetch(url, {
@@ -555,7 +513,7 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error("Scrape error:", error);
+    logger.error({ err: error }, 'Failed to scrape URL');
     return NextResponse.json(
       { error: "Failed to scrape URL" },
       { status: 500 }

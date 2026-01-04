@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { createClient } from '@/lib/supabase/server';
+import logger from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -36,7 +37,7 @@ export async function GET() {
       .order('name');
 
     if (error) {
-      console.error('Error fetching accounts:', error);
+      logger.error({ err: error, userId: user.id }, 'Failed to fetch linked accounts');
       return NextResponse.json(
         { error: 'Failed to fetch accounts' },
         { status: 500 }
@@ -45,7 +46,7 @@ export async function GET() {
 
     return NextResponse.json({ accounts });
   } catch (error) {
-    console.error('Error fetching accounts:', error);
+    logger.error({ err: error }, 'Failed to fetch accounts');
     return NextResponse.json(
       { error: 'Failed to fetch accounts' },
       { status: 500 }

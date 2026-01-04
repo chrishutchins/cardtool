@@ -1,3 +1,4 @@
+import { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -6,6 +7,11 @@ import { PointValuesEditor } from "@/components/point-values-editor";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 import { TemplateSelector } from "@/components/template-selector";
+
+export const metadata: Metadata = {
+  title: "Point Values | CardTool",
+  description: "Customize your point and mile valuations",
+};
 
 // Force dynamic rendering to ensure fresh data on each request
 export const dynamic = "force-dynamic";

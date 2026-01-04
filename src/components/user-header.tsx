@@ -46,7 +46,8 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true }: Us
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="text-lg font-bold text-white">
-              CardTool
+              <span className="text-blue-400">Card</span>
+              <span>Tool</span>
             </Link>
             
             {/* Desktop nav */}

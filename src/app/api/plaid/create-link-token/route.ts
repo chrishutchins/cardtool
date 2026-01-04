@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { plaidClient } from '@/lib/plaid';
 import { Products, CountryCode } from 'plaid';
+import logger from '@/lib/logger';
 
 export async function POST() {
   try {
@@ -23,7 +24,7 @@ export async function POST() {
 
     return NextResponse.json({ link_token: response.data.link_token });
   } catch (error) {
-    console.error('Error creating link token:', error);
+    logger.error({ err: error }, 'Failed to create Plaid link token');
     return NextResponse.json(
       { error: 'Failed to create link token' },
       { status: 500 }

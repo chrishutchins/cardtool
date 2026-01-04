@@ -1,3 +1,4 @@
+import { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -5,6 +6,11 @@ import { revalidatePath } from "next/cache";
 import { UserHeader } from "@/components/user-header";
 import { ComparisonTable } from "./comparison-table";
 import { isAdminEmail } from "@/lib/admin";
+
+export const metadata: Metadata = {
+  title: "Compare Cards | CardTool",
+  description: "Compare credit card earning rates across categories",
+};
 
 async function saveCompareCategories(categoryIds: number[]) {
   "use server";

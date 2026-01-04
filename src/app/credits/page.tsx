@@ -1,3 +1,4 @@
+import { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -5,6 +6,11 @@ import { revalidatePath } from "next/cache";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 import { CreditsClient } from "./credits-client";
+
+export const metadata: Metadata = {
+  title: "Credit Tracker | CardTool",
+  description: "Track and manage your credit card perks and credits",
+};
 
 export default async function CreditsPage() {
   const user = await currentUser();

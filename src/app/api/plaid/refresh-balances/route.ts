@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { createClient } from '@/lib/supabase/server';
 import { plaidClient } from '@/lib/plaid';
+import logger from '@/lib/logger';
 
 export async function POST() {
   try {
@@ -20,7 +21,7 @@ export async function POST() {
       .eq('user_id', user.id);
 
     if (itemsError) {
-      console.error('Error fetching plaid items:', itemsError);
+      logger.error({ err: itemsError, userId: user.id }, 'Failed to fetch plaid items');
       return NextResponse.json(
         { error: 'Failed to fetch plaid items' },
         { status: 500 }
@@ -36,10 +37,9 @@ export async function POST() {
     // Refresh balances for each Plaid item
     for (const item of plaidItems) {
       try {
-        console.log('Refreshing balances for item:', item.id);
+        logger.debug({ plaidItemId: item.id, userId: user.id }, 'Refreshing balances for item');
         
         // Set min_last_updated_datetime to 24 hours ago
-        // Required for some institutions like Capital One (ins_128026)
         const minLastUpdated = new Date();
         minLastUpdated.setHours(minLastUpdated.getHours() - 24);
         
@@ -50,14 +50,7 @@ export async function POST() {
           },
         });
 
-        console.log('Received accounts:', balanceResponse.data.accounts.map(a => ({
-          name: a.name,
-          type: a.type,
-          subtype: a.subtype,
-          balances: a.balances,
-        })));
-
-        // Update each account's balance - include both type=credit AND subtype=credit card
+        // Update each account's balance
         for (const account of balanceResponse.data.accounts) {
           if (account.type === 'credit' || account.subtype === 'credit card') {
             const { data: updatedRows, error: updateError } = await supabase
@@ -73,23 +66,28 @@ export async function POST() {
               .select('id');
 
             if (updateError) {
-              console.error('Error updating account:', account.name, updateError);
+              logger.error(
+                { err: updateError, accountName: account.name, plaidItemId: item.id },
+                'Failed to update account balance'
+              );
             } else if (updatedRows && updatedRows.length > 0) {
-              console.log('Updated account:', account.name, 'balances:', account.balances);
               totalUpdated += updatedRows.length;
             }
           }
         }
       } catch (plaidError: unknown) {
-        const errorMessage = plaidError instanceof Error ? plaidError.message : 'Unknown error';
-        console.error('Error refreshing balances for item:', item.id, errorMessage);
+        logger.error(
+          { err: plaidError, plaidItemId: item.id, userId: user.id },
+          'Failed to refresh balances for item'
+        );
         // Continue with other items even if one fails
       }
     }
 
+    logger.info({ updated: totalUpdated, userId: user.id }, 'Balance refresh completed');
     return NextResponse.json({ success: true, updated: totalUpdated });
   } catch (error) {
-    console.error('Error refreshing balances:', error);
+    logger.error({ err: error }, 'Failed to refresh balances');
     return NextResponse.json(
       { error: 'Failed to refresh balances' },
       { status: 500 }

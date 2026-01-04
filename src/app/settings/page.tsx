@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { currentUser } from "@clerk/nextjs/server";
+import { createClient, createAdminClient, createUntypedClient } from "@/lib/supabase/server";
+import { currentUser, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { UserHeader } from "@/components/user-header";
@@ -11,6 +11,13 @@ import { PaypalCategories } from "@/app/wallet/paypal-categories";
 import { LargePurchaseCategories } from "./large-purchase-categories";
 import { LinkedAccounts } from "@/app/wallet/linked-accounts";
 import { isAdminEmail } from "@/lib/admin";
+import { AccountManagement } from "./account-management";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Settings | CardTool",
+  description: "Configure your CardTool preferences and account settings",
+};
 
 export default async function SettingsPage() {
   const user = await currentUser();
@@ -764,6 +771,55 @@ export default async function SettingsPage() {
             </p>
           </div>
         )}
+
+        {/* Account Management */}
+        <div className="mt-12 pt-8 border-t border-zinc-800">
+          <AccountManagement
+            userId={user.id}
+            userEmail={user.emailAddresses[0]?.emailAddress}
+            onDeleteAccount={async () => {
+              "use server";
+              const user = await currentUser();
+              if (!user) return { success: false };
+
+              const supabase = createAdminClient();
+              const untypedSupabase = createUntypedClient();
+              const userId = user.id;
+
+              // Get wallet IDs first
+              const { data: wallets } = await supabase
+                .from("user_wallets")
+                .select("id")
+                .eq("user_id", userId);
+              const walletIds = wallets?.map((w) => w.id) || [];
+
+              // Delete in correct order (foreign keys)
+              // Use untyped client for tables not in generated types
+              await untypedSupabase.from("user_feedback").delete().eq("user_id", userId);
+              await supabase.from("user_linked_accounts").delete().eq("user_id", userId);
+              await supabase.from("user_plaid_items").delete().eq("user_id", userId);
+              if (walletIds.length > 0) {
+                await supabase.from("user_credit_usage").delete().in("user_wallet_id", walletIds);
+              }
+              await supabase.from("user_wallets").delete().eq("user_id", userId);
+              await supabase.from("user_category_spend").delete().eq("user_id", userId);
+              await supabase.from("user_feature_flags").delete().eq("user_id", userId);
+              await supabase.from("user_card_selections").delete().eq("user_id", userId);
+              await supabase.from("user_multiplier_tiers").delete().eq("user_id", userId);
+              await supabase.from("user_travel_booking_preferences").delete().eq("user_id", userId);
+              await supabase.from("user_mobile_pay_categories").delete().eq("user_id", userId);
+              await supabase.from("user_paypal_categories").delete().eq("user_id", userId);
+              await supabase.from("user_large_purchase_categories").delete().eq("user_id", userId);
+              await supabase.from("user_card_debit_pay").delete().eq("user_id", userId);
+
+              // Delete from Clerk
+              const client = await clerkClient();
+              await client.users.deleteUser(userId);
+
+              redirect("/account-deleted");
+            }}
+          />
+        </div>
       </div>
     </div>
   );

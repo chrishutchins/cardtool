@@ -1,3 +1,4 @@
+import { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -5,6 +6,11 @@ import { revalidatePath } from "next/cache";
 import { SpendingEditor } from "@/components/spending-editor";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
+
+export const metadata: Metadata = {
+  title: "Spending | CardTool",
+  description: "Set your annual spending by category",
+};
 
 // Categories to hide from the spending page (derived/payment overlay, not directly trackable)
 const HIDDEN_CATEGORY_SLUGS = ["mobile-pay", "over-5k", "paypal"];

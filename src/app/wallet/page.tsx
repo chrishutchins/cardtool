@@ -1,3 +1,4 @@
+import { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -19,6 +20,11 @@ import {
   WelcomeBonusInput,
   SpendBonusInput,
 } from "@/lib/returns-calculator";
+
+export const metadata: Metadata = {
+  title: "My Wallet | CardTool",
+  description: "Manage your credit cards and track rewards",
+};
 import { CardRecommendations } from "./card-recommendations";
 import { UserBonusSection, UserWelcomeBonus, UserSpendBonus } from "./user-bonus-section";
 import { WalletClient } from "./wallet-client";
