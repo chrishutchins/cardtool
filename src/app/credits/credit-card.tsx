@@ -4,10 +4,21 @@ import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { Credit, CreditUsage, CreditSettings, WalletCard } from "./credits-client";
 
 // Tooltip component - appears on hover (desktop) or tap (mobile)
+// Smart positioning: appears above by default, below if not enough space
 function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<"above" | "below">("above");
   const ref = useRef<HTMLSpanElement>(null);
   const justOpenedRef = useRef(false);
+
+  // Check position on open and update if needed
+  useEffect(() => {
+    if (isOpen && ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      // If less than 60px from top of viewport, show below
+      setPosition(rect.top < 60 ? "below" : "above");
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -33,14 +44,24 @@ function Tooltip({ children, text }: { children: React.ReactNode; text: string }
     setIsOpen(!isOpen);
   };
 
+  const positionClasses = position === "above" 
+    ? "bottom-full mb-1" 
+    : "top-full mt-1";
+
   return (
     <span 
       ref={ref}
       className="relative group/tooltip inline-flex"
       onClick={handleClick}
+      onMouseEnter={() => {
+        if (ref.current) {
+          const rect = ref.current.getBoundingClientRect();
+          setPosition(rect.top < 60 ? "below" : "above");
+        }
+      }}
     >
       {children}
-      <span className={`pointer-events-none absolute bottom-full left-0 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg min-w-48 max-w-sm z-50 transition-opacity duration-75 whitespace-normal ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
+      <span className={`pointer-events-none absolute left-0 ${positionClasses} px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg min-w-48 max-w-sm z-[100] transition-opacity duration-75 whitespace-normal ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
         {text}
       </span>
     </span>

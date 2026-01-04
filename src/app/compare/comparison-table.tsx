@@ -3,11 +3,21 @@
 import { useState, useMemo, useEffect, useRef, useTransition, useCallback } from "react";
 
 // Fast tooltip component - appears on hover (desktop) or tap (mobile)
-// Wraps text to prevent overflow, max width constrained
+// Smart positioning: appears above by default, below if not enough space
 function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<"above" | "below">("above");
   const ref = useRef<HTMLSpanElement>(null);
   const justOpenedRef = useRef(false);
+
+  // Check position on open and update if needed
+  useEffect(() => {
+    if (isOpen && ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      // If less than 60px from top of viewport, show below
+      setPosition(rect.top < 60 ? "below" : "above");
+    }
+  }, [isOpen]);
 
   // Close on outside click/touch
   useEffect(() => {
@@ -46,14 +56,24 @@ function Tooltip({ children, text }: { children: React.ReactNode; text: string }
     setIsOpen(!isOpen);
   }, [isOpen]);
 
+  const positionClasses = position === "above" 
+    ? "bottom-full mb-1" 
+    : "top-full mt-1";
+
   return (
     <span 
       ref={ref}
       className="relative group/tooltip inline-flex"
       onClick={handleClick}
+      onMouseEnter={() => {
+        if (ref.current) {
+          const rect = ref.current.getBoundingClientRect();
+          setPosition(rect.top < 60 ? "below" : "above");
+        }
+      }}
     >
       {children}
-      <span className={`pointer-events-none absolute bottom-full left-0 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-50 transition-opacity duration-75 ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
+      <span className={`pointer-events-none absolute left-0 ${positionClasses} px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-[100] transition-opacity duration-75 ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
         {text}
       </span>
     </span>
@@ -61,11 +81,21 @@ function Tooltip({ children, text }: { children: React.ReactNode; text: string }
 }
 
 // Rich tooltip with ReactNode content support for colored breakdowns
-// Appears on hover (desktop) or tap (mobile)
+// Smart positioning: appears above by default, below if not enough space
 function RichTooltip({ children, content }: { children: React.ReactNode; content: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<"above" | "below">("above");
   const ref = useRef<HTMLSpanElement>(null);
   const justOpenedRef = useRef(false);
+
+  // Check position on open and update if needed
+  useEffect(() => {
+    if (isOpen && ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      // If less than 80px from top of viewport, show below
+      setPosition(rect.top < 80 ? "below" : "above");
+    }
+  }, [isOpen]);
 
   // Close on outside click/touch
   useEffect(() => {
@@ -104,14 +134,24 @@ function RichTooltip({ children, content }: { children: React.ReactNode; content
     setIsOpen(!isOpen);
   }, [isOpen]);
 
+  const positionClasses = position === "above" 
+    ? "bottom-full mb-1" 
+    : "top-full mt-1";
+
   return (
     <span 
       ref={ref}
       className="relative group/richtooltip inline-flex cursor-help"
       onClick={handleClick}
+      onMouseEnter={() => {
+        if (ref.current) {
+          const rect = ref.current.getBoundingClientRect();
+          setPosition(rect.top < 80 ? "below" : "above");
+        }
+      }}
     >
       {children}
-      <span className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-600 rounded shadow-lg z-50 whitespace-nowrap transition-opacity duration-75 ${isOpen ? "opacity-100" : "opacity-0 group-hover/richtooltip:opacity-100"}`}>
+      <span className={`pointer-events-none absolute left-1/2 -translate-x-1/2 ${positionClasses} px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-600 rounded shadow-lg z-[100] whitespace-nowrap transition-opacity duration-75 ${isOpen ? "opacity-100" : "opacity-0 group-hover/richtooltip:opacity-100"}`}>
         {content}
       </span>
     </span>
