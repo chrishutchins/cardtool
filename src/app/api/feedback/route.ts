@@ -81,6 +81,7 @@ export async function POST(request: Request) {
         await sgMail.send({
           to: FEEDBACK_NOTIFY_EMAIL,
           from: FEEDBACK_FROM_EMAIL,
+          replyTo: userEmail,
           subject: `${typeEmoji} New ${typeLabel} from ${userEmail}`,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
