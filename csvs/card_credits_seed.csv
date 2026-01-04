@@ -1,0 +1,116 @@
+card_slug,name,brand_name,reset_cycle,default_value,default_quantity,unit_name,notes
+amex-platinum,Uber Credit,Uber,monthly,15,,,Up to $15/month in Uber Cash ($35 in Dec)
+amex-platinum,Airline Fee Credit,,annual,200,,,Incidental airline fees on selected airline
+amex-platinum,Saks Credit,Saks Fifth Avenue,semiannual,50,,,Up to $50 semiannually ($100/year)
+amex-platinum,CLEAR Plus Credit,CLEAR,annual,189,,,CLEAR Plus membership
+amex-platinum,Digital Entertainment Credit,,monthly,20,,,Disney+/Hulu/ESPN+/NYT/Peacock/Audible
+amex-platinum,Equinox Credit,Equinox,monthly,25,,,Equinox+ or Equinox membership credit
+amex-platinum,Hotel Credit,,annual,200,,,Fine Hotels + Resorts or The Hotel Collection
+amex-platinum,Walmart+ Credit,Walmart,monthly,12.95,,,Walmart+ membership monthly credit
+amex-platinum,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck every 4.5 years
+amex-platinum,Centurion Lounge Access,,annual,,4,guest pass,Unlimited cardholder + 2 guests (or paid)
+amex-schwab-platinum,Uber Credit,Uber,monthly,15,,,Up to $15/month in Uber Cash ($35 in Dec)
+amex-schwab-platinum,Airline Fee Credit,,annual,200,,,Incidental airline fees on selected airline
+amex-schwab-platinum,Saks Credit,Saks Fifth Avenue,semiannual,50,,,Up to $50 semiannually ($100/year)
+amex-schwab-platinum,CLEAR Plus Credit,CLEAR,annual,189,,,CLEAR Plus membership
+amex-schwab-platinum,Digital Entertainment Credit,,monthly,20,,,Disney+/Hulu/ESPN+/NYT/Peacock/Audible
+amex-schwab-platinum,Equinox Credit,Equinox,monthly,25,,,Equinox+ or Equinox membership credit
+amex-schwab-platinum,Hotel Credit,,annual,200,,,Fine Hotels + Resorts or The Hotel Collection
+amex-schwab-platinum,Walmart+ Credit,Walmart,monthly,12.95,,,Walmart+ membership monthly credit
+amex-schwab-platinum,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck every 4.5 years
+amex-gold,Uber Credit,Uber,monthly,10,,,Up to $10/month in Uber Cash ($20 in Dec)
+amex-gold,Dining Credit,,monthly,10,,,Grubhub/Seamless/Goldbelly/Wine.com/Milk Bar/Caviar
+amex-gold,Dunkin Credit,Dunkin,monthly,7,,,Up to $7/month at Dunkin
+amex-green,CLEAR Plus Credit,CLEAR,annual,189,,,CLEAR Plus membership
+amex-green,LoungeBuddy Credit,,annual,100,,,Airport lounge access via LoungeBuddy app
+chase-sapphire-reserve,Travel Credit,,cardmember_year,300,,,Any travel purchase via Chase portal or statement
+chase-sapphire-reserve,DoorDash DashPass,DoorDash,annual,60,,,Complimentary DashPass membership for 2 years
+chase-sapphire-reserve,Lyft Pink,Lyft,annual,60,,,Lyft Pink All Access membership
+chase-sapphire-reserve,Instacart+,Instacart,annual,60,,,Instacart+ membership
+chase-sapphire-reserve,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+chase-sapphire-reserve,Priority Pass Lounge,,annual,,2,guest,Unlimited visits + guests
+chase-sapphire-reserve-business,Travel Credit,,cardmember_year,300,,,Any travel purchase
+chase-sapphire-reserve-business,Priority Pass Lounge,,annual,,2,guest,Unlimited visits + guests
+chase-sapphire-reserve-business,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+chase-sapphire-preferred,Hotel Credit,,cardmember_year,50,,,Hotels via Chase Travel (anniversary)
+capital-one-venture-x,Travel Credit,,cardmember_year,300,,,Travel via Capital One Travel portal
+capital-one-venture-x,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+capital-one-venture-x,Capital One Lounge Access,,annual,,2,guest,Unlimited visits + guests at CO Lounges
+capital-one-venture-x,Priority Pass Lounge,,annual,,2,guest,Unlimited visits
+capital-one-venture-x-business,Travel Credit,,cardmember_year,300,,,Travel via Capital One Travel portal
+capital-one-venture-x-business,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+capital-one-venture-x-business,Capital One Lounge Access,,annual,,2,guest,Unlimited visits + guests
+citi-strata-elite,Hotel Credit,,cardmember_year,200,,,Hotels via Citi Travel portal
+citi-strata-elite,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+citi-strata-elite,Priority Pass Lounge,,annual,,4,guest,Unlimited visits + guests
+citi-aa-executive,Admirals Club,,annual,,8,guest,Unlimited Admirals Club access + guests
+citi-aa-executive,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+amex-hilton-aspire,Hilton Resort Credit,Hilton,annual,200,,,Hilton resort purchases
+amex-hilton-aspire,Airline Credit,,annual,250,,,Airline incidental fees on selected airline
+amex-hilton-aspire,Free Night Award,Hilton,annual,,1,free night,Annual free night certificate
+amex-hilton-aspire,Diamond Status,Hilton,annual,,1,status,Hilton Diamond status
+amex-hilton-aspire,Priority Pass Lounge,,annual,,2,guest,Unlimited visits + guests
+amex-hilton-surpass,Free Night Award,Hilton,annual,,1,free night,Annual free night certificate (after $15k spend)
+amex-hilton-business,Free Night Award,Hilton,annual,,1,free night,Weekend free night after $15k spend
+amex-bonvoy-brilliant,Marriott Credit,Marriott,monthly,25,,,Up to $25/month on dining at Marriott ($300/year)
+amex-bonvoy-brilliant,Free Night Award,Marriott,annual,,1,free night,Up to 85K points value (after $60k spend 2nd)
+amex-bonvoy-brilliant,Platinum Elite Status,Marriott,annual,,1,status,Marriott Platinum Elite status
+amex-bonvoy-business,Free Night Award,Marriott,annual,,1,free night,Up to 35K points value
+amex-bonvoy-bevy,Free Night Award,Marriott,annual,,1,free night,Up to 50K points value
+chase-bonvoy-boundless,Free Night Award,Marriott,annual,,1,free night,Up to 35K points value
+chase-bonvoy-bountiful,Free Night Award,Marriott,annual,,1,free night,Up to 50K points value
+chase-ihg-premier,Free Night Award,IHG,annual,,1,free night,Up to 40K points value
+chase-ihg-premier-business,Free Night Award,IHG,annual,,1,free night,Up to 40K points value
+chase-hyatt-personal,Free Night Award,Hyatt,annual,,1,free night,Category 1-4 properties
+chase-hyatt-personal,Discoverist Status,Hyatt,annual,,1,status,World of Hyatt Discoverist status
+chase-hyatt-business,Free Night Award,Hyatt,annual,,1,free night,Category 1-4 properties
+chase-hyatt-business,Discoverist Status,Hyatt,annual,,1,status,World of Hyatt Discoverist status
+amex-delta-reserve,Delta Sky Club,Delta,annual,,4,guest,Unlimited access + guests when flying Delta
+amex-delta-reserve,Companion Certificate,Delta,annual,,1,certificate,Companion flies free on domestic first class
+amex-delta-reserve,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+amex-delta-reserve-business,Delta Sky Club,Delta,annual,,4,guest,Unlimited access + guests when flying Delta
+amex-delta-reserve-business,Companion Certificate,Delta,annual,,1,certificate,Companion flies free on domestic first class
+amex-delta-reserve-business,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+amex-delta-platinum,Companion Certificate,Delta,annual,,1,certificate,Companion flies at reduced rate
+amex-delta-platinum,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+amex-delta-platinum-business,Companion Certificate,Delta,annual,,1,certificate,Companion flies at reduced rate
+amex-delta-platinum-business,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+amex-delta-gold,First Bag Free,Delta,annual,,1,benefit,First checked bag free
+amex-delta-gold-business,First Bag Free,Delta,annual,,1,benefit,First checked bag free
+chase-united-club,United Club,,annual,,2,guest,Unlimited access + guests
+chase-united-club,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+chase-united-club-business,United Club,,annual,,2,guest,Unlimited access + guests
+chase-united-club-business,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+chase-united-quest,Anniversary Award,,cardmember_year,125,,,125 anniversary award miles
+chase-united-quest,United Travel Bank Credit,,annual,50,,,$50 United Travel Bank credit
+chase-united-explorer,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+chase-united-explorer,First Bag Free,United,annual,,2,bag,First checked bag free for you + companion
+chase-united-business,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+chase-southwest-priority,Southwest Credit,Southwest,annual,75,,,7500 anniversary points (~$75 value)
+chase-southwest-priority,WiFi Credits,Southwest,annual,,4,pass,4 inflight WiFi credits per year
+chase-southwest-priority,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+chase-southwest-performance-business,Southwest Credit,Southwest,annual,100,,,10000 anniversary points (~$100 value)
+chase-southwest-performance-business,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+bilt-card,Rent Day Bonus,Bilt,monthly,,,, Double points on rent day (1st of month)
+us-bank-altitude-reserve,Travel Credit,,cardmember_year,325,,,Travel purchases via mobile wallet
+us-bank-altitude-reserve,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+us-bank-altitude-reserve,Priority Pass Lounge,,annual,,4,guest,Unlimited visits + guests
+wells-fargo-autograph-journey,Airline Credit,,annual,100,,,Statement credit for airlines
+amex-business-platinum,Dell Credit,Dell,semiannual,100,,,Up to $100 semiannually ($200/year)
+amex-business-platinum,Indeed Credit,Indeed,monthly,150,,,Job posting credits monthly
+amex-business-platinum,Adobe Credit,Adobe,monthly,15,,,Adobe Creative Cloud monthly
+amex-business-platinum,Wireless Credit,,monthly,10,,,AT&T/Verizon/T-Mobile/Sprint monthly
+amex-business-platinum,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+amex-business-platinum,Centurion Lounge Access,,annual,,4,guest,Unlimited cardholder + guests
+amex-business-platinum,Airline Fee Credit,,annual,200,,,Incidental airline fees
+amex-business-gold,Wireless Credit,,monthly,10,,,AT&T/Verizon/T-Mobile/Sprint monthly
+amex-business-gold,Flexible Credit,,annual,150,,,FedEx/Grubhub/Office Depot (one category)
+chase-ink-business-preferred,Lyft Pink,Lyft,annual,60,,,Lyft Pink membership
+bank-of-america-premium-rewards-elite,Airline Credit,,annual,100,,,Incidental airline fees
+bank-of-america-premium-rewards-elite,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+bank-of-america-premium-rewards-elite,Lifestyle Credit,,quarterly,25,,,Peloton/Instacart/Peacock quarterly
+bank-of-america-premium-rewards,Global Entry/TSA Credit,,cardmember_year,100,,,Global Entry or TSA PreCheck
+chase-freedom-flex,DoorDash DashPass,DoorDash,quarterly,,,, 3 months free then discounted DashPass
+chase-freedom-unlimited,DoorDash DashPass,DoorDash,quarterly,,,, 3 months free then discounted DashPass
+aeroplan-card,NEXUS Credit,,cardmember_year,50,,,NEXUS application fee credit
+aeroplan-card,Companion Pass,,annual,,1,pass,Companion pass for redemption flights

@@ -1,9 +1,209 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PortfolioReturns, EarningsGoal, CardRecommendation, CategoryAllocation } from "@/lib/returns-calculator";
+import { PortfolioReturns, EarningsGoal, CardRecommendation, CategoryAllocation, AllocationEntry, BonusDetail } from "@/lib/returns-calculator";
 import { CardRecommendations } from "@/app/wallet/card-recommendations";
+
+// Tooltip component for showing allocation breakdown on click/hover
+function AllocationTooltip({ 
+  alloc, 
+  children 
+}: { 
+  alloc: AllocationEntry;
+  children: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const justOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (justOpenedRef.current) {
+        justOpenedRef.current = false;
+        return;
+      }
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+    }, 10);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleClick = () => {
+    if (!isOpen) justOpenedRef.current = true;
+    setIsOpen(!isOpen);
+  };
+
+  // Calculate components for tooltip - use baseEarnedValue (NOT including debit pay)
+  const basePercent = alloc.spend > 0 ? (alloc.baseEarnedValue / alloc.spend) * 100 : 0;
+  const debitPayPercent = alloc.spend > 0 ? (alloc.debitPayBonus / alloc.spend) * 100 : 0;
+
+  return (
+    <span ref={ref} className="relative inline-block">
+      <span
+        onClick={handleClick}
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => !justOpenedRef.current && setIsOpen(false)}
+        className="cursor-pointer border-b border-dotted border-zinc-500 hover:border-zinc-300"
+      >
+        {children}
+      </span>
+      {isOpen && (
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl p-3 text-xs">
+          <div className="font-semibold text-white mb-2 border-b border-zinc-600 pb-1">
+            Earning Breakdown
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Base earning:</span>
+              <span className="text-white">{basePercent.toFixed(2)}%</span>
+            </div>
+            {debitPayPercent > 0 && (
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Debit pay:</span>
+                <span className="text-white">+{debitPayPercent.toFixed(2)}%</span>
+              </div>
+            )}
+            {alloc.bonusDetails && alloc.bonusDetails.map((bonus, idx) => {
+              const bonusPercent = alloc.spend > 0 ? (bonus.value / alloc.spend) * 100 : 0;
+              return (
+                <div key={idx} className="flex justify-between">
+                  <span className="text-zinc-400">{bonus.name}:</span>
+                  <span className="text-white">+{bonusPercent.toFixed(2)}%</span>
+                </div>
+              );
+            })}
+            <div className="flex justify-between border-t border-zinc-600 pt-1 mt-1">
+              <span className="text-emerald-400 font-semibold">Total:</span>
+              <span className="text-emerald-400 font-semibold">{alloc.effectiveRate.toFixed(2)}%</span>
+            </div>
+          </div>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-8 border-transparent border-t-zinc-600" />
+        </div>
+      )}
+    </span>
+  );
+}
+
+// Format allocation rate with optional bonus indicator
+function formatAllocationRate(alloc: AllocationEntry): { main: string; bonus: string | null } {
+  // Base rate display
+  const main = alloc.isCashback 
+    ? formatRate(alloc.rate, "%")
+    : formatRate(alloc.rate, "x");
+  
+  // Calculate additional value (debit pay + bonus) as percentage
+  const additionalValue = alloc.debitPayBonus + alloc.bonusContribution;
+  const additionalPercent = alloc.spend > 0 ? (additionalValue / alloc.spend) * 100 : 0;
+  
+  if (additionalPercent > 0.01) {
+    return { main, bonus: `+${additionalPercent.toFixed(1)}%` };
+  }
+  return { main, bonus: null };
+}
+
+// Tooltip for Card Breakdown showing earning sources
+function CardEarningsTooltip({ 
+  card, 
+  children 
+}: { 
+  card: {
+    totalEarned: number;
+    totalDebitPay: number;
+    totalBonusValue: number;
+    bonusDetails: BonusDetail[];
+    isCashback: boolean;
+  };
+  children: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const justOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (justOpenedRef.current) {
+        justOpenedRef.current = false;
+        return;
+      }
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+    }, 10);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleClick = () => {
+    if (!isOpen) justOpenedRef.current = true;
+    setIsOpen(!isOpen);
+  };
+
+  const hasExtras = card.totalDebitPay > 0 || card.totalBonusValue > 0;
+  if (!hasExtras) return <>{children}</>;
+
+  return (
+    <span ref={ref} className="relative inline-block">
+      <span
+        onClick={handleClick}
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => !justOpenedRef.current && setIsOpen(false)}
+        className="cursor-pointer border-b border-dotted border-zinc-500 hover:border-zinc-300"
+      >
+        {children}
+      </span>
+      {isOpen && (
+        <div className="absolute z-50 bottom-full right-0 mb-2 w-52 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl p-3 text-xs">
+          <div className="font-semibold text-white mb-2 border-b border-zinc-600 pb-1">
+            Earning Sources
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Base earning:</span>
+              <span className="text-white">
+                {card.isCashback 
+                  ? formatCurrency(card.totalEarned - card.totalDebitPay - card.totalBonusValue)
+                  : formatNumber(card.totalEarned, 0) + " pts"
+                }
+              </span>
+            </div>
+            {card.totalDebitPay > 0 && (
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Debit pay:</span>
+                <span className="text-white">+{formatCurrency(card.totalDebitPay)}</span>
+              </div>
+            )}
+            {card.bonusDetails && card.bonusDetails.map((bonus, idx) => (
+              <div key={idx} className="flex justify-between">
+                <span className="text-zinc-400">{bonus.name}:</span>
+                <span className="text-white">+{formatCurrency(bonus.value)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="absolute top-full right-4 -mt-px border-8 border-transparent border-t-zinc-600" />
+        </div>
+      )}
+    </span>
+  );
+}
 
 interface ReturnsDisplayProps {
   returns: PortfolioReturns;
@@ -383,42 +583,56 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
                         <td className="px-4 py-3 text-right text-zinc-400">{formatCurrency(category.totalSpend)}</td>
                         <td className="px-4 py-3">
                           <div className="space-y-1">
-                            {category.allocations.map((alloc, idx) => (
-                              <div key={idx} className="text-sm">
-                                <span className="text-zinc-300">{alloc.cardName}</span>
-                                <span className="text-zinc-500 ml-1">
-                                  ({formatCurrency(alloc.spend)} @ {formatRate(alloc.rate, alloc.isCashback ? "%" : "x")}
-                                  {alloc.debitPayBonus > 0 && (
-                                    <span className="text-pink-400"> +{((alloc.debitPayBonus / alloc.spend) * 100).toFixed(0)}%</span>
-                                  )})
-                                </span>
-                              </div>
-                            ))}
+                            {category.allocations.map((alloc, allocIdx) => {
+                              const rateDisplay = formatAllocationRate(alloc);
+                              return (
+                                <div key={allocIdx} className="text-sm">
+                                  <span className="text-zinc-300">{alloc.cardName}</span>
+                                  <span className="text-zinc-500 ml-1">
+                                    ({formatCurrency(alloc.spend)} @{" "}
+                                    {alloc.hasBonus ? (
+                                      <AllocationTooltip alloc={alloc}>
+                                        <span className="text-white">{rateDisplay.main}</span>
+                                        {rateDisplay.bonus && (
+                                          <span className="text-zinc-400"> {rateDisplay.bonus}</span>
+                                        )}
+                                      </AllocationTooltip>
+                                    ) : (
+                                      <span>{rateDisplay.main}</span>
+                                    )}
+                                    )
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {category.allocations.map((alloc, idx) => (
-                            <div key={idx} className="text-sm text-zinc-300">
-                              {alloc.isCashback 
-                                ? formatCurrency(alloc.earned)
-                                : formatNumber(alloc.earned, 0) + " pts"
-                              }
-                              {alloc.debitPayBonus > 0 && (
-                                <span className="text-pink-400"> + {formatCurrency(alloc.debitPayBonus)}</span>
-                              )}
-                            </div>
-                          ))}
+                          {category.allocations.map((alloc, allocIdx) => {
+                            const hasExtras = alloc.debitPayBonus > 0 || alloc.bonusContribution > 0;
+                            return (
+                              <div key={allocIdx} className="text-sm text-zinc-300">
+                                {alloc.isCashback 
+                                  ? formatCurrency(alloc.earned)
+                                  : formatNumber(alloc.earned, 0) + " pts"
+                                }
+                                {hasExtras && (
+                                  <span className="text-zinc-400"> + {formatCurrency(alloc.debitPayBonus + alloc.bonusContribution)}</span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {category.allocations.map((alloc, idx) => (
-                            <div key={idx} className="text-sm text-emerald-400">
-                              {formatCurrency(alloc.earnedValue)}
+                          {category.allocations.map((alloc, allocIdx) => (
+                            <div key={allocIdx} className="text-sm text-emerald-400">
+                              {formatCurrency(alloc.baseEarnedValue + alloc.debitPayBonus + alloc.bonusContribution)}
                             </div>
                           ))}
                         </td>
                         <td className="px-4 py-3 text-right text-amber-400 font-medium">
                           {category.totalSpend > 0 
-                            ? formatPercent((category.allocations.reduce((sum, a) => sum + a.earnedValue, 0) / category.totalSpend) * 100)
+                            ? formatPercent((category.allocations.reduce((sum, a) => sum + a.earnedValue + a.bonusContribution, 0) / category.totalSpend) * 100)
                             : "—"
                           }
                         </td>
@@ -482,15 +696,17 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
                         {formatCurrency(card.totalSpend)}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className={card.isCashback ? "text-emerald-400" : "text-violet-400"}>
-                          {card.isCashback 
-                            ? formatCurrency(card.totalEarned)
-                            : formatNumber(card.totalEarned, 0) + " pts"
-                          }
-                        </span>
-                        {card.totalDebitPay > 0 && (
-                          <span className="text-pink-400"> + {formatCurrency(card.totalDebitPay)}</span>
-                        )}
+                        <CardEarningsTooltip card={card}>
+                          <span className="text-zinc-300">
+                            {card.isCashback 
+                              ? formatCurrency(card.totalEarned)
+                              : formatNumber(card.totalEarned, 0) + " pts"
+                            }
+                            {(card.totalDebitPay > 0 || card.totalBonusValue > 0) && (
+                              <span className="text-zinc-400"> + {formatCurrency(card.totalDebitPay + card.totalBonusValue)}</span>
+                            )}
+                          </span>
+                        </CardEarningsTooltip>
                       </td>
                       <td className="px-4 py-3 text-right text-emerald-400">
                         {formatCurrency(card.totalEarnedValue)}

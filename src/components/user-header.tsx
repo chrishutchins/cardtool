@@ -3,24 +3,42 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
-const navItems = [
-  { href: "/wallet", label: "My Wallet" },
-  { href: "/returns", label: "Earnings" },
-  { href: "/compare", label: "Compare" },
-  { href: "/spending", label: "Spending" },
-  { href: "/point-values", label: "Point Values" },
-  { href: "/settings", label: "Settings" },
+const baseNavItems = [
+  { href: "/wallet", label: "My Wallet", onboardingId: "wallet" },
+  { href: "/returns", label: "Earnings", onboardingId: "earnings" },
+  { href: "/compare", label: "Compare", onboardingId: "compare" },
+  { href: "/spending", label: "Spending", onboardingId: "spending" },
+  { href: "/point-values", label: "Point Values", onboardingId: "point-values" },
+  { href: "/settings", label: "Settings", onboardingId: "settings" },
 ];
 
 interface UserHeaderProps {
   isAdmin?: boolean;
+  creditTrackingEnabled?: boolean;
 }
 
-export function UserHeader({ isAdmin = false }: UserHeaderProps) {
+export function UserHeader({ isAdmin = false, creditTrackingEnabled = true }: UserHeaderProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Build nav items dynamically based on feature flags
+  const navItems = useMemo(() => {
+    const items = [...baseNavItems];
+    
+    // Add Credits link if enabled for user or if admin (after Compare, 4th position)
+    if (creditTrackingEnabled || isAdmin) {
+      const compareIndex = items.findIndex(item => item.href === "/compare");
+      items.splice(compareIndex + 1, 0, { 
+        href: "/credits", 
+        label: "Credits", 
+        onboardingId: "credits" 
+      });
+    }
+    
+    return items;
+  }, [creditTrackingEnabled, isAdmin]);
 
   return (
     <nav className="border-b border-zinc-800 bg-zinc-900">
@@ -39,6 +57,7 @@ export function UserHeader({ isAdmin = false }: UserHeaderProps) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    data-onboarding={item.onboardingId}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       isActive
                         ? "bg-zinc-800 text-white"
@@ -76,6 +95,7 @@ export function UserHeader({ isAdmin = false }: UserHeaderProps) {
                       <Link
                         key={item.href}
                         href={item.href}
+                        data-onboarding={item.onboardingId}
                         onClick={() => setIsOpen(false)}
                         className={`block px-4 py-2 text-sm transition-colors ${
                           isActive

@@ -1,15 +1,118 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useTransition } from "react";
+import { useState, useMemo, useEffect, useRef, useTransition, useCallback } from "react";
 
-// Fast tooltip component - appears immediately on hover
+// Fast tooltip component - appears on hover (desktop) or tap (mobile)
 // Wraps text to prevent overflow, max width constrained
 function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const justOpenedRef = useRef(false);
+
+  // Close on outside click/touch
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      // Skip if we just opened (prevents immediate close on mobile)
+      if (justOpenedRef.current) {
+        justOpenedRef.current = false;
+        return;
+      }
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    
+    // Small delay to avoid race condition with the opening click
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("click", handleClickOutside);
+      document.addEventListener("touchend", handleClickOutside);
+    }, 10);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("touchend", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isOpen) {
+      justOpenedRef.current = true;
+    }
+    setIsOpen(!isOpen);
+  }, [isOpen]);
+
   return (
-    <span className="relative group/tooltip inline-flex">
+    <span 
+      ref={ref}
+      className="relative group/tooltip inline-flex"
+      onClick={handleClick}
+    >
       {children}
-      <span className="pointer-events-none absolute bottom-full left-0 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-75 z-50">
+      <span className={`pointer-events-none absolute bottom-full left-0 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-50 transition-opacity duration-75 ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
         {text}
+      </span>
+    </span>
+  );
+}
+
+// Rich tooltip with ReactNode content support for colored breakdowns
+// Appears on hover (desktop) or tap (mobile)
+function RichTooltip({ children, content }: { children: React.ReactNode; content: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const justOpenedRef = useRef(false);
+
+  // Close on outside click/touch
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      // Skip if we just opened (prevents immediate close on mobile)
+      if (justOpenedRef.current) {
+        justOpenedRef.current = false;
+        return;
+      }
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    
+    // Small delay to avoid race condition with the opening click
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("click", handleClickOutside);
+      document.addEventListener("touchend", handleClickOutside);
+    }, 10);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("touchend", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isOpen) {
+      justOpenedRef.current = true;
+    }
+    setIsOpen(!isOpen);
+  }, [isOpen]);
+
+  return (
+    <span 
+      ref={ref}
+      className="relative group/richtooltip inline-flex cursor-help"
+      onClick={handleClick}
+    >
+      {children}
+      <span className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-600 rounded shadow-lg z-50 whitespace-nowrap transition-opacity duration-75 ${isOpen ? "opacity-100" : "opacity-0 group-hover/richtooltip:opacity-100"}`}>
+        {content}
       </span>
     </span>
   );
@@ -31,6 +134,20 @@ interface Card {
   multiplier: number;
   spendBonusRate: number;
   welcomeBonusRate: number;
+  // Detailed bonus info for proper capped calculations
+  spendBonuses: BonusInfo[];
+  welcomeBonuses: BonusInfo[];
+}
+
+interface BonusInfo {
+  name: string;             // Display name for the bonus
+  bonusValue: number;       // Max dollar value of this bonus
+  spendCap: number;         // Spend threshold to earn full bonus
+  type: "threshold" | "elite_earning";
+  sourceType: "welcome" | "spend_threshold" | "elite_earning";
+  unitCap?: number;         // Max units for elite earning (if capped)
+  unitValue?: number;       // Value per unit for elite earning
+  perSpend?: number;        // Spend per unit for elite earning
 }
 
 interface Category {
@@ -51,6 +168,7 @@ interface CapInfo {
 interface BonusDisplaySettings {
   includeWelcomeBonuses: boolean;
   includeSpendBonuses: boolean;
+  includeDebitPay: boolean;
   showAvailableCredit: boolean;
 }
 
@@ -69,7 +187,7 @@ interface ComparisonTableProps {
   accountLinkingEnabled: boolean;
   onSaveCategories?: (categoryIds: number[]) => Promise<void>;
   onSaveEvalCards?: (cardIds: string[]) => Promise<void>;
-  onUpdateBonusSettings?: (includeWelcomeBonuses: boolean, includeSpendBonuses: boolean, showAvailableCredit: boolean) => Promise<void>;
+  onUpdateBonusSettings?: (includeWelcomeBonuses: boolean, includeSpendBonuses: boolean, includeDebitPay: boolean, showAvailableCredit: boolean) => Promise<void>;
 }
 
 type SortConfig = {
@@ -79,6 +197,37 @@ type SortConfig = {
 };
 
 type FilterMode = "all" | "my-cards" | "evaluate";
+
+/**
+ * Calculate the actual bonus value earned given total spend on a card.
+ * 
+ * For threshold bonuses: earn min(spend, spendCap) / spendCap * bonusValue
+ *   (i.e., prorated if spend < requirement, full value if spend >= requirement)
+ * 
+ * For elite earning: earn (spend / perSpend) * unitValue, capped at unitCap * unitValue
+ */
+function calculateBonusValueFromSpend(
+  totalSpend: number,
+  bonuses: BonusInfo[]
+): number {
+  let totalBonusValue = 0;
+
+  for (const bonus of bonuses) {
+    if (bonus.type === "threshold") {
+      // Threshold bonus: prorated based on how much of the spend requirement is met
+      const earnedValue = Math.min(totalSpend / bonus.spendCap, 1) * bonus.bonusValue;
+      totalBonusValue += earnedValue;
+    } else if (bonus.type === "elite_earning" && bonus.unitValue && bonus.perSpend) {
+      // Elite earning: earn units based on total spend
+      const unitsEarned = totalSpend / bonus.perSpend;
+      const cappedUnits = bonus.unitCap !== undefined ? Math.min(unitsEarned, bonus.unitCap) : unitsEarned;
+      const earnedValue = cappedUnits * bonus.unitValue;
+      totalBonusValue += earnedValue;
+    }
+  }
+
+  return totalBonusValue;
+}
 
 // Format cap type for tooltip
 function formatCapType(capType: string): string {
@@ -152,11 +301,14 @@ export function ComparisonTable({
   // Local state for bonus toggles (optimistic updates)
   const [includeWelcomeBonuses, setIncludeWelcomeBonuses] = useState(bonusDisplaySettings.includeWelcomeBonuses);
   const [includeSpendBonuses, setIncludeSpendBonuses] = useState(bonusDisplaySettings.includeSpendBonuses);
+  const [includeDebitPay, setIncludeDebitPay] = useState(bonusDisplaySettings.includeDebitPay);
   const [showAvailableCredit, setShowAvailableCredit] = useState(bonusDisplaySettings.showAvailableCredit);
 
   // Check if any cards have bonuses configured (only show toggles if there are bonuses)
   const hasAnySubs = useMemo(() => cards.some((c) => c.welcomeBonusRate > 0), [cards]);
   const hasAnySpendBonuses = useMemo(() => cards.some((c) => c.spendBonusRate > 0), [cards]);
+  // Check if any cards have debit pay configured
+  const hasAnyDebitPay = useMemo(() => Object.keys(debitPayValues).length > 0, [debitPayValues]);
   // Check if any cards have available credit data (linked AND paired)
   const hasAnyAvailableCredit = useMemo(() => Object.keys(availableCredit).length > 0, [availableCredit]);
 
@@ -220,7 +372,9 @@ export function ComparisonTable({
   // Calculate effective value including debit pay (for display and sorting)
   const getEffectiveValueWithDebit = (card: Card, categoryId: number): number => {
     const baseValue = getEffectiveValue(card, categoryId);
-    const debitPay = debitPayValues[card.cardId] ?? 0;
+    // Only include debit pay if toggle is on
+    // Use card.id (wallet_id for owned cards) for debit pay lookup since it's now per-instance
+    const debitPay = includeDebitPay ? (debitPayValues[card.id] ?? 0) : 0;
     // Debit pay is a percentage, convert to cents (1% = 1 cent per dollar)
     return baseValue + debitPay;
   };
@@ -231,6 +385,36 @@ export function ComparisonTable({
     const spendBonusCents = includeSpendBonuses && card.spendBonusRate > 0 ? card.spendBonusRate * 100 : 0;
     return { subCents, spendBonusCents };
   };
+
+  // Calculate total spend per card across all selected categories (for bonus capping)
+  const cardTotalSpend = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const card of cards) {
+      let totalSpend = 0;
+      for (const category of selectedCategories) {
+        const spendCents = userSpending[category.id] ?? 0;
+        totalSpend += spendCents / 100; // Convert to dollars
+      }
+      totals[card.id] = totalSpend;
+    }
+    return totals;
+  }, [cards, selectedCategories, userSpending]);
+
+  // Calculate properly-capped bonus values per card
+  const cardCappedBonusValues = useMemo(() => {
+    const values: Record<string, { welcomeBonus: number; spendBonus: number }> = {};
+    for (const card of cards) {
+      const totalSpend = cardTotalSpend[card.id] ?? 0;
+      const welcomeBonus = includeWelcomeBonuses && card.welcomeBonuses.length > 0
+        ? calculateBonusValueFromSpend(totalSpend, card.welcomeBonuses)
+        : 0;
+      const spendBonus = includeSpendBonuses && card.spendBonuses.length > 0
+        ? calculateBonusValueFromSpend(totalSpend, card.spendBonuses)
+        : 0;
+      values[card.id] = { welcomeBonus, spendBonus };
+    }
+    return values;
+  }, [cards, cardTotalSpend, includeWelcomeBonuses, includeSpendBonuses]);
 
   // Helper to annualize cap amount based on period
   const annualizeCap = (amount: number, period: string | null): number => {
@@ -243,11 +427,14 @@ export function ComparisonTable({
   };
 
   // Calculate earnings for a spend amount considering caps
+  // Bonus earnings are distributed proportionally based on category spend / total card spend
   const calculateEarnings = (card: Card, categoryId: number, spendCents: number): { earnings: number; debitPayEarnings: number; subEarnings: number; spendBonusEarnings: number } => {
     const rate = card.earningRates[categoryId] ?? card.defaultEarnRate;
     const pointValue = card.pointValue;
     const cap = capInfo[card.cardId]?.[categoryId];
-    const debitPayPercent = debitPayValues[card.cardId] ?? 0;
+    // Only include debit pay if toggle is on
+    // Use card.id (wallet_id for owned cards) for debit pay lookup since it's now per-instance
+    const debitPayPercent = includeDebitPay ? (debitPayValues[card.id] ?? 0) : 0;
     const spendDollars = spendCents / 100;
     
     let earnings: number;
@@ -274,15 +461,14 @@ export function ComparisonTable({
     // Debit pay earnings (flat % of spend)
     const debitPayEarnings = spendDollars * (debitPayPercent / 100);
     
-    // SUB earnings (welcome bonus as % of spend)
-    const subEarnings = includeWelcomeBonuses && card.welcomeBonusRate > 0 
-      ? spendDollars * card.welcomeBonusRate 
-      : 0;
+    // Calculate bonus earnings as proportional share of the properly-capped card total
+    // This ensures bonuses are capped at their spend requirement, not applied to all spend
+    const totalSpend = cardTotalSpend[card.id] ?? 0;
+    const spendProportion = totalSpend > 0 ? spendDollars / totalSpend : 0;
     
-    // Spend bonus earnings (as % of spend)
-    const spendBonusEarnings = includeSpendBonuses && card.spendBonusRate > 0 
-      ? spendDollars * card.spendBonusRate 
-      : 0;
+    const cappedBonuses = cardCappedBonusValues[card.id] ?? { welcomeBonus: 0, spendBonus: 0 };
+    const subEarnings = spendProportion * cappedBonuses.welcomeBonus;
+    const spendBonusEarnings = spendProportion * cappedBonuses.spendBonus;
     
     return { earnings, debitPayEarnings, subEarnings, spendBonusEarnings };
   };
@@ -299,7 +485,7 @@ export function ComparisonTable({
       };
     }
     return stats;
-  }, [cards, selectedCategories, debitPayValues, includeSpendBonuses, includeWelcomeBonuses]);
+  }, [cards, selectedCategories, debitPayValues, includeSpendBonuses, includeWelcomeBonuses, includeDebitPay]);
 
   // Get min/max earnings per category for color scaling (earnings-based, for spending view)
   const categoryEarningsStats = useMemo(() => {
@@ -319,7 +505,7 @@ export function ComparisonTable({
       }
     }
     return stats;
-  }, [cards, selectedCategories, userSpending, debitPayValues, includeSpendBonuses, includeWelcomeBonuses]);
+  }, [cards, selectedCategories, userSpending, debitPayValues, includeSpendBonuses, includeWelcomeBonuses, includeDebitPay]);
 
   // Get color class based on value position in range
   const getColorStyle = (value: number, categoryId: number, useEarnings: boolean = false): string => {
@@ -403,7 +589,7 @@ export function ComparisonTable({
     });
 
     return filtered;
-  }, [cards, filterMode, sortConfig, evaluationCardIds, showSpending, userSpending, includeSpendBonuses, includeWelcomeBonuses]);
+  }, [cards, filterMode, sortConfig, evaluationCardIds, showSpending, userSpending, includeSpendBonuses, includeWelcomeBonuses, includeDebitPay]);
 
   // Handle sort click
   const handleSort = (type: "card" | "category", categoryId?: number) => {
@@ -593,7 +779,7 @@ export function ComparisonTable({
         </button>
 
         {/* Bonus Toggles - Only show if user has any bonuses configured */}
-        {(hasAnySubs || hasAnySpendBonuses || (accountLinkingEnabled && hasAnyAvailableCredit)) && (
+        {(hasAnySubs || hasAnySpendBonuses || hasAnyDebitPay || (accountLinkingEnabled && hasAnyAvailableCredit)) && (
           <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800/50">
             {hasAnySubs && (
               <label className="flex items-center gap-2 cursor-pointer">
@@ -604,7 +790,7 @@ export function ComparisonTable({
                   onChange={(e) => {
                     setIncludeWelcomeBonuses(e.target.checked);
                     startTransition(() => {
-                      onUpdateBonusSettings?.(e.target.checked, includeSpendBonuses, showAvailableCredit);
+                      onUpdateBonusSettings?.(e.target.checked, includeSpendBonuses, includeDebitPay, showAvailableCredit);
                     });
                   }}
                   className="rounded border-zinc-600 bg-zinc-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
@@ -621,12 +807,29 @@ export function ComparisonTable({
                   onChange={(e) => {
                     setIncludeSpendBonuses(e.target.checked);
                     startTransition(() => {
-                      onUpdateBonusSettings?.(includeWelcomeBonuses, e.target.checked, showAvailableCredit);
+                      onUpdateBonusSettings?.(includeWelcomeBonuses, e.target.checked, includeDebitPay, showAvailableCredit);
                     });
                   }}
                   className="rounded border-zinc-600 bg-zinc-700 text-lime-500 focus:ring-lime-500 focus:ring-offset-0"
                 />
                 <span className={`text-sm ${includeSpendBonuses ? "text-lime-400" : "text-zinc-300"}`}>Spend Bonuses</span>
+              </label>
+            )}
+            {hasAnyDebitPay && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeDebitPay}
+                  disabled={isPending}
+                  onChange={(e) => {
+                    setIncludeDebitPay(e.target.checked);
+                    startTransition(() => {
+                      onUpdateBonusSettings?.(includeWelcomeBonuses, includeSpendBonuses, e.target.checked, showAvailableCredit);
+                    });
+                  }}
+                  className="rounded border-zinc-600 bg-zinc-700 text-pink-500 focus:ring-pink-500 focus:ring-offset-0"
+                />
+                <span className={`text-sm ${includeDebitPay ? "text-pink-400" : "text-zinc-300"}`}>Debit Pay</span>
               </label>
             )}
             {accountLinkingEnabled && hasAnyAvailableCredit && (
@@ -638,7 +841,7 @@ export function ComparisonTable({
                   onChange={(e) => {
                     setShowAvailableCredit(e.target.checked);
                     startTransition(() => {
-                      onUpdateBonusSettings?.(includeWelcomeBonuses, includeSpendBonuses, e.target.checked);
+                      onUpdateBonusSettings?.(includeWelcomeBonuses, includeSpendBonuses, includeDebitPay, e.target.checked);
                     });
                   }}
                   className="rounded border-zinc-600 bg-zinc-700 text-zinc-300 focus:ring-zinc-500 focus:ring-offset-0"
@@ -836,7 +1039,9 @@ export function ComparisonTable({
 
                     {/* Category Values */}
                     {selectedCategories.map((cat) => {
-                      const debitPay = debitPayValues[card.cardId] ?? 0;
+                      // Only show debit pay if toggle is on
+                      // Use card.id (wallet_id for owned cards) for debit pay lookup since it's now per-instance
+                      const debitPay = includeDebitPay ? (debitPayValues[card.id] ?? 0) : 0;
                       const cap = capInfo[card.cardId]?.[cat.id];
                       const spendCents = userSpending[cat.id] ?? 0;
                       const { subCents, spendBonusCents } = getBonusValueCents(card);
@@ -846,6 +1051,35 @@ export function ComparisonTable({
                         const { earnings, debitPayEarnings, subEarnings, spendBonusEarnings } = calculateEarnings(card, cat.id, spendCents);
                         const totalEarnings = earnings + debitPayEarnings + subEarnings + spendBonusEarnings;
                         const colorClass = getColorStyle(totalEarnings, cat.id, true);
+                        const hasBreakdown = subEarnings > 0 || spendBonusEarnings > 0 || debitPayEarnings > 0;
+                        
+                        // Build individual bonus lines with names
+                        const bonusLinesSpend: { name: string; value: number }[] = [];
+                        if (subEarnings > 0 && card.welcomeBonuses.length > 0) {
+                          for (const wb of card.welcomeBonuses) {
+                            const totalWelcome = cardCappedBonusValues[card.id]?.welcomeBonus ?? 0;
+                            if (totalWelcome > 0) {
+                              const proportion = (wb.bonusValue / card.welcomeBonuses.reduce((s, b) => s + b.bonusValue, 0)) || 1 / card.welcomeBonuses.length;
+                              bonusLinesSpend.push({ name: wb.name, value: subEarnings * proportion });
+                            }
+                          }
+                        }
+                        if (spendBonusEarnings > 0 && card.spendBonuses.length > 0) {
+                          for (const sb of card.spendBonuses) {
+                            bonusLinesSpend.push({ name: sb.name, value: spendBonusEarnings / card.spendBonuses.length });
+                          }
+                        }
+                        
+                        const breakdownContent = hasBreakdown ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-zinc-400">Base: ${Math.round(earnings).toLocaleString()}</span>
+                            {bonusLinesSpend.map((line, idx) => (
+                              <span key={idx} className="text-zinc-400">{line.name}: +${Math.round(line.value).toLocaleString()}</span>
+                            ))}
+                            {debitPayEarnings > 0 && <span className="text-zinc-400">Debit Pay: +${Math.round(debitPayEarnings).toLocaleString()}</span>}
+                            <span className="text-emerald-400 font-semibold border-t border-zinc-600 pt-0.5 mt-0.5">Total: ${Math.round(totalEarnings).toLocaleString()}</span>
+                          </div>
+                        ) : null;
                         
                         return (
                           <td
@@ -853,15 +1087,12 @@ export function ComparisonTable({
                             className={`px-3 py-3 text-center text-sm ${colorClass}`}
                           >
                             <div className="font-mono">
-                              ${Math.round(earnings).toLocaleString()}
-                              {subEarnings > 0 && (
-                                <span className="text-cyan-400"> +${Math.round(subEarnings).toLocaleString()}</span>
-                              )}
-                              {spendBonusEarnings > 0 && (
-                                <span className="text-lime-400"> +${Math.round(spendBonusEarnings).toLocaleString()}</span>
-                              )}
-                              {debitPayEarnings > 0 && (
-                                <span className="text-pink-400"> +${Math.round(debitPayEarnings).toLocaleString()}</span>
+                              {hasBreakdown ? (
+                                <RichTooltip content={breakdownContent}>
+                                  <span className="border-b border-dotted border-current">${Math.round(totalEarnings).toLocaleString()}</span>
+                                </RichTooltip>
+                              ) : (
+                                <span>${Math.round(earnings).toLocaleString()}</span>
                               )}
                             </div>
                             {cap && (
@@ -878,21 +1109,49 @@ export function ComparisonTable({
                         const baseValue = rate * card.pointValue;
                         const totalValue = getEffectiveValueWithDebit(card, cat.id);
                         const colorClass = getColorStyle(totalValue, cat.id);
+                        const hasBreakdown = subCents > 0 || spendBonusCents > 0 || debitPay > 0;
+                        
+                        // Build individual bonus lines with names
+                        const bonusLines: { name: string; value: number }[] = [];
+                        if (subCents > 0 && card.welcomeBonuses.length > 0) {
+                          for (const wb of card.welcomeBonuses) {
+                            // Calculate proportional value for this bonus
+                            const totalWelcome = cardCappedBonusValues[card.id]?.welcomeBonus ?? 0;
+                            if (totalWelcome > 0) {
+                              const proportion = (wb.bonusValue / card.welcomeBonuses.reduce((s, b) => s + b.bonusValue, 0)) || 1 / card.welcomeBonuses.length;
+                              bonusLines.push({ name: wb.name, value: subCents * proportion });
+                            }
+                          }
+                        }
+                        if (spendBonusCents > 0 && card.spendBonuses.length > 0) {
+                          for (const sb of card.spendBonuses) {
+                            // For simplicity, divide evenly if multiple
+                            bonusLines.push({ name: sb.name, value: spendBonusCents / card.spendBonuses.length });
+                          }
+                        }
+                        
+                        const breakdownContent = hasBreakdown ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-zinc-400">Base: {baseValue.toFixed(1)}¢</span>
+                            {bonusLines.map((line, idx) => (
+                              <span key={idx} className="text-zinc-400">{line.name}: +{line.value.toFixed(1)}¢</span>
+                            ))}
+                            {debitPay > 0 && <span className="text-zinc-400">Debit Pay: +{debitPay}¢</span>}
+                            <span className="text-emerald-400 font-semibold border-t border-zinc-600 pt-0.5 mt-0.5">Total: {totalValue.toFixed(1)}¢</span>
+                          </div>
+                        ) : null;
                         
                         return (
                           <td
                             key={cat.id}
                             className={`px-3 py-3 text-center text-sm font-mono ${colorClass}`}
                           >
-                            {baseValue.toFixed(1)}¢
-                            {subCents > 0 && (
-                              <span className="text-cyan-400"> +{subCents.toFixed(1)}¢</span>
-                            )}
-                            {spendBonusCents > 0 && (
-                              <span className="text-lime-400"> +{spendBonusCents.toFixed(1)}¢</span>
-                            )}
-                            {debitPay > 0 && (
-                              <span className="text-pink-400"> +{debitPay}¢</span>
+                            {hasBreakdown ? (
+                              <RichTooltip content={breakdownContent}>
+                                <span className="border-b border-dotted border-current">{totalValue.toFixed(1)}¢</span>
+                              </RichTooltip>
+                            ) : (
+                              <span>{baseValue.toFixed(1)}¢</span>
                             )}
                             {cap && (
                               <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
@@ -945,7 +1204,7 @@ export function ComparisonTable({
             <span>Spend Bonuses</span>
           </div>
         )}
-        {Object.keys(debitPayValues).length > 0 && (
+        {includeDebitPay && Object.keys(debitPayValues).length > 0 && (
           <div className="flex items-center gap-1">
             <span className="text-pink-400">+X¢</span>
             <span>Debit pay</span>

@@ -17,11 +17,11 @@ import {
   TravelPreference,
   MultiplierProgram,
   WelcomeBonusInput,
-  WelcomeBonusSettings,
   SpendBonusInput,
 } from "@/lib/returns-calculator";
 import { CardRecommendations } from "./card-recommendations";
-import { BonusSettings } from "./bonus-settings";
+import { UserBonusSection, UserWelcomeBonus, UserSpendBonus } from "./user-bonus-section";
+import { WalletClient } from "./wallet-client";
 
 export default async function WalletPage() {
   const user = await currentUser();
@@ -55,12 +55,10 @@ export default async function WalletPage() {
     largePurchaseCategoryResult,
     userPointValueSettingsResult,
     pointValueTemplatesResult,
-    welcomeBonusesResult,
-    userWelcomeBonusSettingsResult,
-    userWelcomeBonusValueOverridesResult,
-    spendBonusesResult,
-    userSpendBonusValuesResult,
+    userWelcomeBonusesResult,
+    userSpendBonusesResult,
     userBonusDisplaySettingsResult,
+    allCurrenciesResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -70,6 +68,7 @@ export default async function WalletPage() {
         card_id,
         custom_name,
         added_at,
+        approval_date,
         cards:card_id (
           id,
           name,
@@ -143,10 +142,10 @@ export default async function WalletPage() {
       .select("currency_id, value_cents")
       .eq("user_id", user.id),
     
-    // User's perks values
+    // User's perks values (now keyed by wallet_card_id, not card_id)
     supabase
       .from("user_card_perks_values")
-      .select("card_id, perks_value")
+      .select("wallet_card_id, perks_value")
       .eq("user_id", user.id),
     
     // User's category selections
@@ -166,17 +165,17 @@ export default async function WalletPage() {
       .from("earning_categories")
       .select("id, name, slug, parent_category_id, excluded_by_default"),
     
-    // User's feature flags (for debit pay)
+    // User's feature flags (for debit pay, onboarding, and credit tracking)
     supabase
       .from("user_feature_flags")
-      .select("debit_pay_enabled")
+      .select("debit_pay_enabled, onboarding_completed, credit_tracking_enabled")
       .eq("user_id", user.id)
       .single(),
     
-    // User's debit pay values
+    // User's debit pay values (now keyed by wallet_card_id)
     supabase
       .from("user_card_debit_pay")
-      .select("card_id, debit_pay_percent")
+      .select("wallet_card_id, debit_pay_percent")
       .eq("user_id", user.id),
       
     // Multiplier programs for recommendations
@@ -242,32 +241,16 @@ export default async function WalletPage() {
         template_currency_values (currency_id, value_cents)
       `),
     
-    // Welcome bonuses for all cards
+    // User's welcome bonuses (with currency name for display)
     supabase
-      .from("card_welcome_bonuses")
-      .select("id, card_id, spend_requirement_cents, time_period_months, component_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_benefit_value_cents"),
-    
-    // User's welcome bonus settings
-    supabase
-      .from("user_welcome_bonus_settings")
-      .select("card_id, is_active, spend_requirement_override, time_period_override")
+      .from("user_welcome_bonuses")
+      .select("id, wallet_card_id, is_active, component_type, spend_requirement_cents, time_period_months, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents, reward_currencies:currency_id(name)")
       .eq("user_id", user.id),
     
-    // User's welcome bonus value overrides
+    // User's spend bonuses (with currency name for display)
     supabase
-      .from("user_welcome_bonus_value_overrides")
-      .select("welcome_bonus_id, value_cents")
-      .eq("user_id", user.id),
-    
-    // Spend bonuses for all cards
-    supabase
-      .from("card_spend_bonuses")
-      .select("id, card_id, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_value_cents, period, per_spend_cents, elite_unit_name, default_unit_value_cents, cap_amount, cap_period"),
-    
-    // User's spend bonus value overrides
-    supabase
-      .from("user_spend_bonus_values")
-      .select("spend_bonus_id, value_cents")
+      .from("user_spend_bonuses")
+      .select("id, wallet_card_id, is_active, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents, period, per_spend_cents, elite_unit_name, unit_value_cents, cap_amount, cap_period, reward_currencies:currency_id(name)")
       .eq("user_id", user.id),
     
     // User's bonus display settings
@@ -276,6 +259,12 @@ export default async function WalletPage() {
       .select("include_welcome_bonuses, include_spend_bonuses")
       .eq("user_id", user.id)
       .single(),
+    
+    // All currencies for bonus creation modal
+    supabase
+      .from("reward_currencies")
+      .select("id, name, code, currency_type")
+      .order("name"),
   ]);
 
   // Type assertion for wallet cards since Supabase types don't infer relations correctly
@@ -284,6 +273,7 @@ export default async function WalletPage() {
     card_id: string;
     custom_name: string | null;
     added_at: string | null;
+    approval_date: string | null;
     cards: {
       id: string;
       name: string;
@@ -317,19 +307,25 @@ export default async function WalletPage() {
     }
   });
 
-  // Build perks map
+  // Build perks map (keyed by wallet_card_id now)
   const perksMap = new Map<string, number>();
   perksResult.data?.forEach((pv) => {
-    perksMap.set(pv.card_id, pv.perks_value);
+    perksMap.set(pv.wallet_card_id, pv.perks_value);
   });
 
   // Check if debit pay is enabled
   const debitPayEnabled = featureFlagsResult.data?.debit_pay_enabled ?? false;
   
-  // Build debit pay map
+  // Check if onboarding has been completed
+  const onboardingCompleted = featureFlagsResult.data?.onboarding_completed ?? false;
+  
+  // Credit tracking is enabled for all users
+  const creditTrackingEnabled = true;
+  
+  // Build debit pay map (keyed by wallet_card_id now)
   const debitPayMap = new Map<string, number>();
   debitPayResult.data?.forEach((dp) => {
-    debitPayMap.set(dp.card_id, Number(dp.debit_pay_percent) ?? 0);
+    debitPayMap.set(dp.wallet_card_id, Number(dp.debit_pay_percent) ?? 0);
   });
 
   // Type for all cards
@@ -519,41 +515,68 @@ export default async function WalletPage() {
   // Large purchase category ID
   const largePurchaseCategoryId = largePurchaseCategoryResult.data?.id;
 
-  // Process welcome bonuses
-  const welcomeBonuses: WelcomeBonusInput[] = (welcomeBonusesResult.data ?? []).map((wb) => ({
+  // Build wallet card id to card_id mapping (for bonus -> card type lookup)
+  const walletCardIdToCardId = new Map<string, string>();
+  walletCards.forEach((wc) => {
+    walletCardIdToCardId.set(wc.id, wc.card_id);
+  });
+
+  // Process user welcome bonuses (with currency name from join)
+  type UserWelcomeBonusRow = {
+    id: string;
+    wallet_card_id: string;
+    is_active: boolean;
+    component_type: string;
+    spend_requirement_cents: number;
+    time_period_months: number;
+    points_amount: number | null;
+    currency_id: string | null;
+    cash_amount_cents: number | null;
+    benefit_description: string | null;
+    value_cents: number | null;
+    reward_currencies: { name: string } | null;
+  };
+  const userWelcomeBonuses: UserWelcomeBonus[] = ((userWelcomeBonusesResult.data ?? []) as unknown as UserWelcomeBonusRow[]).map((wb) => ({
     id: wb.id,
-    card_id: wb.card_id,
+    wallet_card_id: wb.wallet_card_id,
+    is_active: wb.is_active,
+    component_type: wb.component_type as "points" | "cash" | "benefit",
     spend_requirement_cents: wb.spend_requirement_cents,
     time_period_months: wb.time_period_months,
-    component_type: wb.component_type as "points" | "cash" | "benefit",
     points_amount: wb.points_amount,
     currency_id: wb.currency_id,
     cash_amount_cents: wb.cash_amount_cents,
     benefit_description: wb.benefit_description,
-    default_benefit_value_cents: wb.default_benefit_value_cents,
+    value_cents: wb.value_cents,
+    currency_name: wb.reward_currencies?.name ?? null,
   }));
 
-  // Build welcome bonus settings map
-  const welcomeBonusSettings = new Map<string, WelcomeBonusSettings>();
-  userWelcomeBonusSettingsResult.data?.forEach((s) => {
-    welcomeBonusSettings.set(s.card_id, {
-      card_id: s.card_id,
-      is_active: s.is_active,
-      spend_requirement_override: s.spend_requirement_override,
-      time_period_override: s.time_period_override,
-    });
-  });
-
-  // Build welcome bonus value overrides map
-  const welcomeBonusValueOverrides = new Map<string, number>();
-  userWelcomeBonusValueOverridesResult.data?.forEach((o) => {
-    welcomeBonusValueOverrides.set(o.welcome_bonus_id, o.value_cents);
-  });
-
-  // Process spend bonuses
-  const spendBonuses: SpendBonusInput[] = (spendBonusesResult.data ?? []).map((sb) => ({
+  // Process user spend bonuses (with currency name from join)
+  type UserSpendBonusRow = {
+    id: string;
+    wallet_card_id: string;
+    is_active: boolean;
+    name: string;
+    bonus_type: string;
+    spend_threshold_cents: number | null;
+    reward_type: string | null;
+    points_amount: number | null;
+    currency_id: string | null;
+    cash_amount_cents: number | null;
+    benefit_description: string | null;
+    value_cents: number | null;
+    period: string | null;
+    per_spend_cents: number | null;
+    elite_unit_name: string | null;
+    unit_value_cents: number | null;
+    cap_amount: number | null;
+    cap_period: string | null;
+    reward_currencies: { name: string } | null;
+  };
+  const userSpendBonuses: UserSpendBonus[] = ((userSpendBonusesResult.data ?? []) as unknown as UserSpendBonusRow[]).map((sb) => ({
     id: sb.id,
-    card_id: sb.card_id,
+    wallet_card_id: sb.wallet_card_id,
+    is_active: sb.is_active,
     name: sb.name,
     bonus_type: sb.bonus_type as "threshold" | "elite_earning",
     spend_threshold_cents: sb.spend_threshold_cents,
@@ -562,20 +585,53 @@ export default async function WalletPage() {
     currency_id: sb.currency_id,
     cash_amount_cents: sb.cash_amount_cents,
     benefit_description: sb.benefit_description,
-    default_value_cents: sb.default_value_cents,
+    value_cents: sb.value_cents,
     period: sb.period as "year" | "calendar_year" | "lifetime" | null,
     per_spend_cents: sb.per_spend_cents,
     elite_unit_name: sb.elite_unit_name,
-    default_unit_value_cents: sb.default_unit_value_cents,
+    unit_value_cents: sb.unit_value_cents,
     cap_amount: sb.cap_amount,
     cap_period: sb.cap_period as "year" | "calendar_year" | null,
+    currency_name: sb.reward_currencies?.name ?? null,
   }));
 
-  // Build spend bonus values map
-  const spendBonusValues = new Map<string, number>();
-  userSpendBonusValuesResult.data?.forEach((v) => {
-    spendBonusValues.set(v.spend_bonus_id, v.value_cents);
-  });
+  // Convert user bonuses to calculator input format (with card_id for aggregation)
+  const welcomeBonuses: WelcomeBonusInput[] = userWelcomeBonuses.map((wb) => ({
+    id: wb.id,
+    wallet_card_id: wb.wallet_card_id,
+    card_id: walletCardIdToCardId.get(wb.wallet_card_id) ?? "",
+    is_active: wb.is_active,
+    spend_requirement_cents: wb.spend_requirement_cents,
+    time_period_months: wb.time_period_months,
+    component_type: wb.component_type,
+    points_amount: wb.points_amount,
+    currency_id: wb.currency_id,
+    cash_amount_cents: wb.cash_amount_cents,
+    benefit_description: wb.benefit_description,
+    value_cents: wb.value_cents,
+  }));
+
+  const spendBonuses: SpendBonusInput[] = userSpendBonuses.map((sb) => ({
+    id: sb.id,
+    wallet_card_id: sb.wallet_card_id,
+    card_id: walletCardIdToCardId.get(sb.wallet_card_id) ?? "",
+    is_active: sb.is_active,
+    name: sb.name,
+    bonus_type: sb.bonus_type,
+    spend_threshold_cents: sb.spend_threshold_cents,
+    reward_type: sb.reward_type,
+    points_amount: sb.points_amount,
+    currency_id: sb.currency_id,
+    cash_amount_cents: sb.cash_amount_cents,
+    benefit_description: sb.benefit_description,
+    value_cents: sb.value_cents,
+    period: sb.period,
+    per_spend_cents: sb.per_spend_cents,
+    elite_unit_name: sb.elite_unit_name,
+    unit_value_cents: sb.unit_value_cents,
+    cap_amount: sb.cap_amount,
+    cap_period: sb.cap_period,
+  }));
 
   // Bonus display settings
   const includeBonusesInCalculation = 
@@ -608,12 +664,9 @@ export default async function WalletPage() {
     travelPreferences,
     enabledSecondaryCards,
     earningsGoal: "maximize" as const, // Default to maximize for wallet summary
-    // Bonus inputs
+    // User-defined bonus inputs (is_active and valuations are built into each bonus)
     welcomeBonuses,
-    welcomeBonusSettings,
-    welcomeBonusValueOverrides,
     spendBonuses,
-    spendBonusValues,
     includeBonusesInCalculation,
     // Multi-instance support: count how many of each card for fee calculation
     cardInstanceCounts,
@@ -664,24 +717,22 @@ export default async function WalletPage() {
       ? `${card.name} ${existingCount + 1}` 
       : null;
     
-    // Add card to wallet
-    await supabase.from("user_wallets").insert({
+    // Add card to wallet and get the new wallet entry ID
+    const { data: newWalletEntry } = await supabase.from("user_wallets").insert({
       user_id: user.id,
       card_id: cardId,
       custom_name: customName,
-    });
+    }).select("id").single();
     
-    // If card has a default perks value, set it for the user
-    // Note: For now, perks are shared across instances (by card_id)
-    // TODO: Consider per-instance perks in future
-    if (card?.default_perks_value && card.default_perks_value > 0) {
+    // If card has a default perks value, set it for this wallet instance
+    if (newWalletEntry && card?.default_perks_value && card.default_perks_value > 0) {
       await supabase.from("user_card_perks_values").upsert(
         {
           user_id: user.id,
-          card_id: cardId,
+          wallet_card_id: newWalletEntry.id,
           perks_value: card.default_perks_value,
         },
-        { onConflict: "user_id,card_id" }
+        { onConflict: "user_id,wallet_card_id" }
       );
     }
     
@@ -716,7 +767,22 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
-  async function updatePerksValue(cardId: string, perksValue: number) {
+  async function updateApprovalDate(walletId: string, date: string | null) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase
+      .from("user_wallets")
+      .update({ approval_date: date })
+      .eq("id", walletId)
+      .eq("user_id", user.id);
+    revalidatePath("/wallet");
+    revalidatePath("/credits");
+  }
+
+  async function updatePerksValue(walletCardId: string, perksValue: number) {
     "use server";
     const user = await currentUser();
     if (!user) return;
@@ -725,10 +791,10 @@ export default async function WalletPage() {
     await supabase.from("user_card_perks_values").upsert(
       {
         user_id: user.id,
-        card_id: cardId,
+        wallet_card_id: walletCardId,
         perks_value: perksValue,
       },
-      { onConflict: "user_id,card_id" }
+      { onConflict: "user_id,wallet_card_id" }
     );
     revalidatePath("/wallet");
   }
@@ -749,7 +815,7 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
-  async function updateDebitPay(cardId: string, percent: number) {
+  async function updateDebitPay(walletCardId: string, percent: number) {
     "use server";
     const user = await currentUser();
     if (!user) return;
@@ -758,10 +824,10 @@ export default async function WalletPage() {
     await supabase.from("user_card_debit_pay").upsert(
       {
         user_id: user.id,
-        card_id: cardId,
+        wallet_card_id: walletCardId,
         debit_pay_percent: percent,
       },
-      { onConflict: "user_id,card_id" }
+      { onConflict: "user_id,wallet_card_id" }
     );
     revalidatePath("/wallet");
   }
@@ -783,165 +849,297 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
-  async function updateWelcomeBonusSettings(cardId: string, isActive: boolean, spendOverride: number | null, timeOverride: number | null) {
+  // User-defined Welcome Bonus CRUD
+  async function addUserWelcomeBonus(formData: FormData) {
     "use server";
     const user = await currentUser();
     if (!user) return;
 
     const supabase = await createClient();
-    await supabase.from("user_welcome_bonus_settings").upsert(
+    const componentType = formData.get("component_type") as string;
+    
+    await supabase.from("user_welcome_bonuses").insert({
+      user_id: user.id,
+      wallet_card_id: formData.get("wallet_card_id") as string,
+      component_type: componentType,
+      spend_requirement_cents: parseInt(formData.get("spend_requirement_cents") as string) || 0,
+      time_period_months: parseInt(formData.get("time_period_months") as string) || 3,
+      points_amount: componentType === "points" ? parseInt(formData.get("points_amount") as string) || null : null,
+      currency_id: componentType === "points" ? formData.get("currency_id") as string || null : null,
+      cash_amount_cents: componentType === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
+      benefit_description: componentType === "benefit" ? formData.get("benefit_description") as string || null : null,
+      value_cents: componentType === "benefit" ? parseInt(formData.get("value_cents") as string) || null : null,
+    });
+    revalidatePath("/wallet");
+  }
+
+  async function updateUserWelcomeBonus(bonusId: string, formData: FormData) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    const componentType = formData.get("component_type") as string;
+    
+    await supabase.from("user_welcome_bonuses").update({
+      component_type: componentType,
+      spend_requirement_cents: parseInt(formData.get("spend_requirement_cents") as string) || 0,
+      time_period_months: parseInt(formData.get("time_period_months") as string) || 3,
+      points_amount: componentType === "points" ? parseInt(formData.get("points_amount") as string) || null : null,
+      currency_id: componentType === "points" ? formData.get("currency_id") as string || null : null,
+      cash_amount_cents: componentType === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
+      benefit_description: componentType === "benefit" ? formData.get("benefit_description") as string || null : null,
+      value_cents: componentType === "benefit" ? parseInt(formData.get("value_cents") as string) || null : null,
+    }).eq("id", bonusId).eq("user_id", user.id);
+    revalidatePath("/wallet");
+  }
+
+  async function deleteUserWelcomeBonus(bonusId: string) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase.from("user_welcome_bonuses").delete().eq("id", bonusId).eq("user_id", user.id);
+    revalidatePath("/wallet");
+  }
+
+  async function toggleUserWelcomeBonusActive(bonusId: string, isActive: boolean) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase.from("user_welcome_bonuses").update({ is_active: isActive }).eq("id", bonusId).eq("user_id", user.id);
+    revalidatePath("/wallet");
+  }
+
+  // User-defined Spend Bonus CRUD
+  async function addUserSpendBonus(formData: FormData) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    const bonusType = formData.get("bonus_type") as string;
+    const rewardType = formData.get("reward_type") as string;
+    
+    if (bonusType === "threshold") {
+      await supabase.from("user_spend_bonuses").insert({
+        user_id: user.id,
+        wallet_card_id: formData.get("wallet_card_id") as string,
+        name: formData.get("name") as string,
+        bonus_type: bonusType,
+        spend_threshold_cents: parseInt(formData.get("spend_threshold_cents") as string) || null,
+        reward_type: rewardType,
+        period: formData.get("period") as string,
+        points_amount: rewardType === "points" ? parseInt(formData.get("points_amount") as string) || null : null,
+        currency_id: rewardType === "points" ? formData.get("currency_id") as string || null : null,
+        cash_amount_cents: rewardType === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
+        benefit_description: rewardType === "benefit" ? formData.get("benefit_description") as string || null : null,
+        value_cents: rewardType === "benefit" ? parseInt(formData.get("value_cents") as string) || null : null,
+      });
+    } else {
+      const capAmount = formData.get("cap_amount") as string;
+      await supabase.from("user_spend_bonuses").insert({
+        user_id: user.id,
+        wallet_card_id: formData.get("wallet_card_id") as string,
+        name: formData.get("name") as string,
+        bonus_type: bonusType,
+        per_spend_cents: parseInt(formData.get("per_spend_cents") as string) || null,
+        elite_unit_name: formData.get("elite_unit_name") as string || null,
+        unit_value_cents: parseFloat(formData.get("unit_value_cents") as string) || null,
+        cap_amount: capAmount ? parseInt(capAmount) || null : null,
+        cap_period: capAmount ? formData.get("cap_period") as string || "year" : null,
+      });
+    }
+    revalidatePath("/wallet");
+  }
+
+  async function updateUserSpendBonus(bonusId: string, formData: FormData) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    const bonusType = formData.get("bonus_type") as string;
+    const rewardType = formData.get("reward_type") as string;
+    
+    if (bonusType === "threshold") {
+      await supabase.from("user_spend_bonuses").update({
+        name: formData.get("name") as string,
+        spend_threshold_cents: parseInt(formData.get("spend_threshold_cents") as string) || null,
+        reward_type: rewardType,
+        period: formData.get("period") as string,
+        points_amount: rewardType === "points" ? parseInt(formData.get("points_amount") as string) || null : null,
+        currency_id: rewardType === "points" ? formData.get("currency_id") as string || null : null,
+        cash_amount_cents: rewardType === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
+        benefit_description: rewardType === "benefit" ? formData.get("benefit_description") as string || null : null,
+        value_cents: rewardType === "benefit" ? parseInt(formData.get("value_cents") as string) || null : null,
+        // Clear elite earning fields
+        per_spend_cents: null,
+        elite_unit_name: null,
+        unit_value_cents: null,
+        cap_amount: null,
+        cap_period: null,
+      }).eq("id", bonusId).eq("user_id", user.id);
+    } else {
+      const capAmount = formData.get("cap_amount") as string;
+      await supabase.from("user_spend_bonuses").update({
+        name: formData.get("name") as string,
+        per_spend_cents: parseInt(formData.get("per_spend_cents") as string) || null,
+        elite_unit_name: formData.get("elite_unit_name") as string || null,
+        unit_value_cents: parseFloat(formData.get("unit_value_cents") as string) || null,
+        cap_amount: capAmount ? parseInt(capAmount) || null : null,
+        cap_period: capAmount ? formData.get("cap_period") as string || "year" : null,
+        // Clear threshold fields
+        spend_threshold_cents: null,
+        reward_type: null,
+        points_amount: null,
+        currency_id: null,
+        cash_amount_cents: null,
+        benefit_description: null,
+        value_cents: null,
+        period: null,
+      }).eq("id", bonusId).eq("user_id", user.id);
+    }
+    revalidatePath("/wallet");
+  }
+
+  async function deleteUserSpendBonus(bonusId: string) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase.from("user_spend_bonuses").delete().eq("id", bonusId).eq("user_id", user.id);
+    revalidatePath("/wallet");
+  }
+
+  async function toggleUserSpendBonusActive(bonusId: string, isActive: boolean) {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase.from("user_spend_bonuses").update({ is_active: isActive }).eq("id", bonusId).eq("user_id", user.id);
+    revalidatePath("/wallet");
+  }
+
+  async function completeOnboarding() {
+    "use server";
+    const user = await currentUser();
+    if (!user) return;
+
+    const supabase = await createClient();
+    await supabase.from("user_feature_flags").upsert(
       {
         user_id: user.id,
-        card_id: cardId,
-        is_active: isActive,
-        spend_requirement_override: spendOverride,
-        time_period_override: timeOverride,
+        onboarding_completed: true,
       },
-      { onConflict: "user_id,card_id" }
+      { onConflict: "user_id" }
     );
-    revalidatePath("/wallet");
-  }
-
-  async function updateWelcomeBonusValueOverride(bonusId: string, valueCents: number | null) {
-    "use server";
-    const user = await currentUser();
-    if (!user) return;
-
-    const supabase = await createClient();
-    if (valueCents === null) {
-      await supabase
-        .from("user_welcome_bonus_value_overrides")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("welcome_bonus_id", bonusId);
-    } else {
-      await supabase.from("user_welcome_bonus_value_overrides").upsert(
-        {
-          user_id: user.id,
-          welcome_bonus_id: bonusId,
-          value_cents: valueCents,
-        },
-        { onConflict: "user_id,welcome_bonus_id" }
-      );
-    }
-    revalidatePath("/wallet");
-  }
-
-  async function updateSpendBonusValue(bonusId: string, valueCents: number | null) {
-    "use server";
-    const user = await currentUser();
-    if (!user) return;
-
-    const supabase = await createClient();
-    if (valueCents === null) {
-      await supabase
-        .from("user_spend_bonus_values")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("spend_bonus_id", bonusId);
-    } else {
-      await supabase.from("user_spend_bonus_values").upsert(
-        {
-          user_id: user.id,
-          spend_bonus_id: bonusId,
-          value_cents: valueCents,
-        },
-        { onConflict: "user_id,spend_bonus_id" }
-      );
-    }
     revalidatePath("/wallet");
   }
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <UserHeader isAdmin={isAdmin} />
-      <div className="mx-auto max-w-5xl px-4 py-12">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white">My Wallet</h1>
-            <p className="text-zinc-400 mt-1">
-              {walletCards.length} card{walletCards.length !== 1 ? "s" : ""} in your wallet
-            </p>
-          </div>
-          <AddCardModal
-            availableCards={availableCardsForModal.map(c => ({
-              id: c.id,
-              name: c.name,
-              slug: c.slug,
-              annual_fee: c.annual_fee,
-              issuer_name: c.issuers?.name,
-              primary_currency_name: c.primary_currency?.name,
-            }))}
-            onAddCard={addToWallet}
-            debitPayEnabled={debitPayEnabled}
-            onEnableDebitPay={enableDebitPay}
-            ownedCardIds={userCardIds}
-          />
-        </div>
-
-        {/* Returns Summary */}
-        {returns && returns.totalSpend > 0 && (
-          <ReturnsSummary returns={returns} />
-        )}
-
-        {/* Card Recommendations */}
-        {recommendations.length > 0 && (
-          <div className="mb-8">
-            <CardRecommendations 
-              recommendations={recommendations}
+    <WalletClient
+      showOnboarding={!onboardingCompleted}
+      onCompleteOnboarding={completeOnboarding}
+    >
+      <div className="min-h-screen bg-zinc-950">
+        <UserHeader isAdmin={isAdmin} creditTrackingEnabled={creditTrackingEnabled} />
+        <div className="mx-auto max-w-5xl px-4 py-12">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-white">My Wallet</h1>
+              <p className="text-zinc-400 mt-1">
+                {walletCards.length} card{walletCards.length !== 1 ? "s" : ""} in your wallet
+              </p>
+            </div>
+            <AddCardModal
+              availableCards={availableCardsForModal.map(c => ({
+                id: c.id,
+                name: c.name,
+                slug: c.slug,
+                annual_fee: c.annual_fee,
+                issuer_name: c.issuers?.name,
+                primary_currency_name: c.primary_currency?.name,
+              }))}
               onAddCard={addToWallet}
+              debitPayEnabled={debitPayEnabled}
+              onEnableDebitPay={enableDebitPay}
+              ownedCardIds={userCardIds}
             />
           </div>
-        )}
 
-        {walletCards.length > 0 ? (
-          <WalletCardList
-            walletCards={walletCards}
-            enabledSecondaryCards={enabledSecondaryCards}
-            perksMap={perksMap}
-            debitPayMap={debitPayMap}
-            debitPayEnabled={debitPayEnabled}
-            onRemove={removeFromWallet}
-            onUpdatePerks={updatePerksValue}
-            onUpdateDebitPay={updateDebitPay}
-            onUpdateCustomName={updateCustomName}
-          />
-        ) : (
-          <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
-            <p className="text-zinc-400 mb-4">Your wallet is empty.</p>
-            <p className="text-zinc-500 text-sm">
-              Add cards to track your rewards and see which currencies are active.
-            </p>
-          </div>
-        )}
+          {/* Returns Summary */}
+          {returns && returns.totalSpend > 0 && (
+            <ReturnsSummary returns={returns} />
+          )}
 
-        {/* Bonus Settings */}
-        {walletCards.length > 0 && (
-          <div className="mt-8">
-          <BonusSettings
-            walletCards={walletCards.map(wc => ({
-              wallet_id: wc.id,
-              card_id: wc.card_id,
-              display_name: wc.custom_name ?? wc.cards?.name ?? "",
-              card_name: wc.cards?.name ?? "",
-              currency_name: wc.cards?.primary_currency?.name ?? null,
-            }))}
-            welcomeBonuses={welcomeBonuses}
-            welcomeBonusSettings={welcomeBonusSettings}
-            welcomeBonusValueOverrides={welcomeBonusValueOverrides}
-            spendBonuses={spendBonuses}
-            spendBonusValues={spendBonusValues}
-            bonusDisplaySettings={bonusDisplaySettings}
-            onUpdateDisplaySettings={updateBonusDisplaySettings}
-            onUpdateWelcomeBonusSettings={updateWelcomeBonusSettings}
-            onUpdateWelcomeBonusValueOverride={updateWelcomeBonusValueOverride}
-            onUpdateSpendBonusValue={updateSpendBonusValue}
-          />
-          </div>
-        )}
+          {/* Card Recommendations */}
+          {recommendations.length > 0 && (
+            <div className="mb-8">
+              <CardRecommendations 
+                recommendations={recommendations}
+                onAddCard={addToWallet}
+              />
+            </div>
+          )}
+
+          {walletCards.length > 0 ? (
+            <WalletCardList
+              walletCards={walletCards}
+              enabledSecondaryCards={enabledSecondaryCards}
+              perksMap={perksMap}
+              debitPayMap={debitPayMap}
+              debitPayEnabled={debitPayEnabled}
+              onRemove={removeFromWallet}
+              onUpdatePerks={updatePerksValue}
+              onUpdateDebitPay={updateDebitPay}
+              onUpdateCustomName={updateCustomName}
+              onUpdateApprovalDate={updateApprovalDate}
+            />
+          ) : (
+            <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
+              <p className="text-zinc-400 mb-4">Your wallet is empty.</p>
+              <p className="text-zinc-500 text-sm">
+                Add cards to track your rewards and see which currencies are active.
+              </p>
+            </div>
+          )}
+
+          {/* User Bonus Section */}
+          {walletCards.length > 0 && (
+            <UserBonusSection
+              walletCards={walletCards.map(wc => ({
+                wallet_id: wc.id,
+                card_id: wc.card_id,
+                display_name: wc.custom_name ?? wc.cards?.name ?? "",
+                card_name: wc.cards?.name ?? "",
+                currency_name: wc.cards?.primary_currency?.name ?? null,
+                currency_id: wc.cards?.primary_currency_id ?? null,
+              }))}
+              currencies={allCurrenciesResult.data ?? []}
+              welcomeBonuses={userWelcomeBonuses}
+              spendBonuses={userSpendBonuses}
+              bonusDisplaySettings={bonusDisplaySettings}
+              onUpdateDisplaySettings={updateBonusDisplaySettings}
+              onAddWelcomeBonus={addUserWelcomeBonus}
+              onUpdateWelcomeBonus={updateUserWelcomeBonus}
+              onDeleteWelcomeBonus={deleteUserWelcomeBonus}
+              onToggleWelcomeBonusActive={toggleUserWelcomeBonusActive}
+              onAddSpendBonus={addUserSpendBonus}
+              onUpdateSpendBonus={updateUserSpendBonus}
+              onDeleteSpendBonus={deleteUserSpendBonus}
+              onToggleSpendBonusActive={toggleUserSpendBonusActive}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </WalletClient>
   );
 }

@@ -169,6 +169,7 @@ export function AddCardModal({
     return (
       <button
         onClick={() => setIsOpen(true)}
+        data-onboarding="add-card"
         className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
       >
         + Add Card

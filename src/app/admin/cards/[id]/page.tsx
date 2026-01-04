@@ -5,8 +5,6 @@ import { revalidatePath } from "next/cache";
 import { CardForm } from "../card-form";
 import { EarningRulesEditor } from "./earning-rules-editor";
 import { CapsEditor } from "./caps-editor";
-import { SpendBonusEditor } from "./spend-bonus-editor";
-import { WelcomeBonusEditor } from "./welcome-bonus-editor";
 import Link from "next/link";
 import { Enums } from "@/lib/database.types";
 
@@ -39,8 +37,6 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     capsResult,
     capCategoriesResult,
     userWalletResult,
-    spendBonusesResult,
-    welcomeBonusesResult,
   ] = await Promise.all([
     supabase.from("cards").select("*").eq("id", id).single(),
     supabase.from("issuers").select("*").order("name"),
@@ -51,10 +47,6 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     // Only fetch cap categories for this card's caps (join through card_caps)
     supabase.from("card_cap_categories").select("cap_id, category_id, earning_categories(id, name), card_caps!inner(card_id)").eq("card_caps.card_id", id),
     user ? supabase.from("user_wallets").select("cards(primary_currency_id)").eq("user_id", user.id) : Promise.resolve({ data: [] }),
-    // Fetch spend bonuses for this card
-    supabase.from("card_spend_bonuses").select("*, reward_currencies:currency_id(name)").eq("card_id", id),
-    // Fetch welcome bonuses for this card
-    supabase.from("card_welcome_bonuses").select("*, reward_currencies:currency_id(name)").eq("card_id", id),
   ]);
 
   if (cardResult.error || !cardResult.data) {
@@ -269,158 +261,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     revalidatePath(`/admin/cards/${id}`);
   }
 
-  async function addSpendBonus(formData: FormData) {
-    "use server";
-    const supabase = await createClient();
-
-    const bonus_type = formData.get("bonus_type") as string;
-    const name = formData.get("name") as string;
-
-    let result;
-    if (bonus_type === "threshold") {
-      const rewardType = formData.get("reward_type") as string;
-      result = await supabase.from("card_spend_bonuses").insert({
-        card_id: id,
-        bonus_type,
-        name,
-        spend_threshold_cents: parseInt(formData.get("spend_threshold_cents") as string) || null,
-        reward_type: rewardType,
-        period: formData.get("period") as string,
-        points_amount: rewardType === "points" ? parseInt(formData.get("points_amount") as string) || null : null,
-        currency_id: rewardType === "points" ? formData.get("currency_id") as string || null : null,
-        cash_amount_cents: rewardType === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
-        benefit_description: rewardType === "benefit" ? formData.get("benefit_description") as string || null : null,
-        default_value_cents: rewardType === "benefit" ? parseInt(formData.get("default_value_cents") as string) || null : null,
-      });
-    } else {
-      const capAmount = formData.get("cap_amount") as string;
-      result = await supabase.from("card_spend_bonuses").insert({
-        card_id: id,
-        bonus_type,
-        name,
-        per_spend_cents: parseInt(formData.get("per_spend_cents") as string) || null,
-        elite_unit_name: formData.get("elite_unit_name") as string || null,
-        default_unit_value_cents: parseFloat(formData.get("default_unit_value_cents") as string) || null,
-        cap_amount: capAmount ? parseInt(capAmount) || null : null,
-        cap_period: capAmount ? formData.get("cap_period") as string || "year" : null,
-      });
-    }
-    
-    if (result.error) {
-      console.error("Error adding spend bonus:", result.error);
-      throw new Error(result.error.message);
-    }
-    
-    revalidatePath(`/admin/cards/${id}`);
-  }
-
-  async function updateSpendBonus(bonusId: string, formData: FormData) {
-    "use server";
-    const supabase = await createClient();
-
-    const bonus_type = formData.get("bonus_type") as string;
-    const name = formData.get("name") as string;
-
-    if (bonus_type === "threshold") {
-      const rewardType = formData.get("reward_type") as string;
-      await supabase.from("card_spend_bonuses").update({
-        bonus_type,
-        name,
-        spend_threshold_cents: parseInt(formData.get("spend_threshold_cents") as string) || null,
-        reward_type: rewardType,
-        period: formData.get("period") as string,
-        points_amount: rewardType === "points" ? parseInt(formData.get("points_amount") as string) || null : null,
-        currency_id: rewardType === "points" ? formData.get("currency_id") as string || null : null,
-        cash_amount_cents: rewardType === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
-        benefit_description: rewardType === "benefit" ? formData.get("benefit_description") as string || null : null,
-        default_value_cents: rewardType === "benefit" ? parseInt(formData.get("default_value_cents") as string) || null : null,
-        // Clear elite earning fields
-        per_spend_cents: null,
-        elite_unit_name: null,
-        default_unit_value_cents: null,
-        cap_amount: null,
-        cap_period: null,
-      }).eq("id", bonusId);
-    } else {
-      const capAmount = formData.get("cap_amount") as string;
-      await supabase.from("card_spend_bonuses").update({
-        bonus_type,
-        name,
-        per_spend_cents: parseInt(formData.get("per_spend_cents") as string) || null,
-        elite_unit_name: formData.get("elite_unit_name") as string || null,
-        default_unit_value_cents: parseFloat(formData.get("default_unit_value_cents") as string) || null,
-        cap_amount: capAmount ? parseInt(capAmount) || null : null,
-        cap_period: capAmount ? formData.get("cap_period") as string || "year" : null,
-        // Clear threshold fields
-        spend_threshold_cents: null,
-        reward_type: null,
-        points_amount: null,
-        currency_id: null,
-        cash_amount_cents: null,
-        benefit_description: null,
-        default_value_cents: null,
-        period: null,
-      }).eq("id", bonusId);
-    }
-    revalidatePath(`/admin/cards/${id}`);
-  }
-
-  async function deleteSpendBonus(bonusId: string) {
-    "use server";
-    const supabase = await createClient();
-    await supabase.from("card_spend_bonuses").delete().eq("id", bonusId);
-    revalidatePath(`/admin/cards/${id}`);
-  }
-
-  async function addWelcomeBonus(formData: FormData) {
-    "use server";
-    const supabase = await createClient();
-
-    const component_type = formData.get("component_type") as string;
-    const spend_requirement_cents = parseInt(formData.get("spend_requirement_cents") as string) || 0;
-    const time_period_months = parseInt(formData.get("time_period_months") as string) || 3;
-
-    await supabase.from("card_welcome_bonuses").insert({
-      card_id: id,
-      component_type,
-      spend_requirement_cents,
-      time_period_months,
-      points_amount: component_type === "points" ? parseInt(formData.get("points_amount") as string) || null : null,
-      currency_id: component_type === "points" ? formData.get("currency_id") as string || null : null,
-      cash_amount_cents: component_type === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
-      benefit_description: component_type === "benefit" ? formData.get("benefit_description") as string || null : null,
-      default_benefit_value_cents: component_type === "benefit" ? parseInt(formData.get("default_benefit_value_cents") as string) || null : null,
-    });
-    revalidatePath(`/admin/cards/${id}`);
-  }
-
-  async function updateWelcomeBonus(bonusId: string, formData: FormData) {
-    "use server";
-    const supabase = await createClient();
-
-    const component_type = formData.get("component_type") as string;
-    const spend_requirement_cents = parseInt(formData.get("spend_requirement_cents") as string) || 0;
-    const time_period_months = parseInt(formData.get("time_period_months") as string) || 3;
-
-    await supabase.from("card_welcome_bonuses").update({
-      component_type,
-      spend_requirement_cents,
-      time_period_months,
-      points_amount: component_type === "points" ? parseInt(formData.get("points_amount") as string) || null : null,
-      currency_id: component_type === "points" ? formData.get("currency_id") as string || null : null,
-      cash_amount_cents: component_type === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
-      benefit_description: component_type === "benefit" ? formData.get("benefit_description") as string || null : null,
-      default_benefit_value_cents: component_type === "benefit" ? parseInt(formData.get("default_benefit_value_cents") as string) || null : null,
-    }).eq("id", bonusId);
-    revalidatePath(`/admin/cards/${id}`);
-  }
-
-  async function deleteWelcomeBonus(bonusId: string) {
-    "use server";
-    const supabase = await createClient();
-    await supabase.from("card_welcome_bonuses").delete().eq("id", bonusId);
-    revalidatePath(`/admin/cards/${id}`);
-  }
+  // Spend Bonuses and Welcome Bonuses have been moved to user-managed in the wallet page
 
   // Pass all categories - cards can have multiple rules per category (e.g., direct vs portal booking)
   const allCategories = categoriesResult.data ?? [];
@@ -512,70 +353,8 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
               />
             </div>
 
-            {/* Spend Bonuses */}
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-              <h2 className="text-lg font-semibold text-white mb-2">Spend Bonuses</h2>
-              <p className="text-sm text-zinc-400 mb-4">
-                Threshold rewards (spend $X → get Y) and elite earning (earn status credits per $X spent).
-              </p>
-              <SpendBonusEditor
-                bonuses={((spendBonusesResult.data ?? []) as unknown as Array<{
-                  id: string;
-                  name: string;
-                  bonus_type: "threshold" | "elite_earning";
-                  spend_threshold_cents: number | null;
-                  reward_type: "points" | "cash" | "benefit" | null;
-                  points_amount: number | null;
-                  currency_id: string | null;
-                  cash_amount_cents: number | null;
-                  benefit_description: string | null;
-                  default_value_cents: number | null;
-                  period: "year" | "calendar_year" | "lifetime" | null;
-                  per_spend_cents: number | null;
-                  elite_unit_name: string | null;
-                  default_unit_value_cents: number | null;
-                  cap_amount: number | null;
-                  cap_period: "year" | "calendar_year" | null;
-                  reward_currencies: { name: string } | null;
-                }>).map(b => ({
-                  ...b,
-                  currency_name: b.reward_currencies?.name,
-                }))}
-                currencies={currenciesResult.data ?? []}
-                onAddBonus={addSpendBonus}
-                onUpdateBonus={updateSpendBonus}
-                onDeleteBonus={deleteSpendBonus}
-              />
-            </div>
-
-            {/* Welcome Bonuses (SUBs) */}
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-              <h2 className="text-lg font-semibold text-white mb-2">Welcome Bonus (SUB)</h2>
-              <p className="text-sm text-zinc-400 mb-4">
-                Sign-up bonus components: points, cash, and benefits earned for meeting spend requirements.
-              </p>
-              <WelcomeBonusEditor
-                bonuses={((welcomeBonusesResult.data ?? []) as unknown as Array<{
-                  id: string;
-                  spend_requirement_cents: number;
-                  time_period_months: number;
-                  component_type: "points" | "cash" | "benefit";
-                  points_amount: number | null;
-                  currency_id: string | null;
-                  cash_amount_cents: number | null;
-                  benefit_description: string | null;
-                  default_benefit_value_cents: number | null;
-                  reward_currencies: { name: string } | null;
-                }>).map(b => ({
-                  ...b,
-                  currency_name: b.reward_currencies?.name,
-                }))}
-                currencies={currenciesResult.data ?? []}
-                onAddBonus={addWelcomeBonus}
-                onUpdateBonus={updateWelcomeBonus}
-                onDeleteBonus={deleteWelcomeBonus}
-              />
-            </div>
+            {/* Spend Bonuses and Welcome Bonuses have been moved to user-managed in the wallet page */}
+            {/* Users now create their own bonuses per wallet card instance */}
           </>
         );
       })()}

@@ -98,6 +98,7 @@ export default function SignUpPage() {
               </p>
             </div>
             <SignUp 
+              forceRedirectUrl="/wallet"
               appearance={{
                 elements: {
                   rootBox: "mx-auto",

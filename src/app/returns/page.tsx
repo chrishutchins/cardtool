@@ -17,7 +17,6 @@ import {
   MultiplierProgram,
   CardRecommendation,
   WelcomeBonusInput,
-  WelcomeBonusSettings,
   SpendBonusInput,
 } from "@/lib/returns-calculator";
 
@@ -61,18 +60,17 @@ export default async function ReturnsPage({ searchParams }: Props) {
     userPointValueSettingsResult,
     templatesResult,
     allCardsResult,
-    welcomeBonusesResult,
-    userWelcomeBonusSettingsResult,
-    userWelcomeBonusValueOverridesResult,
-    spendBonusesResult,
-    userSpendBonusValuesResult,
+    userWelcomeBonusesResult,
+    userSpendBonusesResult,
     userBonusDisplaySettingsResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
       .from("user_wallets")
       .select(`
+        id,
         card_id,
+        custom_name,
         cards:card_id (
           id,
           name,
@@ -128,16 +126,16 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .select("currency_id, value_cents")
       .eq("user_id", user.id),
     
-    // User's perks values
+    // User's perks values (now keyed by wallet_card_id)
     supabase
       .from("user_card_perks_values")
-      .select("card_id, perks_value")
+      .select("wallet_card_id, perks_value")
       .eq("user_id", user.id),
     
-    // User's debit pay values
+    // User's debit pay values (now keyed by wallet_card_id)
     supabase
       .from("user_card_debit_pay")
-      .select("card_id, debit_pay_percent")
+      .select("wallet_card_id, debit_pay_percent")
       .eq("user_id", user.id),
     
     // User's category selections for "selected_category" bonuses
@@ -242,32 +240,16 @@ export default async function ReturnsPage({ searchParams }: Props) {
       `)
       .eq("is_active", true),
     
-    // Welcome bonuses for all cards
+    // User's welcome bonuses
     supabase
-      .from("card_welcome_bonuses")
-      .select("id, card_id, spend_requirement_cents, time_period_months, component_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_benefit_value_cents"),
-    
-    // User's welcome bonus settings
-    supabase
-      .from("user_welcome_bonus_settings")
-      .select("card_id, is_active, spend_requirement_override, time_period_override")
+      .from("user_welcome_bonuses")
+      .select("id, wallet_card_id, is_active, component_type, spend_requirement_cents, time_period_months, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents")
       .eq("user_id", user.id),
     
-    // User's welcome bonus value overrides
+    // User's spend bonuses
     supabase
-      .from("user_welcome_bonus_value_overrides")
-      .select("welcome_bonus_id, value_cents")
-      .eq("user_id", user.id),
-    
-    // Spend bonuses for all cards
-    supabase
-      .from("card_spend_bonuses")
-      .select("id, card_id, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_value_cents, period, per_spend_cents, elite_unit_name, default_unit_value_cents, cap_amount, cap_period"),
-    
-    // User's spend bonus value overrides
-    supabase
-      .from("user_spend_bonus_values")
-      .select("spend_bonus_id, value_cents")
+      .from("user_spend_bonuses")
+      .select("id, wallet_card_id, is_active, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents, period, per_spend_cents, elite_unit_name, unit_value_cents, cap_amount, cap_period")
       .eq("user_id", user.id),
     
     // User's bonus display settings
@@ -282,22 +264,106 @@ export default async function ReturnsPage({ searchParams }: Props) {
   // Track instance counts for fee calculation (users may have multiple of same card)
   const userCardIds = new Set<string>();
   const cardInstanceCounts = new Map<string, number>();
+  const walletCardIdToCardId = new Map<string, string>();
   
-  walletResult.data?.forEach((w) => {
+  type WalletRow = { id: string; card_id: string; custom_name: string | null; cards: CardInput | null };
+  const walletRows = (walletResult.data as unknown as WalletRow[]) ?? [];
+  
+  walletRows.forEach((w) => {
     if (w.cards) {
       userCardIds.add(w.card_id);
       cardInstanceCounts.set(w.card_id, (cardInstanceCounts.get(w.card_id) ?? 0) + 1);
+      walletCardIdToCardId.set(w.id, w.card_id);
     }
   });
   
-  // De-duplicate cards for spend allocation (same card earns the same)
-  const cards: CardInput[] = Array.from(
-    new Map(
-      (walletResult.data ?? [])
-        .filter(w => w.cards)
-        .map(w => [w.card_id, w.cards as unknown as CardInput])
-    ).values()
-  );
+  // Pre-fetch bonus data to check for differences between wallet instances
+  const walletWelcomeBonuses = (userWelcomeBonusesResult.data ?? []);
+  const walletSpendBonuses = (userSpendBonusesResult.data ?? []);
+  
+  // Group wallet instances by card_id to check for bonus differences
+  const walletsByCardId = new Map<string, WalletRow[]>();
+  walletRows.forEach((w) => {
+    if (w.cards) {
+      const existing = walletsByCardId.get(w.card_id) ?? [];
+      existing.push(w);
+      walletsByCardId.set(w.card_id, existing);
+    }
+  });
+  
+  // Helper to get bonus signature for a wallet instance
+  const getBonusSignature = (walletId: string): string => {
+    const welcomeCount = walletWelcomeBonuses.filter(wb => wb.wallet_card_id === walletId && wb.is_active).length;
+    const spendCount = walletSpendBonuses.filter(sb => sb.wallet_card_id === walletId && sb.is_active).length;
+    const welcomeValue = walletWelcomeBonuses
+      .filter(wb => wb.wallet_card_id === walletId && wb.is_active)
+      .reduce((sum, wb) => sum + (wb.value_cents ?? wb.cash_amount_cents ?? wb.points_amount ?? 0), 0);
+    const spendValue = walletSpendBonuses
+      .filter(sb => sb.wallet_card_id === walletId && sb.is_active)
+      .reduce((sum, sb) => sum + (sb.value_cents ?? sb.cash_amount_cents ?? sb.points_amount ?? 0), 0);
+    return `${welcomeCount}:${welcomeValue}:${spendCount}:${spendValue}`;
+  };
+  
+  // Determine which card types need to be split into separate wallet instances
+  const cardTypesNeedingSplit = new Set<string>();
+  walletsByCardId.forEach((wallets, cardId) => {
+    if (wallets.length > 1) {
+      const signatures = wallets.map(w => getBonusSignature(w.id));
+      const uniqueSignatures = new Set(signatures);
+      if (uniqueSignatures.size > 1) {
+        // Different wallet instances have different bonuses - need to split
+        cardTypesNeedingSplit.add(cardId);
+      }
+    }
+  });
+  
+  // Build cards array: de-duplicate unless instances have different bonuses
+  const cards: CardInput[] = [];
+  const walletIdToEffectiveCardId = new Map<string, string>();
+  
+  // First, handle the normal de-duplication (most common case)
+  const processedCardIds = new Set<string>();
+  
+  walletsByCardId.forEach((wallets, cardId) => {
+    if (cardTypesNeedingSplit.has(cardId)) {
+      // Split: each wallet instance becomes a separate "card" with wallet_id as id
+      wallets.forEach((w) => {
+        if (w.cards) {
+          const displayName = w.custom_name ?? w.cards.name;
+          cards.push({
+            ...w.cards,
+            id: w.id, // Use wallet_id as the card id
+            name: displayName, // Use custom_name if set
+          });
+          walletIdToEffectiveCardId.set(w.id, w.id);
+          // Each split instance has count of 1
+          cardInstanceCounts.set(w.id, 1);
+        }
+      });
+      processedCardIds.add(cardId);
+    } else {
+      // Normal case: use first wallet's card data (all instances are the same)
+      const firstWallet = wallets[0];
+      if (firstWallet?.cards) {
+        cards.push(firstWallet.cards);
+        wallets.forEach(w => walletIdToEffectiveCardId.set(w.id, cardId));
+      }
+      processedCardIds.add(cardId);
+    }
+  });
+  
+  // Safety check: if cards array is somehow empty but we have wallet data, fall back to original logic
+  if (cards.length === 0 && walletRows.length > 0) {
+    console.warn("Card splitting logic resulted in empty cards array, falling back to original logic");
+    const cardMap = new Map<string, CardInput>();
+    walletRows.forEach((w) => {
+      if (w.cards && !cardMap.has(w.card_id)) {
+        cardMap.set(w.card_id, w.cards);
+        walletIdToEffectiveCardId.set(w.id, w.card_id);
+      }
+    });
+    cardMap.forEach((card) => cards.push(card));
+  }
 
   // Process ALL earning rules (needed for recommendations)
   const allEarningRules: EarningRuleInput[] = (rulesResult.data ?? [])
@@ -315,8 +381,26 @@ export default async function ReturnsPage({ searchParams }: Props) {
       brand_name: r.brand_name,
     }));
 
-  // Filter earning rules to only user's cards (for current returns calculation)
-  const earningRules = allEarningRules.filter((r) => userCardIds.has(r.card_id));
+  // For split cards, duplicate earning rules to use wallet_id as card_id
+  // This way the calculator can find earning rules for split wallet instances
+  const earningRulesWithSplit: EarningRuleInput[] = [...allEarningRules];
+  cardTypesNeedingSplit.forEach((cardId) => {
+    const wallets = walletsByCardId.get(cardId) ?? [];
+    const rulesForCard = allEarningRules.filter(r => r.card_id === cardId);
+    wallets.forEach((w) => {
+      rulesForCard.forEach((r) => {
+        earningRulesWithSplit.push({
+          ...r,
+          id: `${r.id}_${w.id}`, // Unique id for the duplicate
+          card_id: w.id, // Use wallet_id as card_id
+        });
+      });
+    });
+  });
+
+  // Filter earning rules to only user's cards (including split wallet instances)
+  const effectiveCardIds = new Set(cards.map(c => c.id));
+  const earningRules = earningRulesWithSplit.filter((r) => effectiveCardIds.has(r.card_id));
 
   // Process ALL category bonuses (needed for recommendations)
   const allCategoryBonuses: CategoryBonusInput[] = (bonusesResult.data ?? [])
@@ -331,8 +415,24 @@ export default async function ReturnsPage({ searchParams }: Props) {
       category_ids: ((b.card_cap_categories as unknown as { category_id: number }[]) ?? []).map(c => c.category_id),
     }));
 
-  // Filter category bonuses to only user's cards (for current returns calculation)
-  const categoryBonuses = allCategoryBonuses.filter((b) => userCardIds.has(b.card_id));
+  // For split cards, duplicate category bonuses to use wallet_id
+  const categoryBonusesWithSplit: CategoryBonusInput[] = [...allCategoryBonuses];
+  cardTypesNeedingSplit.forEach((cardId) => {
+    const wallets = walletsByCardId.get(cardId) ?? [];
+    const bonusesForCard = allCategoryBonuses.filter(b => b.card_id === cardId);
+    wallets.forEach((w) => {
+      bonusesForCard.forEach((b) => {
+        categoryBonusesWithSplit.push({
+          ...b,
+          id: `${b.id}_${w.id}`,
+          card_id: w.id,
+        });
+      });
+    });
+  });
+
+  // Filter category bonuses to only user's cards (including split wallet instances)
+  const categoryBonuses = categoryBonusesWithSplit.filter((b) => effectiveCardIds.has(b.card_id));
 
   // Build category map with exclusion status
   const categoryExclusionMap = new Map<number, boolean>();
@@ -390,16 +490,45 @@ export default async function ReturnsPage({ searchParams }: Props) {
     userCurrencyValues.set(v.currency_id, v.value_cents);
   });
 
-  // Build perks values map
+  // Build perks values map (keyed by wallet_card_id from the database)
+  // For split cards, we use wallet_id directly; for non-split cards, we aggregate by card_id
   const perksValues = new Map<string, number>();
   perksResult.data?.forEach((p) => {
-    perksValues.set(p.card_id, p.perks_value);
+    perksValues.set(p.wallet_card_id, p.perks_value);
+  });
+  
+  // For non-split cards, aggregate perks values from all wallet instances to use card_id as key
+  walletsByCardId.forEach((wallets, cardId) => {
+    if (!cardTypesNeedingSplit.has(cardId)) {
+      // Sum perks from all wallet instances of this card type
+      let totalPerks = 0;
+      wallets.forEach((w) => {
+        totalPerks += perksValues.get(w.id) ?? 0;
+      });
+      if (totalPerks > 0) {
+        perksValues.set(cardId, totalPerks);
+      }
+    }
   });
 
-  // Build debit pay values map
+  // Build debit pay values map (keyed by wallet_card_id from the database)
   const debitPayValues = new Map<string, number>();
   debitPayResult.data?.forEach((d) => {
-    debitPayValues.set(d.card_id, Number(d.debit_pay_percent) ?? 0);
+    debitPayValues.set(d.wallet_card_id, Number(d.debit_pay_percent) ?? 0);
+  });
+  
+  // For non-split cards, aggregate debit pay values from all wallet instances to use card_id as key
+  // (use max value since different instances might have different debit pay settings)
+  walletsByCardId.forEach((wallets, cardId) => {
+    if (!cardTypesNeedingSplit.has(cardId)) {
+      let maxDebitPay = 0;
+      wallets.forEach((w) => {
+        maxDebitPay = Math.max(maxDebitPay, debitPayValues.get(w.id) ?? 0);
+      });
+      if (maxDebitPay > 0) {
+        debitPayValues.set(cardId, maxDebitPay);
+      }
+    }
   });
 
   // Build user selections map
@@ -475,10 +604,12 @@ export default async function ReturnsPage({ searchParams }: Props) {
   
   const largePurchaseCategoryId = largePurchaseCategoryResult.data?.id;
 
-  // Process welcome bonuses
-  const welcomeBonuses: WelcomeBonusInput[] = (welcomeBonusesResult.data ?? []).map((wb) => ({
+  // Process user welcome bonuses (use effective card id - wallet_id if split, card_id otherwise)
+  const welcomeBonuses: WelcomeBonusInput[] = (userWelcomeBonusesResult.data ?? []).map((wb) => ({
     id: wb.id,
-    card_id: wb.card_id,
+    wallet_card_id: wb.wallet_card_id,
+    card_id: walletIdToEffectiveCardId.get(wb.wallet_card_id) ?? walletCardIdToCardId.get(wb.wallet_card_id) ?? "",
+    is_active: wb.is_active,
     spend_requirement_cents: wb.spend_requirement_cents,
     time_period_months: wb.time_period_months,
     component_type: wb.component_type as "points" | "cash" | "benefit",
@@ -486,30 +617,15 @@ export default async function ReturnsPage({ searchParams }: Props) {
     currency_id: wb.currency_id,
     cash_amount_cents: wb.cash_amount_cents,
     benefit_description: wb.benefit_description,
-    default_benefit_value_cents: wb.default_benefit_value_cents,
+    value_cents: wb.value_cents,
   }));
 
-  // Build welcome bonus settings map
-  const welcomeBonusSettings = new Map<string, WelcomeBonusSettings>();
-  userWelcomeBonusSettingsResult.data?.forEach((s) => {
-    welcomeBonusSettings.set(s.card_id, {
-      card_id: s.card_id,
-      is_active: s.is_active,
-      spend_requirement_override: s.spend_requirement_override,
-      time_period_override: s.time_period_override,
-    });
-  });
-
-  // Build welcome bonus value overrides map
-  const welcomeBonusValueOverrides = new Map<string, number>();
-  userWelcomeBonusValueOverridesResult.data?.forEach((o) => {
-    welcomeBonusValueOverrides.set(o.welcome_bonus_id, o.value_cents);
-  });
-
-  // Process spend bonuses
-  const spendBonuses: SpendBonusInput[] = (spendBonusesResult.data ?? []).map((sb) => ({
+  // Process user spend bonuses (use effective card id - wallet_id if split, card_id otherwise)
+  const spendBonuses: SpendBonusInput[] = (userSpendBonusesResult.data ?? []).map((sb) => ({
     id: sb.id,
-    card_id: sb.card_id,
+    wallet_card_id: sb.wallet_card_id,
+    card_id: walletIdToEffectiveCardId.get(sb.wallet_card_id) ?? walletCardIdToCardId.get(sb.wallet_card_id) ?? "",
+    is_active: sb.is_active,
     name: sb.name,
     bonus_type: sb.bonus_type as "threshold" | "elite_earning",
     spend_threshold_cents: sb.spend_threshold_cents,
@@ -518,20 +634,14 @@ export default async function ReturnsPage({ searchParams }: Props) {
     currency_id: sb.currency_id,
     cash_amount_cents: sb.cash_amount_cents,
     benefit_description: sb.benefit_description,
-    default_value_cents: sb.default_value_cents,
+    value_cents: sb.value_cents,
     period: sb.period as "year" | "calendar_year" | "lifetime" | null,
     per_spend_cents: sb.per_spend_cents,
     elite_unit_name: sb.elite_unit_name,
-    default_unit_value_cents: sb.default_unit_value_cents,
+    unit_value_cents: sb.unit_value_cents,
     cap_amount: sb.cap_amount,
     cap_period: sb.cap_period as "year" | "calendar_year" | null,
   }));
-
-  // Build spend bonus values map
-  const spendBonusValues = new Map<string, number>();
-  userSpendBonusValuesResult.data?.forEach((v) => {
-    spendBonusValues.set(v.spend_bonus_id, v.value_cents);
-  });
 
   // Bonus display settings
   const includeBonusesInCalculation = 
@@ -559,12 +669,9 @@ export default async function ReturnsPage({ searchParams }: Props) {
     travelPreferences,
     enabledSecondaryCards,
     earningsGoal,
-    // Bonus inputs
+    // User-defined bonus inputs (is_active and valuations are built into each bonus)
     welcomeBonuses,
-    welcomeBonusSettings,
-    welcomeBonusValueOverrides,
     spendBonuses,
-    spendBonusValues,
     includeBonusesInCalculation,
     // Multi-instance support: count how many of each card for fee calculation
     cardInstanceCounts,

@@ -48,7 +48,7 @@ async function saveCompareEvalCards(cardIds: string[]) {
   }
 }
 
-async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean, showAvailableCredit: boolean) {
+async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean, includeDebitPay: boolean, showAvailableCredit: boolean) {
   "use server";
   const user = await currentUser();
   if (!user) return;
@@ -59,6 +59,7 @@ async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includ
       user_id: user.id,
       include_welcome_bonuses: includeWelcomeBonuses,
       include_spend_bonuses: includeSpendBonuses,
+      include_debit_pay: includeDebitPay,
       show_available_credit: showAvailableCredit,
     },
     { onConflict: "user_id" }
@@ -171,17 +172,17 @@ export default async function ComparePage() {
     userCurrencyValues?.map((v) => [v.currency_id, v.value_cents]) ?? []
   );
 
-  // Get user's debit pay values and feature flags
+  // Get user's debit pay values and feature flags (debit pay is now keyed by wallet_card_id)
   const [{ data: featureFlags }, { data: debitPayValues }, { data: linkedAccountsData }] = await Promise.all([
     supabase.from("user_feature_flags").select("debit_pay_enabled, account_linking_enabled").eq("user_id", user.id).single(),
-    supabase.from("user_card_debit_pay").select("card_id, debit_pay_percent").eq("user_id", user.id),
+    supabase.from("user_card_debit_pay").select("wallet_card_id, debit_pay_percent").eq("user_id", user.id),
     supabase.from("user_linked_accounts").select("wallet_card_id, available_balance, current_balance, credit_limit, manual_credit_limit").eq("user_id", user.id).not("wallet_card_id", "is", null),
   ]);
 
   const debitPayMap: Record<string, number> = {};
   if (featureFlags?.debit_pay_enabled) {
     for (const dp of debitPayValues ?? []) {
-      debitPayMap[dp.card_id] = Number(dp.debit_pay_percent) || 0;
+      debitPayMap[dp.wallet_card_id] = Number(dp.debit_pay_percent) || 0;
     }
   }
 
@@ -219,14 +220,12 @@ export default async function ComparePage() {
     }
   }
 
-  // Get multiplier programs, spend bonuses, and bonus display settings
+  // Get multiplier programs and user-defined bonuses
   const [
     { data: multiplierProgramsData },
     { data: userMultiplierTiers },
-    { data: spendBonusesData },
-    { data: userSpendBonusValuesData },
-    { data: welcomeBonusesData },
-    { data: userWelcomeBonusSettings },
+    { data: userSpendBonusesData },
+    { data: userWelcomeBonusesData },
     { data: bonusDisplaySettingsData },
   ] = await Promise.all([
     supabase
@@ -243,22 +242,16 @@ export default async function ComparePage() {
       .select("program_id, tier_id")
       .eq("user_id", user.id),
     supabase
-      .from("card_spend_bonuses")
-      .select("id, card_id, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_value_cents, period, per_spend_cents, elite_unit_name, default_unit_value_cents, cap_amount, cap_period"),
-    supabase
-      .from("user_spend_bonus_values")
-      .select("spend_bonus_id, value_cents")
+      .from("user_spend_bonuses")
+      .select("id, wallet_card_id, is_active, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents, period, per_spend_cents, elite_unit_name, unit_value_cents, cap_amount, cap_period")
       .eq("user_id", user.id),
     supabase
-      .from("card_welcome_bonuses")
-      .select("id, card_id, spend_requirement_cents, time_period_months, component_type, points_amount, currency_id, cash_amount_cents, benefit_description, default_benefit_value_cents"),
-    supabase
-      .from("user_welcome_bonus_settings")
-      .select("card_id, is_active, spend_requirement_override, time_period_override")
+      .from("user_welcome_bonuses")
+      .select("id, wallet_card_id, is_active, component_type, spend_requirement_cents, time_period_months, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents")
       .eq("user_id", user.id),
     supabase
       .from("user_bonus_display_settings")
-      .select("include_welcome_bonuses, include_spend_bonuses, show_available_credit")
+      .select("include_welcome_bonuses, include_spend_bonuses, include_debit_pay, show_available_credit")
       .eq("user_id", user.id)
       .single(),
   ]);
@@ -304,18 +297,26 @@ export default async function ComparePage() {
     }
   }
 
-  // Calculate spend bonus rates per card
-  const spendBonusValues = new Map<string, number>();
-  (userSpendBonusValuesData ?? []).forEach((v) => {
-    spendBonusValues.set(v.spend_bonus_id, parseFloat(String(v.value_cents)));
-  });
-
-  const cardSpendBonusRates: Record<string, number> = {};
-  for (const sb of (spendBonusesData ?? [])) {
-    let bonusRate = 0;
+  // Build bonus info structures for each wallet instance
+  // Bonus info includes the value, spend cap, and type for proper capped calculations
+  interface BonusInfo {
+    name: string;             // Display name for the bonus
+    bonusValue: number;       // Max dollar value of this bonus
+    spendCap: number;         // Spend threshold to earn full bonus
+    type: "threshold" | "elite_earning";
+    sourceType: "welcome" | "spend_threshold" | "elite_earning";
+    unitCap?: number;         // Max units for elite earning (if capped)
+    unitValue?: number;       // Value per unit for elite earning
+    perSpend?: number;        // Spend per unit for elite earning
+  }
+  
+  const walletSpendBonuses: Record<string, BonusInfo[]> = {};
+  const walletSpendBonusRates: Record<string, number> = {}; // For backwards compatibility in rate display
+  
+  for (const sb of (userSpendBonusesData ?? [])) {
+    if (!sb.is_active) continue;
     
     if (sb.bonus_type === "threshold" && sb.spend_threshold_cents) {
-      // Threshold: reward_value / spend_threshold
       let rewardValue = 0;
       
       if (sb.reward_type === "points" && sb.points_amount && sb.currency_id) {
@@ -326,38 +327,54 @@ export default async function ComparePage() {
       } else if (sb.reward_type === "cash" && sb.cash_amount_cents) {
         rewardValue = sb.cash_amount_cents / 100;
       } else if (sb.reward_type === "benefit") {
-        const valueCents = spendBonusValues.get(sb.id) ?? sb.default_value_cents ?? 0;
+        const valueCents = sb.value_cents ?? 0;
         rewardValue = valueCents / 100;
       }
       
-      bonusRate = rewardValue / (sb.spend_threshold_cents / 100);
+      if (rewardValue > 0 && sb.spend_threshold_cents > 0) {
+        if (!walletSpendBonuses[sb.wallet_card_id]) walletSpendBonuses[sb.wallet_card_id] = [];
+        walletSpendBonuses[sb.wallet_card_id].push({
+          name: sb.name || "Spend Bonus",
+          bonusValue: rewardValue,
+          spendCap: sb.spend_threshold_cents / 100,
+          type: "threshold",
+          sourceType: "spend_threshold",
+        });
+        // Rate for display
+        const bonusRate = rewardValue / (sb.spend_threshold_cents / 100);
+        walletSpendBonusRates[sb.wallet_card_id] = (walletSpendBonusRates[sb.wallet_card_id] ?? 0) + bonusRate;
+      }
     } else if (sb.bonus_type === "elite_earning" && sb.per_spend_cents) {
-      // Elite earning: unit_value / per_spend
-      const unitValueCents = spendBonusValues.get(sb.id) ?? sb.default_unit_value_cents ?? 0;
-      bonusRate = (unitValueCents / 100) / (sb.per_spend_cents / 100);
-    }
-    
-    if (bonusRate > 0) {
-      cardSpendBonusRates[sb.card_id] = (cardSpendBonusRates[sb.card_id] ?? 0) + bonusRate;
+      const unitValueCents = sb.unit_value_cents ?? 0;
+      const perSpendDollars = sb.per_spend_cents / 100;
+      const unitValueDollars = unitValueCents / 100;
+      
+      if (unitValueDollars > 0 && perSpendDollars > 0) {
+        if (!walletSpendBonuses[sb.wallet_card_id]) walletSpendBonuses[sb.wallet_card_id] = [];
+        walletSpendBonuses[sb.wallet_card_id].push({
+          name: sb.name || (sb.elite_unit_name ? `${sb.elite_unit_name} Earning` : "Elite Earning"),
+          bonusValue: 0, // Calculated dynamically
+          spendCap: Infinity,
+          type: "elite_earning",
+          sourceType: "elite_earning",
+          unitCap: sb.cap_amount ?? undefined,
+          unitValue: unitValueDollars,
+          perSpend: perSpendDollars,
+        });
+        // Rate for display
+        const bonusRate = unitValueCents / sb.per_spend_cents;
+        walletSpendBonusRates[sb.wallet_card_id] = (walletSpendBonusRates[sb.wallet_card_id] ?? 0) + bonusRate;
+      }
     }
   }
 
-  // Calculate welcome bonus rates per card (for active bonuses)
-  const welcomeBonusSettings = new Map<string, { is_active: boolean; spend_requirement_override: number | null; time_period_override: number | null }>();
-  (userWelcomeBonusSettings ?? []).forEach((s) => {
-    welcomeBonusSettings.set(s.card_id, {
-      is_active: s.is_active,
-      spend_requirement_override: s.spend_requirement_override,
-      time_period_override: s.time_period_override,
-    });
-  });
-
-  const cardWelcomeBonusRates: Record<string, number> = {};
-  for (const wb of (welcomeBonusesData ?? [])) {
-    const settings = welcomeBonusSettings.get(wb.card_id);
-    if (!settings?.is_active) continue;
+  // Build welcome bonus info for each wallet instance
+  const walletWelcomeBonuses: Record<string, BonusInfo[]> = {};
+  const walletWelcomeBonusRates: Record<string, number> = {}; // For backwards compatibility
+  
+  for (const wb of (userWelcomeBonusesData ?? [])) {
+    if (!wb.is_active) continue;
     
-    // Calculate bonus value
     let bonusValue = 0;
     if (wb.component_type === "points" && wb.points_amount && wb.currency_id) {
       const currencyValue = userValuesByCurrency.get(wb.currency_id) 
@@ -366,16 +383,24 @@ export default async function ComparePage() {
       bonusValue = (wb.points_amount * currencyValue) / 100;
     } else if (wb.component_type === "cash" && wb.cash_amount_cents) {
       bonusValue = wb.cash_amount_cents / 100;
-    } else if (wb.component_type === "benefit" && wb.default_benefit_value_cents) {
-      bonusValue = wb.default_benefit_value_cents / 100;
+    } else if (wb.component_type === "benefit") {
+      bonusValue = (wb.value_cents ?? 0) / 100;
     }
     
-    // Calculate spend requirement
-    const spendRequirement = (settings.spend_requirement_override ?? wb.spend_requirement_cents) / 100;
+    const spendRequirement = wb.spend_requirement_cents / 100;
     
-    if (spendRequirement > 0) {
+    if (spendRequirement > 0 && bonusValue > 0) {
+      if (!walletWelcomeBonuses[wb.wallet_card_id]) walletWelcomeBonuses[wb.wallet_card_id] = [];
+      walletWelcomeBonuses[wb.wallet_card_id].push({
+        name: "Welcome Bonus",
+        bonusValue,
+        spendCap: spendRequirement,
+        type: "threshold",
+        sourceType: "welcome",
+      });
+      // Rate for display
       const bonusRate = bonusValue / spendRequirement;
-      cardWelcomeBonusRates[wb.card_id] = (cardWelcomeBonusRates[wb.card_id] ?? 0) + bonusRate;
+      walletWelcomeBonusRates[wb.wallet_card_id] = (walletWelcomeBonusRates[wb.wallet_card_id] ?? 0) + bonusRate;
     }
   }
 
@@ -383,6 +408,7 @@ export default async function ComparePage() {
   const bonusDisplaySettings = {
     includeWelcomeBonuses: bonusDisplaySettingsData?.include_welcome_bonuses ?? false,
     includeSpendBonuses: bonusDisplaySettingsData?.include_spend_bonuses ?? false,
+    includeDebitPay: bonusDisplaySettingsData?.include_debit_pay ?? true, // Default to true for debit pay
     showAvailableCredit: bonusDisplaySettingsData?.show_available_credit ?? false,
   };
 
@@ -732,6 +758,9 @@ export default async function ComparePage() {
     multiplier: number;
     spendBonusRate: number;
     welcomeBonusRate: number;
+    // Bonus info for proper capped calculations
+    spendBonuses: BonusInfo[];
+    welcomeBonuses: BonusInfo[];
   }[] = [];
   
   for (const card of (allCards ?? []) as unknown as CardData[]) {
@@ -762,29 +791,41 @@ export default async function ComparePage() {
       pointValue,
       earningRates,
       multiplier: cardMultipliers[card.id] ?? 1,
-      spendBonusRate: cardSpendBonusRates[card.id] ?? 0,
-      welcomeBonusRate: cardWelcomeBonusRates[card.id] ?? 0,
+      // Bonus rates are set per-instance below
+      spendBonusRate: 0,
+      welcomeBonusRate: 0,
+      // Bonus info for proper capped calculations
+      spendBonuses: [] as BonusInfo[],
+      welcomeBonuses: [] as BonusInfo[],
     };
 
     const walletEntries = walletEntriesByCardId.get(card.id);
     
     if (walletEntries && walletEntries.length > 0) {
-      // Card is owned - create one row per wallet instance
+      // Card is owned - create one row per wallet instance with instance-specific bonus info
       for (const entry of walletEntries) {
         cardsForTable.push({
           ...baseCardData,
           id: entry.walletId, // Use wallet_id as the unique identifier
           name: entry.customName ?? card.name, // Use custom name if set
           isOwned: true,
+          spendBonusRate: walletSpendBonusRates[entry.walletId] ?? 0,
+          welcomeBonusRate: walletWelcomeBonusRates[entry.walletId] ?? 0,
+          spendBonuses: walletSpendBonuses[entry.walletId] ?? [],
+          welcomeBonuses: walletWelcomeBonuses[entry.walletId] ?? [],
         });
       }
     } else {
-      // Card is not owned - show once with card_id
+      // Card is not owned - show once with card_id (no user-defined bonuses)
       cardsForTable.push({
         ...baseCardData,
         id: card.id,
         name: card.name,
         isOwned: false,
+        spendBonusRate: 0,
+        welcomeBonusRate: 0,
+        spendBonuses: [],
+        welcomeBonuses: [],
       });
     }
   }

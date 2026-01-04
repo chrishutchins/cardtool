@@ -7,6 +7,7 @@ interface WalletCard {
   card_id: string;
   custom_name: string | null;
   added_at: string | null;
+  approval_date: string | null;
   cards: {
     id: string;
     name: string;
@@ -28,9 +29,10 @@ interface WalletCardListProps {
   debitPayMap?: Map<string, number>;
   debitPayEnabled?: boolean;
   onRemove: (walletId: string) => Promise<void>;
-  onUpdatePerks: (cardId: string, perksValue: number) => Promise<void>;
-  onUpdateDebitPay?: (cardId: string, percent: number) => Promise<void>;
+  onUpdatePerks: (walletCardId: string, perksValue: number) => Promise<void>;
+  onUpdateDebitPay?: (walletCardId: string, percent: number) => Promise<void>;
   onUpdateCustomName?: (walletId: string, customName: string | null) => Promise<void>;
+  onUpdateApprovalDate?: (walletId: string, date: string | null) => Promise<void>;
 }
 
 type SortField = "name" | "issuer" | "currency" | "annual_fee" | "perks" | "net_fee" | "debit_pay";
@@ -90,6 +92,7 @@ export function WalletCardList({
   onUpdatePerks,
   onUpdateDebitPay,
   onUpdateCustomName,
+  onUpdateApprovalDate,
 }: WalletCardListProps) {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [editingPerksId, setEditingPerksId] = useState<string | null>(null);
@@ -98,6 +101,8 @@ export function WalletCardList({
   const [editDebitPayValue, setEditDebitPayValue] = useState<string>("");
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState<string>("");
+  const [editingApprovalDateId, setEditingApprovalDateId] = useState<string | null>(null);
+  const [editApprovalDateValue, setEditApprovalDateValue] = useState<string>("");
   // Optimistic custom names - immediately show updated names while server action runs
   const [optimisticNames, setOptimisticNames] = useState<Map<string, string | null>>(new Map());
   const [isPending, startTransition] = useTransition();
@@ -164,8 +169,9 @@ export function WalletCardList({
     result.sort((a, b) => {
       if (!a.cards || !b.cards) return 0;
       
-      const aPerks = perksMap.get(a.cards.id) ?? 0;
-      const bPerks = perksMap.get(b.cards.id) ?? 0;
+      // perksMap is now keyed by wallet entry ID (a.id), not card type ID (a.cards.id)
+      const aPerks = perksMap.get(a.id) ?? 0;
+      const bPerks = perksMap.get(b.id) ?? 0;
       const aNet = a.cards.annual_fee - aPerks;
       const bNet = b.cards.annual_fee - bPerks;
       const aActiveCurrency = enabledSecondaryCards.has(a.cards.id) && a.cards.secondary_currency
@@ -175,8 +181,9 @@ export function WalletCardList({
         ? b.cards.secondary_currency
         : b.cards.primary_currency;
       
-      const aDebitPay = debitPayMap.get(a.cards.id) ?? 0;
-      const bDebitPay = debitPayMap.get(b.cards.id) ?? 0;
+      // debitPayMap is now keyed by wallet entry ID (a.id), not card type ID (a.cards.id)
+      const aDebitPay = debitPayMap.get(a.id) ?? 0;
+      const bDebitPay = debitPayMap.get(b.id) ?? 0;
       
       // Use optimistic name, then custom_name, then card name
       const aOptimistic = optimisticNames.get(a.id);
@@ -243,15 +250,15 @@ export function WalletCardList({
     return `$${fee}`;
   };
 
-  const handleEditPerks = (cardId: string, currentValue: number) => {
-    setEditingPerksId(cardId);
+  const handleEditPerks = (walletCardId: string, currentValue: number) => {
+    setEditingPerksId(walletCardId);
     setEditPerksValue(currentValue.toString());
   };
 
-  const handleSavePerks = (cardId: string) => {
+  const handleSavePerks = (walletCardId: string) => {
     const value = parseInt(editPerksValue) || 0;
     startTransition(async () => {
-      await onUpdatePerks(cardId, value);
+      await onUpdatePerks(walletCardId, value);
       setEditingPerksId(null);
     });
   };
@@ -261,16 +268,16 @@ export function WalletCardList({
     setEditPerksValue("");
   };
 
-  const handleEditDebitPay = (cardId: string, currentValue: number) => {
-    setEditingDebitPayId(cardId);
+  const handleEditDebitPay = (walletCardId: string, currentValue: number) => {
+    setEditingDebitPayId(walletCardId);
     setEditDebitPayValue(currentValue.toString());
   };
 
-  const handleSaveDebitPay = (cardId: string) => {
+  const handleSaveDebitPay = (walletCardId: string) => {
     const value = parseFloat(editDebitPayValue) || 0;
     if (onUpdateDebitPay) {
       startTransition(async () => {
-        await onUpdateDebitPay(cardId, value);
+        await onUpdateDebitPay(walletCardId, value);
         setEditingDebitPayId(null);
       });
     }
@@ -314,6 +321,26 @@ export function WalletCardList({
   const handleCancelName = () => {
     setEditingNameId(null);
     setEditNameValue("");
+  };
+
+  const handleEditApprovalDate = (walletId: string, currentDate: string | null) => {
+    setEditingApprovalDateId(walletId);
+    setEditApprovalDateValue(currentDate ?? "");
+  };
+
+  const handleSaveApprovalDate = (walletId: string) => {
+    if (onUpdateApprovalDate) {
+      const dateValue = editApprovalDateValue || null;
+      startTransition(async () => {
+        await onUpdateApprovalDate(walletId, dateValue);
+        setEditingApprovalDateId(null);
+      });
+    }
+  };
+
+  const handleCancelApprovalDate = () => {
+    setEditingApprovalDateId(null);
+    setEditApprovalDateValue("");
   };
 
   return (
@@ -413,6 +440,9 @@ export function WalletCardList({
                   <span className="inline-flex items-center justify-end">Debit +%<SortIcon field="debit_pay" /></span>
                 </th>
               )}
+              <th className="px-4 py-3 text-center text-xs font-medium text-zinc-400 uppercase whitespace-nowrap hidden xl:table-cell">
+                Opened
+              </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase w-20">
               </th>
             </tr>
@@ -426,7 +456,8 @@ export function WalletCardList({
                 ? card.secondary_currency
                 : card.primary_currency;
               
-              const perksValue = perksMap.get(card.id) ?? 0;
+              // perksMap is now keyed by wallet entry ID (wc.id), not card type ID (card.id)
+              const perksValue = perksMap.get(wc.id) ?? 0;
               const netFee = card.annual_fee - perksValue;
               const currencyConfig = currencyTypeConfig[activeCurrency?.currency_type ?? "other"] ?? currencyTypeConfig.other;
 
@@ -512,7 +543,7 @@ export function WalletCardList({
 
                   {/* Perks Value (editable) */}
                   <td className="px-4 py-3 text-right hidden lg:table-cell">
-                    {editingPerksId === card.id ? (
+                    {editingPerksId === wc.id ? (
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-zinc-500">$</span>
                         <input
@@ -522,12 +553,12 @@ export function WalletCardList({
                           className="w-16 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-blue-500 focus:outline-none"
                           autoFocus
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSavePerks(card.id);
+                            if (e.key === "Enter") handleSavePerks(wc.id);
                             if (e.key === "Escape") handleCancelPerks();
                           }}
                         />
                         <button
-                          onClick={() => handleSavePerks(card.id)}
+                          onClick={() => handleSavePerks(wc.id)}
                           disabled={isPending}
                           className="px-1.5 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
                         >
@@ -543,7 +574,7 @@ export function WalletCardList({
                       </div>
                     ) : (
                       <button
-                        onClick={() => handleEditPerks(card.id, perksValue)}
+                        onClick={() => handleEditPerks(wc.id, perksValue)}
                         className="text-zinc-400 hover:text-white transition-colors group"
                         title="Click to edit perks value"
                       >
@@ -567,7 +598,7 @@ export function WalletCardList({
                   {/* Debit Pay (only if enabled) */}
                   {debitPayEnabled && (
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
-                      {editingDebitPayId === card.id ? (
+                      {editingDebitPayId === wc.id ? (
                         <div className="flex items-center justify-end gap-1">
                           <input
                             type="number"
@@ -577,13 +608,13 @@ export function WalletCardList({
                             className="w-16 rounded border border-pink-600/50 bg-zinc-700 px-2 py-1 text-right text-white text-sm focus:border-pink-500 focus:outline-none"
                             autoFocus
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") handleSaveDebitPay(card.id);
+                              if (e.key === "Enter") handleSaveDebitPay(wc.id);
                               if (e.key === "Escape") handleCancelDebitPay();
                             }}
                           />
                           <span className="text-pink-400/70">%</span>
                           <button
-                            onClick={() => handleSaveDebitPay(card.id)}
+                            onClick={() => handleSaveDebitPay(wc.id)}
                             disabled={isPending}
                             className="px-1.5 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
                           >
@@ -599,12 +630,12 @@ export function WalletCardList({
                         </div>
                       ) : (
                         <button
-                          onClick={() => handleEditDebitPay(card.id, debitPayMap.get(card.id) ?? 0)}
+                          onClick={() => handleEditDebitPay(wc.id, debitPayMap.get(wc.id) ?? 0)}
                           className="text-zinc-400 hover:text-pink-400 transition-colors group"
                           title="Click to edit debit pay bonus"
                         >
-                          {(debitPayMap.get(card.id) ?? 0) > 0 ? (
-                            <span className="text-pink-400">+{debitPayMap.get(card.id)}%</span>
+                          {(debitPayMap.get(wc.id) ?? 0) > 0 ? (
+                            <span className="text-pink-400">+{debitPayMap.get(wc.id)}%</span>
                           ) : (
                             <span className="text-zinc-600 group-hover:text-zinc-400">0%</span>
                           )}
@@ -613,6 +644,54 @@ export function WalletCardList({
                       )}
                     </td>
                   )}
+
+                  {/* Approval Date */}
+                  <td className="px-4 py-3 text-center hidden xl:table-cell">
+                    {editingApprovalDateId === wc.id ? (
+                      <div className="flex items-center justify-center gap-1">
+                        <input
+                          type="date"
+                          value={editApprovalDateValue}
+                          onChange={(e) => setEditApprovalDateValue(e.target.value)}
+                          className="w-32 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-white text-sm focus:border-blue-500 focus:outline-none"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveApprovalDate(wc.id);
+                            if (e.key === "Escape") handleCancelApprovalDate();
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSaveApprovalDate(wc.id)}
+                          disabled={isPending}
+                          className="px-1.5 py-1 text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={handleCancelApprovalDate}
+                          disabled={isPending}
+                          className="px-1.5 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleEditApprovalDate(wc.id, wc.approval_date)}
+                        className="text-zinc-400 hover:text-white transition-colors group"
+                        title="Click to set approval date"
+                      >
+                        {wc.approval_date ? (
+                          <span className="text-zinc-300">
+                            {new Date(wc.approval_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-600 group-hover:text-zinc-400">Set date</span>
+                        )}
+                        <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
+                      </button>
+                    )}
+                  </td>
 
                   {/* Actions */}
                   <td className="px-4 py-3 text-right">
