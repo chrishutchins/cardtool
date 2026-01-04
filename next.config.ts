@@ -1,8 +1,20 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
+// Clerk frontend API domain - derived from publishable key or set explicitly
+// For custom domains, Clerk uses clerk.<your-domain> pattern
+const clerkFrontendApi = process.env.NEXT_PUBLIC_CLERK_FRONTEND_API || "";
+
 const nextConfig: NextConfig = {
   async headers() {
+    // Build CSP Clerk domains dynamically
+    const clerkDomains = [
+      "https://*.clerk.accounts.dev", // Development
+      clerkFrontendApi ? `https://${clerkFrontendApi}` : "", // Production custom domain
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     return [
       {
         source: "/:path*",
@@ -29,16 +41,16 @@ const nextConfig: NextConfig = {
               "camera=(), microphone=(), geolocation=(), interest-cohort=()",
           },
 
-          // Content Security Policy (starter - refine as needed)
+          // Content Security Policy
           {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://clerk.cardtool.chrishutchins.com",
+              `script-src 'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com ${clerkDomains}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://api.clerk.com https://*.clerk.accounts.dev https://clerk.cardtool.chrishutchins.com https://*.supabase.co https://*.sentry.io https://*.ingest.sentry.io",
+              `connect-src 'self' https://api.clerk.com ${clerkDomains} https://*.supabase.co https://*.sentry.io https://*.ingest.sentry.io`,
               "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev",
               "frame-ancestors 'none'",
               "worker-src 'self' blob:",

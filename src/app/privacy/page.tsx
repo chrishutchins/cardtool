@@ -61,7 +61,7 @@ export default function PrivacyPage() {
                   User-entered annual spending estimates by category (e.g., &quot;I spend
                   $500/month on groceries&quot;)
                 </li>
-                <li>This data is self-reported and not linked to actual transactions</li>
+                <li>This data is optional, self-reported and not linked to actual transactions</li>
               </ul>
 
               <h3 className="text-xl font-medium text-zinc-200 mb-3">
@@ -98,12 +98,43 @@ export default function PrivacyPage() {
               </ul>
             </section>
 
+            <section className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-6">
+              <h2 className="text-2xl font-semibold text-emerald-300 mb-4">
+                4. We Do Not Sell Your Data
+              </h2>
+              <p className="text-zinc-300 leading-relaxed mb-4 font-medium">
+                CardTool does not sell, rent, trade, or otherwise provide your personal
+                information to any third parties for their marketing or commercial purposes.
+              </p>
+              <ul className="list-disc list-inside text-zinc-300 space-y-2">
+                <li>
+                  <strong>No data brokers:</strong> We never share your information with
+                  data brokers or advertisers
+                </li>
+                <li>
+                  <strong>No marketing lists:</strong> Your email and personal data are
+                  never shared for third-party marketing
+                </li>
+                <li>
+                  <strong>No profiling for others:</strong> We do not create profiles
+                  about you to sell to other companies
+                </li>
+                <li>
+                  <strong>Service providers only:</strong> The only third parties that
+                  receive your data are the service providers listed below, solely to
+                  operate CardTool
+                </li>
+              </ul>
+            </section>
+
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                4. Third-Party Services
+                5. Third-Party Service Providers
               </h2>
               <p className="text-zinc-300 leading-relaxed mb-4">
-                We use the following third-party services to provide CardTool:
+                We use the following third-party services solely to operate CardTool.
+                These providers only receive the minimum data necessary to perform their
+                function:
               </p>
               <ul className="list-disc list-inside text-zinc-300 space-y-2">
                 <li>
@@ -129,7 +160,7 @@ export default function PrivacyPage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                5. Data Retention
+                6. Data Retention
               </h2>
               <ul className="list-disc list-inside text-zinc-300 space-y-2">
                 <li>
@@ -149,7 +180,7 @@ export default function PrivacyPage() {
 
             <section className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6">
               <h2 className="text-2xl font-semibold text-blue-300 mb-4">
-                6. Optional Bank Account Linking (Plaid)
+                7. Optional Bank Account Linking (Plaid)
               </h2>
               <p className="text-zinc-300 leading-relaxed mb-4 font-medium">
                 This section applies ONLY if you choose to enable our optional bank account
@@ -236,7 +267,7 @@ export default function PrivacyPage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                7. Data Security
+                8. Data Security
               </h2>
               <ul className="list-disc list-inside text-zinc-300 space-y-2">
                 <li>All data is encrypted in transit using HTTPS/TLS</li>
@@ -249,7 +280,7 @@ export default function PrivacyPage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                8. Your Rights
+                9. Your Rights
               </h2>
               <p className="text-zinc-300 leading-relaxed mb-4">
                 You have the right to:
@@ -276,7 +307,7 @@ export default function PrivacyPage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                9. Children&apos;s Privacy
+                10. Children&apos;s Privacy
               </h2>
               <p className="text-zinc-300 leading-relaxed">
                 CardTool is not intended for users under 18 years of age. We do not
@@ -287,7 +318,7 @@ export default function PrivacyPage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                10. Changes to This Policy
+                11. Changes to This Policy
               </h2>
               <p className="text-zinc-300 leading-relaxed">
                 We may update this Privacy Policy from time to time. We will notify you
@@ -299,7 +330,7 @@ export default function PrivacyPage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                11. Contact Us
+                12. Contact Us
               </h2>
               <p className="text-zinc-300 leading-relaxed">
                 If you have any questions about this Privacy Policy, please contact us

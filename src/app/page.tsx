@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { isCurrentUserAdmin } from "@/lib/admin";
 import { Footer } from "@/components/footer";
-import { CheckCircle, Lock, CreditCard, TrendingUp, Calculator } from "lucide-react";
+import { CheckCircle, Lock, Target, Wallet, BarChart3 } from "lucide-react";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -102,13 +102,13 @@ export default async function Home() {
         <div className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-5xl font-bold tracking-tight text-white sm:text-7xl">
-              See exactly which card
+              See exactly which cards
               <span className="block bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                earns you the most
+                earn you the most
               </span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400">
-              Track 100+ credit cards. Optimize spending across 30+ categories.
+              Track all your cards and credits. Optimize spending across 30+ categories.
               Never leave rewards on the table.
             </p>
 
@@ -166,111 +166,41 @@ export default async function Home() {
           <div className="mt-24 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
               <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
-                <CreditCard className="h-6 w-6" />
+                <Target className="h-6 w-6" />
               </div>
               <h3 className="text-lg font-semibold text-white">
-                Track Your Cards
+                Optimize Your Spending
               </h3>
               <p className="mt-2 text-zinc-400">
-                Add all your credit cards to your wallet and see their earning
-                rates at a glance.
+                See which card earns the most for all your spending, factoring in
+                caps, other cards, how you redeem points, and more.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                <Wallet className="h-6 w-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">
+                Know Your True Value
+              </h3>
+              <p className="mt-2 text-zinc-400">
+                Track credits, perks, and rewards to see if your cards are
+                actually worth their annual fees.
               </p>
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
               <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-purple-500/10 text-purple-400">
-                <TrendingUp className="h-6 w-6" />
+                <BarChart3 className="h-6 w-6" />
               </div>
               <h3 className="text-lg font-semibold text-white">
-                Currency Upgrades
+                Make Smarter Decisions
               </h3>
               <p className="mt-2 text-zinc-400">
-                Automatically detect when holding one card upgrades
-                another&apos;s rewards currency.
+                Compare potential new cards against your wallet and see exactly
+                how much more you&apos;d earn.
               </p>
-            </div>
-
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
-                <Calculator className="h-6 w-6" />
-              </div>
-              <h3 className="text-lg font-semibold text-white">
-                Spending Caps
-              </h3>
-              <p className="mt-2 text-zinc-400">
-                Track bonus category caps and know when rates change mid-year.
-              </p>
-            </div>
-          </div>
-
-          {/* How It Works */}
-          <div className="mt-32">
-            <h2 className="text-3xl font-bold text-white text-center mb-12">
-              How It Works
-            </h2>
-            <div className="grid gap-8 md:grid-cols-3">
-              <div className="text-center">
-                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-lg">
-                  1
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  Add Your Cards
-                </h3>
-                <p className="text-zinc-400">
-                  Add the credit cards you carry to your virtual wallet.
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-lg">
-                  2
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  Enter Your Spending
-                </h3>
-                <p className="text-zinc-400">
-                  Tell us how much you spend in each category annually.
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-lg">
-                  3
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  See Your Earnings
-                </h3>
-                <p className="text-zinc-400">
-                  View which card to use for maximum rewards on every purchase.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* CTA Section */}
-          <div className="mt-32 text-center">
-            <div className="rounded-2xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-12">
-              <h2 className="text-3xl font-bold text-white mb-4">
-                Ready to maximize your rewards?
-              </h2>
-              <p className="text-zinc-400 mb-8 max-w-lg mx-auto">
-                Join the beta and start seeing exactly how much you could be
-                earning with your credit cards.
-              </p>
-              <SignedOut>
-                <Link
-                  href="/sign-up"
-                  className="inline-block rounded-lg bg-blue-600 px-8 py-4 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-                >
-                  Get Started for Free
-                </Link>
-              </SignedOut>
-              <SignedIn>
-                <Link
-                  href="/wallet"
-                  className="inline-block rounded-lg bg-blue-600 px-8 py-4 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-                >
-                  Go to My Wallet
-                </Link>
-              </SignedIn>
             </div>
           </div>
         </div>
