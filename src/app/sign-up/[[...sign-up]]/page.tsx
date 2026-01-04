@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
 import { Loader2, CheckCircle, ArrowRight } from "lucide-react";
 
-type VerificationStep = "email" | "invite" | "signup";
+type VerificationStep = "email" | "invite" | "signup" | "existing";
 
 export default function SignUpPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [step, setStep] = useState<VerificationStep>("email");
@@ -33,7 +35,10 @@ export default function SignUpPage() {
 
       const data = await response.json();
 
-      if (data.whitelisted) {
+      if (data.existingUser) {
+        // User already has an account - show message and redirect option
+        setStep("existing");
+      } else if (data.whitelisted) {
         // Email is whitelisted via Stripe subscription
         setStep("signup");
       } else {
@@ -207,6 +212,43 @@ export default function SignUpPage() {
             <p className="text-center text-xs text-zinc-600 mt-6">
               Don&apos;t have an invite code? Contact the administrator.
             </p>
+          </div>
+        )}
+
+        {step === "existing" && (
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8">
+            <div className="text-center mb-6">
+              <Link href="/" className="text-2xl font-bold text-white inline-block">
+                <span className="text-blue-400">Card</span>
+                <span>Tool</span>
+              </Link>
+            </div>
+
+            <div className="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <p className="text-sm text-blue-300 text-center">
+                An account already exists for <strong>{email}</strong>.
+                <br />
+                Please sign in instead.
+              </p>
+            </div>
+
+            <button
+              onClick={() => router.push("/sign-in")}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+            >
+              Go to Sign In
+              <ArrowRight className="h-4 w-4" />
+            </button>
+
+            <button
+              onClick={() => {
+                setStep("email");
+                setError("");
+              }}
+              className="w-full mt-4 text-sm text-zinc-500 hover:text-zinc-300"
+            >
+              ← Use a different email
+            </button>
           </div>
         )}
 
