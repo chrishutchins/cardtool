@@ -43,10 +43,22 @@ export default async function Home() {
                   Compare
                 </Link>
                 <Link
+                  href="/credits"
+                  className="text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  Credits
+                </Link>
+                <Link
                   href="/spending"
                   className="text-sm text-zinc-400 hover:text-white transition-colors"
                 >
-                  My Spending
+                  Spending
+                </Link>
+                <Link
+                  href="/point-values"
+                  className="text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  Point Values
                 </Link>
                 <Link
                   href="/settings"
