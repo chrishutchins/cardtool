@@ -1,7 +1,51 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { Credit, CreditUsage, CreditSettings, WalletCard } from "./credits-client";
+
+// Tooltip component - appears on hover (desktop) or tap (mobile)
+function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const justOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      if (justOpenedRef.current) {
+        justOpenedRef.current = false;
+        return;
+      }
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [isOpen]);
+
+  const handleClick = () => {
+    if (!isOpen) {
+      justOpenedRef.current = true;
+    }
+    setIsOpen(!isOpen);
+  };
+
+  return (
+    <span 
+      ref={ref}
+      className="relative group/tooltip inline-flex"
+      onClick={handleClick}
+    >
+      {children}
+      <span className={`pointer-events-none absolute bottom-full left-0 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-50 transition-opacity duration-75 whitespace-normal ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
+        {text}
+      </span>
+    </span>
+  );
+}
 
 interface CreditCardProps {
   credit: Credit;
@@ -441,6 +485,15 @@ export function CreditCard({
               <span className={`font-medium truncate ${isFullyUsed ? "text-zinc-400 line-through" : "text-white"}`}>
                 {credit.name}
               </span>
+              {credit.notes && (
+                <Tooltip text={credit.notes}>
+                  <span className="cursor-help text-amber-500 hover:text-amber-400 transition-colors">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </span>
+                </Tooltip>
+              )}
               <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 whitespace-nowrap">
                 {formatIntervalLabel()}
               </span>
