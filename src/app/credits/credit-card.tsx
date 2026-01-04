@@ -502,7 +502,7 @@ export function CreditCard({
               <div className="text-xs text-zinc-500 mt-0.5 truncate">{walletCard.display_name}</div>
             )}
             {settings?.notes && settings.notes !== "NEVER_USED" && (
-              <div className="text-xs text-zinc-500 mt-0.5 italic truncate">{settings.notes}</div>
+              <div className="text-xs text-sky-400/70 mt-0.5 italic truncate">{settings.notes}</div>
             )}
           </div>
         </div>
