@@ -34,11 +34,11 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://clerk.cardtool.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://clerk.cardtool.chrishutchins.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://api.clerk.com https://*.clerk.accounts.dev https://*.supabase.co https://*.sentry.io https://*.ingest.sentry.io",
+              "connect-src 'self' https://api.clerk.com https://*.clerk.accounts.dev https://clerk.cardtool.chrishutchins.com https://*.supabase.co https://*.sentry.io https://*.ingest.sentry.io",
               "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev",
               "frame-ancestors 'none'",
               "worker-src 'self' blob:",
