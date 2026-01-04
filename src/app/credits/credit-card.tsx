@@ -40,7 +40,7 @@ function Tooltip({ children, text }: { children: React.ReactNode; text: string }
       onClick={handleClick}
     >
       {children}
-      <span className={`pointer-events-none absolute bottom-full left-0 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-50 transition-opacity duration-75 whitespace-normal ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
+      <span className={`pointer-events-none absolute bottom-full left-0 mb-1 px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg min-w-48 max-w-sm z-50 transition-opacity duration-75 whitespace-normal ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
         {text}
       </span>
     </span>
