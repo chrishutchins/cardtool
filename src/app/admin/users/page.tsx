@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { clerkClient } from "@clerk/nextjs/server";
-import { UserRow } from "./user-row";
+import { UsersTable } from "./users-table";
+import { startEmulation } from "@/lib/emulation";
 
 interface UserStats {
   userId: string;
@@ -152,6 +153,11 @@ export default async function UsersPage() {
     revalidatePath("/admin/users");
   }
 
+  async function emulateUser(userId: string, email: string | null) {
+    "use server";
+    await startEmulation(userId, email);
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -159,48 +165,12 @@ export default async function UsersPage() {
         <span className="text-zinc-400">{users.length} users</span>
       </div>
 
-      {/* Users Table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-800/50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                User
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Cards Added
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Spending Edits
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                First Activity
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Account Linking
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {users.map((user) => (
-              <UserRow 
-                key={user.userId} 
-                user={user} 
-                onDelete={deleteUser}
-                onToggleAccountLinking={toggleAccountLinking}
-              />
-            ))}
-          </tbody>
-        </table>
-        {users.length === 0 && (
-          <div className="px-6 py-12 text-center text-zinc-500">
-            No users yet.
-          </div>
-        )}
-      </div>
+      <UsersTable
+        users={users}
+        onDelete={deleteUser}
+        onToggleAccountLinking={toggleAccountLinking}
+        onEmulate={emulateUser}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { LinkedAccounts } from "@/app/wallet/linked-accounts";
 import { isAdminEmail } from "@/lib/admin";
 import { AccountManagement } from "./account-management";
 import { Metadata } from "next";
+import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 
 export const metadata: Metadata = {
   title: "Settings | CardTool",
@@ -23,6 +24,14 @@ export default async function SettingsPage() {
   const user = await currentUser();
   
   if (!user) {
+    redirect("/sign-in");
+  }
+
+  // Get effective user ID for data reads (may be emulated user if admin is emulating)
+  const effectiveUserId = await getEffectiveUserId();
+  const emulationInfo = await getEmulationInfo();
+  
+  if (!effectiveUserId) {
     redirect("/sign-in");
   }
 
@@ -59,12 +68,12 @@ export default async function SettingsPage() {
           secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (name, code, currency_type)
         )
       `)
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase.from("issuers").select("id, name").order("name"),
     supabase
       .from("user_travel_booking_preferences")
       .select("category_slug, preference_type, brand_name, portal_issuer_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     // Get travel subcategories (Flights, Hotels, Rental Car - children of All Travel)
     supabase
       .from("earning_categories")
@@ -79,11 +88,11 @@ export default async function SettingsPage() {
     supabase
       .from("user_mobile_pay_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("user_paypal_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("user_feature_flags")
       .select("debit_pay_enabled, account_linking_enabled")
@@ -92,7 +101,7 @@ export default async function SettingsPage() {
     supabase
       .from("user_large_purchase_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("earning_categories")
       .select("id")
@@ -565,7 +574,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader isAdmin={isAdmin} />
+      <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Settings</h1>

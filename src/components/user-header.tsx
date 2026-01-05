@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { useState, useMemo } from "react";
+import { EmulationBanner } from "./emulation-banner";
+import { stopEmulation } from "@/lib/emulation";
 
 const baseNavItems = [
   { href: "/wallet", label: "My Wallet", onboardingId: "wallet" },
@@ -14,12 +16,20 @@ const baseNavItems = [
   { href: "/settings", label: "Settings", onboardingId: "settings" },
 ];
 
+interface EmulationInfo {
+  isEmulating: boolean;
+  emulatedUserId: string | null;
+  emulatedUserEmail: string | null;
+  realUserId: string;
+}
+
 interface UserHeaderProps {
   isAdmin?: boolean;
   creditTrackingEnabled?: boolean;
+  emulationInfo?: EmulationInfo | null;
 }
 
-export function UserHeader({ isAdmin = false, creditTrackingEnabled = true }: UserHeaderProps) {
+export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emulationInfo }: UserHeaderProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -41,7 +51,15 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true }: Us
   }, [creditTrackingEnabled, isAdmin]);
 
   return (
-    <nav className="border-b border-zinc-800 bg-zinc-900">
+    <>
+      {emulationInfo?.isEmulating && emulationInfo.emulatedUserId && (
+        <EmulationBanner
+          emulatedUserEmail={emulationInfo.emulatedUserEmail}
+          emulatedUserId={emulationInfo.emulatedUserId}
+          onStopEmulation={stopEmulation}
+        />
+      )}
+      <nav className="border-b border-zinc-800 bg-zinc-900">
       <div className="mx-auto max-w-7xl px-4">
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-6">
@@ -127,5 +145,6 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true }: Us
         </div>
       </div>
     </nav>
+    </>
   );
 }

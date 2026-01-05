@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { UserHeader } from "@/components/user-header";
 import { ComparisonTable } from "./comparison-table";
 import { isAdminEmail } from "@/lib/admin";
+import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 
 export const metadata: Metadata = {
   title: "Compare Cards | CardTool",
@@ -80,6 +81,14 @@ export default async function ComparePage() {
     redirect("/sign-in");
   }
 
+  // Get effective user ID for data reads (may be emulated user if admin is emulating)
+  const effectiveUserId = await getEffectiveUserId();
+  const emulationInfo = await getEmulationInfo();
+  
+  if (!effectiveUserId) {
+    redirect("/sign-in");
+  }
+
   const supabase = await createClient();
 
   // Get all active cards with their details
@@ -123,7 +132,7 @@ export default async function ComparePage() {
   const { data: userWallet } = await supabase
     .from("user_wallets")
     .select("id, card_id, custom_name")
-    .eq("user_id", user.id);
+    .eq("user_id", effectiveUserId);
 
   const userCardIds = new Set(userWallet?.map((w) => w.card_id) ?? []);
   
@@ -144,11 +153,11 @@ export default async function ComparePage() {
     supabase
       .from("user_currency_values")
       .select("currency_id, value_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("user_point_value_settings")
       .select("selected_template_id")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
     supabase
       .from("point_value_templates")
@@ -180,9 +189,9 @@ export default async function ComparePage() {
 
   // Get user's debit pay values and feature flags (debit pay is now keyed by wallet_card_id)
   const [{ data: featureFlags }, { data: debitPayValues }, { data: linkedAccountsData }] = await Promise.all([
-    supabase.from("user_feature_flags").select("debit_pay_enabled, account_linking_enabled").eq("user_id", user.id).single(),
-    supabase.from("user_card_debit_pay").select("wallet_card_id, debit_pay_percent").eq("user_id", user.id),
-    supabase.from("user_linked_accounts").select("wallet_card_id, available_balance, current_balance, credit_limit, manual_credit_limit").eq("user_id", user.id).not("wallet_card_id", "is", null),
+    supabase.from("user_feature_flags").select("debit_pay_enabled, account_linking_enabled").eq("user_id", effectiveUserId).single(),
+    supabase.from("user_card_debit_pay").select("wallet_card_id, debit_pay_percent").eq("user_id", effectiveUserId),
+    supabase.from("user_linked_accounts").select("wallet_card_id, available_balance, current_balance, credit_limit, manual_credit_limit").eq("user_id", effectiveUserId).not("wallet_card_id", "is", null),
   ]);
 
   const debitPayMap: Record<string, number> = {};
@@ -246,19 +255,19 @@ export default async function ComparePage() {
     supabase
       .from("user_multiplier_tiers")
       .select("program_id, tier_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("user_spend_bonuses")
       .select("id, wallet_card_id, is_active, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents, period, per_spend_cents, elite_unit_name, unit_value_cents, cap_amount, cap_period")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("user_welcome_bonuses")
       .select("id, wallet_card_id, is_active, component_type, spend_requirement_cents, time_period_months, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("user_bonus_display_settings")
       .select("include_welcome_bonuses, include_spend_bonuses, include_debit_pay, show_available_credit")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
   ]);
 
@@ -432,7 +441,7 @@ export default async function ComparePage() {
     supabase
       .from("user_category_spend")
       .select("category_id, annual_spend_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("spending_defaults")
       .select("category_id, annual_spend_cents"),
@@ -440,13 +449,13 @@ export default async function ComparePage() {
     supabase
       .from("user_category_spend")
       .select("category_id, large_purchase_spend_cents")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .not("large_purchase_spend_cents", "is", null),
     // Get user's mobile pay category selections
     supabase
       .from("user_mobile_pay_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     // Get mobile pay category ID
     supabase
       .from("earning_categories")
@@ -463,7 +472,7 @@ export default async function ComparePage() {
     supabase
       .from("user_paypal_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     // Get PayPal category ID
     supabase
       .from("earning_categories")
@@ -511,11 +520,11 @@ export default async function ComparePage() {
     supabase
       .from("user_compare_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("user_compare_evaluation_cards")
       .select("card_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
   ]);
 
   const savedCategoryIds = savedCategories?.map((c) => c.category_id) ?? [];
@@ -872,7 +881,7 @@ export default async function ComparePage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader isAdmin={isAdmin} />
+      <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-[1600px] px-4 py-8">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-white">Compare Cards</h1>

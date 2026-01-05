@@ -17,12 +17,15 @@ export function UserRow({
   user,
   onDelete,
   onToggleAccountLinking,
+  onEmulate,
 }: {
   user: UserStats;
   onDelete: (userId: string) => Promise<void>;
   onToggleAccountLinking: (userId: string, enabled: boolean) => Promise<void>;
+  onEmulate: (userId: string, email: string | null) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [isEmulating, startEmulateTransition] = useTransition();
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "—";
@@ -45,6 +48,12 @@ export function UserRow({
   const handleToggleAccountLinking = () => {
     startTransition(() => {
       onToggleAccountLinking(user.userId, !user.accountLinkingEnabled);
+    });
+  };
+
+  const handleEmulate = () => {
+    startEmulateTransition(() => {
+      onEmulate(user.userId, user.email);
     });
   };
 
@@ -92,13 +101,22 @@ export function UserRow({
         </button>
       </td>
       <td className="px-6 py-4 text-right">
-        <button
-          onClick={handleDelete}
-          disabled={isPending}
-          className="text-red-400 hover:text-red-300 text-sm disabled:opacity-50"
-        >
-          {isPending ? "Deleting..." : "Delete"}
-        </button>
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={handleEmulate}
+            disabled={isEmulating || isPending}
+            className="text-amber-400 hover:text-amber-300 text-sm disabled:opacity-50"
+          >
+            {isEmulating ? "Loading..." : "Emulate"}
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={isPending || isEmulating}
+            className="text-red-400 hover:text-red-300 text-sm disabled:opacity-50"
+          >
+            {isPending ? "Deleting..." : "Delete"}
+          </button>
+        </div>
       </td>
     </tr>
   );

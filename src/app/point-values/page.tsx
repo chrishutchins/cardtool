@@ -7,6 +7,7 @@ import { PointValuesEditor } from "@/components/point-values-editor";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 import { TemplateSelector } from "@/components/template-selector";
+import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 
 export const metadata: Metadata = {
   title: "Point Values | CardTool",
@@ -20,6 +21,14 @@ export default async function PointValuesPage() {
   const user = await currentUser();
 
   if (!user) {
+    redirect("/sign-in");
+  }
+
+  // Get effective user ID for data reads (may be emulated user if admin is emulating)
+  const effectiveUserId = await getEffectiveUserId();
+  const emulationInfo = await getEmulationInfo();
+  
+  if (!effectiveUserId) {
     redirect("/sign-in");
   }
 
@@ -43,12 +52,12 @@ export default async function PointValuesPage() {
     supabase
       .from("user_point_value_settings")
       .select("selected_template_id")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
     supabase
       .from("user_currency_values")
       .select("currency_id, value_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
   ]);
 
   const templates = templatesResult.data ?? [];
@@ -180,7 +189,7 @@ export default async function PointValuesPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader isAdmin={isAdmin} />
+      <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">My Point Values</h1>

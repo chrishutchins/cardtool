@@ -8,6 +8,7 @@ import { AddCardModal } from "./add-card-modal";
 import { UserHeader } from "@/components/user-header";
 import { ReturnsSummary } from "./returns-summary";
 import { isAdminEmail } from "@/lib/admin";
+import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import {
   calculatePortfolioReturns,
   calculateCardRecommendations,
@@ -33,6 +34,14 @@ export default async function WalletPage() {
   const user = await currentUser();
   
   if (!user) {
+    redirect("/sign-in");
+  }
+
+  // Get effective user ID for data reads (may be emulated user if admin is emulating)
+  const effectiveUserId = await getEffectiveUserId();
+  const emulationInfo = await getEmulationInfo();
+  
+  if (!effectiveUserId) {
     redirect("/sign-in");
   }
 
@@ -89,7 +98,7 @@ export default async function WalletPage() {
           secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
         )
       `)
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // All available cards for adding (includes default_perks_value for recommendations)
     supabase
@@ -116,7 +125,7 @@ export default async function WalletPage() {
     supabase
       .from("user_effective_spending")
       .select("category_id, category_name, category_slug, annual_spend_cents, large_purchase_spend_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // All earning rules
     supabase
@@ -146,25 +155,25 @@ export default async function WalletPage() {
     supabase
       .from("user_currency_values")
       .select("currency_id, value_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's perks values (now keyed by wallet_card_id, not card_id)
     supabase
       .from("user_card_perks_values")
       .select("wallet_card_id, perks_value")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's category selections
     supabase
       .from("user_card_selections")
       .select("cap_id, selected_category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's travel preferences
     supabase
       .from("user_travel_booking_preferences")
       .select("category_slug, preference_type, brand_name, portal_issuer_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // All categories for parent lookups
     supabase
@@ -182,7 +191,7 @@ export default async function WalletPage() {
     supabase
       .from("user_card_debit_pay")
       .select("wallet_card_id, debit_pay_percent")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
       
     // Multiplier programs for recommendations
     supabase
@@ -196,13 +205,13 @@ export default async function WalletPage() {
           earning_multiplier_cards (card_id)
         )
       `)
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // Mobile pay categories (for bonus calculation)
     supabase
       .from("user_mobile_pay_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // Mobile Pay category ID
     supabase
@@ -215,7 +224,7 @@ export default async function WalletPage() {
     supabase
       .from("user_paypal_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // PayPal category ID
     supabase
@@ -251,13 +260,13 @@ export default async function WalletPage() {
     supabase
       .from("user_welcome_bonuses")
       .select("id, wallet_card_id, is_active, component_type, spend_requirement_cents, time_period_months, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents, reward_currencies:currency_id(name)")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's spend bonuses (with currency name for display)
     supabase
       .from("user_spend_bonuses")
       .select("id, wallet_card_id, is_active, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents, period, per_spend_cents, elite_unit_name, unit_value_cents, cap_amount, cap_period, reward_currencies:currency_id(name)")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's bonus display settings
     supabase
@@ -1056,7 +1065,11 @@ export default async function WalletPage() {
       onCompleteOnboarding={completeOnboarding}
     >
       <div className="min-h-screen bg-zinc-950">
-        <UserHeader isAdmin={isAdmin} creditTrackingEnabled={creditTrackingEnabled} />
+        <UserHeader 
+          isAdmin={isAdmin} 
+          creditTrackingEnabled={creditTrackingEnabled}
+          emulationInfo={emulationInfo}
+        />
         <div className="mx-auto max-w-5xl px-4 py-12">
           <div className="flex items-center justify-between mb-8">
             <div>

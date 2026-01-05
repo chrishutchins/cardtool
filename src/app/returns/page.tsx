@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { UserHeader } from "@/components/user-header";
 import { ReturnsDisplay } from "./returns-display";
 import { isAdminEmail } from "@/lib/admin";
+import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import {
   calculatePortfolioReturns,
   calculateMarginalValues,
@@ -38,6 +39,14 @@ export default async function ReturnsPage({ searchParams }: Props) {
   const user = await currentUser();
   
   if (!user) {
+    redirect("/sign-in");
+  }
+
+  // Get effective user ID for data reads (may be emulated user if admin is emulating)
+  const effectiveUserId = await getEffectiveUserId();
+  const emulationInfo = await getEmulationInfo();
+  
+  if (!effectiveUserId) {
     redirect("/sign-in");
   }
 
@@ -94,13 +103,13 @@ export default async function ReturnsPage({ searchParams }: Props) {
           )
         )
       `)
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's spending per category (including >$5k portions)
     supabase
       .from("user_effective_spending")
       .select("category_id, category_name, category_slug, annual_spend_cents, large_purchase_spend_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // All earning rules for user's cards (fetched after we know which cards)
     supabase
@@ -130,31 +139,31 @@ export default async function ReturnsPage({ searchParams }: Props) {
     supabase
       .from("user_currency_values")
       .select("currency_id, value_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's perks values (now keyed by wallet_card_id)
     supabase
       .from("user_card_perks_values")
       .select("wallet_card_id, perks_value")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's debit pay values (now keyed by wallet_card_id)
     supabase
       .from("user_card_debit_pay")
       .select("wallet_card_id, debit_pay_percent")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's category selections for "selected_category" bonuses
     supabase
       .from("user_card_selections")
       .select("cap_id, selected_category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's travel booking preferences
     supabase
       .from("user_travel_booking_preferences")
       .select("category_slug, preference_type, brand_name, portal_issuer_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // All categories for parent lookups and exclusion status
     supabase
@@ -176,13 +185,13 @@ export default async function ReturnsPage({ searchParams }: Props) {
     supabase
       .from("user_multiplier_tiers")
       .select("program_id, tier_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's mobile pay categories
     supabase
       .from("user_mobile_pay_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // Get the Mobile Pay category ID
     supabase
@@ -195,7 +204,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     supabase
       .from("user_paypal_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // Get the PayPal category ID
     supabase
@@ -250,13 +259,13 @@ export default async function ReturnsPage({ searchParams }: Props) {
     supabase
       .from("user_welcome_bonuses")
       .select("id, wallet_card_id, is_active, component_type, spend_requirement_cents, time_period_months, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's spend bonuses
     supabase
       .from("user_spend_bonuses")
       .select("id, wallet_card_id, is_active, name, bonus_type, spend_threshold_cents, reward_type, points_amount, currency_id, cash_amount_cents, benefit_description, value_cents, period, per_spend_cents, elite_unit_name, unit_value_cents, cap_amount, cap_period")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     
     // User's bonus display settings
     supabase
@@ -734,7 +743,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader isAdmin={isAdmin} />
+      <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-5xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Total Earnings</h1>

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { SpendingEditor } from "@/components/spending-editor";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
+import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 
 export const metadata: Metadata = {
   title: "Spending | CardTool",
@@ -19,6 +20,14 @@ export default async function SpendingPage() {
   const user = await currentUser();
 
   if (!user) {
+    redirect("/sign-in");
+  }
+
+  // Get effective user ID for data reads (may be emulated user if admin is emulating)
+  const effectiveUserId = await getEffectiveUserId();
+  const emulationInfo = await getEmulationInfo();
+  
+  if (!effectiveUserId) {
     redirect("/sign-in");
   }
 
@@ -36,11 +45,11 @@ export default async function SpendingPage() {
     supabase
       .from("user_category_spend")
       .select("category_id, annual_spend_cents, large_purchase_spend_cents")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("user_large_purchase_categories")
       .select("category_id")
-      .eq("user_id", user.id),
+      .eq("user_id", effectiveUserId),
     supabase
       .from("earning_categories")
       .select("id")
@@ -137,7 +146,7 @@ export default async function SpendingPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader isAdmin={isAdmin} />
+      <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">My Spending</h1>
