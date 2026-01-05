@@ -127,7 +127,7 @@ export default async function SettingsPage() {
           institution_name
         )
       `)
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .order("name"),
   ]);
 
@@ -206,7 +206,7 @@ export default async function SettingsPage() {
         supabase
           .from("user_card_selections")
           .select("cap_id, selected_category_id")
-          .eq("user_id", user.id)
+          .eq("user_id", effectiveUserId)
           .in("cap_id", capIds),
       ])
     : [{ data: [] }, { data: [] }];
@@ -247,7 +247,7 @@ export default async function SettingsPage() {
         supabase
           .from("user_multiplier_tiers")
           .select("program_id, tier_id")
-          .eq("user_id", user.id)
+          .eq("user_id", effectiveUserId)
           .in("program_id", Array.from(applicableProgramIds)),
       ])
     : [{ data: [] }, { data: [] }];
