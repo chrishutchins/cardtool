@@ -553,8 +553,8 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
         </button>
 
         {showCategoryDetails && (
-          <div className="border-t border-zinc-700">
-            <table className="w-full">
+          <div className="border-t border-zinc-700 overflow-x-auto">
+            <table className="w-full min-w-[700px]">
               <thead>
                 <tr className="bg-zinc-800/50">
                   <th className="text-left text-xs font-medium text-zinc-400 uppercase px-4 py-3">Category</th>
@@ -664,8 +664,8 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
         </button>
 
         {showCardDetails && (
-          <div className="border-t border-zinc-700">
-            <table className="w-full">
+          <div className="border-t border-zinc-700 overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead>
                 <tr className="bg-zinc-800/50">
                   <th className="text-left text-xs font-medium text-zinc-400 uppercase px-4 py-3">Card</th>

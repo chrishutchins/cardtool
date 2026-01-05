@@ -386,8 +386,8 @@ export function SpendingEditor({ categories, onUpdate }: SpendingEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-lg border border-zinc-700">
-        <table className="w-full">
+      <div className="overflow-x-auto rounded-lg border border-zinc-700">
+        <table className="w-full min-w-[500px]">
           <thead>
             <tr className="bg-zinc-800/50 border-b border-zinc-700">
               <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase">
