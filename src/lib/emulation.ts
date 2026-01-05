@@ -1,3 +1,5 @@
+"use server";
+
 /**
  * User Emulation Utilities (Admin Only)
  * 
@@ -75,8 +77,6 @@ export async function getEmulationInfo(): Promise<EmulationInfo | null> {
  * Sets a cookie with the target user ID and redirects to wallet.
  */
 export async function startEmulation(userId: string, userEmail: string | null): Promise<void> {
-  "use server";
-  
   const user = await currentUser();
   if (!user) {
     throw new Error("Not authenticated");
@@ -125,8 +125,6 @@ export async function startEmulation(userId: string, userEmail: string | null): 
  * Stop emulating and return to admin view.
  */
 export async function stopEmulation(): Promise<void> {
-  "use server";
-  
   const cookieStore = await cookies();
   
   cookieStore.delete(EMULATION_COOKIE_NAME);
@@ -134,4 +132,3 @@ export async function stopEmulation(): Promise<void> {
 
   redirect("/admin/users");
 }
-
