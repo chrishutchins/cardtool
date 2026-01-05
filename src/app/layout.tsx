@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { FeedbackButton } from "@/components/feedback-button";
+import { EnvIndicator } from "@/components/env-indicator";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,6 +47,7 @@ export default async function RootLayout({
         <ClerkProvider>
           {children}
           {userId && <FeedbackButton />}
+          <EnvIndicator />
         </ClerkProvider>
       </body>
     </html>
