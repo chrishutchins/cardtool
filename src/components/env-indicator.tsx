@@ -16,7 +16,7 @@ export function EnvIndicator() {
 
   return (
     <div 
-      className={`fixed bottom-4 left-4 z-50 ${bgColor} text-white text-xs font-bold px-2 py-1 rounded shadow-lg pointer-events-none select-none`}
+      className={`fixed bottom-4 left-16 z-50 ${bgColor} text-white text-xs font-bold px-2 py-1 rounded shadow-lg pointer-events-none select-none`}
       style={{ opacity: 0.9 }}
     >
       {label}

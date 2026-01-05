@@ -93,6 +93,7 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
             <div className="md:hidden relative">
               <button
                 onClick={() => setIsOpen(!isOpen)}
+                data-mobile-menu-button
                 className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors"
               >
                 Menu

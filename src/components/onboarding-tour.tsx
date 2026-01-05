@@ -211,26 +211,48 @@ interface OnboardingTourProps {
   onComplete: () => Promise<void>;
 }
 
+// Nav items that live in the mobile menu
+const NAV_TARGETS = ["earnings", "compare", "credits", "spending", "point-values", "settings", "wallet"];
+
 export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [mounted, setMounted] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [menuOpened, setMenuOpened] = useState(false);
 
   const step = ONBOARDING_STEPS[currentStep];
-  
-  // Debug logging
-  console.log("[Onboarding] Step:", currentStep, "Target:", step?.target, "Mounted:", mounted, "TargetRect:", targetRect);
+
+  // Check if we're on mobile (mobile menu button is visible)
+  const isMobile = useCallback(() => {
+    const menuButton = document.querySelector("[data-mobile-menu-button]");
+    if (!menuButton) return false;
+    const rect = menuButton.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }, []);
+
+  // Open the mobile menu if it's not already open
+  const openMobileMenu = useCallback(() => {
+    const menuButton = document.querySelector("[data-mobile-menu-button]") as HTMLButtonElement;
+    if (menuButton) {
+      menuButton.click();
+      return true;
+    }
+    return false;
+  }, []);
 
   // Find and highlight target element
   const updateTargetRect = useCallback(() => {
     if (!step) return;
     const target = document.querySelector(`[data-onboarding="${step.target}"]`);
     if (target) {
-      setTargetRect(target.getBoundingClientRect());
-    } else {
-      setTargetRect(null);
+      const rect = target.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setTargetRect(rect);
+        return;
+      }
     }
+    setTargetRect(null);
   }, [step]);
 
   useEffect(() => {
@@ -238,15 +260,40 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   }, []);
 
   useEffect(() => {
-    // Reset targetRect when step changes to avoid stale positioning
+    // Reset state when step changes
     setTargetRect(null);
+    setMenuOpened(false);
+    
+    // Check if current step's target exists and try to make it visible
+    const checkAndUpdate = () => {
+      if (!step) return;
+      
+      const target = document.querySelector(`[data-onboarding="${step.target}"]`);
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTargetRect(rect);
+          return;
+        }
+      }
+      
+      // Target not found - if it's a nav item and we're on mobile, open the menu
+      if (NAV_TARGETS.includes(step.target) && isMobile() && !menuOpened) {
+        openMobileMenu();
+        setMenuOpened(true);
+        // Don't update rect yet - will retry after menu opens
+        return;
+      }
+    };
     
     // Initial attempt
-    updateTargetRect();
+    checkAndUpdate();
     
-    // Retry a few times in case element isn't mounted yet
-    const retryTimeouts = [50, 150, 300].map((delay) =>
-      setTimeout(updateTargetRect, delay)
+    // Retry a few times - important for waiting for menu to open
+    const retryTimeouts = [50, 100, 200, 400].map((delay) =>
+      setTimeout(() => {
+        updateTargetRect();
+      }, delay)
     );
 
     // Update on scroll/resize
@@ -258,11 +305,12 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
       window.removeEventListener("scroll", updateTargetRect, true);
       window.removeEventListener("resize", updateTargetRect);
     };
-  }, [updateTargetRect]);
+  }, [updateTargetRect, step, currentStep, isMobile, openMobileMenu, menuOpened]);
 
   const handleNext = () => {
-    if (currentStep < ONBOARDING_STEPS.length - 1) {
-      setCurrentStep((prev) => prev + 1);
+    const nextStep = currentStep + 1;
+    if (nextStep < ONBOARDING_STEPS.length) {
+      setCurrentStep(nextStep);
     } else {
       // Complete the tour
       startTransition(async () => {

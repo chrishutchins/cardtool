@@ -14,7 +14,6 @@ export function WalletClient({
   showOnboarding,
   onCompleteOnboarding,
 }: WalletClientProps) {
-  console.log("[WalletClient] showOnboarding:", showOnboarding);
   return (
     <>
       {children}

@@ -5,7 +5,23 @@ import { withSentryConfig } from "@sentry/nextjs";
 // For custom domains, Clerk uses clerk.<your-domain> pattern
 const clerkFrontendApi = process.env.NEXT_PUBLIC_CLERK_FRONTEND_API || "";
 
+// Use development Clerk keys when in dev mode and dev keys are available
+const isDev = process.env.NODE_ENV === "development";
+
 const nextConfig: NextConfig = {
+  env: {
+    // Override Clerk keys in development when dev keys are available
+    ...(isDev && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV && {
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV,
+    }),
+    ...(isDev && process.env.CLERK_SECRET_KEY_DEV && {
+      CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY_DEV,
+    }),
+    // Disable frontend API in dev mode when using dev keys (use Clerk's hosted UI)
+    ...(isDev && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV && {
+      NEXT_PUBLIC_CLERK_FRONTEND_API: "",
+    }),
+  },
   async headers() {
     // Build CSP Clerk domains dynamically
     const clerkDomains = [

@@ -26,12 +26,20 @@ export interface EmulationInfo {
 /**
  * Get the effective user ID for data reads.
  * Returns emulated user ID if admin is emulating, otherwise real user ID.
+ * In development, can be overridden via DEV_USER_ID_OVERRIDE env var.
  * 
  * @returns The user ID to use for database queries
  */
 export async function getEffectiveUserId(): Promise<string | null> {
   const user = await currentUser();
   if (!user) return null;
+
+  // In development, allow overriding the user ID to use production data
+  // This lets developers use Clerk Development instance while accessing production user data
+  if (process.env.NODE_ENV === "development" && process.env.DEV_USER_ID_OVERRIDE) {
+    console.log(`[Dev Mode] Using DEV_USER_ID_OVERRIDE: ${process.env.DEV_USER_ID_OVERRIDE}`);
+    return process.env.DEV_USER_ID_OVERRIDE;
+  }
 
   const email = user.emailAddresses?.[0]?.emailAddress;
   
