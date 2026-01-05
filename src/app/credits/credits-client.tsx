@@ -133,6 +133,7 @@ export function CreditsClient({
   const [showHidden, setShowHidden] = useState(false);
   const [hideUsed, setHideUsed] = useState(true);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [markUsedModal, setMarkUsedModal] = useState<{
     credit: Credit;
     walletCard: WalletCard;
@@ -475,33 +476,62 @@ export function CreditsClient({
         </div>
       ) : (
         <div className="space-y-4">
-          {groupedCredits.map((group) => (
-            <div key={group.key} className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-              <div className="bg-zinc-800/50 px-4 py-2 border-b border-zinc-700">
-                <h3 className="font-medium text-white">{group.label}</h3>
+          {groupedCredits.map((group) => {
+            const isCollapsed = collapsedGroups.has(group.key);
+            return (
+              <div key={group.key} className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+                <button
+                  onClick={() => {
+                    setCollapsedGroups(prev => {
+                      const next = new Set(prev);
+                      if (next.has(group.key)) {
+                        next.delete(group.key);
+                      } else {
+                        next.add(group.key);
+                      }
+                      return next;
+                    });
+                  }}
+                  className="w-full flex items-center justify-between bg-zinc-800/50 px-4 py-2 border-b border-zinc-700 hover:bg-zinc-800/70 transition-colors"
+                >
+                  <h3 className="font-medium text-white">{group.label}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-500">{group.credits.length} credit{group.credits.length !== 1 ? 's' : ''}</span>
+                    <svg
+                      className={`w-5 h-5 text-zinc-400 transition-transform ${isCollapsed ? "" : "rotate-180"}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
+                {!isCollapsed && (
+                  <div className="divide-y divide-zinc-800">
+                    {group.credits.map((item) => (
+                      <CreditCard
+                        key={`${item.walletCard.id}:${item.credit.id}`}
+                        credit={item.credit}
+                        walletCard={item.walletCard}
+                        settings={item.settings}
+                        usage={item.usage}
+                        viewMode={viewMode}
+                        selectedYear={selectedYear}
+                        onMarkUsed={handleMarkUsed}
+                        onMarkUsedDirect={onMarkUsed}
+                        onDeleteUsage={onDeleteUsage}
+                        onUpdateSettings={onUpdateSettings}
+                        onUpdateApprovalDate={onUpdateApprovalDate}
+                        showCardName={sortMode !== "card"}
+                        hideUsed={hideUsed}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="divide-y divide-zinc-800">
-                {group.credits.map((item) => (
-                  <CreditCard
-                    key={`${item.walletCard.id}:${item.credit.id}`}
-                    credit={item.credit}
-                    walletCard={item.walletCard}
-                    settings={item.settings}
-                    usage={item.usage}
-                    viewMode={viewMode}
-                    selectedYear={selectedYear}
-                    onMarkUsed={handleMarkUsed}
-                    onMarkUsedDirect={onMarkUsed}
-                    onDeleteUsage={onDeleteUsage}
-                    onUpdateSettings={onUpdateSettings}
-                    onUpdateApprovalDate={onUpdateApprovalDate}
-                    showCardName={sortMode !== "card"}
-                    hideUsed={hideUsed}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
