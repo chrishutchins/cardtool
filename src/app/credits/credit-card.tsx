@@ -384,7 +384,7 @@ export function CreditCard({
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-white truncate">{credit.name}</span>
+              <span className="font-medium text-white">{credit.name}</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 whitespace-nowrap">
                 {formatIntervalLabel()}
               </span>
@@ -503,7 +503,7 @@ export function CreditCard({
           {/* Credit Name & Details */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`font-medium truncate ${isFullyUsed ? "text-zinc-400 line-through" : "text-white"}`}>
+              <span className={`font-medium ${isFullyUsed ? "text-zinc-400 line-through" : "text-white"}`}>
                 {credit.name}
               </span>
               {credit.notes && (
