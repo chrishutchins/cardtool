@@ -58,7 +58,7 @@ export function UserRow({
   };
 
   return (
-    <tr className={`hover:bg-zinc-800/30 ${isPending ? "opacity-50" : ""}`}>
+    <tr className={`hover:bg-zinc-800/30 ${isPending || isEmulating ? "opacity-50" : ""}`}>
       <td className="px-6 py-4">
         <div>
           {user.email ? (

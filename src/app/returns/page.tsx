@@ -224,7 +224,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     supabase
       .from("user_point_value_settings")
       .select("selected_template_id")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
     
     // All templates with their values
@@ -271,7 +271,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     supabase
       .from("user_bonus_display_settings")
       .select("include_welcome_bonuses, include_spend_bonuses")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
   ]);
 

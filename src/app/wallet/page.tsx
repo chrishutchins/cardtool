@@ -184,7 +184,7 @@ export default async function WalletPage() {
     supabase
       .from("user_feature_flags")
       .select("debit_pay_enabled, onboarding_completed, credit_tracking_enabled")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
     
     // User's debit pay values (now keyed by wallet_card_id)
@@ -244,7 +244,7 @@ export default async function WalletPage() {
     supabase
       .from("user_point_value_settings")
       .select("selected_template_id")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
     
     // Point value templates with their currency values
@@ -272,7 +272,7 @@ export default async function WalletPage() {
     supabase
       .from("user_bonus_display_settings")
       .select("include_welcome_bonuses, include_spend_bonuses")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
     
     // All currencies for bonus creation modal

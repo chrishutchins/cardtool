@@ -96,7 +96,7 @@ export default async function SettingsPage() {
     supabase
       .from("user_feature_flags")
       .select("debit_pay_enabled, account_linking_enabled")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .single(),
     supabase
       .from("user_large_purchase_categories")
