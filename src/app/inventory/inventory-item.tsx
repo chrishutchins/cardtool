@@ -50,14 +50,16 @@ export function InventoryItem({
       }
       return { text: `$${original.toFixed(0)}`, color: "text-zinc-300" };
     } else if (trackingType === "quantity") {
-      const remaining = item.quantity - (item.quantity_used ?? 0);
+      const qty = item.quantity ?? 1;
+      const qtyUsed = item.quantity_used ?? 0;
+      const remaining = qty - qtyUsed;
       if (item.is_used) {
-        return { text: `${item.quantity} used`, color: "text-emerald-400" };
+        return { text: `${qty} used`, color: "text-emerald-400" };
       }
-      if (item.quantity_used > 0) {
-        return { text: `${remaining} of ${item.quantity} left`, color: "text-amber-400" };
+      if (qtyUsed > 0) {
+        return { text: `${remaining} of ${qty} left`, color: "text-amber-400" };
       }
-      return { text: `${item.quantity}`, color: "text-zinc-300" };
+      return { text: `${qty}`, color: "text-zinc-300" };
     } else {
       // single_use
       if (item.is_used) {
@@ -113,8 +115,12 @@ export function InventoryItem({
   const getProgress = () => {
     if (trackingType === "dollar_value" && item.original_value_cents) {
       return ((item.remaining_value_cents ?? 0) / item.original_value_cents) * 100;
-    } else if (trackingType === "quantity" && item.quantity > 0) {
-      return ((item.quantity - (item.quantity_used ?? 0)) / item.quantity) * 100;
+    } else if (trackingType === "quantity") {
+      const qty = item.quantity ?? 1;
+      const qtyUsed = item.quantity_used ?? 0;
+      if (qty > 0) {
+        return ((qty - qtyUsed) / qty) * 100;
+      }
     }
     return 100;
   };

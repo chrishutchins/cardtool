@@ -22,8 +22,8 @@ export interface InventoryItemData {
   pin: string | null;
   url: string | null;
   notes: string | null;
-  quantity: number;
-  quantity_used: number;
+  quantity: number | null;
+  quantity_used: number | null;
   original_value_cents: number | null;
   remaining_value_cents: number | null;
   is_used: boolean;

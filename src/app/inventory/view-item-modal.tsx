@@ -56,8 +56,9 @@ export function ViewItemModal({
       const original = (item.original_value_cents ?? 0) / 100;
       return `$${remaining.toFixed(2)} of $${original.toFixed(2)} remaining`;
     } else if (trackingType === "quantity") {
-      const remaining = item.quantity - (item.quantity_used ?? 0);
-      return `${remaining} of ${item.quantity} remaining`;
+      const qty = item.quantity ?? 1;
+      const remaining = qty - (item.quantity_used ?? 0);
+      return `${remaining} of ${qty} remaining`;
     } else {
       return item.is_used ? "Used" : "Available";
     }

@@ -116,7 +116,6 @@ export function InventoryTypeForm({ action, defaultValues, onCancel }: Inventory
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
-            name="is_active"
             checked={isActive}
             onChange={(e) => setIsActive(e.target.checked)}
             className="rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500"

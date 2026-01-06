@@ -169,7 +169,7 @@ export function EditInventoryModal({
                   name="quantity"
                   min="1"
                   required
-                  defaultValue={item.quantity}
+                  defaultValue={item.quantity ?? 1}
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-emerald-500 focus:outline-none"
                 />
               </div>
@@ -180,7 +180,7 @@ export function EditInventoryModal({
                   name="quantity_used"
                   min="0"
                   required
-                  defaultValue={item.quantity_used}
+                  defaultValue={item.quantity_used ?? 0}
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-emerald-500 focus:outline-none"
                 />
               </div>

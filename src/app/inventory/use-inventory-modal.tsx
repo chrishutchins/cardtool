@@ -18,7 +18,8 @@ export function UseInventoryModal({
   const trackingType = item.inventory_types?.tracking_type ?? "single_use";
 
   // For quantity type
-  const remainingQuantity = item.quantity - (item.quantity_used ?? 0);
+  const qty = item.quantity ?? 1;
+  const remainingQuantity = qty - (item.quantity_used ?? 0);
   const [useCount, setUseCount] = useState(1);
 
   // For dollar_value type
@@ -66,7 +67,7 @@ export function UseInventoryModal({
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-emerald-500 focus:outline-none"
               />
               <p className="mt-2 text-sm text-zinc-500">
-                {remainingQuantity} of {item.quantity} remaining
+                {remainingQuantity} of {qty} remaining
               </p>
             </div>
           )}
