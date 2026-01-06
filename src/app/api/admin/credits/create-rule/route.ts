@@ -28,36 +28,39 @@ export async function POST(request: NextRequest) {
     // Check if rule already exists (use maybeSingle since no match is expected case)
     const { data: existingRule } = await supabase
       .from("credit_matching_rules")
-      .select("id")
+      .select("id, pattern, credit_id")
       .eq("pattern", pattern)
       .eq("credit_id", creditId)
       .maybeSingle();
 
+    let rule = existingRule;
+    let ruleAlreadyExisted = false;
+
     if (existingRule) {
-      return NextResponse.json(
-        { error: "A rule with this pattern already exists for this credit" },
-        { status: 409 }
-      );
-    }
+      // Rule exists - we'll re-run matching for it instead of returning an error
+      ruleAlreadyExisted = true;
+      logger.info({ ruleId: existingRule.id, pattern }, "Rule already exists, re-running matching");
+    } else {
+      // Create the matching rule
+      const { data: newRule, error: ruleError } = await supabase
+        .from("credit_matching_rules")
+        .insert({
+          credit_id: creditId,
+          pattern,
+          match_amount_cents: matchAmountCents || null,
+          created_by: user.id,
+        })
+        .select()
+        .single();
 
-    // Create the matching rule
-    const { data: rule, error: ruleError } = await supabase
-      .from("credit_matching_rules")
-      .insert({
-        credit_id: creditId,
-        pattern,
-        match_amount_cents: matchAmountCents || null,
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (ruleError || !rule) {
-      logger.error({ err: ruleError }, "Failed to create matching rule");
-      return NextResponse.json(
-        { error: "Failed to create matching rule" },
-        { status: 500 }
-      );
+      if (ruleError || !newRule) {
+        logger.error({ err: ruleError }, "Failed to create matching rule");
+        return NextResponse.json(
+          { error: "Failed to create matching rule" },
+          { status: 500 }
+        );
+      }
+      rule = newRule;
     }
 
     // Re-run matching for all unmatched transactions that might now match
@@ -87,12 +90,14 @@ export async function POST(request: NextRequest) {
         ruleId: rule.id,
         pattern,
         transactionsMatched: totalMatched,
-      }, "Created matching rule and matched existing transactions");
+        ruleAlreadyExisted,
+      }, ruleAlreadyExisted ? "Re-ran matching for existing rule" : "Created matching rule and matched existing transactions");
 
       return NextResponse.json({
         success: true,
         rule,
         transactionsMatched: totalMatched,
+        ruleAlreadyExisted,
       });
     }
 
@@ -100,6 +105,7 @@ export async function POST(request: NextRequest) {
       success: true,
       rule,
       transactionsMatched: 0,
+      ruleAlreadyExisted,
     });
   } catch (error) {
     logger.error({ err: error }, "Failed to create matching rule");
