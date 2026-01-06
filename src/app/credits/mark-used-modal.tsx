@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Credit, CreditSettings, WalletCard } from "./credits-client";
+import { Credit, CreditWithSlot, CreditSettings, WalletCard } from "./credits-client";
 
 interface MarkUsedModalProps {
-  credit: Credit;
+  credit: Credit | CreditWithSlot;
   walletCard: WalletCard;
   periodStart: string;
   periodEnd: string;

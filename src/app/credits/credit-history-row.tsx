@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo, useRef, useEffect } from "react";
-import { Credit, CreditUsage, CreditSettings, WalletCard } from "./credits-client";
+import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard } from "./credits-client";
 import { parseLocalDate } from "@/lib/utils";
 
 // Tooltip component for notes
@@ -61,14 +61,14 @@ function Tooltip({ children, text }: { children: React.ReactNode; text: React.Re
 }
 
 interface CreditHistoryRowProps {
-  credit: Credit;
+  credit: CreditWithSlot;
   walletCard: WalletCard;
   settings: CreditSettings | null;
   usage: CreditUsage[];
   selectedYear: number;
   onMarkUsed: (formData: FormData) => Promise<void>;
   onDeleteUsage: (usageId: string) => Promise<void>;
-  onOpenModal: (credit: Credit, walletCard: WalletCard, periodStart: string, periodEnd: string) => void;
+  onOpenModal: (credit: CreditWithSlot, walletCard: WalletCard, periodStart: string, periodEnd: string) => void;
   onUpdateApprovalDate: (walletId: string, date: string | null) => Promise<void>;
   onUpdateSettings: (formData: FormData) => Promise<void>;
   showCardName: boolean;
@@ -431,7 +431,7 @@ export function CreditHistoryRow({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-white">
-            {credit.name}{formatValue() && ` - ${formatValue()}`}
+            {credit.displayName}{formatValue() && ` - ${formatValue()}`}
           </span>
           {/* Notes Tooltip */}
           {allNotes.length > 0 && (

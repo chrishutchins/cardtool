@@ -28,6 +28,12 @@ interface CardCredit {
   reset_cycle: 'monthly' | 'quarterly' | 'semiannual' | 'annual' | 'cardmember_year' | 'usage_based';
   reset_day_of_month: number | null;
   default_value_cents: number | null;
+  canonical_name: string | null;
+  credit_count: number;
+  cards?: {
+    id: string;
+    issuer_id: string | null;
+  };
 }
 
 interface UserWallet {
@@ -45,6 +51,7 @@ interface CreditUsage {
   period_end: string;
   amount_used: number;
   auto_detected: boolean;
+  slot_number: number;
 }
 
 /**
@@ -164,6 +171,77 @@ export function formatDateString(date: Date): string {
 }
 
 /**
+ * Finds the next available slot for a multi-use credit in a given period
+ */
+async function findAvailableSlot(
+  supabase: SupabaseClient,
+  walletId: string,
+  creditId: string,
+  periodStart: string,
+  creditCount: number
+): Promise<number | null> {
+  // Get all used slots for this credit in this period
+  const { data: usages } = await supabase
+    .from('user_credit_usage')
+    .select('slot_number')
+    .eq('user_wallet_id', walletId)
+    .eq('credit_id', creditId)
+    .eq('period_start', periodStart);
+
+  const usedSlots = new Set(usages?.map(u => u.slot_number) || []);
+
+  // Find the first available slot
+  for (let slot = 1; slot <= creditCount; slot++) {
+    if (!usedSlots.has(slot)) {
+      return slot;
+    }
+  }
+
+  return null; // All slots are used
+}
+
+/**
+ * Finds a matching credit for a rule, considering canonical names and issuer
+ */
+async function findMatchingCredit(
+  supabase: SupabaseClient,
+  rule: MatchingRule,
+  creditById: Map<string, CardCredit>,
+  walletByCardId: Map<string, UserWallet>
+): Promise<{ credit: CardCredit; wallet: UserWallet } | null> {
+  const ruleCredit = creditById.get(rule.credit_id);
+  if (!ruleCredit) return null;
+
+  // If no canonical name, just use direct card lookup
+  if (!ruleCredit.canonical_name) {
+    const wallet = walletByCardId.get(ruleCredit.card_id);
+    if (wallet) {
+      return { credit: ruleCredit, wallet };
+    }
+    return null;
+  }
+
+  // Get the issuer of the rule's credit
+  const issuerId = ruleCredit.cards?.issuer_id;
+
+  // Find all credits with the same canonical name and same issuer
+  // that the user has in their wallet
+  for (const [cardId, wallet] of walletByCardId) {
+    for (const [creditId, credit] of creditById) {
+      if (
+        credit.card_id === cardId &&
+        credit.canonical_name === ruleCredit.canonical_name &&
+        credit.cards?.issuer_id === issuerId
+      ) {
+        return { credit, wallet };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Main credit matching function - processes transactions and marks credits as used
  */
 export async function matchTransactionsToCredits(
@@ -198,7 +276,8 @@ export async function matchTransactionsToCredits(
       user_id,
       approval_date,
       cards:card_id (
-        id
+        id,
+        issuer_id
       )
     `)
     .eq('user_id', userId);
@@ -208,11 +287,17 @@ export async function matchTransactionsToCredits(
     return { matched, clawbacks, errors };
   }
 
-  // Fetch credits for user's cards
+  // Fetch credits for user's cards (with issuer info via cards)
   const cardIds = walletCards?.map(wc => wc.card_id) || [];
   const { data: credits, error: creditsError } = await supabase
     .from('card_credits')
-    .select('*')
+    .select(`
+      *,
+      cards:card_id (
+        id,
+        issuer_id
+      )
+    `)
     .in('card_id', cardIds.length > 0 ? cardIds : ['none'])
     .eq('is_active', true);
 
@@ -221,9 +306,46 @@ export async function matchTransactionsToCredits(
     return { matched, clawbacks, errors };
   }
 
+  // Also fetch credits for canonical name matching (same issuer, different cards)
+  // Get all issuers from user's cards
+  const issuerIds = new Set<string>();
+  walletCards?.forEach(wc => {
+    const card = wc.cards as { id: string; issuer_id: string | null } | null;
+    if (card?.issuer_id) {
+      issuerIds.add(card.issuer_id);
+    }
+  });
+
+  // Fetch all credits from these issuers for canonical name matching
+  let allCredits = credits || [];
+  if (issuerIds.size > 0) {
+    const { data: issuerCredits } = await supabase
+      .from('card_credits')
+      .select(`
+        *,
+        cards:card_id (
+          id,
+          issuer_id
+        )
+      `)
+      .not('canonical_name', 'is', null)
+      .eq('is_active', true);
+
+    if (issuerCredits) {
+      // Add credits from same issuers that aren't already in our list
+      const existingIds = new Set(allCredits.map(c => c.id));
+      issuerCredits.forEach(c => {
+        const card = c.cards as { id: string; issuer_id: string | null } | null;
+        if (card?.issuer_id && issuerIds.has(card.issuer_id) && !existingIds.has(c.id)) {
+          allCredits.push(c);
+        }
+      });
+    }
+  }
+
   // Create lookup maps
   const creditById = new Map<string, CardCredit>();
-  credits?.forEach(c => creditById.set(c.id, c));
+  allCredits?.forEach(c => creditById.set(c.id, c as CardCredit));
 
   const walletByCardId = new Map<string, UserWallet>();
   walletCards?.forEach(w => walletByCardId.set(w.card_id, w as unknown as UserWallet));
@@ -238,11 +360,11 @@ export async function matchTransactionsToCredits(
 
     if (!matchingRule) continue;
 
-    const credit = creditById.get(matchingRule.credit_id);
-    if (!credit) continue;
+    // Find the credit and wallet, considering canonical names
+    const match = await findMatchingCredit(supabase, matchingRule, creditById, walletByCardId);
+    if (!match) continue;
 
-    const wallet = walletByCardId.get(credit.card_id);
-    if (!wallet) continue;
+    const { credit, wallet } = match;
 
     // Determine if this is a credit or clawback
     const isClawback = txn.amount_cents > 0;
@@ -254,6 +376,9 @@ export async function matchTransactionsToCredits(
       wallet.approval_date ? new Date(wallet.approval_date) : null,
       credit.reset_day_of_month
     );
+
+    const periodStartStr = formatDateString(periodStart);
+    const periodEndStr = formatDateString(periodEnd);
 
     try {
       // Update transaction with matched credit info
@@ -268,9 +393,6 @@ export async function matchTransactionsToCredits(
 
       if (isClawback) {
         // For clawbacks, find the usage record in this period and reduce the amount
-        const periodStartStr = formatDateString(periodStart);
-        const periodEndStr = formatDateString(periodEnd);
-        
         // Find existing usage record for this period
         const { data: existingUsage } = await supabase
           .from('user_credit_usage')
@@ -278,6 +400,8 @@ export async function matchTransactionsToCredits(
           .eq('user_wallet_id', wallet.id)
           .eq('credit_id', credit.id)
           .eq('period_start', periodStartStr)
+          .order('slot_number', { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         if (existingUsage) {
@@ -313,6 +437,7 @@ export async function matchTransactionsToCredits(
               auto_detected: true,
               is_clawback: true,
               used_at: txn.date,
+              slot_number: 1,
             })
             .select('id')
             .single();
@@ -333,31 +458,70 @@ export async function matchTransactionsToCredits(
         clawbacks++;
       } else {
         // For credits (negative amounts), find or create usage record for this period
-        const periodStartStr = formatDateString(periodStart);
-        const periodEndStr = formatDateString(periodEnd);
+        const absoluteAmount = Math.abs(txn.amount_cents);
+        const creditCount = credit.credit_count || 1;
 
-        // Check if usage record exists for this period
-        const { data: existingUsage } = await supabase
+        // Check if usage record exists for this period (for any slot)
+        const { data: existingUsages } = await supabase
           .from('user_credit_usage')
-          .select('id, amount_used')
+          .select('id, amount_used, slot_number')
           .eq('user_wallet_id', wallet.id)
           .eq('credit_id', credit.id)
           .eq('period_start', periodStartStr)
-          .maybeSingle();
+          .order('slot_number', { ascending: true });
 
         let usageId: string;
-        const absoluteAmount = Math.abs(txn.amount_cents);
 
-        if (existingUsage) {
-          // Update existing usage record
-          const newAmount = existingUsage.amount_used + absoluteAmount / 100;
-          await supabase
-            .from('user_credit_usage')
-            .update({ amount_used: newAmount })
-            .eq('id', existingUsage.id);
-          usageId = existingUsage.id;
+        if (existingUsages && existingUsages.length > 0) {
+          // Find an existing slot that isn't full, or use the first one
+          const creditValue = credit.default_value_cents || 0;
+          let targetUsage = existingUsages.find(u => 
+            creditValue === 0 || u.amount_used * 100 < creditValue
+          );
+
+          if (!targetUsage && existingUsages.length < creditCount) {
+            // All existing slots are full but we have more slots available
+            const nextSlot = existingUsages.length + 1;
+            const { data: newUsage, error: insertError } = await supabase
+              .from('user_credit_usage')
+              .insert({
+                user_wallet_id: wallet.id,
+                credit_id: credit.id,
+                period_start: periodStartStr,
+                period_end: periodEndStr,
+                amount_used: absoluteAmount / 100,
+                auto_detected: true,
+                used_at: txn.date,
+                slot_number: nextSlot,
+              })
+              .select('id')
+              .single();
+
+            if (insertError || !newUsage) {
+              errors.push(`Failed to create usage record: ${insertError?.message}`);
+              continue;
+            }
+            usageId = newUsage.id;
+          } else if (targetUsage) {
+            // Update existing usage record
+            const newAmount = targetUsage.amount_used + absoluteAmount / 100;
+            await supabase
+              .from('user_credit_usage')
+              .update({ amount_used: newAmount })
+              .eq('id', targetUsage.id);
+            usageId = targetUsage.id;
+          } else {
+            // All slots are full, add to first slot anyway
+            const firstUsage = existingUsages[0];
+            const newAmount = firstUsage.amount_used + absoluteAmount / 100;
+            await supabase
+              .from('user_credit_usage')
+              .update({ amount_used: newAmount })
+              .eq('id', firstUsage.id);
+            usageId = firstUsage.id;
+          }
         } else {
-          // Create new usage record
+          // Create new usage record for slot 1
           const { data: newUsage, error: insertError } = await supabase
             .from('user_credit_usage')
             .insert({
@@ -368,6 +532,7 @@ export async function matchTransactionsToCredits(
               amount_used: absoluteAmount / 100,
               auto_detected: true,
               used_at: txn.date,
+              slot_number: 1,
             })
             .select('id')
             .single();
@@ -449,4 +614,3 @@ export function isPotentialCreditTransaction(
 
   return false;
 }
-

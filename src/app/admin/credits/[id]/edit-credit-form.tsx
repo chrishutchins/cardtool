@@ -14,6 +14,8 @@ interface Credit {
   card_id: string;
   name: string;
   brand_name: string | null;
+  canonical_name: string | null;
+  credit_count: number;
   reset_cycle: string;
   renewal_period_months: number | null;
   default_value_cents: number | null;
@@ -81,6 +83,34 @@ export function EditCreditForm({ credit, cards, onSubmit }: EditCreditFormProps)
             name="brand_name"
             defaultValue={credit.brand_name ?? ""}
             placeholder="e.g., Uber, Clear, Delta"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">
+            Canonical Name
+            <span className="text-zinc-500 font-normal ml-1">(for matching across cards)</span>
+          </label>
+          <input
+            type="text"
+            name="canonical_name"
+            defaultValue={credit.canonical_name ?? ""}
+            placeholder="e.g., Saks Credit, Delta Stays"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">
+            Credit Count
+            <span className="text-zinc-500 font-normal ml-1">(for multi-use credits)</span>
+          </label>
+          <input
+            type="number"
+            name="credit_count"
+            min="1"
+            defaultValue={credit.credit_count || 1}
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none"
           />
         </div>

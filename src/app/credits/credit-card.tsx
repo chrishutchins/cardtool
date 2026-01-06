@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
-import { Credit, CreditUsage, CreditSettings, WalletCard, UsageTransaction } from "./credits-client";
+import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard, UsageTransaction } from "./credits-client";
 import { parseLocalDate } from "@/lib/utils";
 
 // Tooltip component - appears on hover (desktop) or tap (mobile)
@@ -144,7 +144,7 @@ function LinkedTransactions({
 }
 
 interface CreditCardProps {
-  credit: Credit;
+  credit: CreditWithSlot;
   walletCard: WalletCard;
   settings: CreditSettings | null;
   usage: CreditUsage[];
@@ -152,7 +152,7 @@ interface CreditCardProps {
   selectedYear: number;
   historyPeriodStart?: string;
   historyPeriodEnd?: string;
-  onMarkUsed: (credit: Credit, walletCard: WalletCard, periodStart: string, periodEnd: string) => void;
+  onMarkUsed: (credit: CreditWithSlot, walletCard: WalletCard, periodStart: string, periodEnd: string) => void;
   onMarkUsedDirect: (formData: FormData) => Promise<void>;
   onDeleteUsage: (usageId: string) => Promise<void>;
   onUpdateSettings: (formData: FormData) => Promise<void>;
@@ -490,7 +490,7 @@ export function CreditCard({
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-white">{credit.name}</span>
+              <span className="font-medium text-white">{credit.displayName}</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 whitespace-nowrap">
                 {formatIntervalLabel()}
               </span>
@@ -549,7 +549,7 @@ export function CreditCard({
     return (
       <div className={`px-4 py-3 ${settings?.is_hidden ? "opacity-50" : ""}`}>
         <div className="flex items-center gap-3 mb-2">
-          <span className="font-medium text-white">{credit.name}</span>
+          <span className="font-medium text-white">{credit.displayName}</span>
           <span className="text-xs px-2 py-0.5 rounded-full bg-amber-900/50 text-amber-300">
             {formatIntervalLabel()}
           </span>
@@ -611,7 +611,7 @@ export function CreditCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`font-medium ${isFullyUsed ? "text-zinc-400 line-through" : "text-white"}`}>
-                {credit.name}
+                {credit.displayName}
               </span>
               {credit.notes && (
                 <Tooltip text={credit.notes}>

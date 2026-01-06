@@ -11,7 +11,8 @@ import {
   ChevronDown, 
   ChevronUp,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Ban
 } from "lucide-react";
 
 interface Transaction {
@@ -314,6 +315,36 @@ export function TransactionsClient({
     }
   };
 
+  const handleExcludePattern = async (pattern: string) => {
+    setActionPending(`exclude-${pattern}`);
+    
+    try {
+      const response = await fetch("/api/admin/credits/exclude-pattern", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pattern }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        if (response.status === 409) {
+          alert("This pattern is already excluded");
+        } else {
+          throw new Error(data.error || "Failed to exclude pattern");
+        }
+        return;
+      }
+
+      const data = await response.json();
+      alert(`Excluded pattern and dismissed ${data.dismissedCount} transactions`);
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to exclude pattern:", error);
+    } finally {
+      setActionPending(null);
+    }
+  };
+
   const refreshSync = async () => {
     setActionPending("refresh");
     
@@ -538,6 +569,18 @@ export function TransactionsClient({
                         >
                           <X className="h-4 w-4 mr-2" />
                           Dismiss
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleExcludePattern(sampleTxn.name)}
+                          disabled={actionPending === `exclude-${sampleTxn.name}`}
+                          className="border-red-900/50 text-red-400 hover:bg-red-900/20"
+                          title="Permanently exclude this pattern from future reviews"
+                        >
+                          <Ban className="h-4 w-4 mr-2" />
+                          Exclude Pattern
                         </Button>
                       </div>
                     )}

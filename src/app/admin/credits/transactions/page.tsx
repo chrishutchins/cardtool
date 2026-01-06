@@ -177,6 +177,21 @@ export default async function AdminTransactionsPage({
     `)
     .order("created_at", { ascending: false });
 
+  // Fetch exclusion patterns
+  const { data: exclusionPatterns } = await supabase
+    .from("transaction_exclusion_patterns")
+    .select("pattern");
+
+  // Filter out transactions matching exclusion patterns (only for unmatched view)
+  if (statusFilter === "unmatched" && exclusionPatterns && exclusionPatterns.length > 0) {
+    filteredTransactions = filteredTransactions.filter(txn => {
+      const nameLower = txn.name.toLowerCase();
+      return !exclusionPatterns.some(ep => 
+        nameLower.includes(ep.pattern.toLowerCase())
+      );
+    });
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 p-6">
       <div className="mx-auto max-w-7xl">

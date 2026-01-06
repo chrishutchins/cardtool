@@ -27,6 +27,15 @@ export interface Credit {
   notes: string | null;
   renewal_period_months: number | null;
   must_be_earned: boolean;
+  credit_count?: number;
+  canonical_name?: string | null;
+}
+
+// Extended credit with slot information for multi-use credits
+export interface CreditWithSlot extends Credit {
+  slotNumber: number; // 1-indexed slot number (e.g., 1 of 2)
+  totalSlots: number; // Total number of slots for this credit
+  displayName: string; // Display name including slot info (e.g., "The Edit (1 of 2)")
 }
 
 export interface LinkedTransaction {
@@ -56,6 +65,7 @@ export interface CreditUsage {
   used_at: string;
   auto_detected?: boolean | null;
   is_clawback?: boolean | null;
+  slot_number?: number;
   user_credit_usage_transactions?: UsageTransaction[];
 }
 
@@ -158,7 +168,7 @@ export function CreditsClient({
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [markUsedModal, setMarkUsedModal] = useState<{
-    credit: Credit;
+    credit: CreditWithSlot;
     walletCard: WalletCard;
     periodStart: string;
     periodEnd: string;
@@ -233,8 +243,9 @@ export function CreditsClient({
     return new Date(year + 10, 11, 31);
   };
 
-  // Check if a credit is fully used in current period
-  const isFullyUsed = (credit: Credit, walletCard: WalletCard, usage: CreditUsage[]): boolean => {
+  // Check if a credit slot is fully used in current period
+  // For multi-count credits, each slot is checked independently
+  const isFullyUsed = (credit: CreditWithSlot, walletCard: WalletCard, usage: CreditUsage[]): boolean => {
     const periodStart = getCurrentPeriodStart(credit, walletCard);
     const maxAmount = credit.default_quantity ?? 1;
     
@@ -276,9 +287,10 @@ export function CreditsClient({
   };
 
   // Combine credits with wallet cards and sort by expiration
+  // Expands multi-count credits (credit_count > 1) into separate visual rows
   const userCredits = useMemo(() => {
     const result: Array<{
-      credit: Credit;
+      credit: CreditWithSlot;
       walletCard: WalletCard;
       settings: CreditSettings | null;
       usage: CreditUsage[];
@@ -290,13 +302,43 @@ export function CreditsClient({
       for (const walletCard of walletEntries) {
         const key = `${walletCard.id}:${credit.id}`;
         const settings = settingsMap.get(key) ?? null;
-        const usage = usageMap.get(key) ?? [];
+        const allUsage = usageMap.get(key) ?? [];
 
         // Filter out hidden credits unless showHidden is true
         if (!showHidden && settings?.is_hidden) continue;
 
         const periodEnd = getCurrentPeriodEnd(credit, walletCard);
-        result.push({ credit, walletCard, settings, usage, periodEnd });
+        const totalSlots = credit.credit_count ?? 1;
+
+        // Expand multi-count credits into separate visual rows
+        for (let slotNumber = 1; slotNumber <= totalSlots; slotNumber++) {
+          // Filter usage to only this slot
+          const slotUsage = allUsage.filter(u => {
+            // If there's only one slot or the usage doesn't have slot_number, include it for slot 1
+            const usageSlot = (u as CreditUsage & { slot_number?: number }).slot_number ?? 1;
+            return usageSlot === slotNumber;
+          });
+
+          // Create display name with slot info if multi-slot
+          const displayName = totalSlots > 1 
+            ? `${credit.name} (${slotNumber} of ${totalSlots})`
+            : credit.name;
+
+          const creditWithSlot: CreditWithSlot = {
+            ...credit,
+            slotNumber,
+            totalSlots,
+            displayName,
+          };
+
+          result.push({ 
+            credit: creditWithSlot, 
+            walletCard, 
+            settings, 
+            usage: slotUsage, 
+            periodEnd 
+          });
+        }
       }
     }
 
@@ -306,7 +348,14 @@ export function CreditsClient({
       const priorityB = CYCLE_PRIORITY[b.credit.reset_cycle] ?? 10;
       
       if (priorityA !== priorityB) return priorityA - priorityB;
-      return a.periodEnd.getTime() - b.periodEnd.getTime();
+      if (a.periodEnd.getTime() !== b.periodEnd.getTime()) {
+        return a.periodEnd.getTime() - b.periodEnd.getTime();
+      }
+      // Sort by slot number within the same credit
+      if (a.credit.id === b.credit.id && a.walletCard.id === b.walletCard.id) {
+        return a.credit.slotNumber - b.credit.slotNumber;
+      }
+      return 0;
     });
 
     return result;
@@ -393,6 +442,7 @@ export function CreditsClient({
   // Calculate totals based on visible credits
   // Credits Used: includes ALL credits (even hidden ones)
   // Credits Left: excludes hidden credits
+  // For multi-slot credits, each slot contributes its share of the total value
   const totals = useMemo(() => {
     let creditsUsed = 0;
     let creditsLeft = 0;
@@ -408,7 +458,11 @@ export function CreditsClient({
       const totalUsed = currentUsage.reduce((sum, u) => sum + u.amount_used, 0);
       const remaining = Math.max(0, maxAmount - totalUsed);
       
-      const effectiveValue = item.settings?.user_value_override_cents ?? item.credit.default_value_cents;
+      // For multi-slot credits, divide the effective value by total slots
+      // so each slot contributes its fair share
+      const baseValue = item.settings?.user_value_override_cents ?? item.credit.default_value_cents;
+      const effectiveValue = baseValue ? baseValue / item.credit.totalSlots : null;
+      
       if (effectiveValue) {
         const usedValue = (totalUsed / maxAmount) * effectiveValue;
         const remainingValue = (remaining / maxAmount) * effectiveValue;
@@ -427,7 +481,7 @@ export function CreditsClient({
     return { creditsUsed, creditsLeft };
   }, [userCredits]);
 
-  const handleMarkUsed = (credit: Credit, walletCard: WalletCard, periodStart: string, periodEnd: string) => {
+  const handleMarkUsed = (credit: CreditWithSlot, walletCard: WalletCard, periodStart: string, periodEnd: string) => {
     setMarkUsedModal({ credit, walletCard, periodStart, periodEnd });
   };
 
@@ -586,7 +640,7 @@ export function CreditsClient({
                     {group.credits.map((item) => (
                       viewMode === "history" ? (
                         <CreditHistoryRow
-                          key={`${item.walletCard.id}:${item.credit.id}`}
+                          key={`${item.walletCard.id}:${item.credit.id}:${item.credit.slotNumber}`}
                           credit={item.credit}
                           walletCard={item.walletCard}
                           settings={item.settings}
@@ -601,7 +655,7 @@ export function CreditsClient({
                         />
                       ) : (
                         <CreditCard
-                          key={`${item.walletCard.id}:${item.credit.id}`}
+                          key={`${item.walletCard.id}:${item.credit.id}:${item.credit.slotNumber}`}
                           credit={item.credit}
                           walletCard={item.walletCard}
                           settings={item.settings}
