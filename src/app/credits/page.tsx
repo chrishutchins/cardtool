@@ -89,6 +89,7 @@ export default async function CreditsPage() {
       used_at,
       auto_detected,
       is_clawback,
+      slot_number,
       user_credit_usage_transactions (
         id,
         amount_cents,
