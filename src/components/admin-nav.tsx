@@ -10,6 +10,7 @@ const navItems = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/cards", label: "Cards" },
   { href: "/admin/credits", label: "Credits" },
+  { href: "/admin/credits/transactions", label: "Transactions" },
   { href: "/admin/issuers", label: "Issuers" },
   { href: "/admin/currencies", label: "Currencies" },
   { href: "/admin/categories", label: "Categories" },
@@ -71,7 +72,7 @@ export function AdminNav() {
               </button>
               
               {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-50">
+                <div className="absolute top-full left-0 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70]">
                   {navItems.map((item) => {
                     const isActive = item.exact
                       ? pathname === item.href

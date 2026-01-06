@@ -101,8 +101,8 @@ export default async function PointValuesPage() {
   async function updateSelectedTemplate(templateId: string | null) {
     "use server";
     try {
-      const user = await currentUser();
-      if (!user) {
+      const userId = await getEffectiveUserId();
+      if (!userId) {
         console.error("[updateSelectedTemplate] No user found");
         return;
       }
@@ -113,7 +113,7 @@ export default async function PointValuesPage() {
         const { error } = await supabase
           .from("user_point_value_settings")
           .delete()
-          .eq("user_id", user.id);
+          .eq("user_id", userId);
         
         if (error) {
           console.error("[updateSelectedTemplate] Delete error:", error);
@@ -121,7 +121,7 @@ export default async function PointValuesPage() {
       } else {
         const { error } = await supabase.from("user_point_value_settings").upsert(
           {
-            user_id: user.id,
+            user_id: userId,
             selected_template_id: templateId,
           },
           { onConflict: "user_id" }
@@ -130,7 +130,7 @@ export default async function PointValuesPage() {
         if (error) {
           console.error("[updateSelectedTemplate] Upsert error:", error);
         } else {
-          console.log("[updateSelectedTemplate] Saved template:", templateId, "for user:", user.id);
+          console.log("[updateSelectedTemplate] Saved template:", templateId, "for user:", userId);
         }
       }
 
@@ -142,8 +142,8 @@ export default async function PointValuesPage() {
 
   async function updateCurrencyValue(currencyId: string, valueCents: number | null) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
 
@@ -152,13 +152,13 @@ export default async function PointValuesPage() {
       await supabase
         .from("user_currency_values")
         .delete()
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("currency_id", currencyId);
     } else {
       // Upsert custom value
       await supabase.from("user_currency_values").upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           currency_id: currencyId,
           value_cents: valueCents,
         },
@@ -171,8 +171,8 @@ export default async function PointValuesPage() {
 
   async function resetAllOverrides() {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
 
@@ -180,7 +180,7 @@ export default async function PointValuesPage() {
     await supabase
       .from("user_currency_values")
       .delete()
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
 
     revalidatePath("/point-values");
   }

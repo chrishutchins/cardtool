@@ -258,13 +258,13 @@ export default async function SettingsPage() {
   // Server actions
   async function selectCategory(capId: string, categoryId: number) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase.from("user_card_selections").upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         cap_id: capId,
         selected_category_id: categoryId,
       },
@@ -275,14 +275,14 @@ export default async function SettingsPage() {
 
   async function selectMultiplierTier(programId: string, tierId: string | null) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     if (tierId) {
       await supabase.from("user_multiplier_tiers").upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           program_id: programId,
           tier_id: tierId,
         },
@@ -292,7 +292,7 @@ export default async function SettingsPage() {
       await supabase
         .from("user_multiplier_tiers")
         .delete()
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("program_id", programId);
     }
     revalidatePath("/settings");
@@ -305,13 +305,13 @@ export default async function SettingsPage() {
     portalIssuerId: string | null
   ) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase.from("user_travel_booking_preferences").upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         category_slug: categorySlug,
         preference_type: preferenceType,
         brand_name: brandName,
@@ -324,14 +324,14 @@ export default async function SettingsPage() {
 
   async function toggleMobilePayCategory(categoryId: number, selected: boolean) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     if (selected) {
       await supabase.from("user_mobile_pay_categories").upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           category_id: categoryId,
         },
         { onConflict: "user_id,category_id" }
@@ -340,7 +340,7 @@ export default async function SettingsPage() {
       await supabase
         .from("user_mobile_pay_categories")
         .delete()
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("category_id", categoryId);
     }
     // Revalidate compare page so mobile pay rates are recalculated
@@ -350,14 +350,14 @@ export default async function SettingsPage() {
 
   async function togglePaypalCategory(categoryId: number, selected: boolean) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     if (selected) {
       await supabase.from("user_paypal_categories").upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           category_id: categoryId,
         },
         { onConflict: "user_id,category_id" }
@@ -366,7 +366,7 @@ export default async function SettingsPage() {
       await supabase
         .from("user_paypal_categories")
         .delete()
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("category_id", categoryId);
     }
     // Revalidate compare page so PayPal rates are recalculated
@@ -376,14 +376,14 @@ export default async function SettingsPage() {
 
   async function toggleLargePurchaseCategory(categoryId: number, selected: boolean) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     if (selected) {
       await supabase.from("user_large_purchase_categories").upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           category_id: categoryId,
         },
         { onConflict: "user_id,category_id" }
@@ -392,7 +392,7 @@ export default async function SettingsPage() {
       await supabase
         .from("user_large_purchase_categories")
         .delete()
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("category_id", categoryId);
     }
     revalidatePath("/settings");
@@ -400,8 +400,8 @@ export default async function SettingsPage() {
 
   async function disableDebitPay() {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     
@@ -409,13 +409,13 @@ export default async function SettingsPage() {
     await supabase
       .from("user_feature_flags")
       .update({ debit_pay_enabled: false })
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
     
     // Also clear all debit pay values for this user
     await supabase
       .from("user_card_debit_pay")
       .delete()
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
 
     revalidatePath("/settings");
     revalidatePath("/wallet");
@@ -424,23 +424,23 @@ export default async function SettingsPage() {
 
   async function pairLinkedAccount(linkedAccountId: string, walletCardId: string | null) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase
       .from("user_linked_accounts")
       .update({ wallet_card_id: walletCardId })
       .eq("id", linkedAccountId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
 
     revalidatePath("/settings");
   }
 
   async function unlinkLinkedAccount(linkedAccountId: string) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     
@@ -449,7 +449,7 @@ export default async function SettingsPage() {
       .from("user_linked_accounts")
       .select("plaid_item_id")
       .eq("id", linkedAccountId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
     
     if (!accountData) return;
@@ -461,14 +461,14 @@ export default async function SettingsPage() {
       .from("user_linked_accounts")
       .delete()
       .eq("id", linkedAccountId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
     
     // Check if there are any remaining accounts for this plaid item
     const { count } = await supabase
       .from("user_linked_accounts")
       .select("id", { count: "exact", head: true })
       .eq("plaid_item_id", plaidItemId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
     
     // If no accounts remain, delete the plaid item
     if ((count ?? 0) === 0) {
@@ -476,7 +476,7 @@ export default async function SettingsPage() {
         .from("user_plaid_items")
         .delete()
         .eq("id", plaidItemId)
-        .eq("user_id", user.id);
+        .eq("user_id", userId);
     }
 
     revalidatePath("/settings");
@@ -484,15 +484,15 @@ export default async function SettingsPage() {
 
   async function updateLinkedAccountCreditLimit(linkedAccountId: string, creditLimit: number | null) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase
       .from("user_linked_accounts")
       .update({ manual_credit_limit: creditLimit })
       .eq("id", linkedAccountId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
 
     revalidatePath("/settings");
     revalidatePath("/compare");

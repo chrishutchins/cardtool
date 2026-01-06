@@ -60,6 +60,8 @@ export default async function ImportCreditsPage() {
         const defaultQuantityStr = row["default_quantity"] || row["quantity"] || "";
         const unitName = row["unit_name"] || row["unit"] || null;
         const notes = row["notes"] || null;
+        const mustBeEarnedStr = row["must_be_earned"] || "";
+        const mustBeEarned = mustBeEarnedStr.toLowerCase() === "true" || mustBeEarnedStr === "1" || mustBeEarnedStr.toLowerCase() === "yes";
 
         const defaultValueCents = defaultValueStr ? Math.round(parseFloat(defaultValueStr) * 100) : null;
         const defaultQuantity = defaultQuantityStr ? parseInt(defaultQuantityStr) : null;
@@ -82,6 +84,7 @@ export default async function ImportCreditsPage() {
           default_quantity: defaultQuantity,
           unit_name: unitName,
           notes,
+          must_be_earned: mustBeEarned,
         });
 
         if (error) {

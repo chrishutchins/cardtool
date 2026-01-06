@@ -19,10 +19,11 @@ export function AddCreditForm({ cards, onSubmit }: AddCreditFormProps) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     startTransition(async () => {
       await onSubmit(formData);
-      e.currentTarget.reset();
+      form.reset();
       setResetCycle("monthly");
     });
   };
@@ -139,6 +140,19 @@ export function AddCreditForm({ cards, onSubmit }: AddCreditFormProps) {
           placeholder="Optional admin notes"
           className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none"
         />
+      </div>
+
+      <div className="flex items-center gap-2 pt-6">
+        <input
+          type="checkbox"
+          id="must_be_earned"
+          name="must_be_earned"
+          value="true"
+          className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
+        />
+        <label htmlFor="must_be_earned" className="text-sm text-zinc-300 cursor-pointer">
+          Must be earned (e.g., Free Night Awards)
+        </label>
       </div>
 
       <div className="md:col-span-2 lg:col-span-4">

@@ -108,7 +108,7 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
               </button>
               
               {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-50">
+                <div className="absolute top-full left-0 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70]">
                   {navItems.map((item) => {
                     const isActive = pathname.startsWith(item.href);
                     return (

@@ -7,6 +7,7 @@ import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 import { CreditsClient } from "./credits-client";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
+import { PlaidSyncTrigger } from "@/components/plaid-sync-trigger";
 
 export const metadata: Metadata = {
   title: "Credit Tracker | CardTool",
@@ -64,13 +65,14 @@ export default async function CreditsPage() {
       default_quantity,
       unit_name,
       notes,
-      renewal_period_months
+      renewal_period_months,
+      must_be_earned
     `)
     .in("card_id", walletCardIds.length > 0 ? walletCardIds : ["none"])
     .eq("is_active", true)
     .order("name");
 
-  // Get user's credit usage
+  // Get user's credit usage with linked transactions
   const walletEntryIds = walletCards?.map((wc) => wc.id) ?? [];
   
   const { data: creditUsage } = await supabase
@@ -84,7 +86,21 @@ export default async function CreditsPage() {
       amount_used,
       perceived_value_cents,
       notes,
-      used_at
+      used_at,
+      auto_detected,
+      is_clawback,
+      user_credit_usage_transactions (
+        id,
+        amount_cents,
+        transaction_id,
+        user_plaid_transactions:transaction_id (
+          id,
+          name,
+          amount_cents,
+          date,
+          merchant_name
+        )
+      )
     `)
     .in("user_wallet_id", walletEntryIds.length > 0 ? walletEntryIds : ["none"]);
 
@@ -105,8 +121,8 @@ export default async function CreditsPage() {
   // Server actions
   async function markCreditUsed(formData: FormData) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
 
@@ -126,7 +142,7 @@ export default async function CreditsPage() {
       .from("user_wallets")
       .select("id")
       .eq("id", userWalletId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
 
     if (!wallet) {
@@ -188,8 +204,8 @@ export default async function CreditsPage() {
 
   async function deleteCreditUsage(usageId: string) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
 
@@ -200,7 +216,7 @@ export default async function CreditsPage() {
       .eq("id", usageId)
       .single();
 
-    if (!usage || (usage.user_wallets as { user_id: string })?.user_id !== user.id) {
+    if (!usage || (usage.user_wallets as { user_id: string })?.user_id !== userId) {
       console.error("Unauthorized: usage record does not belong to user");
       return;
     }
@@ -211,8 +227,8 @@ export default async function CreditsPage() {
 
   async function updateCreditSettings(formData: FormData) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
 
@@ -228,7 +244,7 @@ export default async function CreditsPage() {
       .from("user_wallets")
       .select("id")
       .eq("id", userWalletId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
 
     if (!wallet) {
@@ -260,15 +276,23 @@ export default async function CreditsPage() {
 
   async function updateApprovalDate(walletId: string, date: string | null) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("updateApprovalDate: No user found");
+      return;
+    }
 
     const supabase = await createClient();
-    await supabase
+    const { error } = await supabase
       .from("user_wallets")
       .update({ approval_date: date })
       .eq("id", walletId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("Error updating approval date:", error);
+      return;
+    }
 
     revalidatePath("/credits");
     revalidatePath("/wallet");
@@ -287,6 +311,7 @@ export default async function CreditsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
+      <PlaidSyncTrigger />
       <UserHeader isAdmin={isAdmin} creditTrackingEnabled={true} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-6xl px-4 py-12">
         <div className="mb-8">

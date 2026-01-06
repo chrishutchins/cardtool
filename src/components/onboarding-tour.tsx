@@ -70,12 +70,24 @@ function OnboardingCallout({
   onNext,
   targetRect,
 }: OnboardingCalloutProps) {
+  // Initialize with a safe default to avoid hydration mismatch
+  const [viewportWidth, setViewportWidth] = useState(1024);
+  
+  // Update viewport width on mount, resize, and when step/target changes
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    // Always update immediately - catches viewport changes without resize events
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, [currentStep, targetRect]); // Re-run when step or target changes
+  
   if (!targetRect) return null;
 
   // Calculate position based on target element and desired position
   const getPosition = () => {
     const padding = 12;
-    const calloutWidth = 320;
+    const calloutWidth = Math.min(320, viewportWidth - 32); // Responsive width
     const calloutHeight = 180; // Approximate height
 
     switch (step.position) {
@@ -86,7 +98,7 @@ function OnboardingCallout({
             16,
             Math.min(
               targetRect.left + targetRect.width / 2 - calloutWidth / 2,
-              window.innerWidth - calloutWidth - 16
+              viewportWidth - calloutWidth - 16
             )
           ),
         };
@@ -97,7 +109,7 @@ function OnboardingCallout({
             16,
             Math.min(
               targetRect.left + targetRect.width / 2 - calloutWidth / 2,
-              window.innerWidth - calloutWidth - 16
+              viewportWidth - calloutWidth - 16
             )
           ),
         };
@@ -117,6 +129,7 @@ function OnboardingCallout({
   };
 
   const position = getPosition();
+  const calloutWidth = Math.min(320, viewportWidth - 32);
 
   // Calculate arrow position
   const getArrowStyles = (): React.CSSProperties => {
@@ -158,10 +171,12 @@ function OnboardingCallout({
 
   return (
     <div
-      className="fixed z-[60] w-80 rounded-xl border border-blue-500/50 bg-zinc-900 shadow-2xl shadow-blue-500/20"
+      className="fixed z-[80] rounded-xl border border-blue-500/50 bg-zinc-900 shadow-2xl shadow-blue-500/20"
       style={{
         top: position.top,
         left: position.left,
+        width: calloutWidth,
+        maxWidth: 'calc(100vw - 32px)',
       }}
     >
       {/* Arrow */}
@@ -219,7 +234,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [mounted, setMounted] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [menuOpened, setMenuOpened] = useState(false);
+  const [completed, setCompleted] = useState(false);
 
   const step = ONBOARDING_STEPS[currentStep];
 
@@ -231,97 +246,124 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
     return rect.width > 0 && rect.height > 0;
   }, []);
 
-  // Open the mobile menu if it's not already open
-  const openMobileMenu = useCallback(() => {
+  // Find a visible target element and return its rect
+  // Uses querySelectorAll because there may be both desktop and mobile versions of the same element
+  const findTargetRect = useCallback((targetId: string): DOMRect | null => {
+    const targets = document.querySelectorAll(`[data-onboarding="${targetId}"]`);
+    for (const target of targets) {
+      const rect = target.getBoundingClientRect();
+      // Check if element is visible (has dimensions and is within viewport)
+      if (rect.width > 0 && rect.height > 0) {
+        return rect;
+      }
+    }
+    return null;
+  }, []);
+
+  // Check if the mobile menu is already open by looking for visible nav items in the mobile dropdown
+  const isMenuOpen = useCallback(() => {
+    // Look for nav targets that are visible - check ALL matching elements
+    for (const targetId of NAV_TARGETS) {
+      const targets = document.querySelectorAll(`[data-onboarding="${targetId}"]`);
+      for (const el of targets) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, []);
+
+  // Open the mobile menu (only if not already open)
+  const openMenuIfNeeded = useCallback(() => {
+    if (isMenuOpen()) {
+      return true; // Already open, no action needed
+    }
     const menuButton = document.querySelector("[data-mobile-menu-button]") as HTMLButtonElement;
     if (menuButton) {
       menuButton.click();
       return true;
     }
     return false;
-  }, []);
-
-  // Find and highlight target element
-  const updateTargetRect = useCallback(() => {
-    if (!step) return;
-    const target = document.querySelector(`[data-onboarding="${step.target}"]`);
-    if (target) {
-      const rect = target.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        setTargetRect(rect);
-        return;
-      }
-    }
-    setTargetRect(null);
-  }, [step]);
+  }, [isMenuOpen]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    // Reset state when step changes
+    // Reset targetRect when step changes
     setTargetRect(null);
-    setMenuOpened(false);
     
-    // Check if current step's target exists and try to make it visible
-    const checkAndUpdate = () => {
-      if (!step) return;
+    if (!step) return;
+
+    let cancelled = false;
+    const timeouts: NodeJS.Timeout[] = [];
+
+    const tryFindTarget = () => {
+      if (cancelled) return;
       
-      const target = document.querySelector(`[data-onboarding="${step.target}"]`);
-      if (target) {
-        const rect = target.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          setTargetRect(rect);
-          return;
-        }
+      const rect = findTargetRect(step.target);
+      if (rect) {
+        setTargetRect(rect);
+        return true;
       }
-      
-      // Target not found - if it's a nav item and we're on mobile, open the menu
-      if (NAV_TARGETS.includes(step.target) && isMobile() && !menuOpened) {
-        openMobileMenu();
-        setMenuOpened(true);
-        // Don't update rect yet - will retry after menu opens
-        return;
-      }
+      return false;
     };
-    
+
     // Initial attempt
-    checkAndUpdate();
-    
-    // Retry a few times - important for waiting for menu to open
-    const retryTimeouts = [50, 100, 200, 400].map((delay) =>
-      setTimeout(() => {
-        updateTargetRect();
-      }, delay)
-    );
+    if (tryFindTarget()) return;
+
+    // If it's a nav item on mobile, ensure menu is open
+    if (NAV_TARGETS.includes(step.target) && isMobile()) {
+      openMenuIfNeeded();
+      
+      // After opening menu, wait a bit then retry multiple times
+      timeouts.push(setTimeout(() => tryFindTarget(), 100));
+      timeouts.push(setTimeout(() => tryFindTarget(), 200));
+      timeouts.push(setTimeout(() => tryFindTarget(), 350));
+      timeouts.push(setTimeout(() => tryFindTarget(), 500));
+      timeouts.push(setTimeout(() => tryFindTarget(), 750));
+    } else {
+      // Just retry in case of timing issues
+      timeouts.push(setTimeout(() => tryFindTarget(), 50));
+      timeouts.push(setTimeout(() => tryFindTarget(), 150));
+      timeouts.push(setTimeout(() => tryFindTarget(), 300));
+    }
 
     // Update on scroll/resize
-    window.addEventListener("scroll", updateTargetRect, true);
-    window.addEventListener("resize", updateTargetRect);
+    const handleUpdate = () => {
+      const rect = findTargetRect(step.target);
+      if (rect) setTargetRect(rect);
+    };
+    window.addEventListener("scroll", handleUpdate, true);
+    window.addEventListener("resize", handleUpdate);
 
     return () => {
-      retryTimeouts.forEach(clearTimeout);
-      window.removeEventListener("scroll", updateTargetRect, true);
-      window.removeEventListener("resize", updateTargetRect);
+      cancelled = true;
+      timeouts.forEach(clearTimeout);
+      window.removeEventListener("scroll", handleUpdate, true);
+      window.removeEventListener("resize", handleUpdate);
     };
-  }, [updateTargetRect, step, currentStep, isMobile, openMobileMenu, menuOpened]);
+  }, [step, currentStep, isMobile, openMenuIfNeeded, findTargetRect]);
 
   const handleNext = () => {
     const nextStep = currentStep + 1;
     if (nextStep < ONBOARDING_STEPS.length) {
       setCurrentStep(nextStep);
     } else {
-      // Complete the tour
+      // Complete the tour - set completed immediately to prevent re-showing
+      setCompleted(true);
       startTransition(async () => {
         await onComplete();
       });
     }
   };
 
-  // Don't render anything if not ready or if target element not found
+  // Don't render anything if not ready, completed, or if target element not found
   // This prevents a dark backdrop from blocking the UI when elements are missing
-  if (!mounted || !step || isPending || !targetRect) return null;
+  if (!mounted || !step || isPending || completed || !targetRect) return null;
 
   return createPortal(
     <>
@@ -330,7 +372,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
 
       {/* Spotlight on target element */}
       <div
-        className="fixed z-50 rounded-lg ring-4 ring-blue-500 ring-offset-2 ring-offset-zinc-950 pointer-events-none transition-all duration-300"
+        className="fixed z-[75] rounded-lg ring-4 ring-blue-500 ring-offset-2 ring-offset-zinc-950 pointer-events-none transition-all duration-300"
         style={{
           top: targetRect.top - 4,
           left: targetRect.left - 4,

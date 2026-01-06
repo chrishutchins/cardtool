@@ -31,7 +31,12 @@ export function MarkUsedModal({
   const isDollarCredit = credit.default_value_cents !== null;
   const maxAmount = credit.default_quantity ?? 1;
   const isUsageBased = credit.reset_cycle === "usage_based";
-  const isMonthly = credit.reset_cycle === "monthly";
+  const mustBeEarned = credit.must_be_earned;
+  // Auto-repeat is available for all recurring credits (not usage-based)
+  const canAutoRepeat = !isUsageBased;
+  
+  // Combine notes from credit and settings
+  const allNotes = [credit.notes, currentSettings?.notes].filter(Boolean).join(" • ");
   
   // Default amount: full value for $ credits, 1 for quantity credits
   const [amountUsed, setAmountUsed] = useState(
@@ -67,7 +72,7 @@ export function MarkUsedModal({
       await onSubmit(formData);
       
       // If auto-repeat changed, update settings
-      if (isMonthly && isAutoRepeat !== (currentSettings?.is_auto_repeat ?? false)) {
+      if (canAutoRepeat && isAutoRepeat !== (currentSettings?.is_auto_repeat ?? false)) {
         const settingsData = new FormData();
         settingsData.set("user_wallet_id", walletCard.id);
         settingsData.set("credit_id", credit.id);
@@ -95,17 +100,29 @@ export function MarkUsedModal({
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-white">Mark Credit Used</h2>
+            <h2 className="text-lg font-semibold text-white">
+              {mustBeEarned ? "Mark Credit Earned" : "Mark Credit Used"}
+            </h2>
             <p className="text-sm text-zinc-400">{credit.name}</p>
           </div>
         </div>
 
         {/* Content */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {/* Notes */}
+          {allNotes && (
+            <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 px-3 py-2">
+              <p className="text-sm text-amber-400/90">{allNotes}</p>
+            </div>
+          )}
+
           {/* Amount Used */}
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-2">
-              {isDollarCredit ? "Amount Used" : `Quantity (max ${maxAmount})`}
+              {isDollarCredit 
+                ? (mustBeEarned ? "Amount Earned" : "Amount Used")
+                : `Quantity (max ${maxAmount.toLocaleString()})`
+              }
             </label>
             <div className="relative">
               {isDollarCredit && (
@@ -124,7 +141,7 @@ export function MarkUsedModal({
             </div>
             {isDollarCredit && (
               <p className="mt-1.5 text-xs text-zinc-500">
-                Max: ${(credit.default_value_cents! / 100).toFixed(2)}
+                Max: ${(credit.default_value_cents! / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
               </p>
             )}
           </div>
@@ -145,7 +162,7 @@ export function MarkUsedModal({
               />
               {credit.renewal_period_months && (
                 <p className="mt-1.5 text-xs text-amber-400">
-                  Credit renews {credit.renewal_period_months / 12 >= 1 
+                  Credit resets {credit.renewal_period_months / 12 >= 1 
                     ? `${Math.floor(credit.renewal_period_months / 12)} year${credit.renewal_period_months >= 24 ? 's' : ''}` 
                     : `${credit.renewal_period_months} months`
                   } from this date
@@ -154,8 +171,8 @@ export function MarkUsedModal({
             </div>
           )}
 
-          {/* Auto-repeat checkbox - only for monthly credits */}
-          {isMonthly && (
+          {/* Auto-repeat checkbox - available for all recurring credits */}
+          {canAutoRepeat && (
             <label className="flex items-center gap-2 cursor-pointer py-2">
               <input
                 type="checkbox"
@@ -163,7 +180,7 @@ export function MarkUsedModal({
                 onChange={(e) => setIsAutoRepeat(e.target.checked)}
                 className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
               />
-              <span className="text-sm text-zinc-300">Automatically mark used every month</span>
+              <span className="text-sm text-zinc-300">Automatically mark used each period</span>
             </label>
           )}
 
@@ -182,7 +199,7 @@ export function MarkUsedModal({
               disabled={isPending}
               className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
             >
-              {isPending ? "Saving..." : "Mark Used"}
+              {isPending ? "Saving..." : (mustBeEarned ? "Mark Earned" : "Mark Used")}
             </button>
           </div>
         </form>

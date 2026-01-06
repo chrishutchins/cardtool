@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import { MarkUsedModal } from "./mark-used-modal";
 import { CreditCard } from "./credit-card";
+import { CreditHistoryRow } from "./credit-history-row";
+import { parseLocalDate } from "@/lib/utils";
 
 export interface WalletCard {
   id: string;
@@ -24,6 +26,22 @@ export interface Credit {
   unit_name: string | null;
   notes: string | null;
   renewal_period_months: number | null;
+  must_be_earned: boolean;
+}
+
+export interface LinkedTransaction {
+  id: string;
+  name: string;
+  amount_cents: number;
+  date: string;
+  merchant_name: string | null;
+}
+
+export interface UsageTransaction {
+  id: string;
+  amount_cents: number;
+  transaction_id: string | null;
+  user_plaid_transactions: LinkedTransaction | null;
 }
 
 export interface CreditUsage {
@@ -36,6 +54,9 @@ export interface CreditUsage {
   perceived_value_cents: number | null;
   notes: string | null;
   used_at: string;
+  auto_detected?: boolean | null;
+  is_clawback?: boolean | null;
+  user_credit_usage_transactions?: UsageTransaction[];
 }
 
 export interface CreditSettings {
@@ -72,7 +93,7 @@ const CYCLE_PRIORITY: Record<string, number> = {
   usage_based: 6,
 };
 
-// Get expiration bucket label for a credit
+// Get expiration bucket label for a credit (current view - uses current date)
 function getExpirationBucket(credit: Credit, walletCard: WalletCard): { key: string; label: string; sortOrder: number } {
   const now = new Date();
   const year = now.getFullYear();
@@ -80,7 +101,6 @@ function getExpirationBucket(credit: Credit, walletCard: WalletCard): { key: str
 
   // Get the period end date based on reset cycle
   let endDate: Date;
-  let sortOrder: number;
 
   if (credit.reset_cycle === "monthly") {
     endDate = new Date(year, month + 1, 0);
@@ -102,13 +122,16 @@ function getExpirationBucket(credit: Credit, walletCard: WalletCard): { key: str
     endDate = new Date(year, 11, 31);
     return { key: `annual-${year}`, label: `${year} Annual`, sortOrder: endDate.getTime() };
   } else if (credit.reset_cycle === "cardmember_year" && walletCard.approval_date) {
-    const approval = new Date(walletCard.approval_date);
+    const approval = parseLocalDate(walletCard.approval_date);
     let nextAnniversary = new Date(year, approval.getMonth(), approval.getDate());
     if (nextAnniversary <= now) {
       nextAnniversary = new Date(year + 1, approval.getMonth(), approval.getDate());
     }
+    // Use month/year as key to group all cardmember credits expiring in the same month
+    const annMonth = nextAnniversary.getMonth();
+    const annYear = nextAnniversary.getFullYear();
     const monthName = nextAnniversary.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-    return { key: `cardmember-${nextAnniversary.getTime()}`, label: monthName, sortOrder: nextAnniversary.getTime() };
+    return { key: `cardmember-${annYear}-${annMonth}`, label: monthName, sortOrder: nextAnniversary.getTime() };
   } else if (credit.reset_cycle === "usage_based") {
     // Usage-based credits go in a separate bucket
     return { key: "usage_based", label: "Usage-Based", sortOrder: Number.MAX_SAFE_INTEGER };
@@ -199,7 +222,7 @@ export function CreditsClient({
     } else if (credit.reset_cycle === "annual") {
       return new Date(year, 11, 31);
     } else if (credit.reset_cycle === "cardmember_year" && walletCard.approval_date) {
-      const approval = new Date(walletCard.approval_date);
+      const approval = parseLocalDate(walletCard.approval_date);
       let nextAnniversary = new Date(year, approval.getMonth(), approval.getDate());
       if (nextAnniversary <= now) {
         nextAnniversary = new Date(year + 1, approval.getMonth(), approval.getDate());
@@ -240,7 +263,7 @@ export function CreditsClient({
     } else if (credit.reset_cycle === "annual") {
       return new Date(year, 0, 1);
     } else if (credit.reset_cycle === "cardmember_year" && walletCard.approval_date) {
-      const approval = new Date(walletCard.approval_date);
+      const approval = parseLocalDate(walletCard.approval_date);
       const startYear = approval.getFullYear();
       const yearsElapsed = year - startYear;
       const start = new Date(startYear + yearsElapsed, approval.getMonth(), approval.getDate());
@@ -289,23 +312,48 @@ export function CreditsClient({
     return result;
   }, [credits, cardToWalletEntries, settingsMap, usageMap, showHidden]);
 
-  // Group credits based on sort mode
+  // Effective sort mode - force card/brand in history view
+  const effectiveSortMode = viewMode === "history" && sortMode === "expiration" ? "card" : sortMode;
+
+  // Group credits based on sort mode and view mode
   const groupedCredits = useMemo(() => {
     const groups = new Map<string, { label: string; credits: typeof userCredits; sortOrder: number }>();
 
-    for (const item of userCredits) {
+    // Filter credits based on hideUsed (only in current view)
+    const visibleCredits = viewMode === "current" && hideUsed
+      ? userCredits.filter(item => !isFullyUsed(item.credit, item.walletCard, item.usage))
+      : userCredits;
+
+    for (const item of visibleCredits) {
       let key: string;
       let label: string;
       let sortOrder: number = 0;
 
-      if (sortMode === "card") {
+      if (effectiveSortMode === "card") {
         key = item.walletCard.id;
         label = item.walletCard.display_name;
-      } else if (sortMode === "brand") {
-        key = item.credit.brand_name ?? "other";
-        label = item.credit.brand_name ?? "Other Credits";
+      } else if (effectiveSortMode === "brand") {
+        // Group by brand first, then by credit name if multiple cards have same credit
+        if (item.credit.brand_name) {
+          // Has a brand - group by brand
+          key = `brand:${item.credit.brand_name.toLowerCase()}`;
+          label = item.credit.brand_name;
+        } else {
+          // No brand - check if this credit name appears on multiple cards
+          const creditName = item.credit.name;
+          const sameNameCredits = visibleCredits.filter(c => c.credit.name === creditName && !c.credit.brand_name);
+          if (sameNameCredits.length > 1) {
+            // Multiple cards have this credit - group by credit name
+            key = `credit:${creditName.toLowerCase()}`;
+            label = creditName;
+          } else {
+            // Single occurrence - put in "Not Grouped"
+            key = "not-grouped";
+            label = "Not Grouped";
+          }
+        }
       } else {
-        // expiration mode
+        // expiration mode (current view only)
         const bucket = getExpirationBucket(item.credit, item.walletCard);
         key = bucket.key;
         label = bucket.label;
@@ -321,19 +369,26 @@ export function CreditsClient({
     const result = Array.from(groups.entries()).map(([key, data]) => ({
       key,
       label: data.label,
-      credits: data.credits,
+      credits: data.credits.sort((a, b) => a.credit.name.localeCompare(b.credit.name)),
       sortOrder: data.sortOrder,
     }));
 
     // Sort groups: by sortOrder for expiration mode, alphabetically otherwise
-    if (sortMode === "expiration") {
+    if (effectiveSortMode === "expiration") {
       result.sort((a, b) => a.sortOrder - b.sortOrder);
+    } else if (effectiveSortMode === "brand") {
+      // For brand mode: sort alphabetically but put "Not Grouped" last
+      result.sort((a, b) => {
+        if (a.key === "not-grouped") return 1;
+        if (b.key === "not-grouped") return -1;
+        return a.label.localeCompare(b.label);
+      });
     } else {
       result.sort((a, b) => a.label.localeCompare(b.label));
     }
 
     return result;
-  }, [userCredits, sortMode]);
+  }, [userCredits, effectiveSortMode, viewMode, hideUsed]);
 
   // Calculate totals based on visible credits
   // Credits Used: includes ALL credits (even hidden ones)
@@ -384,13 +439,13 @@ export function CreditsClient({
           <div className="flex items-center gap-2">
             <span className="text-sm text-zinc-400">Sort by:</span>
             <select
-              value={sortMode}
+              value={viewMode === "history" && sortMode === "expiration" ? "card" : sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
             >
-              <option value="expiration">Expiration</option>
+              {viewMode === "current" && <option value="expiration">Expiration</option>}
               <option value="card">Card</option>
-              <option value="brand">Brand</option>
+              <option value="brand">Brand/Credit</option>
             </select>
           </div>
 
@@ -447,6 +502,25 @@ export function CreditsClient({
             />
             <span className="text-sm text-zinc-400">Show hidden</span>
           </label>
+
+          {/* Expand/Collapse All */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCollapsedGroups(new Set())}
+              className="text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1 transition-colors"
+              title="Expand all"
+            >
+              Expand
+            </button>
+            <span className="text-zinc-600">|</span>
+            <button
+              onClick={() => setCollapsedGroups(new Set(groupedCredits.map(g => g.key)))}
+              className="text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1 transition-colors"
+              title="Collapse all"
+            >
+              Collapse
+            </button>
+          </div>
         </div>
 
         {/* Totals */}
@@ -510,22 +584,39 @@ export function CreditsClient({
                 {!isCollapsed && (
                   <div className="divide-y divide-zinc-800">
                     {group.credits.map((item) => (
-                      <CreditCard
-                        key={`${item.walletCard.id}:${item.credit.id}`}
-                        credit={item.credit}
-                        walletCard={item.walletCard}
-                        settings={item.settings}
-                        usage={item.usage}
-                        viewMode={viewMode}
-                        selectedYear={selectedYear}
-                        onMarkUsed={handleMarkUsed}
-                        onMarkUsedDirect={onMarkUsed}
-                        onDeleteUsage={onDeleteUsage}
-                        onUpdateSettings={onUpdateSettings}
-                        onUpdateApprovalDate={onUpdateApprovalDate}
-                        showCardName={sortMode !== "card"}
-                        hideUsed={hideUsed}
-                      />
+                      viewMode === "history" ? (
+                        <CreditHistoryRow
+                          key={`${item.walletCard.id}:${item.credit.id}`}
+                          credit={item.credit}
+                          walletCard={item.walletCard}
+                          settings={item.settings}
+                          usage={item.usage}
+                          selectedYear={selectedYear}
+                          onMarkUsed={onMarkUsed}
+                          onDeleteUsage={onDeleteUsage}
+                          onOpenModal={handleMarkUsed}
+                          onUpdateApprovalDate={onUpdateApprovalDate}
+                          onUpdateSettings={onUpdateSettings}
+                          showCardName={sortMode !== "card"}
+                        />
+                      ) : (
+                        <CreditCard
+                          key={`${item.walletCard.id}:${item.credit.id}`}
+                          credit={item.credit}
+                          walletCard={item.walletCard}
+                          settings={item.settings}
+                          usage={item.usage}
+                          viewMode={viewMode}
+                          selectedYear={selectedYear}
+                          onMarkUsed={handleMarkUsed}
+                          onMarkUsedDirect={onMarkUsed}
+                          onDeleteUsage={onDeleteUsage}
+                          onUpdateSettings={onUpdateSettings}
+                          onUpdateApprovalDate={onUpdateApprovalDate}
+                          showCardName={sortMode !== "card"}
+                          hideUsed={hideUsed}
+                        />
+                      )
                     ))}
                   </div>
                 )}

@@ -114,6 +114,7 @@ export type Database = {
           default_value_cents: number | null
           id: string
           is_active: boolean
+          must_be_earned: boolean
           name: string
           notes: string | null
           renewal_period_months: number | null
@@ -130,6 +131,7 @@ export type Database = {
           default_value_cents?: number | null
           id?: string
           is_active?: boolean
+          must_be_earned?: boolean
           name: string
           notes?: string | null
           renewal_period_months?: number | null
@@ -146,6 +148,7 @@ export type Database = {
           default_value_cents?: number | null
           id?: string
           is_active?: boolean
+          must_be_earned?: boolean
           name?: string
           notes?: string | null
           renewal_period_months?: number | null
@@ -507,6 +510,41 @@ export type Database = {
           },
         ]
       }
+      credit_matching_rules: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          credit_id: string | null
+          id: string
+          match_amount_cents: number | null
+          pattern: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          credit_id?: string | null
+          id?: string
+          match_amount_cents?: number | null
+          pattern: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          credit_id?: string | null
+          id?: string
+          match_amount_cents?: number | null
+          pattern?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_matching_rules_credit_id_fkey"
+            columns: ["credit_id"]
+            isOneToOne: false
+            referencedRelation: "card_credits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       earning_categories: {
         Row: {
           created_at: string | null
@@ -846,6 +884,36 @@ export type Database = {
             referencedColumns: ["category_id"]
           },
         ]
+      }
+      stripe_members: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       template_currency_values: {
         Row: {
@@ -1222,9 +1290,11 @@ export type Database = {
       user_credit_usage: {
         Row: {
           amount_used: number
+          auto_detected: boolean | null
           created_at: string | null
           credit_id: string
           id: string
+          is_clawback: boolean | null
           notes: string | null
           perceived_value_cents: number | null
           period_end: string
@@ -1235,9 +1305,11 @@ export type Database = {
         }
         Insert: {
           amount_used: number
+          auto_detected?: boolean | null
           created_at?: string | null
           credit_id: string
           id?: string
+          is_clawback?: boolean | null
           notes?: string | null
           perceived_value_cents?: number | null
           period_end: string
@@ -1248,9 +1320,11 @@ export type Database = {
         }
         Update: {
           amount_used?: number
+          auto_detected?: boolean | null
           created_at?: string | null
           credit_id?: string
           id?: string
+          is_clawback?: boolean | null
           notes?: string | null
           perceived_value_cents?: number | null
           period_end?: string
@@ -1272,6 +1346,45 @@ export type Database = {
             columns: ["user_wallet_id"]
             isOneToOne: false
             referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_credit_usage_transactions: {
+        Row: {
+          amount_cents: number
+          created_at: string | null
+          id: string
+          transaction_id: string | null
+          usage_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string | null
+          id?: string
+          transaction_id?: string | null
+          usage_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string | null
+          id?: string
+          transaction_id?: string | null
+          usage_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_credit_usage_transactions_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "user_plaid_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_credit_usage_transactions_usage_id_fkey"
+            columns: ["usage_id"]
+            isOneToOne: false
+            referencedRelation: "user_credit_usage"
             referencedColumns: ["id"]
           },
         ]
@@ -1347,6 +1460,36 @@ export type Database = {
           id?: string
           onboarding_completed?: boolean | null
           updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_feedback: {
+        Row: {
+          created_at: string | null
+          feedback_type: string
+          id: string
+          message: string
+          page_url: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          feedback_type: string
+          id?: string
+          message: string
+          page_url?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          feedback_type?: string
+          id?: string
+          message?: string
+          page_url?: string | null
+          user_agent?: string | null
           user_id?: string
         }
         Relationships: []
@@ -1611,6 +1754,117 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_plaid_sync_state: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_synced_at: string | null
+          last_transaction_date: string | null
+          plaid_item_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          last_transaction_date?: string | null
+          plaid_item_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          last_transaction_date?: string | null
+          plaid_item_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_plaid_sync_state_plaid_item_id_fkey"
+            columns: ["plaid_item_id"]
+            isOneToOne: false
+            referencedRelation: "user_plaid_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_plaid_transactions: {
+        Row: {
+          amount_cents: number
+          category: string[] | null
+          created_at: string | null
+          date: string
+          dismissed: boolean | null
+          id: string
+          is_clawback: boolean | null
+          linked_account_id: string | null
+          matched_credit_id: string | null
+          matched_rule_id: string | null
+          merchant_name: string | null
+          name: string
+          pending: boolean | null
+          plaid_transaction_id: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          category?: string[] | null
+          created_at?: string | null
+          date: string
+          dismissed?: boolean | null
+          id?: string
+          is_clawback?: boolean | null
+          linked_account_id?: string | null
+          matched_credit_id?: string | null
+          matched_rule_id?: string | null
+          merchant_name?: string | null
+          name: string
+          pending?: boolean | null
+          plaid_transaction_id: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          category?: string[] | null
+          created_at?: string | null
+          date?: string
+          dismissed?: boolean | null
+          id?: string
+          is_clawback?: boolean | null
+          linked_account_id?: string | null
+          matched_credit_id?: string | null
+          matched_rule_id?: string | null
+          merchant_name?: string | null
+          name?: string
+          pending?: boolean | null
+          plaid_transaction_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_plaid_transactions_linked_account_id_fkey"
+            columns: ["linked_account_id"]
+            isOneToOne: false
+            referencedRelation: "user_linked_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_plaid_transactions_matched_credit_id_fkey"
+            columns: ["matched_credit_id"]
+            isOneToOne: false
+            referencedRelation: "card_credits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_plaid_transactions_matched_rule_id_fkey"
+            columns: ["matched_rule_id"]
+            isOneToOne: false
+            referencedRelation: "credit_matching_rules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_point_value_settings: {
         Row: {

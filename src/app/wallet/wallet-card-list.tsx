@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import { parseLocalDate } from "@/lib/utils";
 
 interface WalletCard {
   id: string;
@@ -683,7 +684,7 @@ export function WalletCardList({
                       >
                         {wc.approval_date ? (
                           <span className="text-zinc-300">
-                            {new Date(wc.approval_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                            {parseLocalDate(wc.approval_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
                           </span>
                         ) : (
                           <span className="text-zinc-600 group-hover:text-zinc-400">Set date</span>

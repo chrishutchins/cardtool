@@ -26,7 +26,8 @@ export default async function EditCreditPage({ params }: Props) {
         default_quantity,
         unit_name,
         is_active,
-        notes
+        notes,
+        must_be_earned
       `)
       .eq("id", id)
       .single(),
@@ -61,6 +62,7 @@ export default async function EditCreditPage({ params }: Props) {
     const notesRaw = formData.get("notes") as string;
     const notes = notesRaw?.trim() || null;
     const isActive = formData.get("is_active") === "on";
+    const mustBeEarned = formData.get("must_be_earned") === "on";
 
     const defaultValueCents = defaultValueStr ? Math.round(parseFloat(defaultValueStr) * 100) : null;
     const defaultQuantity = defaultQuantityStr ? parseInt(defaultQuantityStr) : null;
@@ -79,6 +81,7 @@ export default async function EditCreditPage({ params }: Props) {
       unit_name: unitName,
       notes,
       is_active: isActive,
+      must_be_earned: mustBeEarned,
     }).eq("id", creditId);
 
     revalidatePath("/admin/credits");

@@ -4,6 +4,7 @@ import { isCurrentUserAdmin } from "@/lib/admin";
 import { Footer } from "@/components/footer";
 import { CheckCircle, Lock, Target, Wallet, BarChart3 } from "lucide-react";
 import { Metadata } from "next";
+import { HomeNav } from "@/components/home-nav";
 
 export const metadata: Metadata = {
   title: "CardTool - Maximize Your Credit Card Rewards",
@@ -17,85 +18,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col">
       {/* Navigation */}
-      <nav className="border-b border-zinc-800">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="text-xl font-bold text-white">
-              <span className="text-blue-400">Card</span>
-              <span>Tool</span>
-            </Link>
-            <div className="flex items-center gap-4">
-              {isAdmin && (
-                <Link
-                  href="/admin"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  Admin
-                </Link>
-              )}
-              <SignedIn>
-                <Link
-                  href="/wallet"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  My Wallet
-                </Link>
-                <Link
-                  href="/returns"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  Earnings
-                </Link>
-                <Link
-                  href="/compare"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  Compare
-                </Link>
-                <Link
-                  href="/credits"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  Credits
-                </Link>
-                <Link
-                  href="/spending"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  Spending
-                </Link>
-                <Link
-                  href="/point-values"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  Point Values
-                </Link>
-                <Link
-                  href="/settings"
-                  className="text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  Settings
-                </Link>
-                <UserButton afterSignOutUrl="/" />
-              </SignedIn>
-              <SignedOut>
-                <Link
-                  href="/sign-in"
-                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/sign-up"
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-                >
-                  Sign Up
-                </Link>
-              </SignedOut>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <HomeNav isAdmin={isAdmin} />
 
       {/* Hero Section */}
       <main className="flex-1">

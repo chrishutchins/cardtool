@@ -180,10 +180,10 @@ export default async function WalletPage() {
       .from("earning_categories")
       .select("id, name, slug, parent_category_id, excluded_by_default"),
     
-    // User's feature flags (for debit pay, onboarding, and credit tracking)
+    // User's feature flags (for debit pay and onboarding)
     supabase
       .from("user_feature_flags")
-      .select("debit_pay_enabled, onboarding_completed, credit_tracking_enabled")
+      .select("debit_pay_enabled, onboarding_completed")
       .eq("user_id", effectiveUserId)
       .single(),
     
@@ -708,8 +708,8 @@ export default async function WalletPage() {
 
   async function addToWallet(cardId: string) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     
@@ -724,7 +724,7 @@ export default async function WalletPage() {
     const { count: existingCount } = await supabase
       .from("user_wallets")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("card_id", cardId);
     
     // If this is a duplicate, set a custom name like "Card Name 2"
@@ -734,7 +734,7 @@ export default async function WalletPage() {
     
     // Add card to wallet and get the new wallet entry ID
     const { data: newWalletEntry } = await supabase.from("user_wallets").insert({
-      user_id: user.id,
+      user_id: userId,
       card_id: cardId,
       custom_name: customName,
     }).select("id").single();
@@ -743,7 +743,7 @@ export default async function WalletPage() {
     if (newWalletEntry && card?.default_perks_value && card.default_perks_value > 0) {
       await supabase.from("user_card_perks_values").upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           wallet_card_id: newWalletEntry.id,
           perks_value: card.default_perks_value,
         },
@@ -756,56 +756,56 @@ export default async function WalletPage() {
 
   async function removeFromWallet(walletId: string) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase
       .from("user_wallets")
       .delete()
       .eq("id", walletId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
     revalidatePath("/wallet");
   }
 
   async function updateCustomName(walletId: string, customName: string | null) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase
       .from("user_wallets")
       .update({ custom_name: customName })
       .eq("id", walletId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
     revalidatePath("/wallet");
   }
 
   async function updateApprovalDate(walletId: string, date: string | null) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase
       .from("user_wallets")
       .update({ approval_date: date })
       .eq("id", walletId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
     revalidatePath("/wallet");
     revalidatePath("/credits");
   }
 
   async function updatePerksValue(walletCardId: string, perksValue: number) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase.from("user_card_perks_values").upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         wallet_card_id: walletCardId,
         perks_value: perksValue,
       },
@@ -816,13 +816,13 @@ export default async function WalletPage() {
 
   async function enableDebitPay() {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase.from("user_feature_flags").upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         debit_pay_enabled: true,
       },
       { onConflict: "user_id" }
@@ -832,13 +832,13 @@ export default async function WalletPage() {
 
   async function updateDebitPay(walletCardId: string, percent: number) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase.from("user_card_debit_pay").upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         wallet_card_id: walletCardId,
         debit_pay_percent: percent,
       },
@@ -849,13 +849,13 @@ export default async function WalletPage() {
 
   async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase.from("user_bonus_display_settings").upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         include_welcome_bonuses: includeWelcomeBonuses,
         include_spend_bonuses: includeSpendBonuses,
       },
@@ -867,14 +867,14 @@ export default async function WalletPage() {
   // User-defined Welcome Bonus CRUD
   async function addUserWelcomeBonus(formData: FormData) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     const componentType = formData.get("component_type") as string;
     
     await supabase.from("user_welcome_bonuses").insert({
-      user_id: user.id,
+      user_id: userId,
       wallet_card_id: formData.get("wallet_card_id") as string,
       component_type: componentType,
       spend_requirement_cents: parseInt(formData.get("spend_requirement_cents") as string) || 0,
@@ -890,8 +890,8 @@ export default async function WalletPage() {
 
   async function updateUserWelcomeBonus(bonusId: string, formData: FormData) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     const componentType = formData.get("component_type") as string;
@@ -905,35 +905,35 @@ export default async function WalletPage() {
       cash_amount_cents: componentType === "cash" ? parseInt(formData.get("cash_amount_cents") as string) || null : null,
       benefit_description: componentType === "benefit" ? formData.get("benefit_description") as string || null : null,
       value_cents: componentType === "benefit" ? parseInt(formData.get("value_cents") as string) || null : null,
-    }).eq("id", bonusId).eq("user_id", user.id);
+    }).eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
 
   async function deleteUserWelcomeBonus(bonusId: string) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
-    await supabase.from("user_welcome_bonuses").delete().eq("id", bonusId).eq("user_id", user.id);
+    await supabase.from("user_welcome_bonuses").delete().eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
 
   async function toggleUserWelcomeBonusActive(bonusId: string, isActive: boolean) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
-    await supabase.from("user_welcome_bonuses").update({ is_active: isActive }).eq("id", bonusId).eq("user_id", user.id);
+    await supabase.from("user_welcome_bonuses").update({ is_active: isActive }).eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
 
   // User-defined Spend Bonus CRUD
   async function addUserSpendBonus(formData: FormData) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     const bonusType = formData.get("bonus_type") as string;
@@ -941,7 +941,7 @@ export default async function WalletPage() {
     
     if (bonusType === "threshold") {
       await supabase.from("user_spend_bonuses").insert({
-        user_id: user.id,
+        user_id: userId,
         wallet_card_id: formData.get("wallet_card_id") as string,
         name: formData.get("name") as string,
         bonus_type: bonusType,
@@ -957,7 +957,7 @@ export default async function WalletPage() {
     } else {
       const capAmount = formData.get("cap_amount") as string;
       await supabase.from("user_spend_bonuses").insert({
-        user_id: user.id,
+        user_id: userId,
         wallet_card_id: formData.get("wallet_card_id") as string,
         name: formData.get("name") as string,
         bonus_type: bonusType,
@@ -973,8 +973,8 @@ export default async function WalletPage() {
 
   async function updateUserSpendBonus(bonusId: string, formData: FormData) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     const bonusType = formData.get("bonus_type") as string;
@@ -997,7 +997,7 @@ export default async function WalletPage() {
         unit_value_cents: null,
         cap_amount: null,
         cap_period: null,
-      }).eq("id", bonusId).eq("user_id", user.id);
+      }).eq("id", bonusId).eq("user_id", userId);
     } else {
       const capAmount = formData.get("cap_amount") as string;
       await supabase.from("user_spend_bonuses").update({
@@ -1016,40 +1016,41 @@ export default async function WalletPage() {
         benefit_description: null,
         value_cents: null,
         period: null,
-      }).eq("id", bonusId).eq("user_id", user.id);
+      }).eq("id", bonusId).eq("user_id", userId);
     }
     revalidatePath("/wallet");
   }
 
   async function deleteUserSpendBonus(bonusId: string) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
-    await supabase.from("user_spend_bonuses").delete().eq("id", bonusId).eq("user_id", user.id);
+    await supabase.from("user_spend_bonuses").delete().eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
 
   async function toggleUserSpendBonusActive(bonusId: string, isActive: boolean) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
-    await supabase.from("user_spend_bonuses").update({ is_active: isActive }).eq("id", bonusId).eq("user_id", user.id);
+    await supabase.from("user_spend_bonuses").update({ is_active: isActive }).eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
 
   async function completeOnboarding() {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    // Use effectiveUserId to handle emulation properly
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
     await supabase.from("user_feature_flags").upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         onboarding_completed: true,
       },
       { onConflict: "user_id" }

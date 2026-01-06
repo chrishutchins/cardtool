@@ -21,6 +21,7 @@ interface Credit {
   unit_name: string | null;
   is_active: boolean;
   notes: string | null;
+  must_be_earned: boolean;
 }
 
 interface EditCreditFormProps {
@@ -164,7 +165,7 @@ export function EditCreditForm({ credit, cards, onSubmit }: EditCreditFormProps)
           />
         </div>
 
-        <div className="md:col-span-2">
+        <div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -173,6 +174,18 @@ export function EditCreditForm({ credit, cards, onSubmit }: EditCreditFormProps)
               className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
             />
             <span className="text-sm text-zinc-300">Active</span>
+          </label>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="must_be_earned"
+              defaultChecked={credit.must_be_earned}
+              className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
+            />
+            <span className="text-sm text-zinc-300">Must be earned (e.g., Free Night Awards)</span>
           </label>
         </div>
       </div>

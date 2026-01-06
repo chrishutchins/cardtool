@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
-import { Credit, CreditUsage, CreditSettings, WalletCard } from "./credits-client";
+import { Credit, CreditUsage, CreditSettings, WalletCard, UsageTransaction } from "./credits-client";
+import { parseLocalDate } from "@/lib/utils";
 
 // Tooltip component - appears on hover (desktop) or tap (mobile)
 // Smart positioning: appears above by default, below if not enough space
@@ -68,6 +69,80 @@ function Tooltip({ children, text }: { children: React.ReactNode; text: string }
   );
 }
 
+// Component to display linked Plaid transactions
+function LinkedTransactions({ 
+  transactions, 
+  isClawback 
+}: { 
+  transactions: UsageTransaction[];
+  isClawback: boolean;
+}) {
+  const [isExpanded, setIsExpanded] = useState(transactions.length <= 2);
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { 
+      month: "short", 
+      day: "numeric" 
+    });
+  };
+
+  const formatAmount = (cents: number) => {
+    const dollars = Math.abs(cents) / 100;
+    return `$${dollars.toFixed(2)}`;
+  };
+
+  const visibleTransactions = isExpanded ? transactions : transactions.slice(0, 2);
+
+  return (
+    <div className="pl-11 space-y-1">
+      <div className="flex items-center gap-2">
+        <span className={`text-xs ${isClawback ? "text-amber-400" : "text-emerald-400/70"}`}>
+          {isClawback ? "Clawback detected" : "Detected from Plaid"}
+          {transactions.length > 1 && ` (${transactions.length} transactions)`}
+        </span>
+        {transactions.length > 2 && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-xs text-zinc-500 hover:text-zinc-300"
+          >
+            {isExpanded ? "Show less" : "Show all"}
+          </button>
+        )}
+      </div>
+      <div className="space-y-0.5">
+        {visibleTransactions.map((utxn, idx) => {
+          const txn = utxn.user_plaid_transactions;
+          if (!txn) return null;
+          
+          const isLast = idx === visibleTransactions.length - 1 && (isExpanded || transactions.length <= 2);
+          const prefix = isLast ? "└─" : "├─";
+          
+          return (
+            <div 
+              key={utxn.id}
+              className="flex items-center gap-2 text-xs text-zinc-500"
+            >
+              <span className="text-zinc-600 font-mono">{prefix}</span>
+              <span className={isClawback ? "text-amber-400/70" : "text-emerald-400/70"}>
+                {formatAmount(txn.amount_cents)}
+              </span>
+              <span className="truncate max-w-[200px]" title={txn.name}>
+                "{txn.name}"
+              </span>
+              <span className="text-zinc-600">on {formatDate(txn.date)}</span>
+            </div>
+          );
+        })}
+        {!isExpanded && transactions.length > 2 && (
+          <div className="text-xs text-zinc-600 pl-4">
+            ... and {transactions.length - 2} more
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface CreditCardProps {
   credit: Credit;
   walletCard: WalletCard;
@@ -75,6 +150,8 @@ interface CreditCardProps {
   usage: CreditUsage[];
   viewMode: "current" | "history";
   selectedYear: number;
+  historyPeriodStart?: string;
+  historyPeriodEnd?: string;
   onMarkUsed: (credit: Credit, walletCard: WalletCard, periodStart: string, periodEnd: string) => void;
   onMarkUsedDirect: (formData: FormData) => Promise<void>;
   onDeleteUsage: (usageId: string) => Promise<void>;
@@ -98,6 +175,8 @@ export function CreditCard({
   usage,
   viewMode,
   selectedYear,
+  historyPeriodStart,
+  historyPeriodEnd,
   onMarkUsed,
   onMarkUsedDirect,
   onDeleteUsage,
@@ -121,7 +200,7 @@ export function CreditCard({
   const lastUsage = useMemo(() => {
     if (credit.reset_cycle !== "usage_based") return null;
     const sorted = [...usage].sort((a, b) => 
-      new Date(b.used_at).getTime() - new Date(a.used_at).getTime()
+      parseLocalDate(b.used_at).getTime() - parseLocalDate(a.used_at).getTime()
     );
     return sorted[0] ?? null;
   }, [credit.reset_cycle, usage]);
@@ -137,7 +216,7 @@ export function CreditCard({
     const now = new Date();
 
     if (credit.reset_cycle === "cardmember_year" && walletCard.approval_date) {
-      const approval = new Date(walletCard.approval_date);
+      const approval = parseLocalDate(walletCard.approval_date);
       let nextAnniversary = new Date(now.getFullYear(), approval.getMonth(), approval.getDate());
       if (nextAnniversary <= now) {
         nextAnniversary = new Date(now.getFullYear() + 1, approval.getMonth(), approval.getDate());
@@ -149,7 +228,7 @@ export function CreditCard({
     }
 
     if (credit.reset_cycle === "usage_based" && lastUsage && credit.renewal_period_months) {
-      const lastUsedDate = new Date(lastUsage.used_at);
+      const lastUsedDate = parseLocalDate(lastUsage.used_at);
       const nextReset = new Date(lastUsedDate);
       nextReset.setMonth(nextReset.getMonth() + credit.renewal_period_months);
       return {
@@ -166,14 +245,24 @@ export function CreditCard({
     if (!isUsageBased || !lastUsage || !credit.renewal_period_months) return false;
     if (viewMode === "history") return false;
     
-    const lastUsedDate = new Date(lastUsage.used_at);
+    const lastUsedDate = parseLocalDate(lastUsage.used_at);
     const nextReset = new Date(lastUsedDate);
     nextReset.setMonth(nextReset.getMonth() + credit.renewal_period_months);
     return new Date() < nextReset;
   }, [isUsageBased, lastUsage, credit.renewal_period_months, viewMode]);
 
   // Generate current period based on reset cycle
+  // In history view, use the provided historyPeriodStart/End instead
   const currentPeriod = useMemo((): Period | null => {
+    // If history period is provided, use it directly
+    if (historyPeriodStart && historyPeriodEnd) {
+      const start = new Date(historyPeriodStart + "T00:00:00");
+      const end = new Date(historyPeriodEnd + "T00:00:00");
+      const label = start.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      const shortLabel = start.toLocaleDateString("en-US", { month: "short" });
+      return { start, end, label, shortLabel };
+    }
+    
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
@@ -195,7 +284,7 @@ export function CreditCard({
     } else if (credit.reset_cycle === "annual") {
       return { start: new Date(year, 0, 1), end: new Date(year, 11, 31), label: `${year}`, shortLabel: `${year}` };
     } else if (credit.reset_cycle === "cardmember_year" && walletCard.approval_date) {
-      const approval = new Date(walletCard.approval_date);
+      const approval = parseLocalDate(walletCard.approval_date);
       const startYear = approval.getFullYear();
       const yearsElapsed = year - startYear;
       const start = new Date(startYear + yearsElapsed, approval.getMonth(), approval.getDate());
@@ -208,7 +297,7 @@ export function CreditCard({
       return { start, end, label: `Year ${yearsElapsed + 1}`, shortLabel: `Year ${yearsElapsed + 1}` };
     } else if (credit.reset_cycle === "usage_based") {
       if (lastUsage && credit.renewal_period_months) {
-        const lastUsedDate = new Date(lastUsage.used_at);
+        const lastUsedDate = parseLocalDate(lastUsage.used_at);
         const nextReset = new Date(lastUsedDate);
         nextReset.setMonth(nextReset.getMonth() + credit.renewal_period_months);
         return { start: lastUsedDate, end: nextReset, label: "Current", shortLabel: "Current" };
@@ -217,7 +306,7 @@ export function CreditCard({
     }
 
     return null;
-  }, [credit.reset_cycle, credit.renewal_period_months, walletCard.approval_date, lastUsage]);
+  }, [credit.reset_cycle, credit.renewal_period_months, walletCard.approval_date, lastUsage, historyPeriodStart, historyPeriodEnd]);
 
   // Check if current period has usage
   const currentPeriodUsage = useMemo(() => {
@@ -267,24 +356,38 @@ export function CreditCard({
     if (!currentPeriod) return null;
     if (credit.reset_cycle === "usage_based") {
       if (lastUsage && nextResetDate) {
-        return `Renews ${nextResetDate.label}`;
+        return `Resets ${nextResetDate.label}`;
       }
       return "Available now";
     }
-    return `Expires ${currentPeriod.end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    return `Resets ${currentPeriod.end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  };
+
+  // Pluralize unit name with proper rules
+  const pluralizeUnit = (count: number, unitName: string) => {
+    if (count === 1) return unitName;
+    // Already plural (ends with s but not ss/sh/ch/x/z patterns that need es)
+    if (unitName.endsWith("s") && !unitName.endsWith("ss") && !unitName.endsWith("Pass")) {
+      return unitName;
+    }
+    // Words ending in s, ss, sh, ch, x, z need "es"
+    if (/(?:s|ss|sh|ch|x|z)$/i.test(unitName)) {
+      return `${unitName}es`;
+    }
+    return `${unitName}s`;
   };
 
   // Format credit value display
   const formatValue = () => {
     const effectiveValue = settings?.user_value_override_cents ?? credit.default_value_cents;
     if (effectiveValue) {
-      return `$${(effectiveValue / 100).toFixed(0)}`;
+      return `$${(effectiveValue / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     }
     if (credit.default_quantity && credit.unit_name) {
-      return `${credit.default_quantity} ${credit.unit_name}${credit.default_quantity > 1 ? "s" : ""}`;
+      return `${credit.default_quantity.toLocaleString()} ${pluralizeUnit(credit.default_quantity, credit.unit_name)}`;
     }
     if (credit.default_quantity) {
-      return `${credit.default_quantity}`;
+      return credit.default_quantity.toLocaleString();
     }
     return "—";
   };
@@ -297,14 +400,14 @@ export function CreditCard({
     if (credit.default_value_cents) {
       const totalValue = settings?.user_value_override_cents ?? credit.default_value_cents;
       const remainingValue = (remaining / defaultAmount) * totalValue;
-      return `$${(remainingValue / 100).toFixed(0)}`;
+      return `$${(remainingValue / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     }
     
     if (credit.unit_name) {
-      return `${remaining} ${credit.unit_name}${remaining !== 1 ? "s" : ""}`;
+      return `${remaining.toLocaleString()} ${pluralizeUnit(remaining, credit.unit_name)}`;
     }
     
-    return `${remaining}`;
+    return remaining.toLocaleString();
   };
 
   const handleSaveSettings = async () => {
@@ -330,8 +433,11 @@ export function CreditCard({
     await onUpdateSettings(formData);
   };
 
-  const handleSaveApprovalDate = async () => {
-    await onUpdateApprovalDate(walletCard.id, approvalDate || null);
+  const handleSaveApprovalDate = () => {
+    if (!approvalDate) return;
+    startTransition(async () => {
+      await onUpdateApprovalDate(walletCard.id, approvalDate || null);
+    });
   };
 
   const handleSetNeverUsed = async () => {
@@ -390,7 +496,7 @@ export function CreditCard({
               </span>
             </div>
             {showCardName && (
-              <div className="text-xs text-zinc-500 mt-0.5 truncate">{walletCard.display_name}</div>
+              <div className="text-sm text-zinc-500 mt-0.5">{walletCard.display_name}</div>
             )}
           </div>
         </div>
@@ -408,7 +514,7 @@ export function CreditCard({
               disabled={!usageBasedDate || isPending}
               className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              Set
+              {isPending ? "Saving..." : "Set"}
             </button>
             <button
               onClick={() => setShowUsageBasedSetup(false)}
@@ -458,9 +564,10 @@ export function CreditCard({
           />
           <button
             onClick={handleSaveApprovalDate}
-            className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500"
+            disabled={!approvalDate || isPending}
+            className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
           >
-            Save
+            {isPending ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
@@ -520,7 +627,7 @@ export function CreditCard({
               </span>
             </div>
             {showCardName && (
-              <div className="text-xs text-zinc-500 mt-0.5 truncate">{walletCard.display_name}</div>
+              <div className="text-sm text-zinc-500 mt-0.5">{walletCard.display_name}</div>
             )}
             {settings?.notes && settings.notes !== "NEVER_USED" && (
               <div className="text-xs text-sky-400/70 mt-0.5 italic truncate">{settings.notes}</div>
@@ -588,9 +695,9 @@ export function CreditCard({
         </div>
       </div>
 
-      {/* Undo button for used credits */}
+      {/* Undo button and linked transactions for used credits */}
       {currentPeriodUsage > 0 && usage.length > 0 && (
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 space-y-2">
           {usage
             .filter(u => {
               if (!currentPeriod) return false;
@@ -598,16 +705,24 @@ export function CreditCard({
               return u.period_start === periodStartStr;
             })
             .map((u) => (
-              <button
-                key={u.id}
-                onClick={() => onDeleteUsage(u.id)}
-                className="text-xs text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                Undo
-              </button>
+              <div key={u.id} className="space-y-1">
+                {/* Show linked transactions if auto-detected */}
+                {u.auto_detected && u.user_credit_usage_transactions && u.user_credit_usage_transactions.length > 0 && (
+                  <LinkedTransactions 
+                    transactions={u.user_credit_usage_transactions}
+                    isClawback={u.is_clawback || false}
+                  />
+                )}
+                <button
+                  onClick={() => onDeleteUsage(u.id)}
+                  className="text-xs text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  {u.auto_detected ? "Unlink" : "Undo"}
+                </button>
+              </div>
             ))}
         </div>
       )}
@@ -639,7 +754,7 @@ export function CreditCard({
             </div>
           </div>
           
-          {credit.reset_cycle === "monthly" && (
+          {credit.reset_cycle !== "usage_based" && (
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -647,7 +762,7 @@ export function CreditCard({
                 onChange={(e) => setIsAutoRepeat(e.target.checked)}
                 className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
               />
-              <span className="text-xs text-zinc-300">Automatically mark used every month</span>
+              <span className="text-xs text-zinc-300">Automatically mark used each period</span>
             </label>
           )}
 

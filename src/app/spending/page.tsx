@@ -103,8 +103,8 @@ export default async function SpendingPage() {
     largePurchaseSpendCents?: number | null
   ) {
     "use server";
-    const user = await currentUser();
-    if (!user) return;
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
 
     const supabase = await createClient();
 
@@ -113,7 +113,7 @@ export default async function SpendingPage() {
       await supabase
         .from("user_category_spend")
         .delete()
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("category_id", categoryId);
     } else {
       // Build the update object - annual_spend_cents is required
@@ -123,7 +123,7 @@ export default async function SpendingPage() {
         annual_spend_cents: number;
         large_purchase_spend_cents?: number;
       } = {
-        user_id: user.id,
+        user_id: userId,
         category_id: categoryId,
         annual_spend_cents: annualSpendCents ?? 0,
       };

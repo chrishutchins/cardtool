@@ -59,6 +59,16 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
   const allCredits = (creditsResult.data ?? []) as unknown as Credit[];
   const cards = cardsResult.data ?? [];
 
+  // Sort credits by card name first, then credit name
+  allCredits.sort((a, b) => {
+    const cardNameA = a.card?.name?.toLowerCase() ?? "";
+    const cardNameB = b.card?.name?.toLowerCase() ?? "";
+    if (cardNameA !== cardNameB) {
+      return cardNameA.localeCompare(cardNameB);
+    }
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+
   // Filter credits by card if specified
   const credits = filterCardId
     ? allCredits.filter((c) => c.card?.id === filterCardId)
@@ -90,6 +100,7 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
     const unitName = unitNameRaw?.trim() || null;
     const notesRaw = formData.get("notes") as string;
     const notes = notesRaw?.trim() || null;
+    const mustBeEarned = formData.get("must_be_earned") === "true";
 
     const defaultValueCents = defaultValueStr ? Math.round(parseFloat(defaultValueStr) * 100) : null;
     const defaultQuantity = defaultQuantityStr ? parseInt(defaultQuantityStr) : null;
@@ -106,6 +117,7 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
       unit_name: unitName,
       notes,
       is_active: true,
+      must_be_earned: mustBeEarned,
     });
 
     revalidatePath("/admin/credits");
