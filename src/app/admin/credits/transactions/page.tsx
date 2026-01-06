@@ -114,6 +114,7 @@ export default async function AdminTransactionsPage({
       name,
       amount_cents,
       date,
+      authorized_date,
       pending,
       category,
       merchant_name,

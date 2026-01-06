@@ -67,11 +67,19 @@ export default async function CreditsPage() {
       unit_name,
       notes,
       renewal_period_months,
-      must_be_earned
+      must_be_earned,
+      inventory_type_id
     `)
     .in("card_id", walletCardIds.length > 0 ? walletCardIds : ["none"])
     .eq("is_active", true)
     .order("name");
+
+  // Fetch inventory types for the add-to-inventory flow
+  const { data: inventoryTypes } = await supabase
+    .from("inventory_types")
+    .select("id, name, slug, tracking_type")
+    .eq("is_active", true)
+    .order("display_order");
 
   // Get user's credit usage with linked transactions
   const walletEntryIds = walletCards?.map((wc) => wc.id) ?? [];
@@ -100,6 +108,7 @@ export default async function CreditsPage() {
           name,
           amount_cents,
           date,
+          authorized_date,
           merchant_name
         )
       )
@@ -559,6 +568,51 @@ export default async function CreditsPage() {
     revalidatePath("/credits");
   }
 
+  async function addInventoryItem(formData: FormData) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = await createClient();
+
+    const typeId = formData.get("type_id") as string;
+    const name = formData.get("name") as string;
+    const brandRaw = formData.get("brand") as string;
+    const brand = brandRaw?.trim() || null;
+    const expirationDateRaw = formData.get("expiration_date") as string;
+    const expirationDate = expirationDateRaw?.trim() || null;
+    const code = (formData.get("code") as string)?.trim() || null;
+    const pin = (formData.get("pin") as string)?.trim() || null;
+    const url = (formData.get("url") as string)?.trim() || null;
+    const notes = (formData.get("notes") as string)?.trim() || null;
+    const quantityStr = formData.get("quantity") as string;
+    const quantity = quantityStr ? parseInt(quantityStr) : 1;
+    const originalValueStr = formData.get("original_value") as string;
+    const originalValueCents = originalValueStr ? Math.round(parseFloat(originalValueStr) * 100) : null;
+    const sourceCreditUsageId = (formData.get("source_credit_usage_id") as string)?.trim() || null;
+
+    await supabase.from("user_inventory").insert({
+      user_id: userId,
+      type_id: typeId,
+      name,
+      brand,
+      expiration_date: expirationDate,
+      code,
+      pin,
+      url,
+      notes,
+      quantity,
+      quantity_used: 0,
+      original_value_cents: originalValueCents,
+      remaining_value_cents: originalValueCents,
+      is_used: false,
+      source_credit_usage_id: sourceCreditUsageId,
+    });
+
+    revalidatePath("/credits");
+    revalidatePath("/inventory");
+  }
+
   // Transform data for client component
   type WalletCardData = {
     id: string;
@@ -593,12 +647,14 @@ export default async function CreditsPage() {
           credits={credits ?? []}
           creditUsage={creditUsage ?? []}
           creditSettings={creditSettings ?? []}
+          inventoryTypes={inventoryTypes ?? []}
           onMarkUsed={markCreditUsed}
           onDeleteUsage={deleteCreditUsage}
           onUpdateSettings={updateCreditSettings}
           onUpdateApprovalDate={updateApprovalDate}
           onUpdateUsagePeriod={updateCreditUsagePeriod}
           onMoveTransaction={moveTransactionToPeriod}
+          onAddInventoryItem={addInventoryItem}
         />
       </div>
     </div>

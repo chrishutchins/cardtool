@@ -19,7 +19,8 @@ CREATE TABLE user_plaid_transactions (
   plaid_transaction_id text NOT NULL UNIQUE,
   name text NOT NULL,
   amount_cents integer NOT NULL,       -- negative = credit, positive = debit
-  date date NOT NULL,
+  date date NOT NULL,                  -- posted date from Plaid
+  authorized_date date,                -- authorized date from Plaid (when transaction actually occurred)
   pending boolean DEFAULT false,
   category text[],
   merchant_name text,

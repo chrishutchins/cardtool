@@ -13,6 +13,7 @@ interface MatchedTransaction {
   name: string;
   amount_cents: number;
   date: string;
+  authorized_date?: string | null;
   merchant_name: string | null;
   card_name: string | null;
 }
@@ -203,7 +204,7 @@ function TransactionsModal({
                         )}
                       </div>
                       <div className="text-xs text-zinc-500">
-                        {parseLocalDate(txn.date).toLocaleDateString("en-US", {
+                        {parseLocalDate(txn.authorized_date || txn.date).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",

@@ -113,6 +113,7 @@ export async function GET(request: NextRequest) {
               name: string;
               amount: number;
               date: string;
+              authorized_date?: string | null;
               pending: boolean;
               category?: string[] | null;
               merchant_name?: string | null;
@@ -158,6 +159,7 @@ export async function GET(request: NextRequest) {
                 name: txn.name,
                 amount_cents: Math.round(txn.amount * 100),
                 date: txn.date,
+                authorized_date: txn.authorized_date || null,
                 pending: txn.pending,
                 category: txn.category || null,
                 merchant_name: txn.merchant_name || null,

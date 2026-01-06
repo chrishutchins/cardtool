@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
           name: string;
           amount: number;
           date: string;
+          authorized_date?: string | null;
           pending: boolean;
           category?: string[] | null;
           merchant_name?: string | null;
@@ -179,6 +180,7 @@ export async function POST(request: NextRequest) {
             name: txn.name,
             amount_cents: Math.round(txn.amount * 100), // Plaid returns positive for debits, negative for credits
             date: txn.date,
+            authorized_date: txn.authorized_date || null,
             pending: txn.pending,
             category: txn.category || null,
             merchant_name: txn.merchant_name || null,

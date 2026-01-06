@@ -16,6 +16,7 @@ interface PlaidTransaction {
   name: string;
   amount_cents: number;
   date: string;
+  authorized_date?: string | null;
   pending: boolean | null;
   category: string[] | null;
   merchant_name: string | null;
@@ -417,10 +418,14 @@ export async function matchTransactionsToCredits(
     // Determine if this is a credit or clawback
     const isClawback = txn.amount_cents > 0;
 
+    // Use authorized_date when available (the date the user actually made the transaction)
+    // Fall back to date (posted date) if authorized_date is not available
+    const effectiveDate = txn.authorized_date || txn.date;
+
     // Calculate the period for this transaction
     // Pass date strings directly so parseLocalDate handles timezone correctly
     const { periodStart, periodEnd } = calculateCreditPeriod(
-      txn.date,
+      effectiveDate,
       credit.reset_cycle,
       wallet.approval_date,
       credit.reset_day_of_month
@@ -485,7 +490,7 @@ export async function matchTransactionsToCredits(
               amount_used: 0, // Clawback with no prior usage
               auto_detected: true,
               is_clawback: true,
-              used_at: txn.date,
+              used_at: effectiveDate,
               slot_number: 1,
             })
             .select('id')
@@ -545,7 +550,7 @@ export async function matchTransactionsToCredits(
                 period_end: periodEndStr,
                 amount_used: absoluteAmount / 100,
                 auto_detected: true,
-                used_at: txn.date,
+                used_at: effectiveDate,
                 slot_number: nextSlot,
               })
               .select('id')
@@ -585,7 +590,7 @@ export async function matchTransactionsToCredits(
               period_end: periodEndStr,
               amount_used: absoluteAmount / 100,
               auto_detected: true,
-              used_at: txn.date,
+              used_at: effectiveDate,
               slot_number: 1,
             })
             .select('id')

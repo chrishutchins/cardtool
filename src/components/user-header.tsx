@@ -45,6 +45,14 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
         label: "Credits", 
         onboardingId: "credits" 
       });
+      
+      // Add Inventory link after Credits
+      const creditsIndex = items.findIndex(item => item.href === "/credits");
+      items.splice(creditsIndex + 1, 0, { 
+        href: "/inventory", 
+        label: "Inventory", 
+        onboardingId: "inventory" 
+      });
     }
     
     return items;

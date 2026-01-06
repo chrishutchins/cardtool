@@ -130,7 +130,7 @@ function LinkedTransactions({
               <span className="truncate max-w-[200px]" title={txn.name}>
                 "{txn.name}"
               </span>
-              <span className="text-zinc-600">on {formatDate(txn.date)}</span>
+              <span className="text-zinc-600">on {formatDate(txn.authorized_date || txn.date)}</span>
             </div>
           );
         })}

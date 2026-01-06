@@ -1,10 +1,92 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { MarkUsedModal } from "./mark-used-modal";
 import { CreditCard } from "./credit-card";
 import { CreditHistoryRow } from "./credit-history-row";
 import { parseLocalDate } from "@/lib/utils";
+import { AddInventoryModal } from "@/app/inventory/add-inventory-modal";
+
+// Prompt to add earned credit to inventory
+function AddToInventoryPrompt({
+  credit,
+  inventoryTypes,
+  onClose,
+  onSubmit,
+}: {
+  credit: Credit;
+  inventoryTypes: InventoryType[];
+  onClose: () => void;
+  onSubmit: (formData: FormData) => Promise<void>;
+}) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  
+  const inventoryType = inventoryTypes.find(t => t.id === credit.inventory_type_id);
+  
+  if (!inventoryType) {
+    // Type not found, close
+    onClose();
+    return null;
+  }
+
+  if (showAddModal) {
+    return (
+      <AddInventoryModal
+        inventoryTypes={inventoryTypes}
+        brandSuggestions={credit.brand_name ? [credit.brand_name] : []}
+        onClose={onClose}
+        onSubmit={onSubmit}
+        prefillData={{
+          name: credit.name,
+          brand: credit.brand_name ?? undefined,
+          type_id: credit.inventory_type_id ?? undefined,
+          original_value: credit.default_value_cents ? credit.default_value_cents / 100 : undefined,
+          quantity: credit.default_quantity ?? undefined,
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-800 shadow-xl">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-800">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Credit Earned!</h2>
+            <p className="text-sm text-zinc-400">{credit.name}</p>
+          </div>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-zinc-300">
+            Would you like to add this to your inventory as a <strong className="text-white">{inventoryType.name}</strong>?
+          </p>
+          <p className="text-xs text-zinc-500">
+            This will help you track the item&apos;s expiration, code, and usage.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
+            >
+              Skip
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
+            >
+              Add to Inventory
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export interface WalletCard {
   id: string;
@@ -28,6 +110,14 @@ export interface Credit {
   renewal_period_months: number | null;
   must_be_earned: boolean;
   credit_count?: number;
+  inventory_type_id?: string | null;
+}
+
+export interface InventoryType {
+  id: string;
+  name: string;
+  slug: string;
+  tracking_type: string;
 }
 
 // Extended credit with slot information for multi-use credits
@@ -42,6 +132,7 @@ export interface LinkedTransaction {
   name: string;
   amount_cents: number;
   date: string;
+  authorized_date?: string | null;
   merchant_name: string | null;
 }
 
@@ -83,12 +174,14 @@ interface CreditsClientProps {
   credits: Credit[];
   creditUsage: CreditUsage[];
   creditSettings: CreditSettings[];
+  inventoryTypes: InventoryType[];
   onMarkUsed: (formData: FormData) => Promise<void>;
   onDeleteUsage: (usageId: string) => Promise<void>;
   onUpdateSettings: (formData: FormData) => Promise<void>;
   onUpdateApprovalDate: (walletId: string, date: string | null) => Promise<void>;
   onUpdateUsagePeriod?: (usageId: string, newDate: string) => Promise<void>;
   onMoveTransaction?: (transactionId: string, newDate: string) => Promise<void>;
+  onAddInventoryItem: (formData: FormData) => Promise<void>;
 }
 
 type SortMode = "card" | "brand" | "expiration";
@@ -157,12 +250,14 @@ export function CreditsClient({
   credits,
   creditUsage,
   creditSettings,
+  inventoryTypes,
   onMarkUsed,
   onDeleteUsage,
   onUpdateSettings,
   onUpdateApprovalDate,
   onUpdateUsagePeriod,
   onMoveTransaction,
+  onAddInventoryItem,
 }: CreditsClientProps) {
   const [sortMode, setSortMode] = useState<SortMode>("expiration");
   const [viewMode, setViewMode] = useState<ViewMode>("current");
@@ -175,6 +270,10 @@ export function CreditsClient({
     walletCard: WalletCard;
     periodStart: string;
     periodEnd: string;
+  } | null>(null);
+  const [inventoryPrompt, setInventoryPrompt] = useState<{
+    credit: Credit;
+    usageId?: string;
   } | null>(null);
 
   // Build wallet card map
@@ -698,8 +797,25 @@ export function CreditsClient({
             s => s.user_wallet_id === markUsedModal.walletCard.id && s.credit_id === markUsedModal.credit.id
           ) ?? null}
           onClose={() => setMarkUsedModal(null)}
-          onSubmit={onMarkUsed}
+          onSubmit={async (formData) => {
+            await onMarkUsed(formData);
+            // Check if this is a must_be_earned credit with an inventory type
+            const credit = markUsedModal.credit;
+            if (credit.must_be_earned && credit.inventory_type_id) {
+              setInventoryPrompt({ credit });
+            }
+          }}
           onUpdateSettings={onUpdateSettings}
+        />
+      )}
+
+      {/* Add to Inventory Prompt Modal */}
+      {inventoryPrompt && (
+        <AddToInventoryPrompt
+          credit={inventoryPrompt.credit}
+          inventoryTypes={inventoryTypes}
+          onClose={() => setInventoryPrompt(null)}
+          onSubmit={onAddInventoryItem}
         />
       )}
     </div>

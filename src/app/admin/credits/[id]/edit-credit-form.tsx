@@ -9,6 +9,13 @@ interface Card {
   slug: string;
 }
 
+interface InventoryType {
+  id: string;
+  name: string;
+  slug: string;
+  tracking_type: "quantity" | "dollar_value" | "single_use";
+}
+
 interface Credit {
   id: string;
   card_id: string;
@@ -23,16 +30,19 @@ interface Credit {
   is_active: boolean;
   notes: string | null;
   must_be_earned: boolean;
+  inventory_type_id: string | null;
 }
 
 interface EditCreditFormProps {
   credit: Credit;
   cards: Card[];
+  inventoryTypes: InventoryType[];
   onSubmit: (formData: FormData) => Promise<void>;
 }
 
-export function EditCreditForm({ credit, cards, onSubmit }: EditCreditFormProps) {
+export function EditCreditForm({ credit, cards, inventoryTypes, onSubmit }: EditCreditFormProps) {
   const [resetCycle, setResetCycle] = useState(credit.reset_cycle);
+  const [mustBeEarned, setMustBeEarned] = useState(credit.must_be_earned);
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -197,12 +207,37 @@ export function EditCreditForm({ credit, cards, onSubmit }: EditCreditFormProps)
             <input
               type="checkbox"
               name="must_be_earned"
-              defaultChecked={credit.must_be_earned}
+              checked={mustBeEarned}
+              onChange={(e) => setMustBeEarned(e.target.checked)}
               className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
             />
             <span className="text-sm text-zinc-300">Must be earned (e.g., Free Night Awards)</span>
           </label>
         </div>
+
+        {mustBeEarned && (
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">
+              Inventory Type
+              <span className="text-zinc-500 font-normal ml-1">(when marked as earned)</span>
+            </label>
+            <select
+              name="inventory_type_id"
+              defaultValue={credit.inventory_type_id ?? ""}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+            >
+              <option value="">No inventory item (e.g., status perks)</option>
+              {inventoryTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name} ({type.tracking_type.replace("_", " ")})
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-zinc-500">
+              When this credit is marked as earned, prompt user to add it to their inventory as this type
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3">

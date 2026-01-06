@@ -12,7 +12,7 @@ export default async function EditCreditPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const [creditResult, cardsResult] = await Promise.all([
+  const [creditResult, cardsResult, inventoryTypesResult] = await Promise.all([
     supabase
       .from("card_credits")
       .select(`
@@ -28,7 +28,8 @@ export default async function EditCreditPage({ params }: Props) {
         unit_name,
         is_active,
         notes,
-        must_be_earned
+        must_be_earned,
+        inventory_type_id
       `)
       .eq("id", id)
       .single(),
@@ -37,6 +38,11 @@ export default async function EditCreditPage({ params }: Props) {
       .select("id, name, slug")
       .eq("is_active", true)
       .order("name"),
+    supabase
+      .from("inventory_types")
+      .select("id, name, slug, tracking_type")
+      .eq("is_active", true)
+      .order("display_order"),
   ]);
 
   if (!creditResult.data) {
@@ -45,6 +51,7 @@ export default async function EditCreditPage({ params }: Props) {
 
   const credit = creditResult.data;
   const cards = cardsResult.data ?? [];
+  const inventoryTypes = inventoryTypesResult.data ?? [];
 
   async function updateCredit(formData: FormData) {
     "use server";
@@ -66,6 +73,8 @@ export default async function EditCreditPage({ params }: Props) {
     const notes = notesRaw?.trim() || null;
     const isActive = formData.get("is_active") === "on";
     const mustBeEarned = formData.get("must_be_earned") === "on";
+    const inventoryTypeIdRaw = formData.get("inventory_type_id") as string;
+    const inventoryTypeId = inventoryTypeIdRaw?.trim() || null;
 
     const defaultValueCents = defaultValueStr ? Math.round(parseFloat(defaultValueStr) * 100) : null;
     const defaultQuantity = defaultQuantityStr ? parseInt(defaultQuantityStr) : null;
@@ -86,6 +95,7 @@ export default async function EditCreditPage({ params }: Props) {
       notes,
       is_active: isActive,
       must_be_earned: mustBeEarned,
+      inventory_type_id: inventoryTypeId,
     }).eq("id", creditId);
 
     revalidatePath("/admin/credits");
@@ -103,7 +113,7 @@ export default async function EditCreditPage({ params }: Props) {
       </div>
 
       <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <EditCreditForm credit={credit} cards={cards} onSubmit={updateCredit} />
+        <EditCreditForm credit={credit} cards={cards} inventoryTypes={inventoryTypes} onSubmit={updateCredit} />
       </div>
     </div>
   );

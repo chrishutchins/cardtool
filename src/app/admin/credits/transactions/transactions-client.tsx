@@ -23,6 +23,7 @@ interface Transaction {
   name: string;
   amount_cents: number;
   date: string;
+  authorized_date?: string | null;
   pending: boolean | null;
   category: string[] | null;
   merchant_name: string | null;
@@ -588,7 +589,7 @@ export function TransactionsClient({
                             className="flex items-center justify-between py-2 px-3 bg-zinc-800/30 rounded text-sm"
                           >
                             <div className="flex items-center gap-4">
-                              <span className="text-zinc-500">{formatDate(txn.date)}</span>
+                              <span className="text-zinc-500">{formatDate(txn.authorized_date || txn.date)}</span>
                               <span className="text-zinc-300">{txn.name}</span>
                               {txn.merchant_name && (
                                 <span className="text-zinc-500">({txn.merchant_name})</span>

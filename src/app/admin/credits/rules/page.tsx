@@ -17,6 +17,7 @@ interface MatchedTransaction {
   name: string;
   amount_cents: number;
   date: string;
+  authorized_date?: string | null;
   merchant_name: string | null;
   card_name: string | null;
 }
@@ -91,7 +92,8 @@ export default async function RulesPage() {
       id, 
       name, 
       amount_cents, 
-      date, 
+      date,
+      authorized_date, 
       merchant_name, 
       matched_rule_id,
       user_linked_accounts:linked_account_id (
@@ -125,6 +127,7 @@ export default async function RulesPage() {
         name: t.name,
         amount_cents: t.amount_cents,
         date: t.date,
+        authorized_date: t.authorized_date,
         merchant_name: t.merchant_name,
         card_name: linkedAccount?.user_wallets?.custom_name || linkedAccount?.user_wallets?.cards?.name || null,
       });
