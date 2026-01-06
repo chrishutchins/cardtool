@@ -332,7 +332,7 @@ export async function matchTransactionsToCredits(
   }
 
   // Also fetch all credits for rule matching (rules may reference credits on cards user doesn't have)
-  const { data: allCreditsForRules } = await supabase
+  const { data: allCreditsForRules, error: allCreditsError } = await supabase
     .from('card_credits')
     .select(`
       *,
@@ -342,6 +342,11 @@ export async function matchTransactionsToCredits(
       )
     `)
     .eq('is_active', true);
+
+  if (allCreditsError) {
+    errors.push(`Failed to fetch all credits for rules: ${allCreditsError.message}`);
+    return { matched, clawbacks, errors };
+  }
 
   // Create lookup maps
   const creditById = new Map<string, CardCredit>();

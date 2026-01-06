@@ -355,11 +355,12 @@ export default async function CreditsPage() {
     }
 
     // Calculate the new period based on the new date
+    // Pass date strings directly - calculateCreditPeriod uses parseLocalDate internally to avoid timezone issues
     const creditData = usage.card_credits as unknown as { reset_cycle: string; reset_day_of_month: number | null };
     const { periodStart, periodEnd } = calculateCreditPeriod(
-      new Date(newDate),
+      newDate,
       creditData.reset_cycle as "monthly" | "quarterly" | "semiannual" | "annual" | "cardmember_year" | "usage_based",
-      walletData.approval_date ? new Date(walletData.approval_date) : null,
+      walletData.approval_date,
       creditData.reset_day_of_month
     );
 
