@@ -277,11 +277,23 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
                             <span className={`text-2xl font-bold ${getStatusColor(rule.status)}`}>
                               {rule.userCount}
                             </span>
-                            <span className="text-zinc-500">/</span>
-                            <span className="text-lg text-zinc-400">{rule.card_limit}</span>
-                            <span className="text-sm text-zinc-500 ml-1">
-                              {formatRuleLabel(rule)}
-                            </span>
+                            {rule.rule_type === "velocity" ? (
+                              <>
+                                <span className="text-sm text-zinc-500">
+                                  in {rule.time_window}{rule.time_unit === "days" ? "d" : "mo"}
+                                </span>
+                                <span className="text-zinc-600 mx-1">·</span>
+                                <span className="text-sm text-zinc-400">
+                                  limit {rule.card_limit}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-zinc-500">/</span>
+                                <span className="text-lg text-zinc-400">{rule.card_limit}</span>
+                                <span className="text-sm text-zinc-500 ml-1">max</span>
+                              </>
+                            )}
                           </div>
 
                           {/* Description */}
