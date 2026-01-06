@@ -310,7 +310,9 @@ export async function matchTransactionsToCredits(
   // Get all issuers from user's cards
   const issuerIds = new Set<string>();
   walletCards?.forEach(wc => {
-    const card = wc.cards as { id: string; issuer_id: string | null } | null;
+    // Handle both single object and array return types from Supabase
+    const cardData = wc.cards;
+    const card = Array.isArray(cardData) ? cardData[0] : cardData;
     if (card?.issuer_id) {
       issuerIds.add(card.issuer_id);
     }

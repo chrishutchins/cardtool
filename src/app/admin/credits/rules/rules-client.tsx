@@ -8,7 +8,7 @@ interface Rule {
   id: string;
   pattern: string;
   match_amount_cents: number | null;
-  created_at: string;
+  created_at: string | null;
   credit: {
     id: string;
     name: string;

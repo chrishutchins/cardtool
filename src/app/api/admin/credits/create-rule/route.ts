@@ -63,6 +63,14 @@ export async function POST(request: NextRequest) {
       rule = newRule;
     }
 
+    // At this point, rule is guaranteed to exist
+    if (!rule) {
+      return NextResponse.json(
+        { error: "Failed to create or find matching rule" },
+        { status: 500 }
+      );
+    }
+
     // Re-run matching for all unmatched transactions that might now match
     const { data: unmatchedTxns } = await supabase
       .from("user_plaid_transactions")

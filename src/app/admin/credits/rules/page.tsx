@@ -13,7 +13,7 @@ interface Rule {
   id: string;
   pattern: string;
   match_amount_cents: number | null;
-  created_at: string;
+  created_at: string | null;
   credit: {
     id: string;
     name: string;
@@ -86,7 +86,9 @@ export default async function RulesPage() {
   const countByRuleId = new Map<string, number>();
   matchCounts?.forEach((t) => {
     const ruleId = t.matched_rule_id;
-    countByRuleId.set(ruleId, (countByRuleId.get(ruleId) || 0) + 1);
+    if (ruleId) {
+      countByRuleId.set(ruleId, (countByRuleId.get(ruleId) || 0) + 1);
+    }
   });
 
   // Transform rules data

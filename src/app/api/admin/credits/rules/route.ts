@@ -54,7 +54,9 @@ export async function GET() {
     const countByRuleId = new Map<string, number>();
     matchCounts?.forEach((t) => {
       const ruleId = t.matched_rule_id;
-      countByRuleId.set(ruleId, (countByRuleId.get(ruleId) || 0) + 1);
+      if (ruleId) {
+        countByRuleId.set(ruleId, (countByRuleId.get(ruleId) || 0) + 1);
+      }
     });
 
     // Add match counts to rules
