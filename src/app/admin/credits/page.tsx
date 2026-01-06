@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
-import { AddCreditForm } from "./add-credit-form";
+import { AddCreditModal } from "./add-credit-modal";
 import { CreditsFilter } from "./credits-filter";
 import { CreditsList } from "./credits-list";
 
@@ -147,6 +147,7 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
         </div>
         <div className="flex items-center gap-4">
           <CreditsFilter cards={cards} />
+          <AddCreditModal cards={cards} onSubmit={createCredit} />
           <Link
             href="/admin/credits/import"
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
@@ -154,12 +155,6 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
             Import Credits
           </Link>
         </div>
-      </div>
-
-      {/* Add New Credit Form */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Add New Credit</h2>
-        <AddCreditForm cards={cards} onSubmit={createCredit} />
       </div>
 
       {/* Credits List */}
