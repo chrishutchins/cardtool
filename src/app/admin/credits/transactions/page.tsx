@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isAdminEmail } from "@/lib/admin";
@@ -29,7 +29,8 @@ export default async function AdminTransactionsPage({
   }
 
   const params = await searchParams;
-  const supabase = await createClient();
+  // Use admin client to bypass RLS (we already verified admin access above)
+  const supabase = createAdminClient();
 
   // Fetch all cards for the filter dropdown
   const { data: cards } = await supabase
