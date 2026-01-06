@@ -3,6 +3,15 @@
 import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Edit2, Trash2, X, Check, ChevronDown } from "lucide-react";
+import { parseLocalDate } from "@/lib/utils";
+
+interface MatchedTransaction {
+  id: string;
+  name: string;
+  amount_cents: number;
+  date: string;
+  merchant_name: string | null;
+}
 
 interface Rule {
   id: string;
@@ -13,43 +22,37 @@ interface Rule {
     id: string;
     name: string;
     canonical_name: string | null;
-    card: {
-      id: string;
-      name: string;
-      issuer: {
-        id: string;
-        name: string;
-      } | null;
-    } | null;
-  } | null;
-  match_count: number;
-}
-
-interface Credit {
-  id: string;
-  name: string;
-  canonical_name: string | null;
-  card: {
-    id: string;
-    name: string;
     issuer: {
       id: string;
       name: string;
     } | null;
   } | null;
+  match_count: number;
+  matched_transactions: MatchedTransaction[];
+}
+
+interface CreditOption {
+  representative_credit_id: string;
+  name: string;
+  canonical_name: string | null;
+  issuer: {
+    id: string;
+    name: string;
+  } | null;
+  credit_ids: string[];
 }
 
 interface RulesClientProps {
   rules: Rule[];
-  credits: Credit[];
+  creditOptions: CreditOption[];
 }
 
 function CreditSelector({
-  credits,
+  creditOptions,
   value,
   onChange,
 }: {
-  credits: Credit[];
+  creditOptions: CreditOption[];
   value: string;
   onChange: (creditId: string) => void;
 }) {
@@ -57,26 +60,19 @@ function CreditSelector({
   const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selectedCredit = credits.find((c) => c.id === value);
+  // Find the selected option - value could be any credit_id in the group
+  const selectedOption = creditOptions.find((c) => c.credit_ids.includes(value));
 
-  const filteredCredits = useMemo(() => {
+  const filteredOptions = useMemo(() => {
     const searchLower = search.toLowerCase();
-    return credits
-      .filter((c) => {
-        if (!search) return true;
-        return (
-          c.name.toLowerCase().includes(searchLower) ||
-          c.card?.name.toLowerCase().includes(searchLower) ||
-          c.card?.issuer?.name.toLowerCase().includes(searchLower)
-        );
-      })
-      .sort((a, b) => {
-        const cardA = a.card?.name || "";
-        const cardB = b.card?.name || "";
-        if (cardA !== cardB) return cardA.localeCompare(cardB);
-        return a.name.localeCompare(b.name);
-      });
-  }, [credits, search]);
+    return creditOptions.filter((c) => {
+      if (!search) return true;
+      return (
+        c.name.toLowerCase().includes(searchLower) ||
+        c.issuer?.name.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [creditOptions, search]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -96,7 +92,9 @@ function CreditSelector({
         className="w-full flex items-center justify-between gap-2 bg-zinc-700 border border-zinc-600 text-zinc-200 rounded-lg px-3 py-2 text-sm text-left"
       >
         <span className="truncate">
-          {selectedCredit ? `${selectedCredit.card?.name} - ${selectedCredit.name}` : "Select credit..."}
+          {selectedOption
+            ? `${selectedOption.issuer?.name || "Unknown"} - ${selectedOption.name}`
+            : "Select credit..."}
         </span>
         <ChevronDown className="w-4 h-4 flex-shrink-0" />
       </button>
@@ -114,22 +112,29 @@ function CreditSelector({
             />
           </div>
           <div className="overflow-y-auto max-h-48">
-            {filteredCredits.map((credit) => (
+            {filteredOptions.map((option) => (
               <button
-                key={credit.id}
+                key={`${option.issuer?.id}-${option.name}`}
                 type="button"
                 onClick={() => {
-                  onChange(credit.id);
+                  onChange(option.representative_credit_id);
                   setIsOpen(false);
                   setSearch("");
                 }}
                 className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-700 ${
-                  credit.id === value ? "bg-zinc-700 text-white" : "text-zinc-300"
+                  selectedOption?.representative_credit_id === option.representative_credit_id
+                    ? "bg-zinc-700 text-white"
+                    : "text-zinc-300"
                 }`}
               >
-                <div className="font-medium">{credit.name}</div>
+                <div className="font-medium">{option.name}</div>
                 <div className="text-xs text-zinc-500">
-                  {credit.card?.issuer?.name} • {credit.card?.name}
+                  {option.issuer?.name || "Unknown Issuer"}
+                  {option.credit_ids.length > 1 && (
+                    <span className="ml-1 text-zinc-600">
+                      ({option.credit_ids.length} cards)
+                    </span>
+                  )}
                 </div>
               </button>
             ))}
@@ -140,7 +145,94 @@ function CreditSelector({
   );
 }
 
-export function RulesClient({ rules, credits }: RulesClientProps) {
+function TransactionsModal({
+  rule,
+  onClose,
+}: {
+  rule: Rule;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative min-h-full flex items-center justify-center p-4">
+        <div className="relative w-full max-w-2xl rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                Matched Transactions
+              </h2>
+              <p className="text-sm text-zinc-400 mt-0.5">
+                Pattern: <code className="text-amber-400 bg-amber-400/10 px-1 rounded">{rule.pattern}</code>
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Transactions list */}
+          <div className="p-6 max-h-96 overflow-y-auto">
+            {rule.matched_transactions.length === 0 ? (
+              <p className="text-center text-zinc-500 py-8">
+                No transactions matched yet
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {rule.matched_transactions.map((txn) => (
+                  <div
+                    key={txn.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-zinc-200 truncate">
+                        {txn.name}
+                      </div>
+                      <div className="text-xs text-zinc-500">
+                        {parseLocalDate(txn.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                        {txn.merchant_name && (
+                          <span className="ml-2">• {txn.merchant_name}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div
+                      className={`text-sm font-medium ${
+                        txn.amount_cents < 0 ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {txn.amount_cents < 0 ? "-" : ""}$
+                      {Math.abs(txn.amount_cents / 100).toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-zinc-800 px-6 py-4">
+            <div className="text-sm text-zinc-400">
+              {rule.matched_transactions.length} transaction{rule.matched_transactions.length !== 1 ? "s" : ""} matched
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function RulesClient({ rules, creditOptions }: RulesClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
@@ -151,6 +243,7 @@ export function RulesClient({ rules, credits }: RulesClientProps) {
     credit_id: string;
   } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [viewingTransactions, setViewingTransactions] = useState<Rule | null>(null);
 
   const filteredRules = useMemo(() => {
     if (!searchQuery) return rules;
@@ -159,8 +252,7 @@ export function RulesClient({ rules, credits }: RulesClientProps) {
       (rule) =>
         rule.pattern.toLowerCase().includes(query) ||
         rule.credit?.name.toLowerCase().includes(query) ||
-        rule.credit?.card?.name.toLowerCase().includes(query) ||
-        rule.credit?.card?.issuer?.name.toLowerCase().includes(query)
+        rule.credit?.issuer?.name.toLowerCase().includes(query)
     );
   }, [rules, searchQuery]);
 
@@ -234,7 +326,7 @@ export function RulesClient({ rules, credits }: RulesClientProps) {
               <th className="px-4 py-3 text-sm font-medium text-zinc-400">Pattern</th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400">Amount</th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400">Credit</th>
-              <th className="px-4 py-3 text-sm font-medium text-zinc-400">Card</th>
+              <th className="px-4 py-3 text-sm font-medium text-zinc-400">Issuer</th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400 text-center">Matches</th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400 text-right">Actions</th>
             </tr>
@@ -268,7 +360,7 @@ export function RulesClient({ rules, credits }: RulesClientProps) {
                     </td>
                     <td className="px-4 py-3" colSpan={2}>
                       <CreditSelector
-                        credits={credits}
+                        creditOptions={creditOptions}
                         value={editValues.credit_id}
                         onChange={(id) => setEditValues({ ...editValues, credit_id: id })}
                       />
@@ -306,18 +398,21 @@ export function RulesClient({ rules, credits }: RulesClientProps) {
                       {rule.match_amount_cents ? `$${(rule.match_amount_cents / 100).toFixed(2)}` : "Any"}
                     </td>
                     <td className="px-4 py-3 text-sm text-zinc-200">{rule.credit?.name || "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-zinc-400">{rule.credit?.card?.name}</div>
-                      <div className="text-xs text-zinc-500">{rule.credit?.card?.issuer?.name}</div>
+                    <td className="px-4 py-3 text-sm text-zinc-400">
+                      {rule.credit?.issuer?.name || "—"}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span
-                        className={`text-sm font-medium ${
-                          rule.match_count > 0 ? "text-emerald-400" : "text-zinc-500"
+                      <button
+                        onClick={() => setViewingTransactions(rule)}
+                        className={`text-sm font-medium px-2 py-0.5 rounded transition-colors ${
+                          rule.match_count > 0
+                            ? "text-emerald-400 hover:bg-emerald-400/10 cursor-pointer"
+                            : "text-zinc-500 cursor-default"
                         }`}
+                        disabled={rule.match_count === 0}
                       >
                         {rule.match_count}
-                      </span>
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {deleteConfirm === rule.id ? (
@@ -368,7 +463,14 @@ export function RulesClient({ rules, credits }: RulesClientProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Transactions Modal */}
+      {viewingTransactions && (
+        <TransactionsModal
+          rule={viewingTransactions}
+          onClose={() => setViewingTransactions(null)}
+        />
+      )}
     </div>
   );
 }
-

@@ -9,6 +9,14 @@ export const metadata: Metadata = {
   title: "Matching Rules | Admin",
 };
 
+interface MatchedTransaction {
+  id: string;
+  name: string;
+  amount_cents: number;
+  date: string;
+  merchant_name: string | null;
+}
+
 interface Rule {
   id: string;
   pattern: string;
@@ -18,30 +26,27 @@ interface Rule {
     id: string;
     name: string;
     canonical_name: string | null;
-    card: {
-      id: string;
-      name: string;
-      issuer: {
-        id: string;
-        name: string;
-      } | null;
-    } | null;
-  } | null;
-  match_count: number;
-}
-
-interface Credit {
-  id: string;
-  name: string;
-  canonical_name: string | null;
-  card: {
-    id: string;
-    name: string;
     issuer: {
       id: string;
       name: string;
     } | null;
   } | null;
+  match_count: number;
+  matched_transactions: MatchedTransaction[];
+}
+
+// Normalized credit option for dropdown: unique Issuer + Credit Name combo
+interface CreditOption {
+  // Use first credit ID for this issuer/name combo (for creating new rules)
+  representative_credit_id: string;
+  name: string;
+  canonical_name: string | null;
+  issuer: {
+    id: string;
+    name: string;
+  } | null;
+  // All credit IDs that share this issuer/name or canonical_name
+  credit_ids: string[];
 }
 
 export default async function RulesPage() {
@@ -77,21 +82,30 @@ export default async function RulesPage() {
     `)
     .order("created_at", { ascending: false });
 
-  // Get match counts for each rule
-  const { data: matchCounts } = await supabase
+  // Get all matched transactions grouped by rule
+  const { data: matchedTxns } = await supabase
     .from("user_plaid_transactions")
-    .select("matched_rule_id")
-    .not("matched_rule_id", "is", null);
+    .select("id, name, amount_cents, date, merchant_name, matched_rule_id")
+    .not("matched_rule_id", "is", null)
+    .order("date", { ascending: false });
 
-  const countByRuleId = new Map<string, number>();
-  matchCounts?.forEach((t) => {
-    const ruleId = t.matched_rule_id;
-    if (ruleId) {
-      countByRuleId.set(ruleId, (countByRuleId.get(ruleId) || 0) + 1);
+  const txnsByRuleId = new Map<string, MatchedTransaction[]>();
+  matchedTxns?.forEach((t) => {
+    if (t.matched_rule_id) {
+      if (!txnsByRuleId.has(t.matched_rule_id)) {
+        txnsByRuleId.set(t.matched_rule_id, []);
+      }
+      txnsByRuleId.get(t.matched_rule_id)!.push({
+        id: t.id,
+        name: t.name,
+        amount_cents: t.amount_cents,
+        date: t.date,
+        merchant_name: t.merchant_name,
+      });
     }
   });
 
-  // Transform rules data
+  // Transform rules data - show Issuer instead of Card
   const rules: Rule[] = (rulesData || []).map((r) => {
     const credit = r.card_credits as {
       id: string;
@@ -104,6 +118,8 @@ export default async function RulesPage() {
       } | null;
     } | null;
 
+    const transactions = txnsByRuleId.get(r.id) || [];
+
     return {
       id: r.id,
       pattern: r.pattern,
@@ -112,18 +128,13 @@ export default async function RulesPage() {
       credit: credit
         ? {
             id: credit.id,
-            name: credit.name,
+            name: credit.canonical_name || credit.name,
             canonical_name: credit.canonical_name,
-            card: credit.cards
-              ? {
-                  id: credit.cards.id,
-                  name: credit.cards.name,
-                  issuer: credit.cards.issuers,
-                }
-              : null,
+            issuer: credit.cards?.issuers || null,
           }
         : null,
-      match_count: countByRuleId.get(r.id) || 0,
+      match_count: transactions.length,
+      matched_transactions: transactions,
     };
   });
 
@@ -146,25 +157,40 @@ export default async function RulesPage() {
     .eq("is_active", true)
     .order("name");
 
-  const credits: Credit[] = (creditsData || []).map((c) => {
+  // Normalize credits to unique Issuer + Credit Name (or canonical_name) combos
+  const creditOptionsMap = new Map<string, CreditOption>();
+  
+  (creditsData || []).forEach((c) => {
     const card = c.cards as {
       id: string;
       name: string;
       issuers: { id: string; name: string } | null;
     } | null;
+    
+    const issuer = card?.issuers || null;
+    const displayName = c.canonical_name || c.name;
+    const issuerId = issuer?.id || "unknown";
+    const key = `${issuerId}:${displayName}`;
+    
+    if (!creditOptionsMap.has(key)) {
+      creditOptionsMap.set(key, {
+        representative_credit_id: c.id,
+        name: displayName,
+        canonical_name: c.canonical_name,
+        issuer,
+        credit_ids: [c.id],
+      });
+    } else {
+      creditOptionsMap.get(key)!.credit_ids.push(c.id);
+    }
+  });
 
-    return {
-      id: c.id,
-      name: c.name,
-      canonical_name: c.canonical_name,
-      card: card
-        ? {
-            id: card.id,
-            name: card.name,
-            issuer: card.issuers,
-          }
-        : null,
-    };
+  const creditOptions: CreditOption[] = Array.from(creditOptionsMap.values()).sort((a, b) => {
+    // Sort by issuer name, then by credit name
+    const issuerA = a.issuer?.name || "ZZZ";
+    const issuerB = b.issuer?.name || "ZZZ";
+    if (issuerA !== issuerB) return issuerA.localeCompare(issuerB);
+    return a.name.localeCompare(b.name);
   });
 
   return (
@@ -176,8 +202,7 @@ export default async function RulesPage() {
         </p>
       </div>
 
-      <RulesClient rules={rules} credits={credits} />
+      <RulesClient rules={rules} creditOptions={creditOptions} />
     </div>
   );
 }
-
