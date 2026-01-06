@@ -353,20 +353,40 @@ export async function matchTransactionsToCredits(
   walletCards?.forEach(w => walletByCardId.set(w.card_id, w as unknown as UserWallet));
 
   // Process each transaction
+  console.log(`[credit-matcher] Processing ${transactions.length} transactions for user ${userId}`);
+  console.log(`[credit-matcher] Found ${rules.length} rules, ${creditById.size} credits, ${walletByCardId.size} wallet cards`);
+  
   for (const txn of transactions) {
     // Skip pending transactions
-    if (txn.pending) continue;
+    if (txn.pending) {
+      console.log(`[credit-matcher] Skipping pending transaction: ${txn.name}`);
+      continue;
+    }
 
     // Find matching rule
     const matchingRule = rules.find(rule => matchesRule(txn, rule));
 
-    if (!matchingRule) continue;
+    if (!matchingRule) {
+      console.log(`[credit-matcher] No matching rule for transaction: ${txn.name}`);
+      continue;
+    }
+    
+    console.log(`[credit-matcher] Found matching rule for "${txn.name}": pattern="${matchingRule.pattern}", credit_id=${matchingRule.credit_id}`);
 
     // Find the credit and wallet, considering canonical names
     const match = await findMatchingCredit(supabase, matchingRule, creditById, walletByCardId);
-    if (!match) continue;
+    if (!match) {
+      console.log(`[credit-matcher] No matching credit/wallet found for rule. Credit in map: ${creditById.has(matchingRule.credit_id)}`);
+      if (creditById.has(matchingRule.credit_id)) {
+        const credit = creditById.get(matchingRule.credit_id)!;
+        console.log(`[credit-matcher] Credit card_id: ${credit.card_id}, canonical_name: ${credit.canonical_name}`);
+        console.log(`[credit-matcher] Wallet for card_id exists: ${walletByCardId.has(credit.card_id)}`);
+      }
+      continue;
+    }
 
     const { credit, wallet } = match;
+    console.log(`[credit-matcher] Matched "${txn.name}" to credit "${credit.name}" on wallet ${wallet.id}`);
 
     // Determine if this is a credit or clawback
     const isClawback = txn.amount_cents > 0;
