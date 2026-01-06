@@ -129,6 +129,7 @@ export default async function AdminTransactionsPage({
         wallet_card_id,
         user_wallets:wallet_card_id (
           card_id,
+          custom_name,
           cards:card_id (
             id,
             name,

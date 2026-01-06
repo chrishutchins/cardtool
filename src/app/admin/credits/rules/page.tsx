@@ -96,6 +96,7 @@ export default async function RulesPage() {
       matched_rule_id,
       user_linked_accounts:linked_account_id (
         user_wallets:wallet_card_id (
+          custom_name,
           cards:card_id (
             name
           )
@@ -117,7 +118,7 @@ export default async function RulesPage() {
         txnsByRuleId.set(t.matched_rule_id, []);
       }
       const linkedAccount = t.user_linked_accounts as { 
-        user_wallets: { cards: { name: string } | null } | null 
+        user_wallets: { custom_name: string | null; cards: { name: string } | null } | null 
       } | null;
       txnsByRuleId.get(t.matched_rule_id)!.push({
         id: t.id,
@@ -125,7 +126,7 @@ export default async function RulesPage() {
         amount_cents: t.amount_cents,
         date: t.date,
         merchant_name: t.merchant_name,
-        card_name: linkedAccount?.user_wallets?.cards?.name || null,
+        card_name: linkedAccount?.user_wallets?.custom_name || linkedAccount?.user_wallets?.cards?.name || null,
       });
     }
   });

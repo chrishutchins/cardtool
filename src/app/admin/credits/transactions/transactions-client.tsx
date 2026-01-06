@@ -38,6 +38,7 @@ interface Transaction {
     wallet_card_id: string | null;
     user_wallets: {
       card_id: string;
+      custom_name: string | null;
       cards: {
         id: string;
         name: string;
@@ -595,7 +596,7 @@ export function TransactionsClient({
                             </div>
                             <div className="flex items-center gap-4">
                               <span className="text-zinc-400 text-xs">
-                                {txn.user_linked_accounts?.user_wallets?.cards?.name || "Unknown Card"}
+                                {txn.user_linked_accounts?.user_wallets?.custom_name || txn.user_linked_accounts?.user_wallets?.cards?.name || "Unknown Card"}
                               </span>
                               <span className={isClawback ? "text-amber-400" : "text-emerald-400"}>
                                 {formatAmount(txn.amount_cents)}
