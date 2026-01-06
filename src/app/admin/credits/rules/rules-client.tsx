@@ -11,6 +11,7 @@ interface MatchedTransaction {
   amount_cents: number;
   date: string;
   merchant_name: string | null;
+  card_name: string | null;
 }
 
 interface Rule {
@@ -194,6 +195,11 @@ function TransactionsModal({
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-zinc-200 truncate">
                         {txn.name}
+                        {txn.card_name && (
+                          <span className="text-zinc-500 font-normal ml-2">
+                            ({txn.card_name})
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-zinc-500">
                         {parseLocalDate(txn.date).toLocaleDateString("en-US", {
@@ -325,8 +331,8 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
             <tr className="border-b border-zinc-800 text-left">
               <th className="px-4 py-3 text-sm font-medium text-zinc-400">Pattern</th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400">Amount</th>
-              <th className="px-4 py-3 text-sm font-medium text-zinc-400">Credit</th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400">Issuer</th>
+              <th className="px-4 py-3 text-sm font-medium text-zinc-400">Credit</th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400 text-center">Matches</th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400 text-right">Actions</th>
             </tr>
@@ -397,10 +403,10 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
                     <td className="px-4 py-3 text-sm text-zinc-400">
                       {rule.match_amount_cents ? `$${(rule.match_amount_cents / 100).toFixed(2)}` : "Any"}
                     </td>
-                    <td className="px-4 py-3 text-sm text-zinc-200">{rule.credit?.name || "—"}</td>
                     <td className="px-4 py-3 text-sm text-zinc-400">
                       {rule.credit?.issuer?.name || "—"}
                     </td>
+                    <td className="px-4 py-3 text-sm text-zinc-200">{rule.credit?.name || "—"}</td>
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => setViewingTransactions(rule)}

@@ -15,6 +15,7 @@ interface MatchedTransaction {
   amount_cents: number;
   date: string;
   merchant_name: string | null;
+  card_name: string | null;
 }
 
 interface Rule {
@@ -82,10 +83,22 @@ export default async function RulesPage() {
     `)
     .order("created_at", { ascending: false });
 
-  // Get all matched transactions grouped by rule
+  // Get all matched transactions grouped by rule, with card info
   const { data: matchedTxns } = await supabase
     .from("user_plaid_transactions")
-    .select("id, name, amount_cents, date, merchant_name, matched_rule_id")
+    .select(`
+      id, 
+      name, 
+      amount_cents, 
+      date, 
+      merchant_name, 
+      matched_rule_id,
+      user_linked_accounts:linked_account_id (
+        cards:card_id (
+          name
+        )
+      )
+    `)
     .not("matched_rule_id", "is", null)
     .order("date", { ascending: false });
 
@@ -95,12 +108,14 @@ export default async function RulesPage() {
       if (!txnsByRuleId.has(t.matched_rule_id)) {
         txnsByRuleId.set(t.matched_rule_id, []);
       }
+      const linkedAccount = t.user_linked_accounts as { cards: { name: string } | null } | null;
       txnsByRuleId.get(t.matched_rule_id)!.push({
         id: t.id,
         name: t.name,
         amount_cents: t.amount_cents,
         date: t.date,
         merchant_name: t.merchant_name,
+        card_name: linkedAccount?.cards?.name || null,
       });
     }
   });
