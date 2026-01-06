@@ -87,6 +87,7 @@ export default async function RulesPage() {
     .order("created_at", { ascending: false });
 
   // Get all matched transactions grouped by rule, with card info
+  // Relationship chain: user_plaid_transactions → user_linked_accounts → user_wallets → cards
   const { data: matchedTxns, error: matchedTxnsError } = await supabase
     .from("user_plaid_transactions")
     .select(`
@@ -97,8 +98,10 @@ export default async function RulesPage() {
       merchant_name, 
       matched_rule_id,
       user_linked_accounts:linked_account_id (
-        cards:card_id (
-          name
+        user_wallets:wallet_card_id (
+          cards:card_id (
+            name
+          )
         )
       )
     `)
@@ -116,14 +119,16 @@ export default async function RulesPage() {
       if (!txnsByRuleId.has(t.matched_rule_id)) {
         txnsByRuleId.set(t.matched_rule_id, []);
       }
-      const linkedAccount = t.user_linked_accounts as { cards: { name: string } | null } | null;
+      const linkedAccount = t.user_linked_accounts as { 
+        user_wallets: { cards: { name: string } | null } | null 
+      } | null;
       txnsByRuleId.get(t.matched_rule_id)!.push({
         id: t.id,
         name: t.name,
         amount_cents: t.amount_cents,
         date: t.date,
         merchant_name: t.merchant_name,
-        card_name: linkedAccount?.cards?.name || null,
+        card_name: linkedAccount?.user_wallets?.cards?.name || null,
       });
     }
   });
