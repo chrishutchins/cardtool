@@ -19,13 +19,71 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { userId } = body;
+    const { userId, rematchAll } = body;
 
+    const supabase = createAdminClient();
+
+    // If rematchAll is true, get all unique user IDs with unmatched transactions
+    if (rematchAll) {
+      // Get all unique users with unmatched transactions
+      const { data: usersWithTxns, error: usersError } = await supabase
+        .from('user_plaid_transactions')
+        .select('user_id')
+        .is('matched_credit_id', null)
+        .eq('dismissed', false)
+        .eq('pending', false);
+
+      if (usersError) {
+        logger.error({ err: usersError }, 'Failed to fetch users with unmatched transactions');
+        return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+      }
+
+      const uniqueUserIds = [...new Set(usersWithTxns?.map(t => t.user_id) || [])];
+      logger.info({ userCount: uniqueUserIds.length }, 'Starting rematch for all users');
+
+      let totalMatched = 0;
+      let totalClawbacks = 0;
+      const allErrors: string[] = [];
+
+      for (const uid of uniqueUserIds) {
+        const { data: unmatchedTxns } = await supabase
+          .from('user_plaid_transactions')
+          .select('*')
+          .eq('user_id', uid)
+          .is('matched_credit_id', null)
+          .eq('dismissed', false)
+          .eq('pending', false);
+
+        if (unmatchedTxns && unmatchedTxns.length > 0) {
+          const result = await matchTransactionsToCredits(supabase, uid, unmatchedTxns);
+          totalMatched += result.matched;
+          totalClawbacks += result.clawbacks;
+          if (result.errors.length > 0) {
+            allErrors.push(...result.errors);
+          }
+        }
+      }
+
+      logger.info({
+        usersProcessed: uniqueUserIds.length,
+        matched: totalMatched,
+        clawbacks: totalClawbacks,
+        errors: allErrors.length,
+      }, 'Rematch all completed');
+
+      return NextResponse.json({
+        success: true,
+        usersProcessed: uniqueUserIds.length,
+        matched: totalMatched,
+        clawbacks: totalClawbacks,
+        errors: allErrors.length > 0 ? allErrors : undefined,
+      });
+    }
+
+    // Single user rematch
     if (!userId) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 });
     }
-
-    const supabase = createAdminClient();
 
     // Fetch all unmatched transactions for the specified user
     const { data: unmatchedTxns, error: txnError } = await supabase
@@ -77,4 +135,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

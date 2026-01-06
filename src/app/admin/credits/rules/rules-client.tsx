@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Edit2, Trash2, X, Check, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, Edit2, Trash2, X, Check, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 import { parseLocalDate } from "@/lib/utils";
 
 type SortKey = "pattern" | "amount" | "issuer" | "credit" | "matches";
@@ -286,6 +286,7 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
   } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [viewingTransactions, setViewingTransactions] = useState<Rule | null>(null);
+  const [isRematching, setIsRematching] = useState(false);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -295,6 +296,29 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
       // New key, start with ascending
       setSortKey(key);
       setSortDirection("asc");
+    }
+  };
+
+  const handleRematchAll = async () => {
+    setIsRematching(true);
+    try {
+      const response = await fetch("/api/admin/credits/rematch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rematchAll: true }),
+      });
+
+      if (!response.ok) {
+        console.error("Rematch failed:", await response.text());
+      }
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch (error) {
+      console.error("Failed to rematch:", error);
+    } finally {
+      setIsRematching(false);
     }
   };
 
@@ -403,11 +427,21 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
         />
       </div>
 
-      {/* Stats */}
-      <div className="flex gap-4 text-sm text-zinc-400">
-        <span>{rules.length} total rules</span>
-        <span>•</span>
-        <span>{rules.reduce((sum, r) => sum + r.match_count, 0)} total matches</span>
+      {/* Stats and Actions */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4 text-sm text-zinc-400">
+          <span>{rules.length} total rules</span>
+          <span>•</span>
+          <span>{rules.reduce((sum, r) => sum + r.match_count, 0)} total matches</span>
+        </div>
+        <button
+          onClick={handleRematchAll}
+          disabled={isRematching || isPending}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white disabled:opacity-50 transition-colors"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRematching ? "animate-spin" : ""}`} />
+          {isRematching ? "Rematching..." : "Rematch All"}
+        </button>
       </div>
 
       {/* Rules list */}
