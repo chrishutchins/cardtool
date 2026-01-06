@@ -3,6 +3,7 @@
 import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard } from "./credits-client";
 import { parseLocalDate } from "@/lib/utils";
+import { LinkedTransactionModal } from "./linked-transaction-modal";
 
 // Tooltip component for notes
 function Tooltip({ children, text }: { children: React.ReactNode; text: React.ReactNode }) {
@@ -71,6 +72,8 @@ interface CreditHistoryRowProps {
   onOpenModal: (credit: CreditWithSlot, walletCard: WalletCard, periodStart: string, periodEnd: string) => void;
   onUpdateApprovalDate: (walletId: string, date: string | null) => Promise<void>;
   onUpdateSettings: (formData: FormData) => Promise<void>;
+  onUpdateCreditUsagePeriod?: (usageId: string, newDate: string) => Promise<void>;
+  onMoveTransaction?: (transactionId: string, newDate: string) => Promise<void>;
   showCardName: boolean;
 }
 
@@ -248,6 +251,8 @@ export function CreditHistoryRow({
   onOpenModal,
   onUpdateApprovalDate,
   onUpdateSettings,
+  onUpdateCreditUsagePeriod,
+  onMoveTransaction,
   showCardName,
 }: CreditHistoryRowProps) {
   const [isPending, startTransition] = useTransition();
@@ -263,6 +268,10 @@ export function CreditHistoryRow({
       : ""
   );
   const [userNotes, setUserNotes] = useState(settings?.notes ?? "");
+  const [linkedTransactionModal, setLinkedTransactionModal] = useState<{
+    usage: CreditUsage;
+    periodLabel: string;
+  } | null>(null);
   
   const mustBeEarned = credit.must_be_earned;
   const isUsageBased = credit.reset_cycle === "usage_based";
@@ -272,9 +281,19 @@ export function CreditHistoryRow({
 
   const periods = useMemo(() => getPeriodsForYear(credit, selectedYear, walletCard, usage), [credit, selectedYear, walletCard, usage]);
 
-  // Check if a period has usage
-  const getUsageForPeriod = (periodStart: string): CreditUsage | undefined => {
-    return usage.find(u => u.period_start === periodStart);
+  // Check if a period has usage - matches by date overlap for cross-year periods
+  const getUsageForPeriod = (periodStart: string, periodEnd: string): CreditUsage | undefined => {
+    const periodStartDate = parseLocalDate(periodStart);
+    const periodEndDate = parseLocalDate(periodEnd);
+    
+    return usage.find(u => {
+      const usageStart = parseLocalDate(u.period_start);
+      const usageEnd = parseLocalDate(u.period_end);
+      
+      // Check if the usage period overlaps with the display period
+      // Usage overlaps if: usageStart <= periodEnd AND usageEnd >= periodStart
+      return usageStart <= periodEndDate && usageEnd >= periodStartDate;
+    });
   };
 
   // Get the max amount for this credit
@@ -286,15 +305,33 @@ export function CreditHistoryRow({
     return periodUsage.amount_used >= maxAmount;
   };
 
+  // Helper to check if a usage record has linked transactions
+  const hasLinkedTransactions = (usageRecord: CreditUsage): boolean => {
+    return !!(
+      usageRecord.auto_detected &&
+      usageRecord.user_credit_usage_transactions &&
+      usageRecord.user_credit_usage_transactions.length > 0
+    );
+  };
+
   const handleTogglePeriod = (period: Period) => {
-    const existingUsage = getUsageForPeriod(period.start);
+    const existingUsage = getUsageForPeriod(period.start, period.end);
     
     if (existingUsage) {
       if (isFullyUsed(existingUsage)) {
-        // Fully used - undo by deleting
-        startTransition(async () => {
-          await onDeleteUsage(existingUsage.id);
-        });
+        // Fully used - check if it has linked transactions
+        if (hasLinkedTransactions(existingUsage)) {
+          // Show modal instead of immediately deleting
+          setLinkedTransactionModal({
+            usage: existingUsage,
+            periodLabel: period.shortLabel,
+          });
+        } else {
+          // No linked transactions - undo by deleting directly
+          startTransition(async () => {
+            await onDeleteUsage(existingUsage.id);
+          });
+        }
       } else {
         // Partially used - open modal to modify
         onOpenModal(credit, walletCard, period.start, period.end);
@@ -416,10 +453,9 @@ export function CreditHistoryRow({
   // Combine notes from credit and user settings
   const allNotes = [credit.notes, settings?.notes].filter(Boolean);
 
-  // Calculate total used for the year
+  // Calculate total used for the year - using date overlap matching
   const yearUsage = useMemo(() => {
-    const periodStarts = periods.map(p => p.start);
-    return usage.filter(u => periodStarts.includes(u.period_start)).length;
+    return periods.filter(p => getUsageForPeriod(p.start, p.end) !== undefined).length;
   }, [periods, usage]);
 
   // Get reset info from first period that has it
@@ -620,10 +656,11 @@ export function CreditHistoryRow({
       {/* Period Grid - 12 column layout */}
       <div className="grid grid-cols-12 gap-1">
         {periods.map((period) => {
-          const periodUsage = getUsageForPeriod(period.start);
+          const periodUsage = getUsageForPeriod(period.start, period.end);
           const hasUsage = !!periodUsage;
           const fullyUsed = isFullyUsed(periodUsage);
           const partiallyUsed = hasUsage && !fullyUsed;
+          const isLinked = periodUsage ? hasLinkedTransactions(periodUsage) : false;
           
           // Determine button state and styling
           let bgClass = "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white";
@@ -631,7 +668,9 @@ export function CreditHistoryRow({
           
           if (fullyUsed) {
             bgClass = "bg-emerald-600 text-white hover:bg-emerald-500";
-            title = `Fully ${mustBeEarned ? "earned" : "used"} - click to undo`;
+            title = isLinked 
+              ? `Auto-detected from Plaid - click to view details` 
+              : `Fully ${mustBeEarned ? "earned" : "used"} - click to undo`;
           } else if (partiallyUsed) {
             bgClass = "bg-amber-600 text-white hover:bg-amber-500";
             const usedAmount = periodUsage!.amount_used;
@@ -652,16 +691,23 @@ export function CreditHistoryRow({
                 gridColumn: `${period.colStart} / span ${period.colSpan}`,
               }}
               className={`
-                flex flex-col items-center justify-center py-2 rounded-lg transition-all
+                flex flex-col items-center justify-center py-2 rounded-lg transition-all relative
                 ${bgClass}
               `}
               title={title}
             >
               <span className="text-xs font-medium">{period.shortLabel}</span>
               {fullyUsed ? (
-                <svg className="w-4 h-4 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+                <div className="relative">
+                  <svg className="w-4 h-4 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {isLinked && (
+                    <svg className="w-2.5 h-2.5 absolute -bottom-0.5 -right-1 text-white/80" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                  )}
+                </div>
               ) : partiallyUsed ? (
                 <svg className="w-4 h-4 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01" />
@@ -673,6 +719,29 @@ export function CreditHistoryRow({
           );
         })}
       </div>
+
+      {/* Linked Transaction Modal */}
+      {linkedTransactionModal && (
+        <LinkedTransactionModal
+          usage={linkedTransactionModal.usage}
+          credit={credit}
+          walletCard={walletCard}
+          periodLabel={linkedTransactionModal.periodLabel}
+          onClose={() => setLinkedTransactionModal(null)}
+          onUnlink={() => {
+            onDeleteUsage(linkedTransactionModal.usage.id);
+            setLinkedTransactionModal(null);
+          }}
+          onUpdatePeriod={onUpdateCreditUsagePeriod ? async (newDate: string) => {
+            await onUpdateCreditUsagePeriod(linkedTransactionModal.usage.id, newDate);
+            setLinkedTransactionModal(null);
+          } : undefined}
+          onMoveTransaction={onMoveTransaction ? async (txnId: string, newDate: string) => {
+            await onMoveTransaction(txnId, newDate);
+            // Modal will stay open to show remaining transactions
+          } : undefined}
+        />
+      )}
     </div>
   );
 }

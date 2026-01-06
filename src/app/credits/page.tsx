@@ -372,6 +372,189 @@ export default async function CreditsPage() {
     revalidatePath("/credits");
   }
 
+  async function moveTransactionToPeriod(transactionId: string, newDate: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("moveTransactionToPeriod: No user found");
+      return;
+    }
+
+    const supabase = await createClient();
+
+    // Get the transaction with its linked usage record
+    const { data: txnLink, error: txnLinkError } = await supabase
+      .from("user_credit_usage_transactions")
+      .select(`
+        id,
+        usage_id,
+        transaction_id,
+        amount_cents,
+        user_credit_usage!inner (
+          id,
+          credit_id,
+          user_wallet_id,
+          period_start,
+          period_end,
+          amount_used,
+          slot_number,
+          user_wallets!inner (
+            user_id,
+            approval_date
+          ),
+          card_credits!inner (
+            id,
+            reset_cycle,
+            reset_day_of_month,
+            default_value_cents,
+            credit_count
+          )
+        )
+      `)
+      .eq("transaction_id", transactionId)
+      .single();
+
+    if (txnLinkError || !txnLink) {
+      console.error("Error fetching transaction link:", txnLinkError);
+      return;
+    }
+
+    const usageData = txnLink.user_credit_usage as unknown as {
+      id: string;
+      credit_id: string;
+      user_wallet_id: string;
+      period_start: string;
+      period_end: string;
+      amount_used: number;
+      slot_number: number;
+      user_wallets: { user_id: string; approval_date: string | null };
+      card_credits: { 
+        id: string; 
+        reset_cycle: string; 
+        reset_day_of_month: number | null;
+        default_value_cents: number | null;
+        credit_count: number;
+      };
+    };
+
+    // Verify the usage belongs to the current user
+    if (usageData.user_wallets.user_id !== userId) {
+      console.error("Unauthorized: usage record does not belong to user");
+      return;
+    }
+
+    // Calculate the new period based on the new date
+    const { periodStart, periodEnd } = calculateCreditPeriod(
+      newDate,
+      usageData.card_credits.reset_cycle as "monthly" | "quarterly" | "semiannual" | "annual" | "cardmember_year" | "usage_based",
+      usageData.user_wallets.approval_date,
+      usageData.card_credits.reset_day_of_month
+    );
+
+    const periodStartStr = periodStart.toISOString().split("T")[0];
+    const periodEndStr = periodEnd.toISOString().split("T")[0];
+
+    // If same period, nothing to do
+    if (periodStartStr === usageData.period_start) {
+      console.log("Transaction already in target period");
+      return;
+    }
+
+    const amountToMove = (txnLink.amount_cents || 0) / 100;
+
+    // Remove the transaction amount from the current usage
+    const newCurrentAmount = Math.max(0, usageData.amount_used - amountToMove);
+    await supabase
+      .from("user_credit_usage")
+      .update({ amount_used: newCurrentAmount })
+      .eq("id", usageData.id);
+
+    // Remove the transaction link from current usage
+    await supabase
+      .from("user_credit_usage_transactions")
+      .delete()
+      .eq("id", txnLink.id);
+
+    // Check if there's an existing usage record for the new period
+    const { data: existingNewPeriodUsage } = await supabase
+      .from("user_credit_usage")
+      .select("id, amount_used")
+      .eq("user_wallet_id", usageData.user_wallet_id)
+      .eq("credit_id", usageData.credit_id)
+      .eq("period_start", periodStartStr)
+      .limit(1)
+      .maybeSingle();
+
+    let targetUsageId: string;
+
+    if (existingNewPeriodUsage) {
+      // Add to existing usage
+      const newAmount = existingNewPeriodUsage.amount_used + amountToMove;
+      await supabase
+        .from("user_credit_usage")
+        .update({ amount_used: newAmount })
+        .eq("id", existingNewPeriodUsage.id);
+      targetUsageId = existingNewPeriodUsage.id;
+    } else {
+      // Create new usage record for the new period
+      const { data: newUsage, error: insertError } = await supabase
+        .from("user_credit_usage")
+        .insert({
+          user_wallet_id: usageData.user_wallet_id,
+          credit_id: usageData.credit_id,
+          period_start: periodStartStr,
+          period_end: periodEndStr,
+          amount_used: amountToMove,
+          auto_detected: true,
+          used_at: newDate,
+          slot_number: 1,
+        })
+        .select("id")
+        .single();
+
+      if (insertError || !newUsage) {
+        console.error("Error creating new usage record:", insertError);
+        return;
+      }
+      targetUsageId = newUsage.id;
+    }
+
+    // Link transaction to the new usage record
+    await supabase
+      .from("user_credit_usage_transactions")
+      .insert({
+        usage_id: targetUsageId,
+        transaction_id: transactionId,
+        amount_cents: txnLink.amount_cents,
+      });
+
+    // Update the transaction's matched credit info
+    await supabase
+      .from("user_plaid_transactions")
+      .update({
+        matched_credit_id: usageData.credit_id,
+      })
+      .eq("id", transactionId);
+
+    // If the original usage has no more amount, delete it
+    if (newCurrentAmount === 0) {
+      // Check if there are any other linked transactions
+      const { data: remainingLinks } = await supabase
+        .from("user_credit_usage_transactions")
+        .select("id")
+        .eq("usage_id", usageData.id);
+
+      if (!remainingLinks || remainingLinks.length === 0) {
+        await supabase
+          .from("user_credit_usage")
+          .delete()
+          .eq("id", usageData.id);
+      }
+    }
+
+    revalidatePath("/credits");
+  }
+
   // Transform data for client component
   type WalletCardData = {
     id: string;
@@ -411,6 +594,7 @@ export default async function CreditsPage() {
           onUpdateSettings={updateCreditSettings}
           onUpdateApprovalDate={updateApprovalDate}
           onUpdateUsagePeriod={updateCreditUsagePeriod}
+          onMoveTransaction={moveTransactionToPeriod}
         />
       </div>
     </div>

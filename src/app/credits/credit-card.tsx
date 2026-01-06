@@ -159,6 +159,7 @@ interface CreditCardProps {
   onUpdateSettings: (formData: FormData) => Promise<void>;
   onUpdateApprovalDate: (walletId: string, date: string | null) => Promise<void>;
   onUpdateUsagePeriod?: (usageId: string, newDate: string) => Promise<void>;
+  onMoveTransaction?: (transactionId: string, newDate: string) => Promise<void>;
   showCardName: boolean;
   hideUsed: boolean;
 }
@@ -185,6 +186,7 @@ export function CreditCard({
   onUpdateSettings,
   onUpdateApprovalDate,
   onUpdateUsagePeriod,
+  onMoveTransaction,
   showCardName,
   hideUsed,
 }: CreditCardProps) {
@@ -301,7 +303,12 @@ export function CreditCard({
       const end = new Date(start);
       end.setFullYear(end.getFullYear() + 1);
       end.setDate(end.getDate() - 1);
-      return { start, end, label: `Year ${yearsElapsed + 1}`, shortLabel: `Year ${yearsElapsed + 1}` };
+      // Use fiscal year format like '25/'26 to match history view
+      const yearShort = (y: number) => `'${String(y).slice(-2)}`;
+      const periodStartYear = start.getFullYear();
+      const periodEndYear = end.getFullYear();
+      const label = `${yearShort(periodStartYear)}/${yearShort(periodEndYear)}`;
+      return { start, end, label, shortLabel: label };
     } else if (credit.reset_cycle === "usage_based") {
       if (lastUsage && credit.renewal_period_months) {
         const lastUsedDate = parseLocalDate(lastUsage.used_at);
@@ -842,6 +849,10 @@ export function CreditCard({
           onUpdatePeriod={onUpdateUsagePeriod ? async (newDate: string) => {
             await onUpdateUsagePeriod(linkedTransactionModal.usage.id, newDate);
             setLinkedTransactionModal(null);
+          } : undefined}
+          onMoveTransaction={onMoveTransaction ? async (txnId: string, newDate: string) => {
+            await onMoveTransaction(txnId, newDate);
+            // Modal will stay open to show remaining transactions
           } : undefined}
         />
       )}

@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { parseLocalDate } from './utils';
 
 interface MatchingRule {
   id: string;
@@ -18,6 +19,11 @@ interface PlaidTransaction {
   pending: boolean | null;
   category: string[] | null;
   merchant_name: string | null;
+}
+
+interface LinkedAccount {
+  id: string;
+  wallet_card_id: string | null;
 }
 
 interface CardCredit {
@@ -81,15 +87,21 @@ export function matchesRule(
 }
 
 /**
- * Calculates the credit period (start and end dates) for a given date and reset cycle
+ * Calculates the credit period (start and end dates) for a given date and reset cycle.
+ * Accepts either a Date object or a date string (YYYY-MM-DD).
  */
 export function calculateCreditPeriod(
-  transactionDate: Date,
+  transactionDate: Date | string,
   resetCycle: CardCredit['reset_cycle'],
-  approvalDate?: Date | null,
+  approvalDate?: Date | string | null,
   resetDayOfMonth?: number | null
 ): { periodStart: Date; periodEnd: Date } {
-  const date = new Date(transactionDate);
+  // Handle both Date objects and strings - use parseLocalDate for strings to avoid timezone issues
+  const date = typeof transactionDate === 'string' ? parseLocalDate(transactionDate) : new Date(transactionDate);
+  const approval = approvalDate 
+    ? (typeof approvalDate === 'string' ? parseLocalDate(approvalDate) : new Date(approvalDate))
+    : null;
+  
   let periodStart: Date;
   let periodEnd: Date;
 
@@ -127,8 +139,7 @@ export function calculateCreditPeriod(
     }
 
     case 'cardmember_year': {
-      if (approvalDate) {
-        const approval = new Date(approvalDate);
+      if (approval) {
         const approvalMonth = approval.getMonth();
         const approvalDay = approval.getDate();
 
@@ -200,38 +211,36 @@ async function findAvailableSlot(
 }
 
 /**
- * Finds a matching credit for a rule, considering credit name and issuer
- * Credits with the same name on different cards from the same issuer share rules
+ * Finds a matching credit for a transaction based on:
+ * 1. The wallet the transaction actually came from (via linked_account)
+ * 2. The rule's credit name and issuer (allowing matching across cards from same issuer)
+ * 
+ * This ensures transactions are ONLY matched to credits on the card they were made on.
  */
-async function findMatchingCredit(
-  supabase: SupabaseClient,
+function findCreditForTransaction(
   rule: MatchingRule,
+  transactionWallet: UserWallet | undefined,
   creditById: Map<string, CardCredit>,
-  walletByCardId: Map<string, UserWallet>
-): Promise<{ credit: CardCredit; wallet: UserWallet } | null> {
+  creditsByCardId: Map<string, CardCredit[]>
+): CardCredit | null {
+  if (!transactionWallet) return null;
+  
   const ruleCredit = creditById.get(rule.credit_id);
   if (!ruleCredit) return null;
 
   // Get the issuer of the rule's credit
   const issuerId = ruleCredit.cards?.issuer_id;
 
-  // Find credits with the same name and same issuer that the user has in their wallet
-  for (const [cardId, wallet] of walletByCardId) {
-    for (const [, credit] of creditById) {
-      if (
-        credit.card_id === cardId &&
-        credit.name === ruleCredit.name &&
-        credit.cards?.issuer_id === issuerId
-      ) {
-        return { credit, wallet };
-      }
+  // Find a credit on the TRANSACTION'S wallet that matches the rule's credit name and issuer
+  const creditsOnTransactionCard = creditsByCardId.get(transactionWallet.card_id) || [];
+  
+  for (const credit of creditsOnTransactionCard) {
+    if (
+      credit.name === ruleCredit.name &&
+      credit.cards?.issuer_id === issuerId
+    ) {
+      return credit;
     }
-  }
-
-  // Fallback: direct card lookup
-  const wallet = walletByCardId.get(ruleCredit.card_id);
-  if (wallet) {
-    return { credit: ruleCredit, wallet };
   }
 
   return null;
@@ -283,6 +292,25 @@ export async function matchTransactionsToCredits(
     return { matched, clawbacks, errors };
   }
 
+  // Fetch user's linked accounts to map linked_account_id -> wallet_id
+  const { data: linkedAccounts, error: linkedError } = await supabase
+    .from('user_linked_accounts')
+    .select('id, wallet_card_id')
+    .eq('user_id', userId);
+
+  if (linkedError) {
+    errors.push(`Failed to fetch linked accounts: ${linkedError.message}`);
+    return { matched, clawbacks, errors };
+  }
+
+  // Build map: linked_account_id -> wallet_id
+  const walletByLinkedAccountId = new Map<string, string>();
+  linkedAccounts?.forEach(la => {
+    if (la.wallet_card_id) {
+      walletByLinkedAccountId.set(la.id, la.wallet_card_id);
+    }
+  });
+
   // Fetch credits for user's cards (with issuer info via cards)
   const cardIds = walletCards?.map(wc => wc.card_id) || [];
   const { data: credits, error: creditsError } = await supabase
@@ -302,59 +330,61 @@ export async function matchTransactionsToCredits(
     return { matched, clawbacks, errors };
   }
 
-  // Also fetch credits from same issuers for cross-card name matching
-  // Get all issuers from user's cards
-  const issuerIds = new Set<string>();
-  walletCards?.forEach(wc => {
-    // Handle both single object and array return types from Supabase
-    const cardData = wc.cards;
-    const card = Array.isArray(cardData) ? cardData[0] : cardData;
-    if (card?.issuer_id) {
-      issuerIds.add(card.issuer_id);
-    }
-  });
-
-  // Fetch all credits from these issuers for name matching across cards
-  let allCredits = credits || [];
-  if (issuerIds.size > 0) {
-    const { data: issuerCredits } = await supabase
-      .from('card_credits')
-      .select(`
-        *,
-        cards:card_id (
-          id,
-          issuer_id
-        )
-      `)
-      .eq('is_active', true);
-
-    if (issuerCredits) {
-      // Add credits from same issuers that aren't already in our list
-      const existingIds = new Set(allCredits.map(c => c.id));
-      issuerCredits.forEach(c => {
-        const card = c.cards as { id: string; issuer_id: string | null } | null;
-        if (card?.issuer_id && issuerIds.has(card.issuer_id) && !existingIds.has(c.id)) {
-          allCredits.push(c);
-        }
-      });
-    }
-  }
+  // Also fetch all credits for rule matching (rules may reference credits on cards user doesn't have)
+  const { data: allCreditsForRules } = await supabase
+    .from('card_credits')
+    .select(`
+      *,
+      cards:card_id (
+        id,
+        issuer_id
+      )
+    `)
+    .eq('is_active', true);
 
   // Create lookup maps
   const creditById = new Map<string, CardCredit>();
-  allCredits?.forEach(c => creditById.set(c.id, c as CardCredit));
+  allCreditsForRules?.forEach(c => creditById.set(c.id, c as CardCredit));
 
-  const walletByCardId = new Map<string, UserWallet>();
-  walletCards?.forEach(w => walletByCardId.set(w.card_id, w as unknown as UserWallet));
+  // Map: card_id -> credits on that card
+  const creditsByCardId = new Map<string, CardCredit[]>();
+  credits?.forEach(c => {
+    const existing = creditsByCardId.get(c.card_id) || [];
+    existing.push(c as CardCredit);
+    creditsByCardId.set(c.card_id, existing);
+  });
+
+  // Map: wallet_id -> wallet
+  const walletById = new Map<string, UserWallet>();
+  walletCards?.forEach(w => walletById.set(w.id, w as unknown as UserWallet));
 
   // Process each transaction
   console.log(`[credit-matcher] Processing ${transactions.length} transactions for user ${userId}`);
-  console.log(`[credit-matcher] Found ${rules.length} rules, ${creditById.size} credits, ${walletByCardId.size} wallet cards`);
+  console.log(`[credit-matcher] Found ${rules.length} rules, ${creditById.size} credits, ${walletById.size} wallet cards, ${walletByLinkedAccountId.size} linked accounts`);
   
   for (const txn of transactions) {
     // Skip pending transactions
     if (txn.pending) {
       console.log(`[credit-matcher] Skipping pending transaction: ${txn.name}`);
+      continue;
+    }
+
+    // Skip transactions without a linked account
+    if (!txn.linked_account_id) {
+      console.log(`[credit-matcher] Skipping transaction without linked account: ${txn.name}`);
+      continue;
+    }
+
+    // Find the wallet this transaction belongs to
+    const walletId = walletByLinkedAccountId.get(txn.linked_account_id);
+    if (!walletId) {
+      console.log(`[credit-matcher] No wallet found for linked account ${txn.linked_account_id}: ${txn.name}`);
+      continue;
+    }
+    
+    const wallet = walletById.get(walletId);
+    if (!wallet) {
+      console.log(`[credit-matcher] Wallet ${walletId} not found in user's wallets: ${txn.name}`);
       continue;
     }
 
@@ -368,29 +398,31 @@ export async function matchTransactionsToCredits(
     
     console.log(`[credit-matcher] Found matching rule for "${txn.name}": pattern="${matchingRule.pattern}", credit_id=${matchingRule.credit_id}`);
 
-    // Find the credit and wallet, considering canonical names
-    const match = await findMatchingCredit(supabase, matchingRule, creditById, walletByCardId);
-    if (!match) {
-      console.log(`[credit-matcher] No matching credit/wallet found for rule. Credit in map: ${creditById.has(matchingRule.credit_id)}`);
-      if (creditById.has(matchingRule.credit_id)) {
-        const credit = creditById.get(matchingRule.credit_id)!;
-        console.log(`[credit-matcher] Credit card_id: ${credit.card_id}, name: ${credit.name}`);
-        console.log(`[credit-matcher] Wallet for card_id exists: ${walletByCardId.has(credit.card_id)}`);
+    // Find the credit on this transaction's wallet that matches the rule
+    const credit = findCreditForTransaction(matchingRule, wallet, creditById, creditsByCardId);
+    if (!credit) {
+      console.log(`[credit-matcher] No matching credit found on wallet ${walletId} for rule. Rule credit: ${matchingRule.credit_id}`);
+      const ruleCredit = creditById.get(matchingRule.credit_id);
+      if (ruleCredit) {
+        console.log(`[credit-matcher] Rule credit name: "${ruleCredit.name}", issuer: ${ruleCredit.cards?.issuer_id}`);
+        console.log(`[credit-matcher] Transaction wallet card_id: ${wallet.card_id}`);
+        const walletCredits = creditsByCardId.get(wallet.card_id) || [];
+        console.log(`[credit-matcher] Credits on wallet: ${walletCredits.map(c => c.name).join(', ')}`);
       }
       continue;
     }
 
-    const { credit, wallet } = match;
     console.log(`[credit-matcher] Matched "${txn.name}" to credit "${credit.name}" on wallet ${wallet.id}`);
 
     // Determine if this is a credit or clawback
     const isClawback = txn.amount_cents > 0;
 
     // Calculate the period for this transaction
+    // Pass date strings directly so parseLocalDate handles timezone correctly
     const { periodStart, periodEnd } = calculateCreditPeriod(
-      new Date(txn.date),
+      txn.date,
       credit.reset_cycle,
-      wallet.approval_date ? new Date(wallet.approval_date) : null,
+      wallet.approval_date,
       credit.reset_day_of_month
     );
 
