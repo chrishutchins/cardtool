@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import { MarkUsedModal } from "./mark-used-modal";
 import { CreditCard } from "./credit-card";
 import { CreditHistoryRow } from "./credit-history-row";
@@ -23,9 +23,14 @@ function AddToInventoryPrompt({
   
   const inventoryType = inventoryTypes.find(t => t.id === credit.inventory_type_id);
   
+  // Close if inventory type not found - must use useEffect for side effects
+  useEffect(() => {
+    if (!inventoryType) {
+      onClose();
+    }
+  }, [inventoryType, onClose]);
+  
   if (!inventoryType) {
-    // Type not found, close
-    onClose();
     return null;
   }
 

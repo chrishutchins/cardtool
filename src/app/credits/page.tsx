@@ -591,7 +591,7 @@ export default async function CreditsPage() {
     const originalValueCents = originalValueStr ? Math.round(parseFloat(originalValueStr) * 100) : null;
     const sourceCreditUsageId = (formData.get("source_credit_usage_id") as string)?.trim() || null;
 
-    await supabase.from("user_inventory").insert({
+    const { error } = await supabase.from("user_inventory").insert({
       user_id: userId,
       type_id: typeId,
       name,
@@ -608,6 +608,11 @@ export default async function CreditsPage() {
       is_used: false,
       source_credit_usage_id: sourceCreditUsageId,
     });
+
+    if (error) {
+      console.error("Error adding inventory item:", error);
+      return;
+    }
 
     revalidatePath("/credits");
     revalidatePath("/inventory");
