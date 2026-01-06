@@ -50,10 +50,11 @@ CREATE TABLE user_credit_usage_transactions (
 CREATE INDEX idx_usage_txn_usage ON user_credit_usage_transactions(usage_id);
 CREATE INDEX idx_usage_txn_transaction ON user_credit_usage_transactions(transaction_id);
 
--- Add columns to user_credit_usage for clawback and auto-detection tracking
+-- Add columns to user_credit_usage for clawback, auto-detection, and multi-slot tracking
 ALTER TABLE user_credit_usage 
 ADD COLUMN is_clawback boolean DEFAULT false,
-ADD COLUMN auto_detected boolean DEFAULT false;
+ADD COLUMN auto_detected boolean DEFAULT false,
+ADD COLUMN slot_number integer DEFAULT 1;
 
 -- Plaid sync state: tracks last sync per user/plaid item
 CREATE TABLE user_plaid_sync_state (
@@ -79,6 +80,12 @@ CREATE POLICY "Anyone can read matching rules"
   ON credit_matching_rules FOR SELECT
   TO authenticated
   USING (true);
+
+-- NOTE: RLS policies use USING (true) because this app uses Clerk for authentication,
+-- not Supabase Auth. auth.uid() is always NULL in this context.
+-- Authorization is enforced at the application layer via Clerk session validation.
+-- Server-side code uses createAdminClient() (service role) to bypass RLS after
+-- verifying user identity through Clerk.
 
 -- RLS Policies for user_plaid_transactions
 CREATE POLICY "Users can read their own transactions"

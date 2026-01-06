@@ -483,7 +483,12 @@ export async function matchTransactionsToCredits(
 
           if (!targetUsage && existingUsages.length < creditCount) {
             // All existing slots are full but we have more slots available
-            const nextSlot = existingUsages.length + 1;
+            // Find the first available slot number (handles gaps from deleted usage records)
+            const usedSlots = new Set(existingUsages.map(u => u.slot_number ?? 1));
+            let nextSlot = 1;
+            while (usedSlots.has(nextSlot) && nextSlot <= creditCount) {
+              nextSlot++;
+            }
             const { data: newUsage, error: insertError } = await supabase
               .from('user_credit_usage')
               .insert({
