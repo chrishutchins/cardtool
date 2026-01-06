@@ -87,6 +87,7 @@ interface CreditsClientProps {
   onDeleteUsage: (usageId: string) => Promise<void>;
   onUpdateSettings: (formData: FormData) => Promise<void>;
   onUpdateApprovalDate: (walletId: string, date: string | null) => Promise<void>;
+  onUpdateUsagePeriod?: (usageId: string, newDate: string) => Promise<void>;
 }
 
 type SortMode = "card" | "brand" | "expiration";
@@ -159,6 +160,7 @@ export function CreditsClient({
   onDeleteUsage,
   onUpdateSettings,
   onUpdateApprovalDate,
+  onUpdateUsagePeriod,
 }: CreditsClientProps) {
   const [sortMode, setSortMode] = useState<SortMode>("expiration");
   const [viewMode, setViewMode] = useState<ViewMode>("current");
@@ -666,6 +668,7 @@ export function CreditsClient({
                           onDeleteUsage={onDeleteUsage}
                           onUpdateSettings={onUpdateSettings}
                           onUpdateApprovalDate={onUpdateApprovalDate}
+                          onUpdateUsagePeriod={onUpdateUsagePeriod}
                           showCardName={sortMode !== "card"}
                           hideUsed={hideUsed}
                         />

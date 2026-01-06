@@ -3,6 +3,7 @@
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard, UsageTransaction } from "./credits-client";
 import { parseLocalDate } from "@/lib/utils";
+import { LinkedTransactionModal } from "./linked-transaction-modal";
 
 // Tooltip component - appears on hover (desktop) or tap (mobile)
 // Smart positioning: appears above by default, below if not enough space
@@ -157,6 +158,7 @@ interface CreditCardProps {
   onDeleteUsage: (usageId: string) => Promise<void>;
   onUpdateSettings: (formData: FormData) => Promise<void>;
   onUpdateApprovalDate: (walletId: string, date: string | null) => Promise<void>;
+  onUpdateUsagePeriod?: (usageId: string, newDate: string) => Promise<void>;
   showCardName: boolean;
   hideUsed: boolean;
 }
@@ -182,6 +184,7 @@ export function CreditCard({
   onDeleteUsage,
   onUpdateSettings,
   onUpdateApprovalDate,
+  onUpdateUsagePeriod,
   showCardName,
   hideUsed,
 }: CreditCardProps) {
@@ -195,6 +198,10 @@ export function CreditCard({
   const [usageBasedDate, setUsageBasedDate] = useState("");
   const [showUsageBasedSetup, setShowUsageBasedSetup] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [linkedTransactionModal, setLinkedTransactionModal] = useState<{
+    usage: CreditUsage;
+    periodLabel: string;
+  } | null>(null);
 
   // Get the most recent usage for usage_based credits
   const lastUsage = useMemo(() => {
@@ -318,6 +325,22 @@ export function CreditCard({
     });
     return periodUsage.reduce((sum, u) => sum + u.amount_used, 0);
   }, [currentPeriod, usage]);
+
+  // Get current period usage records (for detecting linked transactions)
+  const currentPeriodUsageRecords = useMemo(() => {
+    if (!currentPeriod) return [];
+    const periodStartStr = currentPeriod.start.toISOString().split("T")[0];
+    return usage.filter(u => u.period_start === periodStartStr);
+  }, [currentPeriod, usage]);
+
+  // Check if any current period usage has linked transactions (auto-detected)
+  const hasLinkedTransactions = useMemo(() => {
+    return currentPeriodUsageRecords.some(u => 
+      u.auto_detected && 
+      u.user_credit_usage_transactions && 
+      u.user_credit_usage_transactions.length > 0
+    );
+  }, [currentPeriodUsageRecords]);
 
   const maxAmount = credit.default_quantity ?? 1;
   const isFullyUsed = currentPeriodUsage >= maxAmount;
@@ -582,11 +605,40 @@ export function CreditCard({
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Mark Used Button / Status */}
           {isFullyUsed ? (
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
+            <button
+              onClick={() => {
+                // If has linked transactions, open modal to view them
+                // Otherwise, immediately unmark by deleting the usage
+                const usageWithTxns = currentPeriodUsageRecords.find(u => 
+                  u.auto_detected && 
+                  u.user_credit_usage_transactions && 
+                  u.user_credit_usage_transactions.length > 0
+                );
+                if (usageWithTxns && currentPeriod) {
+                  setLinkedTransactionModal({
+                    usage: usageWithTxns,
+                    periodLabel: currentPeriod.label,
+                  });
+                } else if (currentPeriodUsageRecords.length > 0) {
+                  // Manually marked - unmark by deleting the first usage record
+                  onDeleteUsage(currentPeriodUsageRecords[0].id);
+                }
+              }}
+              className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0 hover:bg-emerald-500 transition-colors cursor-pointer relative group"
+              title={hasLinkedTransactions ? "View linked transaction" : "Click to unmark"}
+            >
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-            </div>
+              {/* Link icon overlay for auto-detected credits */}
+              {hasLinkedTransactions && (
+                <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-sky-500 rounded-full flex items-center justify-center shadow-sm">
+                  <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                </div>
+              )}
+            </button>
           ) : currentPeriodUsage > 0 ? (
             <button
               onClick={() => currentPeriod && onMarkUsed(credit, walletCard, currentPeriod.start.toISOString().split("T")[0], currentPeriod.end.toISOString().split("T")[0])}
@@ -773,6 +825,25 @@ export function CreditCard({
             Save Settings
           </button>
         </div>
+      )}
+
+      {/* Linked Transaction Modal */}
+      {linkedTransactionModal && (
+        <LinkedTransactionModal
+          usage={linkedTransactionModal.usage}
+          credit={credit}
+          walletCard={walletCard}
+          periodLabel={linkedTransactionModal.periodLabel}
+          onClose={() => setLinkedTransactionModal(null)}
+          onUnlink={() => {
+            onDeleteUsage(linkedTransactionModal.usage.id);
+            setLinkedTransactionModal(null);
+          }}
+          onUpdatePeriod={onUpdateUsagePeriod ? async (newDate: string) => {
+            await onUpdateUsagePeriod(linkedTransactionModal.usage.id, newDate);
+            setLinkedTransactionModal(null);
+          } : undefined}
+        />
       )}
     </div>
   );

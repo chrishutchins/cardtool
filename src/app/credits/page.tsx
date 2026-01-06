@@ -8,6 +8,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { CreditsClient } from "./credits-client";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import { PlaidSyncTrigger } from "@/components/plaid-sync-trigger";
+import { calculateCreditPeriod } from "@/lib/credit-matcher";
 
 export const metadata: Metadata = {
   title: "Credit Tracker | CardTool",
@@ -299,6 +300,78 @@ export default async function CreditsPage() {
     revalidatePath("/wallet");
   }
 
+  async function updateCreditUsagePeriod(usageId: string, newDate: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("updateCreditUsagePeriod: No user found");
+      return;
+    }
+
+    const supabase = await createClient();
+
+    // First, get the usage record with its credit and wallet info
+    const { data: usage, error: usageError } = await supabase
+      .from("user_credit_usage")
+      .select(`
+        id,
+        credit_id,
+        user_wallet_id,
+        user_wallets!inner (
+          user_id,
+          approval_date
+        ),
+        card_credits!inner (
+          reset_cycle,
+          reset_day_of_month
+        )
+      `)
+      .eq("id", usageId)
+      .single();
+
+    if (usageError || !usage) {
+      console.error("Error fetching usage record:", usageError);
+      return;
+    }
+
+    // Verify the usage belongs to the current user
+    const walletData = usage.user_wallets as unknown as { user_id: string; approval_date: string | null };
+    if (walletData.user_id !== userId) {
+      console.error("Unauthorized: usage record does not belong to user");
+      return;
+    }
+
+    // Calculate the new period based on the new date
+    const creditData = usage.card_credits as unknown as { reset_cycle: string; reset_day_of_month: number | null };
+    const { periodStart, periodEnd } = calculateCreditPeriod(
+      new Date(newDate),
+      creditData.reset_cycle as "monthly" | "quarterly" | "semiannual" | "annual" | "cardmember_year" | "usage_based",
+      walletData.approval_date ? new Date(walletData.approval_date) : null,
+      creditData.reset_day_of_month
+    );
+
+    // Format dates as YYYY-MM-DD
+    const periodStartStr = periodStart.toISOString().split("T")[0];
+    const periodEndStr = periodEnd.toISOString().split("T")[0];
+
+    // Update the usage record with new period and date
+    const { error: updateError } = await supabase
+      .from("user_credit_usage")
+      .update({
+        period_start: periodStartStr,
+        period_end: periodEndStr,
+        used_at: newDate,
+      })
+      .eq("id", usageId);
+
+    if (updateError) {
+      console.error("Error updating credit usage period:", updateError);
+      return;
+    }
+
+    revalidatePath("/credits");
+  }
+
   // Transform data for client component
   type WalletCardData = {
     id: string;
@@ -337,6 +410,7 @@ export default async function CreditsPage() {
           onDeleteUsage={deleteCreditUsage}
           onUpdateSettings={updateCreditSettings}
           onUpdateApprovalDate={updateApprovalDate}
+          onUpdateUsagePeriod={updateCreditUsagePeriod}
         />
       </div>
     </div>
