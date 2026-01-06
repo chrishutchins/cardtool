@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
 import logger from "@/lib/logger";
 
@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Use admin client for admin operations
+    const supabase = createAdminClient();
 
     // Mark the transaction as dismissed
     const { error } = await supabase

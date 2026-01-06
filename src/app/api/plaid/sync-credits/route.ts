@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { plaidClient } from '@/lib/plaid';
 import { matchTransactionsToCredits } from '@/lib/credit-matcher';
 import logger from '@/lib/logger';
@@ -16,7 +16,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await createClient();
+    // Use admin client since we're already authenticated via Clerk
+    // and RLS policies use auth.uid() which only works with Supabase Auth
+    const supabase = createAdminClient();
 
     // Check for force refresh option
     const body = await request.json().catch(() => ({}));
@@ -273,7 +275,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // Get latest sync state
     const { data: syncStates } = await supabase

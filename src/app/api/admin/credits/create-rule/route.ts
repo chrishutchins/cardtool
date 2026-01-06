@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
 import { matchTransactionsToCredits } from "@/lib/credit-matcher";
 import logger from "@/lib/logger";
@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Use admin client for admin operations
+    const supabase = createAdminClient();
 
     // Check if rule already exists (use maybeSingle since no match is expected case)
     const { data: existingRule } = await supabase
