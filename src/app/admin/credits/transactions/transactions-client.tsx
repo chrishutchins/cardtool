@@ -53,15 +53,15 @@ interface Card {
   slug: string;
 }
 
-interface Credit {
-  id: string;
+interface CreditOption {
+  representative_credit_id: string;
   name: string;
-  brand_name: string | null;
-  card_id: string;
-  cards: {
+  canonical_name: string | null;
+  issuer: {
+    id: string;
     name: string;
-    slug: string;
   } | null;
+  credit_ids: string[];
 }
 
 interface MatchingRule {
@@ -82,55 +82,39 @@ interface Filters {
 interface TransactionsClientProps {
   transactions: Transaction[];
   cards: Card[];
-  credits: Credit[];
+  creditOptions: CreditOption[];
   matchingRules: MatchingRule[];
   filters: Filters;
 }
 
-// Searchable credit selector component
+// Searchable credit selector component - shows Issuer + Credit Name (grouped by canonical name)
 function CreditSelector({
-  credits,
+  creditOptions,
   value,
   onChange,
-  placeholder = "Search credits...",
 }: {
-  credits: Credit[];
+  creditOptions: CreditOption[];
   value: string;
   onChange: (creditId: string) => void;
-  placeholder?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sort credits by card name, then credit name
-  const sortedCredits = useMemo(() => {
-    return [...credits].sort((a, b) => {
-      const cardA = a.cards?.name?.toLowerCase() ?? "";
-      const cardB = b.cards?.name?.toLowerCase() ?? "";
-      if (cardA !== cardB) return cardA.localeCompare(cardB);
-      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-    });
-  }, [credits]);
+  // Find the selected option - value could be any credit_id in the group
+  const selectedOption = creditOptions.find((c) => c.credit_ids.includes(value));
 
-  // Filter credits based on search
-  const filteredCredits = useMemo(() => {
-    if (!search.trim()) return sortedCredits;
+  // Filter options based on search
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) return creditOptions;
     const searchLower = search.toLowerCase();
-    return sortedCredits.filter(
-      (credit) =>
-        credit.name.toLowerCase().includes(searchLower) ||
-        credit.cards?.name?.toLowerCase().includes(searchLower) ||
-        credit.brand_name?.toLowerCase().includes(searchLower)
+    return creditOptions.filter(
+      (option) =>
+        option.name.toLowerCase().includes(searchLower) ||
+        option.issuer?.name.toLowerCase().includes(searchLower)
     );
-  }, [sortedCredits, search]);
-
-  // Get selected credit label
-  const selectedCredit = credits.find((c) => c.id === value);
-  const selectedLabel = selectedCredit
-    ? `${selectedCredit.cards?.name} - ${selectedCredit.name}`
-    : "";
+  }, [creditOptions, search]);
 
   // Handle click outside
   useEffect(() => {
@@ -152,8 +136,10 @@ function CreditSelector({
           setTimeout(() => inputRef.current?.focus(), 0);
         }}
       >
-        <span className={selectedLabel ? "text-zinc-200" : "text-zinc-400"}>
-          {selectedLabel || "Select a credit..."}
+        <span className={selectedOption ? "text-zinc-200" : "text-zinc-400"}>
+          {selectedOption
+            ? `${selectedOption.issuer?.name || "Unknown"} - ${selectedOption.name}`
+            : "Select a credit..."}
         </span>
         <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </div>
@@ -168,30 +154,37 @@ function CreditSelector({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={placeholder}
+                placeholder="Search credits..."
                 className="w-full bg-zinc-700 border border-zinc-600 text-zinc-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
           </div>
           <div className="max-h-48 overflow-y-auto">
-            {filteredCredits.length === 0 ? (
+            {filteredOptions.length === 0 ? (
               <div className="px-3 py-2 text-sm text-zinc-500">No credits found</div>
             ) : (
-              filteredCredits.map((credit) => (
+              filteredOptions.map((option) => (
                 <div
-                  key={credit.id}
+                  key={option.representative_credit_id}
                   className={`px-3 py-2 text-sm cursor-pointer hover:bg-zinc-700 ${
-                    credit.id === value ? "bg-emerald-900/30 text-emerald-400" : "text-zinc-200"
+                    selectedOption?.representative_credit_id === option.representative_credit_id
+                      ? "bg-emerald-900/30 text-emerald-400"
+                      : "text-zinc-200"
                   }`}
                   onClick={() => {
-                    onChange(credit.id);
+                    onChange(option.representative_credit_id);
                     setIsOpen(false);
                     setSearch("");
                   }}
                 >
-                  <span className="text-zinc-400">{credit.cards?.name}</span>
+                  <span className="text-zinc-400">{option.issuer?.name || "Unknown"}</span>
                   <span className="text-zinc-500 mx-1">-</span>
-                  <span>{credit.name}</span>
+                  <span>{option.name}</span>
+                  {option.credit_ids.length > 1 && (
+                    <span className="text-zinc-500 text-xs ml-2">
+                      ({option.credit_ids.length} cards)
+                    </span>
+                  )}
                 </div>
               ))
             )}
@@ -205,7 +198,7 @@ function CreditSelector({
 export function TransactionsClient({
   transactions,
   cards,
-  credits,
+  creditOptions,
   matchingRules,
   filters,
 }: TransactionsClientProps) {
@@ -454,8 +447,8 @@ export function TransactionsClient({
           <p className="text-2xl font-bold text-white">{matchingRules.length}</p>
         </div>
         <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-800">
-          <p className="text-sm text-zinc-400">Credits Available</p>
-          <p className="text-2xl font-bold text-white">{credits.length}</p>
+          <p className="text-sm text-zinc-400">Credit Types</p>
+          <p className="text-2xl font-bold text-white">{creditOptions.length}</p>
         </div>
       </div>
 
@@ -527,7 +520,7 @@ export function TransactionsClient({
                         <div className="flex-1 min-w-[280px]">
                           <label className="block text-sm text-zinc-400 mb-1">Assign to Credit:</label>
                           <CreditSelector
-                            credits={credits}
+                            creditOptions={creditOptions}
                             value={selectedCredit[group] || ""}
                             onChange={(creditId) => setSelectedCredit({ ...selectedCredit, [group]: creditId })}
                           />
@@ -603,7 +596,7 @@ export function TransactionsClient({
                             </div>
                             <div className="flex items-center gap-4">
                               <span className="text-zinc-400 text-xs">
-                                User: {txn.user_id.slice(0, 8)}...
+                                {txn.user_linked_accounts?.user_wallets?.cards?.name || "Unknown Card"}
                               </span>
                               <span className={isClawback ? "text-amber-400" : "text-emerald-400"}>
                                 {formatAmount(txn.amount_cents)}

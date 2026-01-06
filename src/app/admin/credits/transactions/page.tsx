@@ -46,14 +46,56 @@ export default async function AdminTransactionsPage({
       id,
       name,
       brand_name,
+      canonical_name,
       card_id,
       cards:card_id (
         name,
-        slug
+        slug,
+        issuers:issuer_id (
+          id,
+          name
+        )
       )
     `)
     .eq("is_active", true)
     .order("name");
+
+  // Normalize credits into CreditOption format (grouped by issuer + canonical name)
+  interface CreditOption {
+    representative_credit_id: string;
+    name: string;
+    canonical_name: string | null;
+    issuer: { id: string; name: string } | null;
+    credit_ids: string[];
+  }
+
+  const creditOptionsMap = new Map<string, CreditOption>();
+  credits?.forEach((c) => {
+    const card = c.cards as { name: string; slug: string; issuers: { id: string; name: string } | null } | null;
+    const issuer = card?.issuers;
+    const displayName = c.canonical_name || c.name;
+    const key = `${issuer?.id || "none"}-${displayName}`;
+
+    if (!creditOptionsMap.has(key)) {
+      creditOptionsMap.set(key, {
+        representative_credit_id: c.id,
+        name: displayName,
+        canonical_name: c.canonical_name,
+        issuer: issuer || null,
+        credit_ids: [c.id],
+      });
+    } else {
+      creditOptionsMap.get(key)!.credit_ids.push(c.id);
+    }
+  });
+
+  // Sort by issuer name, then credit name
+  const creditOptions = Array.from(creditOptionsMap.values()).sort((a, b) => {
+    const issuerA = a.issuer?.name?.toLowerCase() ?? "";
+    const issuerB = b.issuer?.name?.toLowerCase() ?? "";
+    if (issuerA !== issuerB) return issuerA.localeCompare(issuerB);
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
 
   // Fetch all brand names from credits for filtering potential credits
   const brandNames = new Set<string>();
@@ -205,7 +247,7 @@ export default async function AdminTransactionsPage({
         <TransactionsClient
           transactions={filteredTransactions}
           cards={cards || []}
-          credits={credits || []}
+          creditOptions={creditOptions}
           matchingRules={matchingRules || []}
           filters={{
             cardId: params.cardId || "",
