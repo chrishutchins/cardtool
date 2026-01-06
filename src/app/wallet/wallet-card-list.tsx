@@ -684,7 +684,7 @@ export function WalletCardList({
                       >
                         {wc.approval_date ? (
                           <span className="text-zinc-300">
-                            {parseLocalDate(wc.approval_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                            {parseLocalDate(wc.approval_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" })}
                           </span>
                         ) : (
                           <span className="text-zinc-600 group-hover:text-zinc-400">Set date</span>

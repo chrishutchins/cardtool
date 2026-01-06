@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   title: "Matching Rules | Admin",
 };
 
+// Force dynamic rendering - don't cache
+export const dynamic = "force-dynamic";
+
 interface MatchedTransaction {
   id: string;
   name: string;
@@ -84,7 +87,7 @@ export default async function RulesPage() {
     .order("created_at", { ascending: false });
 
   // Get all matched transactions grouped by rule, with card info
-  const { data: matchedTxns } = await supabase
+  const { data: matchedTxns, error: matchedTxnsError } = await supabase
     .from("user_plaid_transactions")
     .select(`
       id, 
@@ -101,6 +104,11 @@ export default async function RulesPage() {
     `)
     .not("matched_rule_id", "is", null)
     .order("date", { ascending: false });
+
+  if (matchedTxnsError) {
+    console.error("Error fetching matched transactions:", matchedTxnsError);
+  }
+  console.log("Matched transactions count:", matchedTxns?.length || 0);
 
   const txnsByRuleId = new Map<string, MatchedTransaction[]>();
   matchedTxns?.forEach((t) => {
