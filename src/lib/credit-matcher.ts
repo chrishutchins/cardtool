@@ -55,10 +55,10 @@ interface CreditUsage {
 }
 
 /**
- * Matches a transaction name against a pattern (case-insensitive contains match)
+ * Matches a transaction name against a pattern (case-insensitive exact match)
  */
 export function matchesPattern(transactionName: string, pattern: string): boolean {
-  return transactionName.toLowerCase().includes(pattern.toLowerCase());
+  return transactionName.toLowerCase() === pattern.toLowerCase();
 }
 
 /**

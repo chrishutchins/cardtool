@@ -71,14 +71,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Re-run matching for all unmatched transactions that might now match
+    // Re-run matching for all unmatched transactions that exactly match the pattern (case-insensitive)
     const { data: unmatchedTxns } = await supabase
       .from("user_plaid_transactions")
       .select("*")
       .is("matched_credit_id", null)
       .eq("dismissed", false)
       .eq("pending", false)
-      .ilike("name", `%${pattern}%`);
+      .ilike("name", pattern);
 
     if (unmatchedTxns && unmatchedTxns.length > 0) {
       // Group by user for proper matching

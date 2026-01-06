@@ -2,8 +2,11 @@
 
 import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Edit2, Trash2, X, Check, ChevronDown } from "lucide-react";
+import { Search, Edit2, Trash2, X, Check, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { parseLocalDate } from "@/lib/utils";
+
+type SortKey = "pattern" | "amount" | "issuer" | "credit" | "matches";
+type SortDirection = "asc" | "desc";
 
 interface MatchedTransaction {
   id: string;
@@ -238,10 +241,45 @@ function TransactionsModal({
   );
 }
 
+function SortableHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentDirection,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  currentSort: SortKey | null;
+  currentDirection: SortDirection;
+  onSort: (key: SortKey) => void;
+}) {
+  const isActive = currentSort === sortKey;
+  return (
+    <button
+      onClick={() => onSort(sortKey)}
+      className="flex items-center gap-1 text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+    >
+      {label}
+      {isActive ? (
+        currentDirection === "asc" ? (
+          <ArrowUp className="w-3 h-3" />
+        ) : (
+          <ArrowDown className="w-3 h-3" />
+        )
+      ) : (
+        <ArrowUpDown className="w-3 h-3 opacity-50" />
+      )}
+    </button>
+  );
+}
+
 export function RulesClient({ rules, creditOptions }: RulesClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [editingRule, setEditingRule] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{
     pattern: string;
@@ -251,16 +289,66 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [viewingTransactions, setViewingTransactions] = useState<Rule | null>(null);
 
-  const filteredRules = useMemo(() => {
-    if (!searchQuery) return rules;
-    const query = searchQuery.toLowerCase();
-    return rules.filter(
-      (rule) =>
-        rule.pattern.toLowerCase().includes(query) ||
-        rule.credit?.name.toLowerCase().includes(query) ||
-        rule.credit?.issuer?.name.toLowerCase().includes(query)
-    );
-  }, [rules, searchQuery]);
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      // Toggle direction if same key
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // New key, start with ascending
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
+
+  const filteredAndSortedRules = useMemo(() => {
+    let result = rules;
+    
+    // Filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (rule) =>
+          rule.pattern.toLowerCase().includes(query) ||
+          rule.credit?.name.toLowerCase().includes(query) ||
+          rule.credit?.issuer?.name.toLowerCase().includes(query)
+      );
+    }
+    
+    // Sort
+    if (sortKey) {
+      result = [...result].sort((a, b) => {
+        let comparison = 0;
+        
+        switch (sortKey) {
+          case "pattern":
+            comparison = a.pattern.localeCompare(b.pattern);
+            break;
+          case "amount":
+            const amountA = a.match_amount_cents ?? -1;
+            const amountB = b.match_amount_cents ?? -1;
+            comparison = amountA - amountB;
+            break;
+          case "issuer":
+            const issuerA = a.credit?.issuer?.name || "";
+            const issuerB = b.credit?.issuer?.name || "";
+            comparison = issuerA.localeCompare(issuerB);
+            break;
+          case "credit":
+            const creditA = a.credit?.name || "";
+            const creditB = b.credit?.name || "";
+            comparison = creditA.localeCompare(creditB);
+            break;
+          case "matches":
+            comparison = a.match_count - b.match_count;
+            break;
+        }
+        
+        return sortDirection === "asc" ? comparison : -comparison;
+      });
+    }
+    
+    return result;
+  }, [rules, searchQuery, sortKey, sortDirection]);
 
   const handleEdit = (rule: Rule) => {
     setEditingRule(rule.id);
@@ -329,16 +417,26 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-800 text-left">
-              <th className="px-4 py-3 text-sm font-medium text-zinc-400">Pattern</th>
-              <th className="px-4 py-3 text-sm font-medium text-zinc-400">Amount</th>
-              <th className="px-4 py-3 text-sm font-medium text-zinc-400">Issuer</th>
-              <th className="px-4 py-3 text-sm font-medium text-zinc-400">Credit</th>
-              <th className="px-4 py-3 text-sm font-medium text-zinc-400 text-center">Matches</th>
+              <th className="px-4 py-3">
+                <SortableHeader label="Pattern" sortKey="pattern" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-3">
+                <SortableHeader label="Amount" sortKey="amount" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-3">
+                <SortableHeader label="Issuer" sortKey="issuer" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-3">
+                <SortableHeader label="Credit" sortKey="credit" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortableHeader label="Matches" sortKey="matches" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort} />
+              </th>
               <th className="px-4 py-3 text-sm font-medium text-zinc-400 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredRules.map((rule) => (
+            {filteredAndSortedRules.map((rule) => (
               <tr key={rule.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
                 {editingRule === rule.id && editValues ? (
                   <>
@@ -459,7 +557,7 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
                 )}
               </tr>
             ))}
-            {filteredRules.length === 0 && (
+            {filteredAndSortedRules.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
                   {searchQuery ? "No rules match your search" : "No matching rules created yet"}
