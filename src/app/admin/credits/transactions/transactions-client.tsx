@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { 
@@ -84,6 +84,121 @@ interface TransactionsClientProps {
   credits: Credit[];
   matchingRules: MatchingRule[];
   filters: Filters;
+}
+
+// Searchable credit selector component
+function CreditSelector({
+  credits,
+  value,
+  onChange,
+  placeholder = "Search credits...",
+}: {
+  credits: Credit[];
+  value: string;
+  onChange: (creditId: string) => void;
+  placeholder?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sort credits by card name, then credit name
+  const sortedCredits = useMemo(() => {
+    return [...credits].sort((a, b) => {
+      const cardA = a.cards?.name?.toLowerCase() ?? "";
+      const cardB = b.cards?.name?.toLowerCase() ?? "";
+      if (cardA !== cardB) return cardA.localeCompare(cardB);
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+  }, [credits]);
+
+  // Filter credits based on search
+  const filteredCredits = useMemo(() => {
+    if (!search.trim()) return sortedCredits;
+    const searchLower = search.toLowerCase();
+    return sortedCredits.filter(
+      (credit) =>
+        credit.name.toLowerCase().includes(searchLower) ||
+        credit.cards?.name?.toLowerCase().includes(searchLower) ||
+        credit.brand_name?.toLowerCase().includes(searchLower)
+    );
+  }, [sortedCredits, search]);
+
+  // Get selected credit label
+  const selectedCredit = credits.find((c) => c.id === value);
+  const selectedLabel = selectedCredit
+    ? `${selectedCredit.cards?.name} - ${selectedCredit.name}`
+    : "";
+
+  // Handle click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div
+        className="w-full bg-zinc-700 border border-zinc-600 text-zinc-200 rounded-lg px-3 py-2 text-sm cursor-pointer flex items-center justify-between"
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setTimeout(() => inputRef.current?.focus(), 0);
+        }}
+      >
+        <span className={selectedLabel ? "text-zinc-200" : "text-zinc-400"}>
+          {selectedLabel || "Select a credit..."}
+        </span>
+        <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 mt-1 w-full bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl max-h-64 overflow-hidden">
+          <div className="p-2 border-b border-zinc-700">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={placeholder}
+                className="w-full bg-zinc-700 border border-zinc-600 text-zinc-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filteredCredits.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-zinc-500">No credits found</div>
+            ) : (
+              filteredCredits.map((credit) => (
+                <div
+                  key={credit.id}
+                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-zinc-700 ${
+                    credit.id === value ? "bg-emerald-900/30 text-emerald-400" : "text-zinc-200"
+                  }`}
+                  onClick={() => {
+                    onChange(credit.id);
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
+                >
+                  <span className="text-zinc-400">{credit.cards?.name}</span>
+                  <span className="text-zinc-500 mx-1">-</span>
+                  <span>{credit.name}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function TransactionsClient({
@@ -378,20 +493,13 @@ export function TransactionsClient({
                     {/* Assignment Controls */}
                     {!sampleTxn.matched_credit_id && !sampleTxn.dismissed && (
                       <div className="flex flex-wrap items-end gap-4 bg-zinc-800/50 p-4 rounded-lg">
-                        <div className="flex-1 min-w-[200px]">
+                        <div className="flex-1 min-w-[280px]">
                           <label className="block text-sm text-zinc-400 mb-1">Assign to Credit:</label>
-                          <select
+                          <CreditSelector
+                            credits={credits}
                             value={selectedCredit[group] || ""}
-                            onChange={(e) => setSelectedCredit({ ...selectedCredit, [group]: e.target.value })}
-                            className="w-full bg-zinc-700 border border-zinc-600 text-zinc-200 rounded-lg px-3 py-2 text-sm"
-                          >
-                            <option value="">Select a credit...</option>
-                            {credits.map((credit) => (
-                              <option key={credit.id} value={credit.id}>
-                                {credit.cards?.name} - {credit.name}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(creditId) => setSelectedCredit({ ...selectedCredit, [group]: creditId })}
+                          />
                         </div>
 
                         <div>
