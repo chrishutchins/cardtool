@@ -15,6 +15,7 @@ interface CardFormProps {
     primary_currency_id: string;
     secondary_currency_id: string | null;
     product_type: "personal" | "business";
+    card_charge_type: "credit" | "charge" | null;
     annual_fee: number;
     default_earn_rate: number;
     default_perks_value: number | null;
@@ -28,6 +29,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
   const [primaryCurrencyId, setPrimaryCurrencyId] = useState(defaultValues?.primary_currency_id ?? "");
   const [secondaryCurrencyId, setSecondaryCurrencyId] = useState(defaultValues?.secondary_currency_id ?? "");
   const [productType, setProductType] = useState<"personal" | "business">(defaultValues?.product_type ?? "personal");
+  const [cardChargeType, setCardChargeType] = useState<"credit" | "charge">(defaultValues?.card_charge_type ?? "credit");
   const [annualFee, setAnnualFee] = useState(defaultValues?.annual_fee ?? 0);
   const [defaultEarnRate, setDefaultEarnRate] = useState(defaultValues?.default_earn_rate ?? 1.0);
   const [defaultPerksValue, setDefaultPerksValue] = useState(defaultValues?.default_perks_value ?? 0);
@@ -43,6 +45,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
       setPrimaryCurrencyId(defaultValues.primary_currency_id ?? "");
       setSecondaryCurrencyId(defaultValues.secondary_currency_id ?? "");
       setProductType(defaultValues.product_type ?? "personal");
+      setCardChargeType(defaultValues.card_charge_type ?? "credit");
       setAnnualFee(defaultValues.annual_fee ?? 0);
       setDefaultEarnRate(defaultValues.default_earn_rate ?? 1.0);
       setDefaultPerksValue(defaultValues.default_perks_value ?? 0);
@@ -133,6 +136,19 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Card Charge Type</label>
+          <select
+            name="card_charge_type"
+            value={cardChargeType}
+            onChange={(e) => setCardChargeType(e.target.value as "credit" | "charge")}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="credit">Credit Card</option>
+            <option value="charge">Charge Card</option>
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">Charge cards have no preset spending limit</p>
+        </div>
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">Primary Currency</label>
           <select

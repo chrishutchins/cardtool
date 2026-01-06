@@ -439,6 +439,7 @@ export type Database = {
       cards: {
         Row: {
           annual_fee: number
+          card_charge_type: Database["public"]["Enums"]["card_charge_type"] | null
           created_at: string | null
           default_earn_rate: number
           default_perks_value: number | null
@@ -455,6 +456,7 @@ export type Database = {
         }
         Insert: {
           annual_fee?: number
+          card_charge_type?: Database["public"]["Enums"]["card_charge_type"] | null
           created_at?: string | null
           default_earn_rate?: number
           default_perks_value?: number | null
@@ -471,6 +473,7 @@ export type Database = {
         }
         Update: {
           annual_fee?: number
+          card_charge_type?: Database["public"]["Enums"]["card_charge_type"] | null
           created_at?: string | null
           default_earn_rate?: number
           default_perks_value?: number | null
@@ -786,6 +789,68 @@ export type Database = {
           tracking_type?: Database["public"]["Enums"]["inventory_tracking_type"]
         }
         Relationships: []
+      }
+      application_rules: {
+        Row: {
+          id: string
+          issuer_id: string
+          rule_type: string
+          name: string
+          description: string | null
+          card_limit: number
+          card_type: string | null
+          time_window: number | null
+          time_unit: string | null
+          counts_all_issuers: boolean | null
+          charge_type: string | null
+          requires_banking: boolean | null
+          display_order: number | null
+          is_active: boolean | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          issuer_id: string
+          rule_type: string
+          name: string
+          description?: string | null
+          card_limit: number
+          card_type?: string | null
+          time_window?: number | null
+          time_unit?: string | null
+          counts_all_issuers?: boolean | null
+          charge_type?: string | null
+          requires_banking?: boolean | null
+          display_order?: number | null
+          is_active?: boolean | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          issuer_id?: string
+          rule_type?: string
+          name?: string
+          description?: string | null
+          card_limit?: number
+          card_type?: string | null
+          time_window?: number | null
+          time_unit?: string | null
+          counts_all_issuers?: boolean | null
+          charge_type?: string | null
+          requires_banking?: boolean | null
+          display_order?: number | null
+          is_active?: boolean | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_rules_issuer_id_fkey"
+            columns: ["issuer_id"]
+            isOneToOne: false
+            referencedRelation: "issuers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       issuers: {
         Row: {
@@ -2536,6 +2601,7 @@ export type Database = {
         | "second_top_category"
         | "all_categories"
       cap_unit: "spend" | "rewards"
+      card_charge_type: "credit" | "charge"
       card_product_type: "personal" | "business"
       credit_reset_cycle:
         | "monthly"
@@ -2697,6 +2763,7 @@ export const Constants = {
         "all_categories",
       ],
       cap_unit: ["spend", "rewards"],
+      card_charge_type: ["credit", "charge"],
       card_product_type: ["personal", "business"],
       credit_reset_cycle: [
         "monthly",

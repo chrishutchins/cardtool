@@ -55,6 +55,14 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
       });
     }
     
+    // Add Rules link after Spending
+    const spendingIndex = items.findIndex(item => item.href === "/spending");
+    items.splice(spendingIndex + 1, 0, { 
+      href: "/rules", 
+      label: "Rules", 
+      onboardingId: "rules" 
+    });
+    
     return items;
   }, [creditTrackingEnabled, isAdmin]);
 
