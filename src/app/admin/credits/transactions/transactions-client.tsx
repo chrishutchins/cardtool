@@ -355,6 +355,33 @@ export function TransactionsClient({
     }
   };
 
+  const rematchAll = async () => {
+    setActionPending("rematch");
+    
+    try {
+      // Get unique user IDs from transactions
+      const userIds = [...new Set(transactions.map(t => t.user_id))];
+      
+      for (const userId of userIds) {
+        const response = await fetch("/api/admin/credits/rematch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+        
+        if (!response.ok) {
+          console.error(`Failed to rematch for user ${userId}:`, await response.text());
+        }
+      }
+      
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to rematch:", error);
+    } finally {
+      setActionPending(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -420,6 +447,17 @@ export function TransactionsClient({
 
         <div className="flex-1" />
 
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={rematchAll}
+          disabled={actionPending === "rematch" || isPending}
+          className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${actionPending === "rematch" ? "animate-spin" : ""}`} />
+          Rematch All
+        </Button>
+        
         <Button
           variant="outline"
           size="sm"
