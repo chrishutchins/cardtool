@@ -25,7 +25,6 @@ interface Rule {
   credit: {
     id: string;
     name: string;
-    canonical_name: string | null;
     issuer: {
       id: string;
       name: string;
@@ -38,7 +37,6 @@ interface Rule {
 interface CreditOption {
   representative_credit_id: string;
   name: string;
-  canonical_name: string | null;
   issuer: {
     id: string;
     name: string;

@@ -28,7 +28,6 @@ interface CardCredit {
   reset_cycle: 'monthly' | 'quarterly' | 'semiannual' | 'annual' | 'cardmember_year' | 'usage_based';
   reset_day_of_month: number | null;
   default_value_cents: number | null;
-  canonical_name: string | null;
   credit_count: number;
   cards?: {
     id: string;
@@ -201,7 +200,8 @@ async function findAvailableSlot(
 }
 
 /**
- * Finds a matching credit for a rule, considering canonical names and issuer
+ * Finds a matching credit for a rule, considering credit name and issuer
+ * Credits with the same name on different cards from the same issuer share rules
  */
 async function findMatchingCredit(
   supabase: SupabaseClient,
@@ -212,30 +212,26 @@ async function findMatchingCredit(
   const ruleCredit = creditById.get(rule.credit_id);
   if (!ruleCredit) return null;
 
-  // If no canonical name, just use direct card lookup
-  if (!ruleCredit.canonical_name) {
-    const wallet = walletByCardId.get(ruleCredit.card_id);
-    if (wallet) {
-      return { credit: ruleCredit, wallet };
-    }
-    return null;
-  }
-
   // Get the issuer of the rule's credit
   const issuerId = ruleCredit.cards?.issuer_id;
 
-  // Find all credits with the same canonical name and same issuer
-  // that the user has in their wallet
+  // Find credits with the same name and same issuer that the user has in their wallet
   for (const [cardId, wallet] of walletByCardId) {
-    for (const [creditId, credit] of creditById) {
+    for (const [, credit] of creditById) {
       if (
         credit.card_id === cardId &&
-        credit.canonical_name === ruleCredit.canonical_name &&
+        credit.name === ruleCredit.name &&
         credit.cards?.issuer_id === issuerId
       ) {
         return { credit, wallet };
       }
     }
+  }
+
+  // Fallback: direct card lookup
+  const wallet = walletByCardId.get(ruleCredit.card_id);
+  if (wallet) {
+    return { credit: ruleCredit, wallet };
   }
 
   return null;
@@ -306,7 +302,7 @@ export async function matchTransactionsToCredits(
     return { matched, clawbacks, errors };
   }
 
-  // Also fetch credits for canonical name matching (same issuer, different cards)
+  // Also fetch credits from same issuers for cross-card name matching
   // Get all issuers from user's cards
   const issuerIds = new Set<string>();
   walletCards?.forEach(wc => {
@@ -318,7 +314,7 @@ export async function matchTransactionsToCredits(
     }
   });
 
-  // Fetch all credits from these issuers for canonical name matching
+  // Fetch all credits from these issuers for name matching across cards
   let allCredits = credits || [];
   if (issuerIds.size > 0) {
     const { data: issuerCredits } = await supabase
@@ -330,7 +326,6 @@ export async function matchTransactionsToCredits(
           issuer_id
         )
       `)
-      .not('canonical_name', 'is', null)
       .eq('is_active', true);
 
     if (issuerCredits) {
@@ -379,7 +374,7 @@ export async function matchTransactionsToCredits(
       console.log(`[credit-matcher] No matching credit/wallet found for rule. Credit in map: ${creditById.has(matchingRule.credit_id)}`);
       if (creditById.has(matchingRule.credit_id)) {
         const credit = creditById.get(matchingRule.credit_id)!;
-        console.log(`[credit-matcher] Credit card_id: ${credit.card_id}, canonical_name: ${credit.canonical_name}`);
+        console.log(`[credit-matcher] Credit card_id: ${credit.card_id}, name: ${credit.name}`);
         console.log(`[credit-matcher] Wallet for card_id exists: ${walletByCardId.has(credit.card_id)}`);
       }
       continue;

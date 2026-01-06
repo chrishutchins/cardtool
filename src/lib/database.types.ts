@@ -108,7 +108,6 @@ export type Database = {
       card_credits: {
         Row: {
           brand_name: string | null
-          canonical_name: string | null
           card_id: string
           created_at: string | null
           credit_count: number
@@ -127,7 +126,6 @@ export type Database = {
         }
         Insert: {
           brand_name?: string | null
-          canonical_name?: string | null
           card_id: string
           created_at?: string | null
           credit_count?: number
@@ -146,7 +144,6 @@ export type Database = {
         }
         Update: {
           brand_name?: string | null
-          canonical_name?: string | null
           card_id?: string
           created_at?: string | null
           credit_count?: number

@@ -28,7 +28,6 @@ export interface Credit {
   renewal_period_months: number | null;
   must_be_earned: boolean;
   credit_count?: number;
-  canonical_name?: string | null;
 }
 
 // Extended credit with slot information for multi-use credits

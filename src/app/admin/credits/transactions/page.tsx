@@ -46,7 +46,6 @@ export default async function AdminTransactionsPage({
       id,
       name,
       brand_name,
-      canonical_name,
       card_id,
       cards:card_id (
         name,
@@ -60,11 +59,10 @@ export default async function AdminTransactionsPage({
     .eq("is_active", true)
     .order("name");
 
-  // Normalize credits into CreditOption format (grouped by issuer + canonical name)
+  // Normalize credits into CreditOption format (grouped by issuer + credit name)
   interface CreditOption {
     representative_credit_id: string;
     name: string;
-    canonical_name: string | null;
     issuer: { id: string; name: string } | null;
     credit_ids: string[];
   }
@@ -73,14 +71,12 @@ export default async function AdminTransactionsPage({
   credits?.forEach((c) => {
     const card = c.cards as { name: string; slug: string; issuers: { id: string; name: string } | null } | null;
     const issuer = card?.issuers;
-    const displayName = c.canonical_name || c.name;
-    const key = `${issuer?.id || "none"}-${displayName}`;
+    const key = `${issuer?.id || "none"}-${c.name}`;
 
     if (!creditOptionsMap.has(key)) {
       creditOptionsMap.set(key, {
         representative_credit_id: c.id,
-        name: displayName,
-        canonical_name: c.canonical_name,
+        name: c.name,
         issuer: issuer || null,
         credit_ids: [c.id],
       });

@@ -28,7 +28,6 @@ export async function GET() {
         card_credits:credit_id (
           id,
           name,
-          canonical_name,
           cards:card_id (
             id,
             name,

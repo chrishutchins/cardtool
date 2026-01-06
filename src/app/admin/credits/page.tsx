@@ -9,7 +9,6 @@ type Credit = {
   id: string;
   name: string;
   brand_name: string | null;
-  canonical_name: string | null;
   credit_count: number;
   reset_cycle: string;
   renewal_period_months: number | null;
@@ -45,7 +44,6 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
         id,
         name,
         brand_name,
-        canonical_name,
         credit_count,
         reset_cycle,
         renewal_period_months,
@@ -85,8 +83,6 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
     const name = formData.get("name") as string;
     const brandNameRaw = formData.get("brand_name") as string;
     const brandName = brandNameRaw?.trim() || null;
-    const canonicalNameRaw = formData.get("canonical_name") as string;
-    const canonicalName = canonicalNameRaw?.trim() || null;
     const creditCountStr = formData.get("credit_count") as string;
     const creditCount = creditCountStr ? parseInt(creditCountStr) : 1;
     const resetCycle = formData.get("reset_cycle") as string;
@@ -107,7 +103,6 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
       card_id: cardId,
       name,
       brand_name: brandName,
-      canonical_name: canonicalName,
       credit_count: creditCount,
       reset_cycle: resetCycle as "monthly" | "quarterly" | "semiannual" | "annual" | "cardmember_year" | "usage_based",
       renewal_period_months: renewalPeriodMonths,

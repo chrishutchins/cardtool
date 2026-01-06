@@ -29,7 +29,6 @@ interface Rule {
   credit: {
     id: string;
     name: string;
-    canonical_name: string | null;
     issuer: {
       id: string;
       name: string;
@@ -44,12 +43,11 @@ interface CreditOption {
   // Use first credit ID for this issuer/name combo (for creating new rules)
   representative_credit_id: string;
   name: string;
-  canonical_name: string | null;
   issuer: {
     id: string;
     name: string;
   } | null;
-  // All credit IDs that share this issuer/name or canonical_name
+  // All credit IDs that share this issuer/name
   credit_ids: string[];
 }
 
@@ -73,7 +71,6 @@ export default async function RulesPage() {
       card_credits:credit_id (
         id,
         name,
-        canonical_name,
         cards:card_id (
           id,
           name,
@@ -138,7 +135,6 @@ export default async function RulesPage() {
     const credit = r.card_credits as {
       id: string;
       name: string;
-      canonical_name: string | null;
       cards: {
         id: string;
         name: string;
@@ -156,8 +152,7 @@ export default async function RulesPage() {
       credit: credit
         ? {
             id: credit.id,
-            name: credit.canonical_name || credit.name,
-            canonical_name: credit.canonical_name,
+            name: credit.name,
             issuer: credit.cards?.issuers || null,
           }
         : null,
@@ -172,7 +167,6 @@ export default async function RulesPage() {
     .select(`
       id,
       name,
-      canonical_name,
       cards:card_id (
         id,
         name,
@@ -185,7 +179,7 @@ export default async function RulesPage() {
     .eq("is_active", true)
     .order("name");
 
-  // Normalize credits to unique Issuer + Credit Name (or canonical_name) combos
+  // Normalize credits to unique Issuer + Credit Name combos
   const creditOptionsMap = new Map<string, CreditOption>();
   
   (creditsData || []).forEach((c) => {
@@ -196,15 +190,13 @@ export default async function RulesPage() {
     } | null;
     
     const issuer = card?.issuers || null;
-    const displayName = c.canonical_name || c.name;
     const issuerId = issuer?.id || "unknown";
-    const key = `${issuerId}:${displayName}`;
+    const key = `${issuerId}:${c.name}`;
     
     if (!creditOptionsMap.has(key)) {
       creditOptionsMap.set(key, {
         representative_credit_id: c.id,
-        name: displayName,
-        canonical_name: c.canonical_name,
+        name: c.name,
         issuer,
         credit_ids: [c.id],
       });

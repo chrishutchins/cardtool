@@ -9,7 +9,6 @@ type Credit = {
   id: string;
   name: string;
   brand_name: string | null;
-  canonical_name: string | null;
   credit_count: number;
   reset_cycle: string;
   renewal_period_months: number | null;
@@ -95,10 +94,10 @@ export function CreditsList({ credits, onToggleActive, onDelete }: CreditsListPr
       groupedCredits.get(key)!.push(credit);
     }
   } else {
-    // Group by canonical name (or name if no canonical)
+    // Group by credit name
     const sortedCredits = [...credits].sort((a, b) => {
-      const nameA = (a.canonical_name || a.name).toLowerCase();
-      const nameB = (b.canonical_name || b.name).toLowerCase();
+      const nameA = a.name.toLowerCase();
+      const nameB = b.name.toLowerCase();
       if (nameA !== nameB) return nameA.localeCompare(nameB);
       const issuerA = a.card?.issuer?.name?.toLowerCase() ?? "";
       const issuerB = b.card?.issuer?.name?.toLowerCase() ?? "";
@@ -109,7 +108,7 @@ export function CreditsList({ credits, onToggleActive, onDelete }: CreditsListPr
     });
 
     for (const credit of sortedCredits) {
-      const key = credit.canonical_name || credit.name;
+      const key = credit.name;
       if (!groupedCredits.has(key)) {
         groupedCredits.set(key, []);
       }
@@ -171,11 +170,6 @@ export function CreditsList({ credits, onToggleActive, onDelete }: CreditsListPr
                 <div className="flex-1">
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="font-medium text-white">{credit.name}</span>
-                    {credit.canonical_name && credit.canonical_name !== credit.name && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-400">
-                        {credit.canonical_name}
-                      </span>
-                    )}
                     {credit.credit_count > 1 && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-purple-900/50 text-purple-400">
                         ×{credit.credit_count}

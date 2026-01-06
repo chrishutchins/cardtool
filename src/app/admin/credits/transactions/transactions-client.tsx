@@ -56,7 +56,6 @@ interface Card {
 interface CreditOption {
   representative_credit_id: string;
   name: string;
-  canonical_name: string | null;
   issuer: {
     id: string;
     name: string;
