@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user.id)
         .order('last_synced_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (syncState?.last_synced_at) {
         const lastSync = new Date(syncState.last_synced_at);
@@ -85,13 +85,13 @@ export async function POST(request: NextRequest) {
     // Process each Plaid item
     for (const plaidItem of plaidItems) {
       try {
-        // Get sync state for this item
+        // Get sync state for this item (may not exist on first sync)
         const { data: syncState } = await supabase
           .from('user_plaid_sync_state')
           .select('last_transaction_date')
           .eq('user_id', user.id)
           .eq('plaid_item_id', plaidItem.id)
-          .single();
+          .maybeSingle();
 
         // Calculate date range
         const endDate = new Date();

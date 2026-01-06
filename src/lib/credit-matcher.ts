@@ -267,8 +267,69 @@ export async function matchTransactionsToCredits(
         .eq('id', txn.id);
 
       if (isClawback) {
-        // For clawbacks, we need to find and update the original usage record
-        // or create a negative adjustment
+        // For clawbacks, find the usage record in this period and reduce the amount
+        const periodStartStr = formatDateString(periodStart);
+        const periodEndStr = formatDateString(periodEnd);
+        
+        // Find existing usage record for this period
+        const { data: existingUsage } = await supabase
+          .from('user_credit_usage')
+          .select('id, amount_used')
+          .eq('user_wallet_id', wallet.id)
+          .eq('credit_id', credit.id)
+          .eq('period_start', periodStartStr)
+          .maybeSingle();
+
+        if (existingUsage) {
+          // Reduce the usage amount by the clawback (positive amount = debit = reduction)
+          const clawbackAmount = txn.amount_cents / 100;
+          const newAmount = Math.max(0, existingUsage.amount_used - clawbackAmount);
+          
+          await supabase
+            .from('user_credit_usage')
+            .update({ amount_used: newAmount })
+            .eq('id', existingUsage.id);
+
+          // Link clawback transaction to usage record
+          await supabase
+            .from('user_credit_usage_transactions')
+            .upsert({
+              usage_id: existingUsage.id,
+              transaction_id: txn.id,
+              amount_cents: -txn.amount_cents, // Store as negative to indicate clawback
+            }, {
+              onConflict: 'usage_id,transaction_id',
+            });
+        } else {
+          // No existing usage to adjust - create a clawback record for tracking
+          const { data: clawbackUsage, error: insertError } = await supabase
+            .from('user_credit_usage')
+            .insert({
+              user_wallet_id: wallet.id,
+              credit_id: credit.id,
+              period_start: periodStartStr,
+              period_end: periodEndStr,
+              amount_used: 0, // Clawback with no prior usage
+              auto_detected: true,
+              is_clawback: true,
+              used_at: txn.date,
+            })
+            .select('id')
+            .single();
+
+          if (!insertError && clawbackUsage) {
+            await supabase
+              .from('user_credit_usage_transactions')
+              .upsert({
+                usage_id: clawbackUsage.id,
+                transaction_id: txn.id,
+                amount_cents: -txn.amount_cents,
+              }, {
+                onConflict: 'usage_id,transaction_id',
+              });
+          }
+        }
+        
         clawbacks++;
       } else {
         // For credits (negative amounts), find or create usage record for this period
@@ -282,7 +343,7 @@ export async function matchTransactionsToCredits(
           .eq('user_wallet_id', wallet.id)
           .eq('credit_id', credit.id)
           .eq('period_start', periodStartStr)
-          .single();
+          .maybeSingle();
 
         let usageId: string;
         const absoluteAmount = Math.abs(txn.amount_cents);

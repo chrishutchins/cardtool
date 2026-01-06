@@ -24,13 +24,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
-    // Check if rule already exists
+    // Check if rule already exists (use maybeSingle since no match is expected case)
     const { data: existingRule } = await supabase
       .from("credit_matching_rules")
       .select("id")
       .eq("pattern", pattern)
       .eq("credit_id", creditId)
-      .single();
+      .maybeSingle();
 
     if (existingRule) {
       return NextResponse.json(

@@ -81,13 +81,13 @@ export async function GET(request: NextRequest) {
         // Process each Plaid item for this user
         for (const plaidItem of items) {
           try {
-            // Get sync state for this item
+            // Get sync state for this item (may not exist on first sync)
             const { data: syncState } = await supabase
               .from('user_plaid_sync_state')
               .select('last_transaction_date')
               .eq('user_id', userId)
               .eq('plaid_item_id', plaidItem.id)
-              .single();
+              .maybeSingle();
 
             // Calculate date range
             const endDate = new Date();
@@ -166,18 +166,23 @@ export async function GET(request: NextRequest) {
 
             // Upsert transactions
             if (transactionsToInsert.length > 0) {
-              await supabase
+              const { error: upsertError } = await supabase
                 .from('user_plaid_transactions')
                 .upsert(transactionsToInsert, {
                   onConflict: 'plaid_transaction_id',
                   ignoreDuplicates: false,
                 });
 
-              totalTransactionsStored += transactionsToInsert.length;
+              if (upsertError) {
+                logger.error({ err: upsertError, userId, plaidItemId: plaidItem.id }, 'Failed to upsert transactions');
+                errors.push(`User ${userId.slice(0, 8)}... - ${plaidItem.institution_name}: Failed to store transactions`);
+              } else {
+                totalTransactionsStored += transactionsToInsert.length;
+              }
             }
 
             // Update sync state
-            await supabase
+            const { error: syncStateError } = await supabase
               .from('user_plaid_sync_state')
               .upsert({
                 user_id: userId,
@@ -187,6 +192,10 @@ export async function GET(request: NextRequest) {
               }, {
                 onConflict: 'user_id,plaid_item_id',
               });
+
+            if (syncStateError) {
+              logger.error({ err: syncStateError, userId, plaidItemId: plaidItem.id }, 'Failed to update sync state');
+            }
 
           } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
