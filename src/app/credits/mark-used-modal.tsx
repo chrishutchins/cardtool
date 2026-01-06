@@ -54,6 +54,10 @@ export function MarkUsedModal({
     formData.set("period_start", periodStart);
     formData.set("period_end", periodEnd);
     
+    // Include slot_number for multi-slot credits
+    const slotNumber = 'slotNumber' in credit ? credit.slotNumber : 1;
+    formData.set("slot_number", slotNumber.toString());
+    
     // For dollar credits, convert to a ratio of the max
     // For quantity credits, use directly
     if (isDollarCredit) {

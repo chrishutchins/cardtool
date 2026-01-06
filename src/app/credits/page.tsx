@@ -133,6 +133,8 @@ export default async function CreditsPage() {
     const periodStart = formData.get("period_start") as string;
     const periodEnd = formData.get("period_end") as string;
     const amountUsed = parseFloat(formData.get("amount_used") as string) || 0;
+    const slotNumberStr = formData.get("slot_number") as string;
+    const slotNumber = slotNumberStr ? parseInt(slotNumberStr) : 1;
     const perceivedValueStr = formData.get("perceived_value") as string;
     const notesRaw = formData.get("notes") as string;
     const notes = notesRaw?.trim() || null;
@@ -152,13 +154,14 @@ export default async function CreditsPage() {
       return;
     }
 
-    // Check if there's already a usage record for this credit in this period
+    // Check if there's already a usage record for this credit in this period and slot
     const { data: existingUsage } = await supabase
       .from("user_credit_usage")
       .select("id, amount_used")
       .eq("user_wallet_id", userWalletId)
       .eq("credit_id", creditId)
       .eq("period_start", periodStart)
+      .eq("slot_number", slotNumber)
       .single();
 
     const perceivedValueCents = perceivedValueStr ? Math.round(parseFloat(perceivedValueStr) * 100) : null;
@@ -191,6 +194,7 @@ export default async function CreditsPage() {
       period_start: periodStart,
       period_end: periodEnd,
       amount_used: amountUsed,
+      slot_number: slotNumber,
       perceived_value_cents: perceivedValueCents,
       notes,
       used_at: usedAt,
