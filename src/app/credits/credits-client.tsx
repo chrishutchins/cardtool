@@ -118,6 +118,7 @@ export interface InventoryType {
   name: string;
   slug: string;
   tracking_type: string;
+  display_order: number | null;
 }
 
 // Extended credit with slot information for multi-use credits

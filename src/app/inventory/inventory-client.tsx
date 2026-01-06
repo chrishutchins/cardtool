@@ -9,7 +9,7 @@ export interface InventoryType {
   name: string;
   slug: string;
   tracking_type: string;
-  display_order?: number;
+  display_order: number | null;
 }
 
 export interface InventoryItemData {

@@ -77,7 +77,7 @@ export default async function CreditsPage() {
   // Fetch inventory types for the add-to-inventory flow
   const { data: inventoryTypes } = await supabase
     .from("inventory_types")
-    .select("id, name, slug, tracking_type")
+    .select("id, name, slug, tracking_type, display_order")
     .eq("is_active", true)
     .order("display_order");
 

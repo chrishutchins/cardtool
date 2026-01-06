@@ -8,9 +8,9 @@ interface InventoryType {
   name: string;
   slug: string;
   tracking_type: "quantity" | "dollar_value" | "single_use";
-  display_order: number;
-  is_active: boolean;
-  created_at: string;
+  display_order: number | null;
+  is_active: boolean | null;
+  created_at: string | null;
 }
 
 interface InventoryTypeRowProps {
@@ -73,7 +73,7 @@ export function InventoryTypeRow({
               name: type.name, 
               slug: type.slug,
               tracking_type: type.tracking_type,
-              is_active: type.is_active
+              is_active: type.is_active ?? true
             }}
             onCancel={() => setIsEditing(false)}
           />
@@ -85,7 +85,7 @@ export function InventoryTypeRow({
   const trackingTypeInfo = TRACKING_TYPE_LABELS[type.tracking_type] || { label: type.tracking_type, color: "bg-zinc-700 text-zinc-300" };
 
   return (
-    <tr className={`hover:bg-zinc-800/50 transition-colors ${!type.is_active ? "opacity-50" : ""}`}>
+    <tr className={`hover:bg-zinc-800/50 transition-colors ${type.is_active === false ? "opacity-50" : ""}`}>
       <td className="px-6 py-4">
         <div className="flex items-center gap-1">
           <button
