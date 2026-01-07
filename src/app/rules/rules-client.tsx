@@ -2,13 +2,14 @@
 
 import { useState, useMemo } from "react";
 import { parseLocalDate } from "@/lib/utils";
-import { ChevronDown, Check, XCircle } from "lucide-react";
+import { Check, XCircle, Eye, X } from "lucide-react";
 
 interface WalletCard {
   id: string;
   card_id: string;
   approval_date: string | null;
   player_number: number | null;
+  custom_name: string | null;
   cards: {
     id: string;
     name: string;
@@ -52,14 +53,85 @@ interface RulesClientProps {
 interface RuleWithStatus extends Rule {
   userCount: number;
   isOverLimit: boolean;
+  matchingCards: WalletCard[];
+}
+
+interface DetailsModalProps {
+  rule: RuleWithStatus;
+  showPlayerColumn: boolean;
+  onClose: () => void;
+}
+
+function DetailsModal({ rule, showPlayerColumn, onClose }: DetailsModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative bg-zinc-900 rounded-xl border border-zinc-700 max-w-lg w-full max-h-[80vh] overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700">
+          <h3 className="text-lg font-semibold text-white">
+            {rule.name} — {rule.userCount} card{rule.userCount !== 1 ? "s" : ""}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-zinc-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 overflow-y-auto max-h-[60vh]">
+          {rule.matchingCards.length === 0 ? (
+            <p className="text-zinc-400 text-center py-4">No matching cards</p>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-xs font-medium text-zinc-400 uppercase">
+                  <th className="pb-2">Card</th>
+                  {showPlayerColumn && <th className="pb-2 text-center">Player</th>}
+                  <th className="pb-2 text-right">Opened</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {rule.matchingCards.map((wc) => (
+                  <tr key={wc.id}>
+                    <td className="py-2 pr-2">
+                      <span className="text-white">
+                        {wc.custom_name || wc.cards?.name || "Unknown"}
+                      </span>
+                    </td>
+                    {showPlayerColumn && (
+                      <td className="py-2 text-center text-zinc-400">
+                        P{wc.player_number ?? 1}
+                      </td>
+                    )}
+                    <td className="py-2 text-right text-zinc-400">
+                      {wc.approval_date
+                        ? parseLocalDate(wc.approval_date).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function RulesClient({ rules, walletCards, players = [], playerCount = 1 }: RulesClientProps) {
-  // Start with all issuers expanded
-  const [collapsedIssuers, setCollapsedIssuers] = useState<Set<string>>(new Set());
-  
   // Selected player filter (1 = P1, etc.)
   const [selectedPlayer, setSelectedPlayer] = useState(1);
+  
+  // Modal state
+  const [selectedRule, setSelectedRule] = useState<RuleWithStatus | null>(null);
   
   // Show player selector if there are multiple players
   const showPlayerSelector = playerCount > 1;
@@ -153,7 +225,7 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
       const userCount = matchingCards.length;
       const isOverLimit = userCount >= rule.card_limit;
 
-      return { ...rule, userCount, isOverLimit };
+      return { ...rule, userCount, isOverLimit, matchingCards };
     });
   }, [rules, filteredWalletCards]);
 
@@ -168,20 +240,8 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
     return grouped;
   }, [rulesWithStatus]);
 
-  const toggleIssuer = (issuerName: string) => {
-    setCollapsedIssuers((prev) => {
-      const next = new Set(prev);
-      if (next.has(issuerName)) {
-        next.delete(issuerName);
-      } else {
-        next.add(issuerName);
-      }
-      return next;
-    });
-  };
-
   return (
-    <div className="space-y-4">
+    <>
       {/* Player Selector */}
       {showPlayerSelector && (
         <div className="flex items-center gap-3 mb-6">
@@ -200,36 +260,27 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
         </div>
       )}
       
-      {Object.entries(rulesByIssuer)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([issuerName, issuerRules]) => {
-          const isExpanded = !collapsedIssuers.has(issuerName);
-
-          return (
+      {/* 2-column grid of issuers */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Object.entries(rulesByIssuer)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([issuerName, issuerRules]) => (
             <div
               key={issuerName}
               className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden"
             >
               {/* Issuer Header */}
-              <button
-                onClick={() => toggleIssuer(issuerName)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-zinc-800/50 transition-colors"
-              >
+              <div className="px-4 py-3 border-b border-zinc-800">
                 <span className="text-lg font-semibold text-white">{issuerName}</span>
-                <ChevronDown
-                  className={`w-5 h-5 text-zinc-400 transition-transform ${
-                    isExpanded ? "" : "rotate-180"
-                  }`}
-                />
-              </button>
+              </div>
 
               {/* Rules List */}
-              {isExpanded && (
-                <div className="divide-y divide-zinc-800 border-t border-zinc-800">
-                  {issuerRules.map((rule) => (
-                    <div key={rule.id} className="px-4 py-3">
-                      {/* Count and time window */}
-                      <div className="flex items-baseline gap-1.5 mb-1">
+              <div className="divide-y divide-zinc-800">
+                {issuerRules.map((rule) => (
+                  <div key={rule.id} className="px-4 py-3">
+                    {/* Count and time window */}
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-baseline gap-1.5">
                         <span
                           className={`text-2xl font-bold ${
                             rule.isOverLimit ? "text-red-400" : "text-white"
@@ -246,25 +297,45 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
                           </span>
                         )}
                       </div>
-
-                      {/* Description with icon */}
-                      {rule.description && (
-                        <div className="flex items-center gap-2 text-sm text-zinc-400">
-                          {rule.isOverLimit ? (
-                            <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
-                          ) : (
-                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                          )}
-                          <span>{rule.description}</span>
-                        </div>
+                      
+                      {/* Details button - only show when count > 0 */}
+                      {rule.userCount > 0 && (
+                        <button
+                          onClick={() => setSelectedRule(rule)}
+                          className="text-zinc-500 hover:text-white transition-colors p-1"
+                          title="View matching cards"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
+
+                    {/* Description with icon */}
+                    {rule.description && (
+                      <div className="flex items-center gap-2 text-sm text-zinc-400">
+                        {rule.isOverLimit ? (
+                          <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        )}
+                        <span>{rule.description}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          );
-        })}
-    </div>
+          ))}
+      </div>
+
+      {/* Details Modal */}
+      {selectedRule && (
+        <DetailsModal
+          rule={selectedRule}
+          showPlayerColumn={showPlayerSelector}
+          onClose={() => setSelectedRule(null)}
+        />
+      )}
+    </>
   );
 }

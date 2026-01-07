@@ -19,6 +19,7 @@ interface WalletCard {
   card_id: string;
   approval_date: string | null;
   player_number: number | null;
+  custom_name: string | null;
   cards: {
     id: string;
     name: string;
@@ -76,6 +77,7 @@ export default async function RulesPage() {
         card_id,
         approval_date,
         player_number,
+        custom_name,
         cards:card_id (
           id,
           name,
