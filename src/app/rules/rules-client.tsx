@@ -8,6 +8,7 @@ interface WalletCard {
   id: string;
   card_id: string;
   approval_date: string | null;
+  player_number: number | null;
   cards: {
     id: string;
     name: string;
@@ -36,9 +37,16 @@ interface Rule {
   issuers: { id: string; name: string } | null;
 }
 
+interface Player {
+  player_number: number;
+  description: string | null;
+}
+
 interface RulesClientProps {
   rules: Rule[];
   walletCards: WalletCard[];
+  players?: Player[];
+  playerCount?: number;
 }
 
 interface RuleWithStatus extends Rule {
@@ -46,9 +54,30 @@ interface RuleWithStatus extends Rule {
   isOverLimit: boolean;
 }
 
-export function RulesClient({ rules, walletCards }: RulesClientProps) {
+export function RulesClient({ rules, walletCards, players = [], playerCount = 1 }: RulesClientProps) {
   // Start with all issuers expanded
   const [collapsedIssuers, setCollapsedIssuers] = useState<Set<string>>(new Set());
+  
+  // Selected player filter (1 = P1, etc.)
+  const [selectedPlayer, setSelectedPlayer] = useState(1);
+  
+  // Show player selector if there are multiple players
+  const showPlayerSelector = playerCount > 1;
+  
+  // Build player descriptions map
+  const playerDescriptions = useMemo(() => {
+    const map = new Map<number, string>();
+    players.forEach(p => {
+      map.set(p.player_number, p.description || `Player ${p.player_number}`);
+    });
+    return map;
+  }, [players]);
+  
+  // Filter wallet cards by selected player
+  const filteredWalletCards = useMemo(() => {
+    if (!showPlayerSelector) return walletCards;
+    return walletCards.filter(wc => (wc.player_number ?? 1) === selectedPlayer);
+  }, [walletCards, selectedPlayer, showPlayerSelector]);
 
   // Calculate user status for each rule
   const rulesWithStatus = useMemo(() => {
@@ -69,7 +98,7 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
           cutoffDate.setMonth(cutoffDate.getMonth() - (rule.time_window ?? 0));
         }
 
-        matchingCards = walletCards.filter((wc) => {
+        matchingCards = filteredWalletCards.filter((wc) => {
           if (!wc.cards || !wc.approval_date) return false;
 
           // Check card type filter
@@ -92,7 +121,7 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
         });
       } else {
         // Limit rule - count all matching cards
-        matchingCards = walletCards.filter((wc) => {
+        matchingCards = filteredWalletCards.filter((wc) => {
           if (!wc.cards) return false;
 
           // Limits always apply to issuer only
@@ -122,7 +151,7 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
 
       return { ...rule, userCount, isOverLimit };
     });
-  }, [rules, walletCards]);
+  }, [rules, filteredWalletCards]);
 
   // Group rules by issuer
   const rulesByIssuer = useMemo(() => {
@@ -149,11 +178,28 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
 
   return (
     <div className="space-y-4">
+      {/* Player Selector */}
+      {showPlayerSelector && (
+        <div className="flex items-center gap-3 mb-6">
+          <span className="text-sm text-zinc-400">Viewing rules for:</span>
+          <select
+            value={selectedPlayer}
+            onChange={(e) => setSelectedPlayer(parseInt(e.target.value))}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+          >
+            {Array.from({ length: playerCount }, (_, i) => i + 1).map(num => (
+              <option key={num} value={num}>
+                P{num}: {playerDescriptions.get(num) || `Player ${num}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      
       {Object.entries(rulesByIssuer)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([issuerName, issuerRules]) => {
           const isExpanded = !collapsedIssuers.has(issuerName);
-          const hasIssues = issuerRules.some((r) => r.isOverLimit);
 
           return (
             <div

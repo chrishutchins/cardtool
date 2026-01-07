@@ -10,6 +10,7 @@ import { MobilePayCategories } from "@/app/wallet/mobile-pay-categories";
 import { PaypalCategories } from "@/app/wallet/paypal-categories";
 import { LargePurchaseCategories } from "./large-purchase-categories";
 import { LinkedAccounts } from "@/app/wallet/linked-accounts";
+import { PlayerSettings } from "./player-settings";
 import { isAdminEmail } from "@/lib/admin";
 import { AccountManagement } from "./account-management";
 import { Metadata } from "next";
@@ -50,6 +51,7 @@ export default async function SettingsPage() {
     largePurchaseCategoriesResult,
     everythingElseCategoryResult,
     linkedAccountsResult,
+    playersResult,
   ] = await Promise.all([
     supabase
       .from("user_wallets")
@@ -129,6 +131,11 @@ export default async function SettingsPage() {
       `)
       .eq("user_id", effectiveUserId)
       .order("name"),
+    supabase
+      .from("user_players")
+      .select("player_number, description")
+      .eq("user_id", effectiveUserId)
+      .order("player_number"),
   ]);
 
   const walletCards = walletCardsResult.data;
@@ -143,6 +150,7 @@ export default async function SettingsPage() {
   const largePurchaseCategories = largePurchaseCategoriesResult.data;
   const everythingElseCategoryId = everythingElseCategoryResult.data?.id ?? null;
   const linkedAccounts = linkedAccountsResult.data;
+  const players = (playersResult.data ?? []) as { player_number: number; description: string | null }[];
 
   // Process wallet cards
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
@@ -498,6 +506,35 @@ export default async function SettingsPage() {
     revalidatePath("/compare");
   }
 
+  async function savePlayers(playerCount: number, descriptions: Record<number, string>) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = await createClient();
+
+    // Delete all existing player entries for this user
+    await supabase
+      .from("user_players")
+      .delete()
+      .eq("user_id", userId);
+
+    // If playerCount > 1, insert new player entries
+    if (playerCount > 1) {
+      const playerRows = Array.from({ length: playerCount }, (_, i) => ({
+        user_id: userId,
+        player_number: i + 1,
+        description: descriptions[i + 1] || null,
+      }));
+
+      await supabase.from("user_players").insert(playerRows);
+    }
+
+    revalidatePath("/settings");
+    revalidatePath("/wallet");
+    revalidatePath("/rules");
+  }
+
   // Cards that require category selection
   const cardsNeedingSelection = typedWalletCards.filter(
     (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
@@ -583,8 +620,14 @@ export default async function SettingsPage() {
           </p>
         </div>
 
+        {/* Player Settings - Always show */}
+        <PlayerSettings
+          players={players}
+          onSavePlayers={savePlayers}
+        />
+
         {hasAnySettings ? (
-          <div className="space-y-8">
+          <div className="space-y-8 mt-8">
             {/* Card Category Selections */}
             {cardsNeedingSelection.length > 0 && (
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">

@@ -74,6 +74,7 @@ export default async function WalletPage() {
     userSpendBonusesResult,
     userBonusDisplaySettingsResult,
     allCurrenciesResult,
+    playersResult,
   ] = await Promise.all([
     // User's wallet cards with full details
     supabase
@@ -84,6 +85,7 @@ export default async function WalletPage() {
         custom_name,
         added_at,
         approval_date,
+        player_number,
         cards:card_id (
           id,
           name,
@@ -280,7 +282,17 @@ export default async function WalletPage() {
       .from("reward_currencies")
       .select("id, name, code, currency_type")
       .order("name"),
+    // User's player configurations
+    supabase
+      .from("user_players")
+      .select("player_number, description")
+      .eq("user_id", effectiveUserId)
+      .order("player_number"),
   ]);
+
+  // Players data
+  const players = (playersResult.data ?? []) as { player_number: number; description: string | null }[];
+  const playerCount = players.length > 0 ? Math.max(...players.map(p => p.player_number)) : 1;
 
   // Type assertion for wallet cards since Supabase types don't infer relations correctly
   type WalletCardData = {
@@ -289,6 +301,7 @@ export default async function WalletPage() {
     custom_name: string | null;
     added_at: string | null;
     approval_date: string | null;
+    player_number: number | null;
     cards: {
       id: string;
       name: string;
@@ -797,6 +810,21 @@ export default async function WalletPage() {
     revalidatePath("/credits");
   }
 
+  async function updatePlayerNumber(walletId: string, playerNumber: number) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = await createClient();
+    await supabase
+      .from("user_wallets")
+      .update({ player_number: playerNumber })
+      .eq("id", walletId)
+      .eq("user_id", userId);
+    revalidatePath("/wallet");
+    revalidatePath("/rules");
+  }
+
   async function updatePerksValue(walletCardId: string, perksValue: number) {
     "use server";
     const userId = await getEffectiveUserId();
@@ -1122,6 +1150,9 @@ export default async function WalletPage() {
               onUpdateDebitPay={updateDebitPay}
               onUpdateCustomName={updateCustomName}
               onUpdateApprovalDate={updateApprovalDate}
+              players={players}
+              playerCount={playerCount}
+              onUpdatePlayerNumber={updatePlayerNumber}
             />
           ) : (
             <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">

@@ -18,6 +18,7 @@ interface WalletCard {
   id: string;
   card_id: string;
   approval_date: string | null;
+  player_number: number | null;
   cards: {
     id: string;
     name: string;
@@ -26,6 +27,11 @@ interface WalletCard {
     card_charge_type: "credit" | "charge" | null;
     issuers: { id: string; name: string } | null;
   } | null;
+}
+
+interface Player {
+  player_number: number;
+  description: string | null;
 }
 
 interface Rule {
@@ -62,13 +68,14 @@ export default async function RulesPage() {
 
   const supabase = await createClient();
 
-  const [walletResult, rulesResult, featureFlagsResult] = await Promise.all([
+  const [walletResult, rulesResult, featureFlagsResult, playersResult] = await Promise.all([
     supabase
       .from("user_wallets")
       .select(`
         id,
         card_id,
         approval_date,
+        player_number,
         cards:card_id (
           id,
           name,
@@ -93,11 +100,18 @@ export default async function RulesPage() {
       .select("credit_tracking_enabled")
       .eq("user_id", effectiveUserId)
       .single(),
+    supabase
+      .from("user_players")
+      .select("player_number, description")
+      .eq("user_id", effectiveUserId)
+      .order("player_number"),
   ]);
 
   const walletCards = (walletResult.data ?? []) as unknown as WalletCard[];
   const rules = (rulesResult.data ?? []) as Rule[];
   const creditTrackingEnabled = featureFlagsResult.data?.credit_tracking_enabled ?? true;
+  const players = (playersResult.data ?? []) as Player[];
+  const playerCount = players.length > 0 ? Math.max(...players.map(p => p.player_number)) : 1;
 
   // Check for cards missing approval dates
   const cardsWithoutDates = walletCards.filter(
@@ -154,7 +168,12 @@ export default async function RulesPage() {
             </p>
           </div>
         ) : (
-          <RulesClient rules={rules} walletCards={walletCards} />
+          <RulesClient 
+            rules={rules} 
+            walletCards={walletCards} 
+            players={players}
+            playerCount={playerCount}
+          />
         )}
       </div>
     </div>

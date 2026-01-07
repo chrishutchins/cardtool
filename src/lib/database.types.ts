@@ -2284,6 +2284,30 @@ export type Database = {
           },
         ]
       }
+      user_players: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          player_number: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          player_number: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          player_number?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_wallets: {
         Row: {
           added_at: string | null
@@ -2291,6 +2315,7 @@ export type Database = {
           card_id: string
           custom_name: string | null
           id: string
+          player_number: number | null
           user_id: string
         }
         Insert: {
@@ -2299,6 +2324,7 @@ export type Database = {
           card_id: string
           custom_name?: string | null
           id?: string
+          player_number?: number | null
           user_id: string
         }
         Update: {
@@ -2307,6 +2333,7 @@ export type Database = {
           card_id?: string
           custom_name?: string | null
           id?: string
+          player_number?: number | null
           user_id?: string
         }
         Relationships: [

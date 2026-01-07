@@ -9,6 +9,7 @@ interface WalletCard {
   custom_name: string | null;
   added_at: string | null;
   approval_date: string | null;
+  player_number: number | null;
   cards: {
     id: string;
     name: string;
@@ -23,6 +24,11 @@ interface WalletCard {
   } | null;
 }
 
+interface Player {
+  player_number: number;
+  description: string | null;
+}
+
 interface WalletCardListProps {
   walletCards: WalletCard[];
   enabledSecondaryCards: Set<string>;
@@ -34,9 +40,12 @@ interface WalletCardListProps {
   onUpdateDebitPay?: (walletCardId: string, percent: number) => Promise<void>;
   onUpdateCustomName?: (walletId: string, customName: string | null) => Promise<void>;
   onUpdateApprovalDate?: (walletId: string, date: string | null) => Promise<void>;
+  players?: Player[];
+  playerCount?: number;
+  onUpdatePlayerNumber?: (walletId: string, playerNumber: number) => Promise<void>;
 }
 
-type SortField = "name" | "issuer" | "currency" | "annual_fee" | "perks" | "net_fee" | "debit_pay";
+type SortField = "name" | "issuer" | "currency" | "annual_fee" | "perks" | "net_fee" | "debit_pay" | "player";
 type SortDirection = "asc" | "desc";
 
 const currencyTypeConfig: Record<string, { label: string; className: string }> = {
@@ -94,6 +103,9 @@ export function WalletCardList({
   onUpdateDebitPay,
   onUpdateCustomName,
   onUpdateApprovalDate,
+  players = [],
+  playerCount = 1,
+  onUpdatePlayerNumber,
 }: WalletCardListProps) {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [editingPerksId, setEditingPerksId] = useState<string | null>(null);
@@ -104,9 +116,24 @@ export function WalletCardList({
   const [editNameValue, setEditNameValue] = useState<string>("");
   const [editingApprovalDateId, setEditingApprovalDateId] = useState<string | null>(null);
   const [editApprovalDateValue, setEditApprovalDateValue] = useState<string>("");
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   // Optimistic custom names - immediately show updated names while server action runs
   const [optimisticNames, setOptimisticNames] = useState<Map<string, string | null>>(new Map());
+  // Optimistic player numbers
+  const [optimisticPlayers, setOptimisticPlayers] = useState<Map<string, number>>(new Map());
   const [isPending, startTransition] = useTransition();
+  
+  // Build player description map
+  const playerDescriptions = useMemo(() => {
+    const map = new Map<number, string>();
+    players.forEach(p => {
+      map.set(p.player_number, p.description || `Player ${p.player_number}`);
+    });
+    return map;
+  }, [players]);
+  
+  // Show player column if playerCount > 1
+  const showPlayerColumn = playerCount > 1;
   
   // Filter and sort state
   const [searchQuery, setSearchQuery] = useState("");
@@ -194,6 +221,10 @@ export function WalletCardList({
       const aDisplayName = aEffective ?? a.cards.name;
       const bDisplayName = bEffective ?? b.cards.name;
       
+      // Get player number (use optimistic if available)
+      const aPlayer = optimisticPlayers.get(a.id) ?? a.player_number ?? 1;
+      const bPlayer = optimisticPlayers.get(b.id) ?? b.player_number ?? 1;
+      
       let comparison = 0;
       switch (sortField) {
         case "name":
@@ -217,13 +248,16 @@ export function WalletCardList({
         case "debit_pay":
           comparison = aDebitPay - bDebitPay;
           break;
+        case "player":
+          comparison = aPlayer - bPlayer;
+          break;
       }
       
       return sortDirection === "asc" ? comparison : -comparison;
     });
     
     return result;
-  }, [walletCards, searchQuery, issuerFilter, currencyFilter, sortField, sortDirection, perksMap, debitPayMap, enabledSecondaryCards, optimisticNames]);
+  }, [walletCards, searchQuery, issuerFilter, currencyFilter, sortField, sortDirection, perksMap, debitPayMap, enabledSecondaryCards, optimisticNames, optimisticPlayers]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -441,6 +475,14 @@ export function WalletCardList({
                   <span className="inline-flex items-center justify-end">Debit +%<SortIcon field="debit_pay" /></span>
                 </th>
               )}
+              {showPlayerColumn && (
+                <th 
+                  className="px-4 py-3 text-center text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap hidden lg:table-cell"
+                  onClick={() => handleSort("player")}
+                >
+                  <span className="inline-flex items-center">Player<SortIcon field="player" /></span>
+                </th>
+              )}
               <th className="px-4 py-3 text-center text-xs font-medium text-zinc-400 uppercase whitespace-nowrap hidden xl:table-cell">
                 Opened
               </th>
@@ -640,6 +682,47 @@ export function WalletCardList({
                           ) : (
                             <span className="text-zinc-600 group-hover:text-zinc-400">0%</span>
                           )}
+                          <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
+                        </button>
+                      )}
+                    </td>
+                  )}
+
+                  {/* Player Number */}
+                  {showPlayerColumn && (
+                    <td className="px-4 py-3 text-center hidden lg:table-cell">
+                      {editingPlayerId === wc.id ? (
+                        <select
+                          value={optimisticPlayers.get(wc.id) ?? wc.player_number ?? 1}
+                          onChange={(e) => {
+                            const newPlayer = parseInt(e.target.value);
+                            setOptimisticPlayers(prev => new Map(prev).set(wc.id, newPlayer));
+                            setEditingPlayerId(null);
+                            startTransition(async () => {
+                              if (onUpdatePlayerNumber) {
+                                await onUpdatePlayerNumber(wc.id, newPlayer);
+                              }
+                            });
+                          }}
+                          onBlur={() => setEditingPlayerId(null)}
+                          autoFocus
+                          className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-white text-sm focus:border-blue-500 focus:outline-none"
+                        >
+                          {Array.from({ length: playerCount }, (_, i) => i + 1).map(num => (
+                            <option key={num} value={num}>
+                              P{num}: {playerDescriptions.get(num) || `Player ${num}`}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          onClick={() => setEditingPlayerId(wc.id)}
+                          className="text-zinc-400 hover:text-white transition-colors group"
+                          title="Click to change player"
+                        >
+                          <span className="text-zinc-300">
+                            P{optimisticPlayers.get(wc.id) ?? wc.player_number ?? 1}
+                          </span>
                           <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
                         </button>
                       )}
