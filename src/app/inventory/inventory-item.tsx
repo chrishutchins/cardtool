@@ -71,22 +71,31 @@ export function InventoryItem({
 
   const remainingDisplay = getRemainingDisplay();
 
+  // Check if this item was imported from a credit and needs expiration set
+  const needsExpiration = !item.expiration_date && item.source_credit_usage_id;
+
   // Format expiration date
   const formatExpiration = () => {
-    if (!item.expiration_date) return null;
+    if (!item.expiration_date) {
+      // Show "Set expiration" prompt if imported from credit
+      if (needsExpiration) {
+        return { text: "Set expiration", color: "text-amber-400", isWarning: true };
+      }
+      return null;
+    }
     const exp = new Date(item.expiration_date + "T00:00:00");
     const now = new Date();
     const diffMs = exp.getTime() - now.getTime();
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) {
-      return { text: "Expired", color: "text-red-400" };
+      return { text: "Expired", color: "text-red-400", isWarning: false };
     } else if (diffDays <= 7) {
-      return { text: `Expires in ${diffDays}d`, color: "text-red-400" };
+      return { text: `Expires in ${diffDays}d`, color: "text-red-400", isWarning: false };
     } else if (diffDays <= 30) {
-      return { text: `Expires ${exp.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, color: "text-amber-400" };
+      return { text: `Expires ${exp.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, color: "text-amber-400", isWarning: false };
     } else {
-      return { text: `Exp ${exp.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, color: "text-zinc-500" };
+      return { text: `Exp ${exp.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, color: "text-zinc-500", isWarning: false };
     }
   };
 
@@ -187,6 +196,18 @@ export function InventoryItem({
                     Has code
                   </span>
                 )}
+                {needsExpiration && (
+                  <button
+                    onClick={() => setShowEditModal(true)}
+                    className="text-xs px-2 py-0.5 rounded-full bg-amber-900/50 text-amber-300 whitespace-nowrap flex items-center gap-1 hover:bg-amber-900/70 transition-colors sm:hidden"
+                    title="Click to set expiration date"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" />
+                    </svg>
+                    Set expiration
+                  </button>
+                )}
               </div>
               {showBrand && item.brand && (
                 <div className="text-sm text-zinc-500 mt-0.5">{item.brand}</div>
@@ -198,9 +219,22 @@ export function InventoryItem({
           <div className="flex items-center gap-4 flex-shrink-0">
             {/* Expiration */}
             {expirationDisplay && (
-              <div className={`text-xs ${expirationDisplay.color} hidden sm:block`}>
-                {expirationDisplay.text}
-              </div>
+              expirationDisplay.isWarning ? (
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className={`text-xs ${expirationDisplay.color} hidden sm:flex items-center gap-1 hover:underline`}
+                  title="Click to set expiration date"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  {expirationDisplay.text}
+                </button>
+              ) : (
+                <div className={`text-xs ${expirationDisplay.color} hidden sm:block`}>
+                  {expirationDisplay.text}
+                </div>
+              )
             )}
 
             {/* Value/Status */}

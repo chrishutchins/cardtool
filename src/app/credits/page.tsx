@@ -68,7 +68,8 @@ export default async function CreditsPage() {
       notes,
       renewal_period_months,
       must_be_earned,
-      inventory_type_id
+      inventory_type_id,
+      credit_count
     `)
     .in("card_id", walletCardIds.length > 0 ? walletCardIds : ["none"])
     .eq("is_active", true)
