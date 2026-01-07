@@ -703,7 +703,7 @@ export function CreditHistoryRow({
               ? `Auto-detected from Plaid - click to view details` 
               : `Fully ${mustBeEarned ? "earned" : "used"} - click to undo`;
           } else if (partiallyUsed) {
-            bgClass = "bg-amber-700/80 text-white hover:bg-amber-600";
+            bgClass = "bg-amber-500/60 text-white hover:bg-amber-500/80";
             const usedAmount = periodUsage!.amount_used;
             if (credit.default_value_cents) {
               const usedValue = (usedAmount / maxAmount) * credit.default_value_cents / 100;
