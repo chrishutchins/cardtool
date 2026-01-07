@@ -165,14 +165,7 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
                 onClick={() => toggleIssuer(issuerName)}
                 className="w-full px-4 py-3 flex items-center justify-between hover:bg-zinc-800/50 transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg font-semibold text-white">{issuerName}</span>
-                  {hasIssues && (
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-red-500/20 text-red-400">
-                      At Limit
-                    </span>
-                  )}
-                </div>
+                <span className="text-lg font-semibold text-white">{issuerName}</span>
                 <ChevronDown
                   className={`w-5 h-5 text-zinc-400 transition-transform ${
                     isExpanded ? "" : "rotate-180"
@@ -186,18 +179,18 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
                   {issuerRules.map((rule) => (
                     <div key={rule.id} className="px-4 py-3">
                       {/* Count and time window */}
-                      <div className="flex items-baseline gap-1 mb-1">
+                      <div className="flex items-baseline gap-1.5 mb-1">
                         <span
-                          className={`text-xl font-bold ${
+                          className={`text-2xl font-bold ${
                             rule.isOverLimit ? "text-red-400" : "text-white"
                           }`}
                         >
                           {rule.userCount}
                         </span>
-                        <span className="text-zinc-500">/</span>
-                        <span className="text-zinc-400">{rule.card_limit}</span>
+                        <span className="text-lg text-zinc-500">/</span>
+                        <span className="text-lg text-zinc-400">{rule.card_limit}</span>
                         {rule.rule_type === "velocity" && (
-                          <span className="text-sm text-zinc-500 ml-1">
+                          <span className="text-zinc-500 ml-1">
                             in {rule.time_window}
                             {rule.time_unit === "days" ? "d" : "mo"}
                           </span>
@@ -213,9 +206,6 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
                             <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                           )}
                           <span>{rule.description}</span>
-                          {rule.requires_banking && (
-                            <span className="text-blue-400">(w/ banking)</span>
-                          )}
                         </div>
                       )}
                     </div>
