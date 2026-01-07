@@ -451,6 +451,19 @@ export async function matchTransactionsToCredits(
         .eq('id', txn.id);
 
       if (isClawback) {
+        // Check if this clawback transaction is already linked
+        const { data: existingClawbackLink } = await supabase
+          .from('user_credit_usage_transactions')
+          .select('id')
+          .eq('transaction_id', txn.id)
+          .maybeSingle();
+
+        if (existingClawbackLink) {
+          // Clawback already processed - skip to avoid double-deduction
+          clawbacks++;
+          continue;
+        }
+
         // For clawbacks, find the usage record in this period and reduce the amount
         // Find existing usage record for this period
         const { data: existingUsage } = await supabase
@@ -519,6 +532,20 @@ export async function matchTransactionsToCredits(
         // For credits (negative amounts), find or create usage record for this period
         const absoluteAmount = Math.abs(txn.amount_cents);
         const creditCount = credit.credit_count || 1;
+
+        // Check if this transaction is already linked to a usage record
+        // This prevents double-counting if rematch runs multiple times
+        const { data: existingLink } = await supabase
+          .from('user_credit_usage_transactions')
+          .select('id')
+          .eq('transaction_id', txn.id)
+          .maybeSingle();
+
+        if (existingLink) {
+          // Transaction already linked - skip to avoid double-counting
+          matched++;
+          continue;
+        }
 
         // Check if usage record exists for this period (for any slot)
         const { data: existingUsages } = await supabase

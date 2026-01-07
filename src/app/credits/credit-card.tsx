@@ -452,14 +452,16 @@ export function CreditCard({
 
   // Format remaining for current period
   const formatRemaining = () => {
+    if (credit.default_value_cents) {
+      // For dollar credits: currentPeriodUsage is in dollars, default_value_cents is in cents
+      const totalValueDollars = (settings?.user_value_override_cents ?? credit.default_value_cents) / 100;
+      const remainingDollars = totalValueDollars - currentPeriodUsage;
+      return `$${remainingDollars.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    }
+    
+    // For quantity credits
     const defaultAmount = credit.default_quantity ?? 1;
     const remaining = defaultAmount - currentPeriodUsage;
-    
-    if (credit.default_value_cents) {
-      const totalValue = settings?.user_value_override_cents ?? credit.default_value_cents;
-      const remainingValue = (remaining / defaultAmount) * totalValue;
-      return `$${(remainingValue / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-    }
     
     if (credit.unit_name) {
       return `${remaining.toLocaleString()} ${pluralizeUnit(remaining, credit.unit_name)}`;
