@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase/server';
+import { getEffectiveUserId } from '@/lib/emulation';
 import { plaidClient } from '@/lib/plaid';
 import { matchTransactionsToCredits } from '@/lib/credit-matcher';
 import logger from '@/lib/logger';
@@ -13,6 +14,12 @@ export async function POST(request: NextRequest) {
     const user = await currentUser();
 
     if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Use effective user ID to support admin emulation
+    const effectiveUserId = await getEffectiveUserId();
+    if (!effectiveUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -29,7 +36,7 @@ export async function POST(request: NextRequest) {
       const { data: syncState } = await supabase
         .from('user_plaid_sync_state')
         .select('last_synced_at')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .order('last_synced_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -52,10 +59,10 @@ export async function POST(request: NextRequest) {
     const { data: plaidItems, error: itemsError } = await supabase
       .from('user_plaid_items')
       .select('id, access_token, item_id, institution_name')
-      .eq('user_id', user.id);
+      .eq('user_id', effectiveUserId);
 
     if (itemsError) {
-      logger.error({ err: itemsError, userId: user.id }, 'Failed to fetch Plaid items');
+      logger.error({ err: itemsError, userId: effectiveUserId }, 'Failed to fetch Plaid items');
       return NextResponse.json({ error: 'Failed to fetch linked accounts' }, { status: 500 });
     }
 
@@ -72,7 +79,7 @@ export async function POST(request: NextRequest) {
     const { data: linkedAccounts } = await supabase
       .from('user_linked_accounts')
       .select('id, plaid_item_id, plaid_account_id')
-      .eq('user_id', user.id);
+      .eq('user_id', effectiveUserId);
 
     const accountByPlaidAccountId = new Map<string, string>();
     linkedAccounts?.forEach(acc => {
@@ -91,7 +98,7 @@ export async function POST(request: NextRequest) {
         const { data: syncState } = await supabase
           .from('user_plaid_sync_state')
           .select('last_transaction_date')
-          .eq('user_id', user.id)
+          .eq('user_id', effectiveUserId)
           .eq('plaid_item_id', plaidItem.id)
           .maybeSingle();
 
@@ -113,7 +120,7 @@ export async function POST(request: NextRequest) {
         const endDateStr = endDate.toISOString().split('T')[0];
 
         logger.info({
-          userId: user.id,
+          userId: effectiveUserId,
           plaidItemId: plaidItem.id,
           institution: plaidItem.institution_name,
           startDate: startDateStr,
@@ -155,7 +162,7 @@ export async function POST(request: NextRequest) {
         }
 
         logger.info({
-          userId: user.id,
+          userId: effectiveUserId,
           plaidItemId: plaidItem.id,
           transactionCount: allTransactions.length,
         }, 'Fetched transactions from Plaid');
@@ -174,7 +181,7 @@ export async function POST(request: NextRequest) {
           }
 
           transactionsToInsert.push({
-            user_id: user.id,
+            user_id: effectiveUserId,
             linked_account_id: linkedAccountId,
             plaid_transaction_id: txn.transaction_id,
             name: txn.name,
@@ -197,7 +204,7 @@ export async function POST(request: NextRequest) {
             });
 
           if (insertError) {
-            logger.error({ err: insertError, userId: user.id }, 'Failed to store transactions');
+            logger.error({ err: insertError, userId: effectiveUserId }, 'Failed to store transactions');
             syncErrors.push(`Failed to store transactions for ${plaidItem.institution_name}`);
           } else {
             totalTransactionsStored += transactionsToInsert.length;
@@ -208,7 +215,7 @@ export async function POST(request: NextRequest) {
         await supabase
           .from('user_plaid_sync_state')
           .upsert({
-            user_id: user.id,
+            user_id: effectiveUserId,
             plaid_item_id: plaidItem.id,
             last_synced_at: new Date().toISOString(),
             last_transaction_date: latestTransactionDate,
@@ -218,7 +225,7 @@ export async function POST(request: NextRequest) {
 
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        logger.error({ err, userId: user.id, plaidItemId: plaidItem.id }, 'Failed to sync Plaid item');
+        logger.error({ err, userId: effectiveUserId, plaidItemId: plaidItem.id }, 'Failed to sync Plaid item');
         syncErrors.push(`Failed to sync ${plaidItem.institution_name}: ${errorMessage}`);
       }
     }
@@ -228,13 +235,13 @@ export async function POST(request: NextRequest) {
     const { data: unmatchedTxns } = await supabase
       .from('user_plaid_transactions')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
       .is('matched_credit_id', null)
       .eq('dismissed', false)
       .eq('pending', false);
 
     if (unmatchedTxns && unmatchedTxns.length > 0) {
-      const matchResult = await matchTransactionsToCredits(supabase, user.id, unmatchedTxns);
+      const matchResult = await matchTransactionsToCredits(supabase, effectiveUserId, unmatchedTxns);
       totalCreditsMatched = matchResult.matched;
       totalClawbacks = matchResult.clawbacks;
 
@@ -244,7 +251,7 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info({
-      userId: user.id,
+      userId: effectiveUserId,
       transactionsStored: totalTransactionsStored,
       creditsMatched: totalCreditsMatched,
       clawbacks: totalClawbacks,
@@ -277,6 +284,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Use effective user ID to support admin emulation
+    const effectiveUserId = await getEffectiveUserId();
+    if (!effectiveUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = createAdminClient();
 
     // Get latest sync state
@@ -289,19 +302,19 @@ export async function GET() {
           institution_name
         )
       `)
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
       .order('last_synced_at', { ascending: false });
 
     // Get transaction counts
     const { count: totalTransactions } = await supabase
       .from('user_plaid_transactions')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+      .eq('user_id', effectiveUserId);
 
     const { count: matchedTransactions } = await supabase
       .from('user_plaid_transactions')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
       .not('matched_credit_id', 'is', null);
 
     return NextResponse.json({

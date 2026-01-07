@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { createClient } from '@/lib/supabase/server';
+import { getEffectiveUserId } from '@/lib/emulation';
 import { plaidClient } from '@/lib/plaid';
 import logger from '@/lib/logger';
 
@@ -12,16 +13,22 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Use effective user ID to support admin emulation
+    const effectiveUserId = await getEffectiveUserId();
+    if (!effectiveUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = await createClient();
 
     // Get all Plaid items for this user
     const { data: plaidItems, error: itemsError } = await supabase
       .from('user_plaid_items')
       .select('id, access_token')
-      .eq('user_id', user.id);
+      .eq('user_id', effectiveUserId);
 
     if (itemsError) {
-      logger.error({ err: itemsError, userId: user.id }, 'Failed to fetch plaid items');
+      logger.error({ err: itemsError, userId: effectiveUserId }, 'Failed to fetch plaid items');
       return NextResponse.json(
         { error: 'Failed to fetch plaid items' },
         { status: 500 }
@@ -37,7 +44,7 @@ export async function POST() {
     // Refresh balances for each Plaid item
     for (const item of plaidItems) {
       try {
-        logger.debug({ plaidItemId: item.id, userId: user.id }, 'Refreshing balances for item');
+        logger.debug({ plaidItemId: item.id, userId: effectiveUserId }, 'Refreshing balances for item');
         
         // Set min_last_updated_datetime to 24 hours ago
         const minLastUpdated = new Date();
@@ -77,14 +84,14 @@ export async function POST() {
         }
       } catch (plaidError: unknown) {
         logger.error(
-          { err: plaidError, plaidItemId: item.id, userId: user.id },
+          { err: plaidError, plaidItemId: item.id, userId: effectiveUserId },
           'Failed to refresh balances for item'
         );
         // Continue with other items even if one fails
       }
     }
 
-    logger.info({ updated: totalUpdated, userId: user.id }, 'Balance refresh completed');
+    logger.info({ updated: totalUpdated, userId: effectiveUserId }, 'Balance refresh completed');
     return NextResponse.json({ success: true, updated: totalUpdated });
   } catch (error) {
     logger.error({ err: error }, 'Failed to refresh balances');

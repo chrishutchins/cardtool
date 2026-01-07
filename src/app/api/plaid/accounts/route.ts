@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { createClient } from '@/lib/supabase/server';
+import { getEffectiveUserId } from '@/lib/emulation';
 import logger from '@/lib/logger';
 
 export async function GET() {
@@ -8,6 +9,12 @@ export async function GET() {
     const user = await currentUser();
     
     if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Use effective user ID to support admin emulation
+    const effectiveUserId = await getEffectiveUserId();
+    if (!effectiveUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -33,11 +40,11 @@ export async function GET() {
           institution_name
         )
       `)
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
       .order('name');
 
     if (error) {
-      logger.error({ err: error, userId: user.id }, 'Failed to fetch linked accounts');
+      logger.error({ err: error, userId: effectiveUserId }, 'Failed to fetch linked accounts');
       return NextResponse.json(
         { error: 'Failed to fetch accounts' },
         { status: 500 }
