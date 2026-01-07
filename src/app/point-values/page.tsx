@@ -53,7 +53,7 @@ export default async function PointValuesPage() {
       .from("user_point_value_settings")
       .select("selected_template_id")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
     supabase
       .from("user_currency_values")
       .select("currency_id, value_cents")

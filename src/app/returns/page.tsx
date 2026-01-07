@@ -225,7 +225,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .from("user_point_value_settings")
       .select("selected_template_id")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
     
     // All templates with their values
     supabase
@@ -272,7 +272,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .from("user_bonus_display_settings")
       .select("include_welcome_bonuses, include_spend_bonuses")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
   ]);
 
   // Process wallet cards

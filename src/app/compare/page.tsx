@@ -158,7 +158,7 @@ export default async function ComparePage() {
       .from("user_point_value_settings")
       .select("selected_template_id")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
     supabase
       .from("point_value_templates")
       .select("id")
@@ -189,7 +189,7 @@ export default async function ComparePage() {
 
   // Get user's debit pay values and feature flags (debit pay is now keyed by wallet_card_id)
   const [{ data: featureFlags }, { data: debitPayValues }, { data: linkedAccountsData }] = await Promise.all([
-    supabase.from("user_feature_flags").select("debit_pay_enabled, account_linking_enabled").eq("user_id", effectiveUserId).single(),
+    supabase.from("user_feature_flags").select("debit_pay_enabled, account_linking_enabled").eq("user_id", effectiveUserId).maybeSingle(),
     supabase.from("user_card_debit_pay").select("wallet_card_id, debit_pay_percent").eq("user_id", effectiveUserId),
     supabase.from("user_linked_accounts").select("wallet_card_id, available_balance, current_balance, credit_limit, manual_credit_limit").eq("user_id", effectiveUserId).not("wallet_card_id", "is", null),
   ]);
@@ -268,7 +268,7 @@ export default async function ComparePage() {
       .from("user_bonus_display_settings")
       .select("include_welcome_bonuses, include_spend_bonuses, include_debit_pay, show_available_credit")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
   ]);
 
   // Build multiplier map: cardId -> multiplier

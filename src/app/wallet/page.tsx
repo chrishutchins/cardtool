@@ -188,7 +188,7 @@ export default async function WalletPage() {
       .from("user_feature_flags")
       .select("debit_pay_enabled, onboarding_completed")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
     
     // User's debit pay values (now keyed by wallet_card_id)
     supabase
@@ -248,7 +248,7 @@ export default async function WalletPage() {
       .from("user_point_value_settings")
       .select("selected_template_id")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
     
     // Point value templates with their currency values
     supabase
@@ -276,7 +276,7 @@ export default async function WalletPage() {
       .from("user_bonus_display_settings")
       .select("include_welcome_bonuses, include_spend_bonuses")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
     
     // All currencies for bonus creation modal
     supabase
@@ -336,10 +336,27 @@ export default async function WalletPage() {
     }
   });
 
-  // Build perks map (keyed by wallet_card_id now)
-  const perksMap = new Map<string, number>();
+  // Build a mapping from wallet_card_id → card_id for lookups
+  const walletToCardIdMap = new Map<string, string>();
+  walletCards.forEach((wc) => {
+    if (wc.cards) {
+      walletToCardIdMap.set(wc.id, wc.cards.id);
+    }
+  });
+
+  // Build TWO perks maps:
+  // 1. perksMapByWalletId - for display in WalletCardList (keyed by wallet_card_id)
+  // 2. perksMapByCardId - for the calculator (keyed by card_id, summed across instances)
+  const perksMapByWalletId = new Map<string, number>();
+  const perksMapByCardId = new Map<string, number>();
   perksResult.data?.forEach((pv) => {
-    perksMap.set(pv.wallet_card_id, pv.perks_value);
+    // For display: keyed by wallet_card_id
+    perksMapByWalletId.set(pv.wallet_card_id, pv.perks_value);
+    // For calculator: keyed by card_id, summed across all instances
+    const cardId = walletToCardIdMap.get(pv.wallet_card_id);
+    if (cardId) {
+      perksMapByCardId.set(cardId, (perksMapByCardId.get(cardId) ?? 0) + pv.perks_value);
+    }
   });
 
   // Check if debit pay is enabled
@@ -351,10 +368,20 @@ export default async function WalletPage() {
   // Credit tracking is enabled for all users
   const creditTrackingEnabled = true;
   
-  // Build debit pay map (keyed by wallet_card_id now)
-  const debitPayMap = new Map<string, number>();
+  // Build TWO debit pay maps:
+  // 1. debitPayMapByWalletId - for display in WalletCardList (keyed by wallet_card_id)
+  // 2. debitPayMapByCardId - for the calculator (keyed by card_id, max value across instances)
+  const debitPayMapByWalletId = new Map<string, number>();
+  const debitPayMapByCardId = new Map<string, number>();
   debitPayResult.data?.forEach((dp) => {
-    debitPayMap.set(dp.wallet_card_id, Number(dp.debit_pay_percent) ?? 0);
+    const value = Number(dp.debit_pay_percent) ?? 0;
+    // For display: keyed by wallet_card_id
+    debitPayMapByWalletId.set(dp.wallet_card_id, value);
+    // For calculator: keyed by card_id, use max value
+    const cardId = walletToCardIdMap.get(dp.wallet_card_id);
+    if (cardId) {
+      debitPayMapByCardId.set(cardId, Math.max(debitPayMapByCardId.get(cardId) ?? 0, value));
+    }
   });
 
   // Type for all cards
@@ -681,8 +708,8 @@ export default async function WalletPage() {
     userCurrencyValues,
     defaultCurrencyValues,
     cashOutValues: new Map<string, number>(), // Not used on wallet summary
-    perksValues: perksMap,
-    debitPayValues: debitPayMap,
+    perksValues: perksMapByCardId,
+    debitPayValues: debitPayMapByCardId,
     multiplierPrograms,
     mobilePayCategories,
     mobilePayCategoryId,
@@ -1191,8 +1218,8 @@ export default async function WalletPage() {
             <WalletCardList
               walletCards={walletCards}
               enabledSecondaryCards={enabledSecondaryCards}
-              perksMap={perksMap}
-              debitPayMap={debitPayMap}
+              perksMap={perksMapByWalletId}
+              debitPayMap={debitPayMapByWalletId}
               debitPayEnabled={debitPayEnabled}
               onRemove={removeFromWallet}
               onUpdatePerks={updatePerksValue}

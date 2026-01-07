@@ -101,7 +101,7 @@ export default async function RulesPage() {
       .from("user_feature_flags")
       .select("credit_tracking_enabled")
       .eq("user_id", effectiveUserId)
-      .single(),
+      .maybeSingle(),
     supabase
       .from("user_players")
       .select("player_number, description")
