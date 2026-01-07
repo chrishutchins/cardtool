@@ -450,12 +450,14 @@ export function WalletCardList({
               >
                 <span className="inline-flex items-center">Issuer<SortIcon field="issuer" /></span>
               </th>
+              {/* Currency column - hidden for now
               <th 
                 className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap hidden sm:table-cell"
                 onClick={() => handleSort("currency")}
               >
                 <span className="inline-flex items-center">Currency<SortIcon field="currency" /></span>
               </th>
+              */}
               <th 
                 className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap hidden lg:table-cell"
                 onClick={() => handleSort("annual_fee")}
@@ -616,12 +618,13 @@ export function WalletCardList({
                     {card.issuers?.name}
                   </td>
 
-                  {/* Currency Badge */}
+                  {/* Currency Badge - hidden for now
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${currencyConfig.className}`}>
                       {currencyConfig.label}
                     </span>
                   </td>
+                  */}
 
                   {/* Annual Fee */}
                   <td className="px-4 py-3 text-right text-zinc-400 hidden lg:table-cell">
