@@ -705,16 +705,17 @@ export function CreditHistoryRow({
             >
               <span className="text-xs font-medium">{period.shortLabel}</span>
               {fullyUsed ? (
-                <div className="relative">
+                isLinked ? (
+                  /* Chain link icon for auto-detected/synced credits */
+                  <svg className="w-4 h-4 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                ) : (
+                  /* Checkmark for manually marked credits */
                   <svg className="w-4 h-4 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  {isLinked && (
-                    <svg className="w-2.5 h-2.5 absolute -bottom-0.5 -right-1 text-white/80" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                  )}
-                </div>
+                )
               ) : partiallyUsed ? (
                 <svg className="w-4 h-4 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01" />
