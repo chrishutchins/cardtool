@@ -677,21 +677,20 @@ export function CreditCard({
           ) : currentPeriodUsage > 0 ? (
             <button
               onClick={() => {
-                // Check if there are linked transactions to show
+                if (!currentPeriod) return;
+                // Always show the usage modal for partial usage
+                // Find any usage record (prefer one with linked transactions)
                 const usageWithTxns = currentPeriodUsageRecords.find(u => 
                   u.auto_detected && 
                   u.user_credit_usage_transactions && 
                   u.user_credit_usage_transactions.length > 0
                 );
-                if (usageWithTxns && currentPeriod) {
-                  // Show linked transactions modal
+                const usageRecord = usageWithTxns || currentPeriodUsageRecords[0];
+                if (usageRecord) {
                   setLinkedTransactionModal({
-                    usage: usageWithTxns,
+                    usage: usageRecord,
                     periodLabel: currentPeriod.label,
                   });
-                } else if (currentPeriod) {
-                  // No linked transactions - open mark used modal to add more
-                  onMarkUsed(credit, walletCard, currentPeriod.start.toISOString().split("T")[0], currentPeriod.end.toISOString().split("T")[0]);
                 }
               }}
               className="w-8 h-8 rounded-lg bg-amber-700/80 flex items-center justify-center flex-shrink-0 hover:bg-amber-600 transition-all"

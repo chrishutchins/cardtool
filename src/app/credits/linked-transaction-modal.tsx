@@ -200,8 +200,20 @@ export function LinkedTransactionModal({
           {/* Transactions */}
           <div className="space-y-2">
             <div className="text-sm text-zinc-400">
-              {isClawback ? "Clawback Transaction" : `Detected Transaction${hasMultipleTransactions ? 's' : ''}`}
+              {transactions.length === 0 
+                ? "Manually Marked" 
+                : isClawback 
+                  ? "Clawback Transaction" 
+                  : `Detected Transaction${hasMultipleTransactions ? 's' : ''}`
+              }
             </div>
+            {transactions.length === 0 ? (
+              <div className="p-3 rounded-lg border border-zinc-700 bg-zinc-800/50">
+                <p className="text-sm text-zinc-400">
+                  This credit was manually marked as used. No linked transactions.
+                </p>
+              </div>
+            ) : (
             <div className="space-y-2">
               {transactions.map((utxn) => {
                 const txn = utxn.user_plaid_transactions;
@@ -276,6 +288,7 @@ export function LinkedTransactionModal({
                 );
               })}
             </div>
+            )}
           </div>
 
           {/* Date Override for single-transaction credits */}
@@ -337,7 +350,7 @@ export function LinkedTransactionModal({
             disabled={isPending}
             className="px-4 py-2 rounded-lg border border-red-800 text-red-400 text-sm font-medium hover:bg-red-950/50 disabled:opacity-50 transition-colors"
           >
-            {isPending ? "Unlinking..." : "Unlink All"}
+            {isPending ? "Removing..." : transactions.length === 0 ? "Remove Usage" : "Unlink All"}
           </button>
           <button
             onClick={onClose}
