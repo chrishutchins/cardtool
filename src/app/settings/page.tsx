@@ -513,6 +513,14 @@ export default async function SettingsPage() {
 
     const supabase = await createClient();
 
+    // Reassign any wallet cards with player_number > new playerCount to P1
+    // This prevents orphaned cards when decreasing player count
+    await supabase
+      .from("user_wallets")
+      .update({ player_number: 1 })
+      .eq("user_id", userId)
+      .gt("player_number", playerCount);
+
     // Delete all existing player entries for this user
     await supabase
       .from("user_players")

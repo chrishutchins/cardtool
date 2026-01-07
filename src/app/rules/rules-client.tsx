@@ -74,10 +74,14 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
   }, [players]);
   
   // Filter wallet cards by selected player
+  // Clamp player_number to valid range to handle orphaned cards from decreased player count
   const filteredWalletCards = useMemo(() => {
     if (!showPlayerSelector) return walletCards;
-    return walletCards.filter(wc => (wc.player_number ?? 1) === selectedPlayer);
-  }, [walletCards, selectedPlayer, showPlayerSelector]);
+    return walletCards.filter(wc => {
+      const effectivePlayerNum = Math.min(Math.max(1, wc.player_number ?? 1), playerCount);
+      return effectivePlayerNum === selectedPlayer;
+    });
+  }, [walletCards, selectedPlayer, showPlayerSelector, playerCount]);
 
   // Calculate user status for each rule
   const rulesWithStatus = useMemo(() => {

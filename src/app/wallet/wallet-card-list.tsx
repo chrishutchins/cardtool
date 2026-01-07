@@ -689,45 +689,51 @@ export function WalletCardList({
                   )}
 
                   {/* Player Number */}
-                  {showPlayerColumn && (
-                    <td className="px-4 py-3 text-center hidden lg:table-cell">
-                      {editingPlayerId === wc.id ? (
-                        <select
-                          value={optimisticPlayers.get(wc.id) ?? wc.player_number ?? 1}
-                          onChange={(e) => {
-                            const newPlayer = parseInt(e.target.value);
-                            setOptimisticPlayers(prev => new Map(prev).set(wc.id, newPlayer));
-                            setEditingPlayerId(null);
-                            startTransition(async () => {
-                              if (onUpdatePlayerNumber) {
-                                await onUpdatePlayerNumber(wc.id, newPlayer);
-                              }
-                            });
-                          }}
-                          onBlur={() => setEditingPlayerId(null)}
-                          autoFocus
-                          className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-white text-sm focus:border-blue-500 focus:outline-none"
-                        >
-                          {Array.from({ length: playerCount }, (_, i) => i + 1).map(num => (
-                            <option key={num} value={num}>
-                              P{num}: {playerDescriptions.get(num) || `Player ${num}`}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <button
-                          onClick={() => setEditingPlayerId(wc.id)}
-                          className="text-zinc-400 hover:text-white transition-colors group"
-                          title="Click to change player"
-                        >
-                          <span className="text-zinc-300">
-                            P{optimisticPlayers.get(wc.id) ?? wc.player_number ?? 1}
-                          </span>
-                          <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
-                        </button>
-                      )}
-                    </td>
-                  )}
+                  {showPlayerColumn && (() => {
+                    // Get player number, clamping to valid range (handles orphaned cards from decreased player count)
+                    const rawPlayerNum = optimisticPlayers.get(wc.id) ?? wc.player_number ?? 1;
+                    const effectivePlayerNum = Math.min(Math.max(1, rawPlayerNum), playerCount);
+                    
+                    return (
+                      <td className="px-4 py-3 text-center hidden lg:table-cell">
+                        {editingPlayerId === wc.id ? (
+                          <select
+                            value={effectivePlayerNum}
+                            onChange={(e) => {
+                              const newPlayer = parseInt(e.target.value);
+                              setOptimisticPlayers(prev => new Map(prev).set(wc.id, newPlayer));
+                              setEditingPlayerId(null);
+                              startTransition(async () => {
+                                if (onUpdatePlayerNumber) {
+                                  await onUpdatePlayerNumber(wc.id, newPlayer);
+                                }
+                              });
+                            }}
+                            onBlur={() => setEditingPlayerId(null)}
+                            autoFocus
+                            className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-white text-sm focus:border-blue-500 focus:outline-none"
+                          >
+                            {Array.from({ length: playerCount }, (_, i) => i + 1).map(num => (
+                              <option key={num} value={num}>
+                                P{num}: {playerDescriptions.get(num) || `Player ${num}`}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            onClick={() => setEditingPlayerId(wc.id)}
+                            className="text-zinc-400 hover:text-white transition-colors group"
+                            title="Click to change player"
+                          >
+                            <span className="text-zinc-300">
+                              P{effectivePlayerNum}
+                            </span>
+                            <span className="ml-1 text-zinc-600 group-hover:text-zinc-400 text-xs">✎</span>
+                          </button>
+                        )}
+                      </td>
+                    );
+                  })()}
 
                   {/* Approval Date */}
                   <td className="px-4 py-3 text-center hidden xl:table-cell">
