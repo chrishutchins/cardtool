@@ -94,7 +94,15 @@ function DetailsModal({ rule, showPlayerColumn, onClose }: DetailsModalProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
-                {rule.matchingCards.map((wc) => (
+                {[...rule.matchingCards]
+                  .sort((a, b) => {
+                    // Sort by approval_date descending (most recent first)
+                    if (!a.approval_date && !b.approval_date) return 0;
+                    if (!a.approval_date) return 1;
+                    if (!b.approval_date) return -1;
+                    return new Date(b.approval_date).getTime() - new Date(a.approval_date).getTime();
+                  })
+                  .map((wc) => (
                   <tr key={wc.id}>
                     <td className="py-2 pr-2">
                       <span className="text-white">
