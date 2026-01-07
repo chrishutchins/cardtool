@@ -349,8 +349,20 @@ export function CreditCard({
     );
   }, [currentPeriodUsageRecords]);
 
+  // Determine if credit is fully used
+  // For value-based credits (default_value_cents), compare usage in cents to value
+  // For quantity-based credits (default_quantity), compare usage count
+  const isFullyUsed = useMemo(() => {
+    if (credit.default_value_cents) {
+      // Value-based: currentPeriodUsage is in dollars, compare to value in cents
+      return currentPeriodUsage * 100 >= credit.default_value_cents;
+    }
+    // Quantity-based: compare to quantity (default 1)
+    const maxQuantity = credit.default_quantity ?? 1;
+    return currentPeriodUsage >= maxQuantity;
+  }, [currentPeriodUsage, credit.default_value_cents, credit.default_quantity]);
+
   const maxAmount = credit.default_quantity ?? 1;
-  const isFullyUsed = currentPeriodUsage >= maxAmount;
 
   // If hideUsed is true and credit is fully used, don't render
   if (hideUsed && isFullyUsed && viewMode === "current") {
@@ -631,19 +643,19 @@ export function CreditCard({
                   onDeleteUsage(currentPeriodUsageRecords[0].id);
                 }
               }}
-              className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0 hover:bg-emerald-500 transition-colors cursor-pointer relative group"
+              className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0 hover:bg-emerald-500 transition-colors cursor-pointer"
               title={hasLinkedTransactions ? "View linked transaction" : "Click to unmark"}
             >
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              {/* Link icon overlay for auto-detected credits */}
-              {hasLinkedTransactions && (
-                <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-sky-500 rounded-full flex items-center justify-center shadow-sm">
-                  <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                </div>
+              {hasLinkedTransactions ? (
+                /* Chain link icon for auto-detected/synced credits */
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              ) : (
+                /* Checkmark for manually marked credits */
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
               )}
             </button>
           ) : currentPeriodUsage > 0 ? (

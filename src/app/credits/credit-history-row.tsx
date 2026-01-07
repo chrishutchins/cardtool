@@ -296,12 +296,19 @@ export function CreditHistoryRow({
     });
   };
 
-  // Get the max amount for this credit
+  // Get the max quantity for this credit (for quantity-based credits)
   const maxAmount = credit.default_quantity ?? 1;
 
   // Check if a period is fully used
+  // For value-based credits, compare usage in cents to default_value_cents
+  // For quantity-based credits, compare usage count to default_quantity
   const isFullyUsed = (periodUsage: CreditUsage | undefined): boolean => {
     if (!periodUsage) return false;
+    if (credit.default_value_cents) {
+      // Value-based: amount_used is in dollars, compare to value in cents
+      return periodUsage.amount_used * 100 >= credit.default_value_cents;
+    }
+    // Quantity-based: compare to quantity (default 1)
     return periodUsage.amount_used >= maxAmount;
   };
 
