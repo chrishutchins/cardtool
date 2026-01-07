@@ -28,16 +28,7 @@ function PlaidLinkHandler({
     token: linkToken,
     onSuccess: onPlaidSuccess,
     onExit,
-    onEvent: (eventName, metadata) => {
-      console.log("Plaid Link event:", eventName, metadata);
-    },
   });
-
-  // Log initialization state
-  useEffect(() => {
-    console.log("PlaidLinkHandler mounted with token:", linkToken.substring(0, 20) + "...");
-    console.log("Ready state:", ready, "Error:", error);
-  }, [linkToken, ready, error]);
 
   // Set a timeout to detect if Plaid never becomes ready
   useEffect(() => {
@@ -64,7 +55,6 @@ function PlaidLinkHandler({
   useEffect(() => {
     if (ready && !hasOpened.current && !initTimeout) {
       hasOpened.current = true;
-      console.log("Opening Plaid Link modal...");
       open();
     }
   }, [ready, open, initTimeout]);
@@ -110,6 +100,7 @@ export function PlaidLinkButton({ onSuccess }: PlaidLinkButtonProps) {
   const onPlaidSuccess = useCallback(
     async (publicToken: string, metadata: unknown) => {
       setIsExchanging(true);
+      setError(null);
       try {
         const response = await fetch("/api/plaid/exchange-token", {
           method: "POST",
@@ -117,11 +108,21 @@ export function PlaidLinkButton({ onSuccess }: PlaidLinkButtonProps) {
           body: JSON.stringify({ public_token: publicToken, metadata }),
         });
         const data = await response.json();
+        
+        if (!response.ok) {
+          console.error("Failed to exchange token:", data);
+          setError(data.error || "Failed to link account");
+          return;
+        }
+        
         if (data.success) {
           onSuccess();
+        } else {
+          setError(data.error || "Failed to link account");
         }
-      } catch (error) {
-        console.error("Error exchanging token:", error);
+      } catch (err) {
+        console.error("Error exchanging token:", err);
+        setError("Network error - please try again");
       } finally {
         setIsExchanging(false);
         setLinkToken(null);
