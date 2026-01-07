@@ -741,10 +741,10 @@ export function CreditHistoryRow({
                   </svg>
                 )
               ) : partiallyUsed ? (
-                /* Show amount used for partially used credits */
+                /* Show percentage used for partially used credits */
                 <span className="text-[9px] font-bold mt-0.5">
                   {credit.default_value_cents 
-                    ? `$${formatCompactDollar(periodUsage!.amount_used)}`
+                    ? `${Math.round((periodUsage!.amount_used * 100) / (credit.default_value_cents / 100))}%`
                     : periodUsage!.amount_used
                   }
                 </span>

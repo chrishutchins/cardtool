@@ -698,7 +698,14 @@ export function CreditCard({
               className="w-8 h-8 rounded-lg bg-amber-500/60 flex items-center justify-center flex-shrink-0 hover:bg-amber-500/80 transition-all"
               title={`$${formatCompactDollar(currentPeriodUsage)} used - click to view details`}
             >
-              <span className="text-[10px] font-bold text-white">${formatCompactDollar(currentPeriodUsage)}</span>
+              {/* Show percentage used for dollar credits */}
+              {credit.default_value_cents ? (
+                <span className="text-[10px] font-bold text-white">
+                  {Math.round((currentPeriodUsage * 100) / (credit.default_value_cents / 100))}%
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-white">{currentPeriodUsage}</span>
+              )}
             </button>
           ) : (
             <button

@@ -53,7 +53,9 @@ export function LinkedTransactionModal({
   
   // For single transaction, use the legacy date picker
   const firstTxn = transactions[0]?.user_plaid_transactions;
-  const [overrideDate, setOverrideDate] = useState(firstTxn?.date || "");
+  // Use transaction date if available, otherwise fall back to usage.used_at
+  const initialDate = firstTxn?.authorized_date || firstTxn?.date || usage.used_at.split("T")[0];
+  const [overrideDate, setOverrideDate] = useState(initialDate);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Close modal on escape key
