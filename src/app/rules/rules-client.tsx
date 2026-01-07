@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { parseLocalDate } from "@/lib/utils";
-import { ChevronDown, Check, AlertCircle, XCircle, Info } from "lucide-react";
+import { ChevronDown, Check, XCircle } from "lucide-react";
 
 interface WalletCard {
   id: string;
@@ -41,15 +41,14 @@ interface RulesClientProps {
   walletCards: WalletCard[];
 }
 
-type RuleStatus = "safe" | "warning" | "danger";
-
 interface RuleWithStatus extends Rule {
   userCount: number;
-  status: RuleStatus;
+  isOverLimit: boolean;
 }
 
 export function RulesClient({ rules, walletCards }: RulesClientProps) {
-  const [expandedIssuers, setExpandedIssuers] = useState<Set<string>>(new Set());
+  // Start with all issuers expanded
+  const [collapsedIssuers, setCollapsedIssuers] = useState<Set<string>>(new Set());
 
   // Calculate user status for each rule
   const rulesWithStatus = useMemo(() => {
@@ -119,14 +118,9 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
       }
 
       const userCount = matchingCards.length;
-      let status: RuleStatus = "safe";
-      if (userCount >= rule.card_limit) {
-        status = "danger";
-      } else if (userCount === rule.card_limit - 1) {
-        status = "warning";
-      }
+      const isOverLimit = userCount >= rule.card_limit;
 
-      return { ...rule, userCount, status };
+      return { ...rule, userCount, isOverLimit };
     });
   }, [rules, walletCards]);
 
@@ -142,7 +136,7 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
   }, [rulesWithStatus]);
 
   const toggleIssuer = (issuerName: string) => {
-    setExpandedIssuers((prev) => {
+    setCollapsedIssuers((prev) => {
       const next = new Set(prev);
       if (next.has(issuerName)) {
         next.delete(issuerName);
@@ -153,73 +147,13 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
     });
   };
 
-  // Start with all issuers expanded
-  const allExpanded = Object.keys(rulesByIssuer).length === expandedIssuers.size;
-
-  const getStatusIcon = (status: RuleStatus) => {
-    switch (status) {
-      case "safe":
-        return <Check className="w-4 h-4 text-emerald-400" />;
-      case "warning":
-        return <AlertCircle className="w-4 h-4 text-amber-400" />;
-      case "danger":
-        return <XCircle className="w-4 h-4 text-red-400" />;
-    }
-  };
-
-  const getStatusColor = (status: RuleStatus) => {
-    switch (status) {
-      case "safe":
-        return "text-emerald-400";
-      case "warning":
-        return "text-amber-400";
-      case "danger":
-        return "text-red-400";
-    }
-  };
-
-  const getStatusBg = (status: RuleStatus) => {
-    switch (status) {
-      case "safe":
-        return "bg-emerald-500/10 border-emerald-500/20";
-      case "warning":
-        return "bg-amber-500/10 border-amber-500/20";
-      case "danger":
-        return "bg-red-500/10 border-red-500/20";
-    }
-  };
-
-  const formatRuleLabel = (rule: RuleWithStatus) => {
-    if (rule.rule_type === "velocity") {
-      const unit = rule.time_unit === "days" ? "d" : "mo";
-      return `${rule.time_window}${unit}`;
-    }
-    return "max";
-  };
-
   return (
     <div className="space-y-4">
-      {/* Quick expand/collapse all */}
-      <div className="flex justify-end">
-        <button
-          onClick={() => {
-            if (allExpanded) {
-              setExpandedIssuers(new Set());
-            } else {
-              setExpandedIssuers(new Set(Object.keys(rulesByIssuer)));
-            }
-          }}
-          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          {allExpanded ? "Collapse All" : "Expand All"}
-        </button>
-      </div>
-
       {Object.entries(rulesByIssuer)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([issuerName, issuerRules]) => {
-          const isExpanded = expandedIssuers.has(issuerName);
-          const hasIssues = issuerRules.some((r) => r.status !== "safe");
+          const isExpanded = !collapsedIssuers.has(issuerName);
+          const hasIssues = issuerRules.some((r) => r.isOverLimit);
 
           return (
             <div
@@ -229,107 +163,61 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
               {/* Issuer Header */}
               <button
                 onClick={() => toggleIssuer(issuerName)}
-                className="w-full px-4 py-3 flex items-center justify-between bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-zinc-800/50 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-lg font-semibold text-white">{issuerName}</span>
                   {hasIssues && (
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-amber-500/20 text-amber-400">
-                      Attention
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-red-500/20 text-red-400">
+                      At Limit
                     </span>
                   )}
                 </div>
                 <ChevronDown
                   className={`w-5 h-5 text-zinc-400 transition-transform ${
-                    isExpanded ? "rotate-180" : ""
+                    isExpanded ? "" : "rotate-180"
                   }`}
                 />
               </button>
 
               {/* Rules List */}
               {isExpanded && (
-                <div className="divide-y divide-zinc-800">
+                <div className="divide-y divide-zinc-800 border-t border-zinc-800">
                   {issuerRules.map((rule) => (
-                    <div
-                      key={rule.id}
-                      className={`px-4 py-4 ${getStatusBg(rule.status)} border-l-4 ${
-                        rule.status === "safe"
-                          ? "border-l-emerald-500"
-                          : rule.status === "warning"
-                          ? "border-l-amber-500"
-                          : "border-l-red-500"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(rule.status)}
-                            <span className="font-medium text-white">{rule.name}</span>
-                            {rule.requires_banking && (
-                              <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">
-                                w/ banking
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Status Display */}
-                          <div className="mt-2 flex items-baseline gap-1">
-                            <span className={`text-2xl font-bold ${getStatusColor(rule.status)}`}>
-                              {rule.userCount}
-                            </span>
-                            {rule.rule_type === "velocity" ? (
-                              <>
-                                <span className="text-sm text-zinc-500">
-                                  in {rule.time_window}{rule.time_unit === "days" ? "d" : "mo"}
-                                </span>
-                                <span className="text-zinc-600 mx-1">·</span>
-                                <span className="text-sm text-zinc-400">
-                                  limit {rule.card_limit}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-zinc-500">/</span>
-                                <span className="text-lg text-zinc-400">{rule.card_limit}</span>
-                                <span className="text-sm text-zinc-500 ml-1">max</span>
-                              </>
-                            )}
-                          </div>
-
-                          {/* Description */}
-                          {rule.description && (
-                            <p className="mt-2 text-sm text-zinc-400">{rule.description}</p>
-                          )}
-
-                          {/* Rule details */}
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            <span
-                              className={`px-2 py-0.5 text-xs rounded ${
-                                rule.rule_type === "velocity"
-                                  ? "bg-blue-500/20 text-blue-400"
-                                  : "bg-purple-500/20 text-purple-400"
-                              }`}
-                            >
-                              {rule.rule_type === "velocity" ? "Velocity" : "Limit"}
-                            </span>
-                            {rule.card_type && rule.card_type !== "both" && (
-                              <span className="px-2 py-0.5 text-xs rounded bg-zinc-700 text-zinc-300">
-                                {rule.card_type} only
-                              </span>
-                            )}
-                            {rule.counts_all_issuers && (
-                              <span className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400">
-                                All issuers
-                              </span>
-                            )}
-                            {rule.charge_type && rule.charge_type !== "all" && (
-                              <span className="px-2 py-0.5 text-xs rounded bg-zinc-700 text-zinc-300">
-                                {rule.charge_type} cards
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                    <div key={rule.id} className="px-4 py-3">
+                      {/* Count and time window */}
+                      <div className="flex items-baseline gap-1 mb-1">
+                        <span
+                          className={`text-xl font-bold ${
+                            rule.isOverLimit ? "text-red-400" : "text-white"
+                          }`}
+                        >
+                          {rule.userCount}
+                        </span>
+                        <span className="text-zinc-500">/</span>
+                        <span className="text-zinc-400">{rule.card_limit}</span>
+                        {rule.rule_type === "velocity" && (
+                          <span className="text-sm text-zinc-500 ml-1">
+                            in {rule.time_window}
+                            {rule.time_unit === "days" ? "d" : "mo"}
+                          </span>
+                        )}
                       </div>
+
+                      {/* Description with icon */}
+                      {rule.description && (
+                        <div className="flex items-center gap-2 text-sm text-zinc-400">
+                          {rule.isOverLimit ? (
+                            <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                          )}
+                          <span>{rule.description}</span>
+                          {rule.requires_banking && (
+                            <span className="text-blue-400">(w/ banking)</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -340,4 +228,3 @@ export function RulesClient({ rules, walletCards }: RulesClientProps) {
     </div>
   );
 }
-
