@@ -5,21 +5,22 @@ import { MarkUsedModal } from "./mark-used-modal";
 import { CreditCard } from "./credit-card";
 import { CreditHistoryRow } from "./credit-history-row";
 import { parseLocalDate } from "@/lib/utils";
-import { AddInventoryModal } from "@/app/inventory/add-inventory-modal";
 
 // Prompt to add earned credit to inventory
 function AddToInventoryPrompt({
   credit,
+  usageId,
   inventoryTypes,
   onClose,
   onSubmit,
 }: {
   credit: Credit;
+  usageId?: string;
   inventoryTypes: InventoryType[];
   onClose: () => void;
   onSubmit: (formData: FormData) => Promise<void>;
 }) {
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [isPending, startTransition] = useTransition();
   
   const inventoryType = inventoryTypes.find(t => t.id === credit.inventory_type_id);
   
@@ -38,23 +39,39 @@ function AddToInventoryPrompt({
     return null;
   }
 
-  if (showAddModal) {
-    return (
-      <AddInventoryModal
-        inventoryTypes={inventoryTypes}
-        brandSuggestions={credit.brand_name ? [credit.brand_name] : []}
-        onClose={onClose}
-        onSubmit={onSubmit}
-        prefillData={{
-          name: credit.name,
-          brand: credit.brand_name ?? undefined,
-          type_id: credit.inventory_type_id ?? undefined,
-          original_value: credit.default_value_cents ? credit.default_value_cents / 100 : undefined,
-          quantity: credit.default_quantity ?? undefined,
-        }}
-      />
-    );
-  }
+  const handleAddToInventory = () => {
+    startTransition(async () => {
+      // Build form data with prefilled values
+      const formData = new FormData();
+      formData.set("type_id", credit.inventory_type_id ?? "");
+      formData.set("name", credit.name);
+      formData.set("brand", credit.brand_name ?? "");
+      // Leave expiration_date blank - user will set it later
+      formData.set("expiration_date", "");
+      formData.set("code", "");
+      formData.set("pin", "");
+      formData.set("url", "");
+      formData.set("notes", "");
+      
+      // Set value/quantity based on tracking type
+      if (inventoryType.tracking_type === "dollar_value" && credit.default_value_cents) {
+        formData.set("original_value", String(credit.default_value_cents / 100));
+      }
+      if (inventoryType.tracking_type === "quantity" && credit.default_quantity) {
+        formData.set("quantity", String(credit.default_quantity));
+      } else {
+        formData.set("quantity", "1");
+      }
+      
+      // Link to the credit usage
+      if (usageId) {
+        formData.set("source_credit_usage_id", usageId);
+      }
+      
+      await onSubmit(formData);
+      onClose();
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -75,20 +92,22 @@ function AddToInventoryPrompt({
             Would you like to add this to your inventory as a <strong className="text-white">{inventoryType.name}</strong>?
           </p>
           <p className="text-xs text-zinc-500">
-            This will help you track the item&apos;s expiration, code, and usage.
+            You can set the expiration date and other details from the Inventory page.
           </p>
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
+              disabled={isPending}
+              className="flex-1 rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
             >
               Skip
             </button>
             <button
-              onClick={() => setShowAddModal(true)}
-              className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
+              onClick={handleAddToInventory}
+              disabled={isPending}
+              className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
             >
-              Add to Inventory
+              {isPending ? "Adding..." : "Add to Inventory"}
             </button>
           </div>
         </div>
