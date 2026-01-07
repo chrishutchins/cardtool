@@ -5,6 +5,22 @@ import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard, UsageT
 import { parseLocalDate } from "@/lib/utils";
 import { LinkedTransactionModal } from "./linked-transaction-modal";
 
+/**
+ * Format dollar amount compactly:
+ * - >= $10: no decimals (e.g., $299)
+ * - < $10: show decimals unless .00 (e.g., $7.50, but $7 not $7.00)
+ */
+function formatCompactDollar(amount: number): string {
+  if (amount >= 10) {
+    return Math.floor(amount).toString();
+  }
+  // For amounts < $10, show decimals unless it's a whole number
+  if (amount % 1 === 0) {
+    return amount.toString();
+  }
+  return amount.toFixed(2);
+}
+
 // Tooltip component - appears on hover (desktop) or tap (mobile)
 // Smart positioning: appears above by default, below if not enough space
 function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
@@ -679,9 +695,9 @@ export function CreditCard({
                 }
               }}
               className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center flex-shrink-0 hover:bg-amber-500 transition-all"
-              title={`$${currentPeriodUsage.toFixed(currentPeriodUsage % 1 === 0 ? 0 : 2)} used - click to view details`}
+              title={`$${formatCompactDollar(currentPeriodUsage)} used - click to view details`}
             >
-              <span className="text-[10px] font-bold text-white">${currentPeriodUsage % 1 === 0 ? currentPeriodUsage : currentPeriodUsage.toFixed(1)}</span>
+              <span className="text-[10px] font-bold text-white">${formatCompactDollar(currentPeriodUsage)}</span>
             </button>
           ) : (
             <button

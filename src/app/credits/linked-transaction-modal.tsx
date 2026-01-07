@@ -4,6 +4,21 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import { CreditUsage, CreditWithSlot, WalletCard, UsageTransaction } from "./credits-client";
 import { parseLocalDate } from "@/lib/utils";
 
+/**
+ * Format dollar amount compactly:
+ * - >= $10: no decimals (e.g., $299)
+ * - < $10: show decimals unless .00 (e.g., $7.50, but $7 not $7.00)
+ */
+function formatCompactDollar(amount: number): string {
+  if (amount >= 10) {
+    return Math.floor(amount).toString();
+  }
+  if (amount % 1 === 0) {
+    return amount.toString();
+  }
+  return amount.toFixed(2);
+}
+
 interface LinkedTransactionModalProps {
   usage: CreditUsage;
   credit: CreditWithSlot;
@@ -170,12 +185,12 @@ export function LinkedTransactionModal({
               <div className="text-sm text-zinc-400">Total Applied</div>
               <div className={`text-lg font-semibold ${isClawback ? 'text-amber-400' : 'text-emerald-400'}`}>
                 {credit.default_value_cents 
-                  ? `$${usage.amount_used.toFixed(usage.amount_used % 1 === 0 ? 0 : 2)}`
+                  ? `$${formatCompactDollar(usage.amount_used)}`
                   : usage.amount_used
                 }
                 {credit.default_value_cents && (
                   <span className="text-sm font-normal text-zinc-500 ml-1">
-                    / ${(credit.default_value_cents / 100).toFixed(0)}
+                    / ${formatCompactDollar(credit.default_value_cents / 100)}
                   </span>
                 )}
               </div>

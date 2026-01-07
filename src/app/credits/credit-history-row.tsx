@@ -5,6 +5,21 @@ import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard } from 
 import { parseLocalDate } from "@/lib/utils";
 import { LinkedTransactionModal } from "./linked-transaction-modal";
 
+/**
+ * Format dollar amount compactly:
+ * - >= $10: no decimals (e.g., $299)
+ * - < $10: show decimals unless .00 (e.g., $7.50, but $7 not $7.00)
+ */
+function formatCompactDollar(amount: number): string {
+  if (amount >= 10) {
+    return Math.floor(amount).toString();
+  }
+  if (amount % 1 === 0) {
+    return amount.toString();
+  }
+  return amount.toFixed(2);
+}
+
 // Tooltip component for notes
 function Tooltip({ children, text }: { children: React.ReactNode; text: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -729,7 +744,7 @@ export function CreditHistoryRow({
                 /* Show amount used for partially used credits */
                 <span className="text-[9px] font-bold mt-0.5">
                   {credit.default_value_cents 
-                    ? `$${periodUsage!.amount_used % 1 === 0 ? periodUsage!.amount_used : periodUsage!.amount_used.toFixed(1)}`
+                    ? `$${formatCompactDollar(periodUsage!.amount_used)}`
                     : periodUsage!.amount_used
                   }
                 </span>
