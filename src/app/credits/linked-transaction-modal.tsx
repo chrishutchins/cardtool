@@ -160,10 +160,26 @@ export function LinkedTransactionModal({
             <div className="text-sm text-zinc-500">{walletCard.display_name}</div>
           </div>
 
-          {/* Current Period */}
-          <div className="space-y-1">
-            <div className="text-sm text-zinc-400">Applied to Period</div>
-            <div className="text-white">{periodLabel}</div>
+          {/* Current Period & Amount Used */}
+          <div className="flex gap-6">
+            <div className="space-y-1">
+              <div className="text-sm text-zinc-400">Applied to Period</div>
+              <div className="text-white">{periodLabel}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-zinc-400">Total Applied</div>
+              <div className={`text-lg font-semibold ${isClawback ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {credit.default_value_cents 
+                  ? `$${usage.amount_used.toFixed(usage.amount_used % 1 === 0 ? 0 : 2)}`
+                  : usage.amount_used
+                }
+                {credit.default_value_cents && (
+                  <span className="text-sm font-normal text-zinc-500 ml-1">
+                    / ${(credit.default_value_cents / 100).toFixed(0)}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Transactions */}

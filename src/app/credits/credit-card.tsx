@@ -660,11 +660,28 @@ export function CreditCard({
             </button>
           ) : currentPeriodUsage > 0 ? (
             <button
-              onClick={() => currentPeriod && onMarkUsed(credit, walletCard, currentPeriod.start.toISOString().split("T")[0], currentPeriod.end.toISOString().split("T")[0])}
-              className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-800 flex items-center justify-center flex-shrink-0 hover:from-emerald-500 hover:to-emerald-700 transition-all"
-              title="Partially used - click to add more"
+              onClick={() => {
+                // Check if there are linked transactions to show
+                const usageWithTxns = currentPeriodUsageRecords.find(u => 
+                  u.auto_detected && 
+                  u.user_credit_usage_transactions && 
+                  u.user_credit_usage_transactions.length > 0
+                );
+                if (usageWithTxns && currentPeriod) {
+                  // Show linked transactions modal
+                  setLinkedTransactionModal({
+                    usage: usageWithTxns,
+                    periodLabel: currentPeriod.label,
+                  });
+                } else if (currentPeriod) {
+                  // No linked transactions - open mark used modal to add more
+                  onMarkUsed(credit, walletCard, currentPeriod.start.toISOString().split("T")[0], currentPeriod.end.toISOString().split("T")[0]);
+                }
+              }}
+              className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center flex-shrink-0 hover:bg-amber-500 transition-all"
+              title={`$${currentPeriodUsage.toFixed(currentPeriodUsage % 1 === 0 ? 0 : 2)} used - click to view details`}
             >
-              <span className="text-xs font-bold text-white">+</span>
+              <span className="text-[10px] font-bold text-white">${currentPeriodUsage % 1 === 0 ? currentPeriodUsage : currentPeriodUsage.toFixed(1)}</span>
             </button>
           ) : (
             <button

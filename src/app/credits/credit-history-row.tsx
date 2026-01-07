@@ -340,8 +340,17 @@ export function CreditHistoryRow({
           });
         }
       } else {
-        // Partially used - open modal to modify
-        onOpenModal(credit, walletCard, period.start, period.end);
+        // Partially used - check if it has linked transactions
+        if (hasLinkedTransactions(existingUsage)) {
+          // Show linked transactions modal
+          setLinkedTransactionModal({
+            usage: existingUsage,
+            periodLabel: period.shortLabel,
+          });
+        } else {
+          // No linked transactions - open modal to modify
+          onOpenModal(credit, walletCard, period.start, period.end);
+        }
       }
     } else {
       // No usage - open modal to mark used
@@ -717,9 +726,13 @@ export function CreditHistoryRow({
                   </svg>
                 )
               ) : partiallyUsed ? (
-                <svg className="w-4 h-4 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01" />
-                </svg>
+                /* Show amount used for partially used credits */
+                <span className="text-[9px] font-bold mt-0.5">
+                  {credit.default_value_cents 
+                    ? `$${periodUsage!.amount_used % 1 === 0 ? periodUsage!.amount_used : periodUsage!.amount_used.toFixed(1)}`
+                    : periodUsage!.amount_used
+                  }
+                </span>
               ) : (
                 <div className="w-4 h-4 mt-0.5 rounded-full border-2 border-current" />
               )}
