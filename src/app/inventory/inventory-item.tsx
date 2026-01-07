@@ -18,14 +18,12 @@ interface InventoryItemProps {
   onDeleteItem: (itemId: string) => Promise<void>;
 }
 
-// Inline expiration prompt component
-function ExpirationPrompt({
-  item,
+// Inline expiration input (shown in place of expiration date)
+function InlineExpirationInput({
   onSetExpiration,
   onMarkNoExpiration,
   isPending,
 }: {
-  item: InventoryItemData;
   onSetExpiration: (date: string) => void;
   onMarkNoExpiration: () => void;
   isPending: boolean;
@@ -33,36 +31,30 @@ function ExpirationPrompt({
   const [date, setDate] = useState("");
 
   return (
-    <div className="mx-4 mb-3 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-2">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-        <span className="text-sm text-amber-200 whitespace-nowrap">
-          Set expiration for {item.name}:
-        </span>
-        <div className="flex items-center gap-2 flex-1">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="flex-1 sm:flex-none sm:w-40 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-white text-sm focus:border-emerald-500 focus:outline-none"
-            disabled={isPending}
-          />
-          <button
-            onClick={() => date && onSetExpiration(date)}
-            disabled={!date || isPending}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Save
-          </button>
-          <button
-            onClick={onMarkNoExpiration}
-            disabled={isPending}
-            className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors disabled:opacity-50"
-            title="Mark as having no expiration"
-          >
-            No exp
-          </button>
-        </div>
-      </div>
+    <div className="flex items-center gap-1.5">
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="w-28 rounded border border-amber-600/50 bg-amber-900/30 px-2 py-1 text-white text-xs focus:border-amber-500 focus:outline-none"
+        disabled={isPending}
+      />
+      <button
+        onClick={() => date && onSetExpiration(date)}
+        disabled={!date || isPending}
+        className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Save expiration date"
+      >
+        ✓
+      </button>
+      <button
+        onClick={onMarkNoExpiration}
+        disabled={isPending}
+        className="rounded border border-zinc-600 px-1.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors disabled:opacity-50"
+        title="No expiration"
+      >
+        ✕
+      </button>
     </div>
   );
 }
@@ -233,17 +225,7 @@ export function InventoryItem({
 
   return (
     <>
-      <div className={`${item.is_used ? "opacity-50" : ""}`}>
-        {/* Expiration Prompt */}
-        {needsExpirationPrompt && (
-          <ExpirationPrompt
-            item={item}
-            onSetExpiration={handleSetExpiration}
-            onMarkNoExpiration={handleMarkNoExpiration}
-            isPending={isPending}
-          />
-        )}
-        <div className="px-4 py-3">
+      <div className={`px-4 py-3 ${item.is_used ? "opacity-50" : ""} ${needsExpirationPrompt ? "bg-amber-900/10" : ""}`}>
         <div className="flex items-center justify-between gap-3">
           {/* Left: Status + Info */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -310,7 +292,15 @@ export function InventoryItem({
           {/* Right: Value + Expiration + Actions */}
           <div className="flex items-center gap-4 flex-shrink-0">
             {/* Expiration */}
-            {expirationDisplay && (
+            {needsExpirationPrompt ? (
+              <div className="hidden sm:block">
+                <InlineExpirationInput
+                  onSetExpiration={handleSetExpiration}
+                  onMarkNoExpiration={handleMarkNoExpiration}
+                  isPending={isPending}
+                />
+              </div>
+            ) : expirationDisplay && (
               expirationDisplay.isEditable ? (
                 <button
                   onClick={() => setShowEditModal(true)}
@@ -367,7 +357,17 @@ export function InventoryItem({
             </div>
           </div>
         </div>
-        </div>
+
+        {/* Mobile expiration input */}
+        {needsExpirationPrompt && (
+          <div className="mt-2 sm:hidden">
+            <InlineExpirationInput
+              onSetExpiration={handleSetExpiration}
+              onMarkNoExpiration={handleMarkNoExpiration}
+              isPending={isPending}
+            />
+          </div>
+        )}
       </div>
 
       {/* Modals */}
