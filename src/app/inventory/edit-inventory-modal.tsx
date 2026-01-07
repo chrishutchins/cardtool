@@ -190,13 +190,30 @@ export function EditInventoryModal({
           {/* Expiration Date */}
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-2">
-              Expiration Date <span className="text-zinc-500 font-normal">(optional)</span>
+              Expiration Date
             </label>
-            <input
-              type="date"
-              name="expiration_date"
-              defaultValue={item.expiration_date ?? ""}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-emerald-500 focus:outline-none"
+            <div className="space-y-2">
+              <input
+                type="date"
+                name="expiration_date"
+                defaultValue={item.expiration_date ?? ""}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-emerald-500 focus:outline-none"
+              />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="no_expiration"
+                  value="true"
+                  defaultChecked={item.no_expiration}
+                  className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
+                />
+                <span className="text-sm text-zinc-400">No expiration / never expires</span>
+              </label>
+            </div>
+          </div>
+          {/* Hidden placeholder for consistent form layout */}
+          <div className="hidden">
+            <input type="hidden" name="no_expiration_fallback" value="false"
             />
           </div>
 

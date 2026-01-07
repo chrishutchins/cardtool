@@ -47,6 +47,7 @@ export default async function InventoryPage() {
       name,
       brand,
       expiration_date,
+      no_expiration,
       code,
       pin,
       url,
@@ -167,6 +168,8 @@ export default async function InventoryPage() {
     const brand = brandRaw?.trim() || null;
     const expirationDateRaw = formData.get("expiration_date") as string;
     const expirationDate = expirationDateRaw?.trim() || null;
+    const noExpirationRaw = formData.get("no_expiration") as string;
+    const noExpiration = noExpirationRaw === "true";
     const code = (formData.get("code") as string)?.trim() || null;
     const pin = (formData.get("pin") as string)?.trim() || null;
     const url = (formData.get("url") as string)?.trim() || null;
@@ -185,6 +188,7 @@ export default async function InventoryPage() {
       name,
       brand,
       expiration_date: expirationDate,
+      no_expiration: noExpiration,
       code,
       pin,
       url,
@@ -328,6 +332,7 @@ export default async function InventoryPage() {
     name: string;
     brand: string | null;
     expiration_date: string | null;
+    no_expiration: boolean;
     code: string | null;
     pin: string | null;
     url: string | null;

@@ -18,6 +18,55 @@ interface InventoryItemProps {
   onDeleteItem: (itemId: string) => Promise<void>;
 }
 
+// Inline expiration prompt component
+function ExpirationPrompt({
+  item,
+  onSetExpiration,
+  onMarkNoExpiration,
+  isPending,
+}: {
+  item: InventoryItemData;
+  onSetExpiration: (date: string) => void;
+  onMarkNoExpiration: () => void;
+  isPending: boolean;
+}) {
+  const [date, setDate] = useState("");
+
+  return (
+    <div className="mx-4 mb-3 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <span className="text-sm text-amber-200 whitespace-nowrap">
+          Set expiration for {item.name}:
+        </span>
+        <div className="flex items-center gap-2 flex-1">
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="flex-1 sm:flex-none sm:w-40 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-white text-sm focus:border-emerald-500 focus:outline-none"
+            disabled={isPending}
+          />
+          <button
+            onClick={() => date && onSetExpiration(date)}
+            disabled={!date || isPending}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Save
+          </button>
+          <button
+            onClick={onMarkNoExpiration}
+            disabled={isPending}
+            className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors disabled:opacity-50"
+            title="Mark as having no expiration"
+          >
+            No exp
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function InventoryItem({
   item,
   inventoryTypes,
@@ -36,6 +85,49 @@ export function InventoryItem({
 
   const trackingType = item.inventory_types?.tracking_type ?? "single_use";
   const typeName = item.inventory_types?.name ?? "Unknown";
+
+  // Check if expiration needs to be set
+  const needsExpirationPrompt = !item.expiration_date && !item.no_expiration && !item.is_used;
+
+  const handleSetExpiration = (date: string) => {
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("type_id", item.type_id);
+      formData.set("name", item.name);
+      formData.set("brand", item.brand ?? "");
+      formData.set("expiration_date", date);
+      formData.set("no_expiration", "false");
+      formData.set("code", item.code ?? "");
+      formData.set("pin", item.pin ?? "");
+      formData.set("url", item.url ?? "");
+      formData.set("notes", item.notes ?? "");
+      formData.set("quantity", String(item.quantity ?? 1));
+      formData.set("quantity_used", String(item.quantity_used ?? 0));
+      formData.set("original_value", item.original_value_cents ? String(item.original_value_cents / 100) : "");
+      formData.set("remaining_value", item.remaining_value_cents ? String(item.remaining_value_cents / 100) : "");
+      await onUpdateItem(item.id, formData);
+    });
+  };
+
+  const handleMarkNoExpiration = () => {
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("type_id", item.type_id);
+      formData.set("name", item.name);
+      formData.set("brand", item.brand ?? "");
+      formData.set("expiration_date", "");
+      formData.set("no_expiration", "true");
+      formData.set("code", item.code ?? "");
+      formData.set("pin", item.pin ?? "");
+      formData.set("url", item.url ?? "");
+      formData.set("notes", item.notes ?? "");
+      formData.set("quantity", String(item.quantity ?? 1));
+      formData.set("quantity_used", String(item.quantity_used ?? 0));
+      formData.set("original_value", item.original_value_cents ? String(item.original_value_cents / 100) : "");
+      formData.set("remaining_value", item.remaining_value_cents ? String(item.remaining_value_cents / 100) : "");
+      await onUpdateItem(item.id, formData);
+    });
+  };
 
   // Calculate remaining for display
   const getRemainingDisplay = () => {
@@ -74,7 +166,15 @@ export function InventoryItem({
   // Format expiration date - ALWAYS show something
   const formatExpiration = () => {
     if (!item.expiration_date) {
-      // Always show clickable "No expiration" for items without a date
+      // If explicitly marked as no expiration, show that
+      if (item.no_expiration) {
+        return { text: "No expiration", color: "text-zinc-500", isEditable: false };
+      }
+      // If needs prompt, don't show anything here (will show inline prompt instead)
+      if (needsExpirationPrompt) {
+        return null;
+      }
+      // Fallback
       return { text: "No expiration", color: "text-zinc-500", isEditable: true };
     }
     const exp = new Date(item.expiration_date + "T00:00:00");
@@ -133,7 +233,17 @@ export function InventoryItem({
 
   return (
     <>
-      <div className={`px-4 py-3 ${item.is_used ? "opacity-50" : ""}`}>
+      <div className={`${item.is_used ? "opacity-50" : ""}`}>
+        {/* Expiration Prompt */}
+        {needsExpirationPrompt && (
+          <ExpirationPrompt
+            item={item}
+            onSetExpiration={handleSetExpiration}
+            onMarkNoExpiration={handleMarkNoExpiration}
+            isPending={isPending}
+          />
+        )}
+        <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           {/* Left: Status + Info */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -256,6 +366,7 @@ export function InventoryItem({
               </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
 

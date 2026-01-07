@@ -18,6 +18,7 @@ export interface InventoryItemData {
   name: string;
   brand: string | null;
   expiration_date: string | null;
+  no_expiration: boolean;
   code: string | null;
   pin: string | null;
   url: string | null;
