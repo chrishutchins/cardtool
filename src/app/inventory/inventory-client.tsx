@@ -1,4 +1,4 @@
-"use client";
+L"use client";
 
 import { useState, useMemo } from "react";
 import { InventoryItem } from "./inventory-item";
