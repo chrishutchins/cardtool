@@ -8,16 +8,16 @@ import logger from '@/lib/logger';
 function verifyCronRequest(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
   
-  // In development, allow requests without auth
-  if (process.env.NODE_ENV === 'development') {
-    return true;
-  }
-
-  // In production, verify the cron secret
+  // Verify the cron secret (required in all environments)
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     logger.warn({}, 'CRON_SECRET not set - cron jobs disabled');
     return false;
+  }
+
+  // Allow dev bypass only if explicitly enabled
+  if (process.env.NODE_ENV === 'development' && process.env.CRON_DEV_BYPASS === 'true') {
+    return true;
   }
 
   return authHeader === `Bearer ${cronSecret}`;

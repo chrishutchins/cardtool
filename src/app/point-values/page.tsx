@@ -129,8 +129,6 @@ export default async function PointValuesPage() {
         
         if (error) {
           console.error("[updateSelectedTemplate] Upsert error:", error);
-        } else {
-          console.log("[updateSelectedTemplate] Saved template:", templateId, "for user:", userId);
         }
       }
 

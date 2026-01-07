@@ -471,7 +471,6 @@ export default async function CreditsPage() {
 
     // If same period, nothing to do
     if (periodStartStr === usageData.period_start) {
-      console.log("Transaction already in target period");
       return;
     }
 

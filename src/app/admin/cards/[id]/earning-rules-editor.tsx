@@ -45,6 +45,28 @@ const TRAVEL_PARENT_SLUG = "all-travel";
 type SortField = "category" | "rate" | "booking";
 type SortDirection = "asc" | "desc";
 
+// SortIcon component - must be defined outside to avoid recreating on each render
+function SortIcon({ 
+  field, 
+  currentField, 
+  direction 
+}: { 
+  field: SortField; 
+  currentField: SortField; 
+  direction: SortDirection;
+}) {
+  if (currentField !== field) return null;
+  return (
+    <svg className="w-4 h-4 ml-1 text-blue-400 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {direction === "asc" ? (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      ) : (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      )}
+    </svg>
+  );
+}
+
 export function EarningRulesEditor({
   rules,
   availableCategories,
@@ -173,19 +195,6 @@ export function EarningRulesEditor({
     }
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return null;
-    return (
-      <svg className="w-4 h-4 ml-1 text-blue-400 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        {sortDirection === "asc" ? (
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-        ) : (
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        )}
-      </svg>
-    );
-  };
-
   const startEdit = (rule: EarningRule) => {
     setEditingRuleId(rule.id);
     setEditRate(rule.rate.toString());
@@ -250,19 +259,19 @@ export function EarningRulesEditor({
                   className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200 whitespace-nowrap"
                   onClick={() => handleSort("category")}
                 >
-                  <span className="inline-flex items-center">Category<SortIcon field="category" /></span>
+                  <span className="inline-flex items-center">Category<SortIcon field="category" currentField={sortField} direction={sortDirection} /></span>
                 </th>
                 <th 
                   className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200 whitespace-nowrap"
                   onClick={() => handleSort("rate")}
                 >
-                  <span className="inline-flex items-center">Rate<SortIcon field="rate" /></span>
+                  <span className="inline-flex items-center">Rate<SortIcon field="rate" currentField={sortField} direction={sortDirection} /></span>
                 </th>
                 <th 
                   className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-zinc-200 whitespace-nowrap"
                   onClick={() => handleSort("booking")}
                 >
-                  <span className="inline-flex items-center">Booking<SortIcon field="booking" /></span>
+                  <span className="inline-flex items-center">Booking<SortIcon field="booking" currentField={sortField} direction={sortDirection} /></span>
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-zinc-400 uppercase whitespace-nowrap">
                   Cap

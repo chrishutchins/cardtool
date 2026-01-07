@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { plaidClient } from '@/lib/plaid';
 import { Products, CountryCode } from 'plaid';
+import { checkRateLimit, ratelimit } from '@/lib/rate-limit';
 import logger from '@/lib/logger';
 
 export async function POST() {
@@ -10,6 +11,13 @@ export async function POST() {
     
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Rate limit: 5 link token requests per minute per user
+    const { success } = await checkRateLimit(ratelimit, `plaid-link:${user.id}`);
+    if (!success) {
+      logger.warn({ userId: user.id }, 'Plaid link token rate limited');
+      return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
     }
 
     // Log environment for debugging

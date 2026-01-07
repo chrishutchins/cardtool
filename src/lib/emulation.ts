@@ -37,7 +37,6 @@ export async function getEffectiveUserId(): Promise<string | null> {
   // In development, allow overriding the user ID to use production data
   // This lets developers use Clerk Development instance while accessing production user data
   if (process.env.NODE_ENV === "development" && process.env.DEV_USER_ID_OVERRIDE) {
-    console.log(`[Dev Mode] Using DEV_USER_ID_OVERRIDE: ${process.env.DEV_USER_ID_OVERRIDE}`);
     return process.env.DEV_USER_ID_OVERRIDE;
   }
 

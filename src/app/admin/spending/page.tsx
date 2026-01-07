@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useTransition } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabaseClient } from "@/lib/supabase/client";
 
 interface Category {
   id: number;
@@ -114,13 +114,18 @@ export default function AdminSpendingPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [isPending, startTransition] = useTransition();
+  
+  // Use the authenticated Supabase client
+  const supabase = useSupabaseClient();
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (supabase) {
+      loadData();
+    }
+  }, [supabase]);
 
   async function loadData() {
-    const supabase = createClient();
+    if (!supabase) return;
     
     const [categoriesResult, spendingResult] = await Promise.all([
       supabase
@@ -154,8 +159,8 @@ export default function AdminSpendingPage() {
   }
 
   async function saveEdit(categoryId: number) {
+    if (!supabase) return;
     startTransition(async () => {
-      const supabase = createClient();
       const amountCents = Math.round(parseFloat(editValue || "0") * 100);
       
       const category = categories.find((c) => c.id === categoryId);

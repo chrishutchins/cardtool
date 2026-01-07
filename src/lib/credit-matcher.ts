@@ -365,32 +365,25 @@ export async function matchTransactionsToCredits(
   walletCards?.forEach(w => walletById.set(w.id, w as unknown as UserWallet));
 
   // Process each transaction
-  console.log(`[credit-matcher] Processing ${transactions.length} transactions for user ${userId}`);
-  console.log(`[credit-matcher] Found ${rules.length} rules, ${creditById.size} credits, ${walletById.size} wallet cards, ${walletByLinkedAccountId.size} linked accounts`);
-  
   for (const txn of transactions) {
     // Skip pending transactions
     if (txn.pending) {
-      console.log(`[credit-matcher] Skipping pending transaction: ${txn.name}`);
       continue;
     }
 
     // Skip transactions without a linked account
     if (!txn.linked_account_id) {
-      console.log(`[credit-matcher] Skipping transaction without linked account: ${txn.name}`);
       continue;
     }
 
     // Find the wallet this transaction belongs to
     const walletId = walletByLinkedAccountId.get(txn.linked_account_id);
     if (!walletId) {
-      console.log(`[credit-matcher] No wallet found for linked account ${txn.linked_account_id}: ${txn.name}`);
       continue;
     }
     
     const wallet = walletById.get(walletId);
     if (!wallet) {
-      console.log(`[credit-matcher] Wallet ${walletId} not found in user's wallets: ${txn.name}`);
       continue;
     }
 
@@ -398,27 +391,14 @@ export async function matchTransactionsToCredits(
     const matchingRule = rules.find(rule => matchesRule(txn, rule));
 
     if (!matchingRule) {
-      console.log(`[credit-matcher] No matching rule for transaction: ${txn.name}`);
       continue;
     }
-    
-    console.log(`[credit-matcher] Found matching rule for "${txn.name}": pattern="${matchingRule.pattern}", credit_id=${matchingRule.credit_id}`);
 
     // Find the credit on this transaction's wallet that matches the rule
     const credit = findCreditForTransaction(matchingRule, wallet, creditById, creditsByCardId);
     if (!credit) {
-      console.log(`[credit-matcher] No matching credit found on wallet ${walletId} for rule. Rule credit: ${matchingRule.credit_id}`);
-      const ruleCredit = creditById.get(matchingRule.credit_id);
-      if (ruleCredit) {
-        console.log(`[credit-matcher] Rule credit name: "${ruleCredit.name}", issuer: ${ruleCredit.cards?.issuer_id}`);
-        console.log(`[credit-matcher] Transaction wallet card_id: ${wallet.card_id}`);
-        const walletCredits = creditsByCardId.get(wallet.card_id) || [];
-        console.log(`[credit-matcher] Credits on wallet: ${walletCredits.map(c => c.name).join(', ')}`);
-      }
       continue;
     }
-
-    console.log(`[credit-matcher] Matched "${txn.name}" to credit "${credit.name}" on wallet ${wallet.id}`);
 
     // Determine if this is a credit or clawback
     const isClawback = txn.amount_cents > 0;
@@ -561,7 +541,7 @@ export async function matchTransactionsToCredits(
         if (existingUsages && existingUsages.length > 0) {
           // Find an existing slot that isn't full, or use the first one
           const creditValue = credit.default_value_cents || 0;
-          let targetUsage = existingUsages.find(u => 
+          const targetUsage = existingUsages.find(u => 
             creditValue === 0 || u.amount_used * 100 < creditValue
           );
 

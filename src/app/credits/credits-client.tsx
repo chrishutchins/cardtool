@@ -27,13 +27,9 @@ function AddToInventoryPrompt({
   // Close if inventory type not found - must use useEffect for side effects
   useEffect(() => {
     if (!inventoryType) {
-      console.log("[AddToInventoryPrompt] No matching inventory type found:", {
-        creditInventoryTypeId: credit.inventory_type_id,
-        availableTypes: inventoryTypes.map(t => ({ id: t.id, name: t.name }))
-      });
       onClose();
     }
-  }, [inventoryType, onClose, credit.inventory_type_id, inventoryTypes]);
+  }, [inventoryType, onClose]);
   
   if (!inventoryType) {
     return null;
@@ -830,14 +826,7 @@ export function CreditsClient({
             await onMarkUsed(formData);
             // Check if this is a must_be_earned credit with an inventory type
             const credit = markUsedModal.credit;
-            console.log("[Credits] Credit marked:", { 
-              name: credit.name, 
-              must_be_earned: credit.must_be_earned, 
-              inventory_type_id: credit.inventory_type_id,
-              hasInventoryTypes: inventoryTypes.length > 0
-            });
             if (credit.must_be_earned && credit.inventory_type_id) {
-              console.log("[Credits] Triggering inventory prompt for:", credit.name);
               setInventoryPrompt({ credit });
             }
           }}

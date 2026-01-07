@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, ratelimit } from "@/lib/rate-limit";
 import logger from "@/lib/logger";
 
 export async function GET() {
@@ -8,6 +9,13 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limit: 5 exports per minute per user
+  const { success } = await checkRateLimit(ratelimit, `export:${user.id}`);
+  if (!success) {
+    logger.warn({ userId: user.id }, "Data export rate limited");
+    return NextResponse.json({ error: "Rate limited. Please try again later." }, { status: 429 });
   }
 
   try {

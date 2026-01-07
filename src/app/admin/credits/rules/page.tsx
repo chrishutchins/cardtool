@@ -111,7 +111,6 @@ export default async function RulesPage() {
   if (matchedTxnsError) {
     console.error("Error fetching matched transactions:", matchedTxnsError);
   }
-  console.log("Matched transactions count:", matchedTxns?.length || 0);
 
   const txnsByRuleId = new Map<string, MatchedTransaction[]>();
   matchedTxns?.forEach((t) => {
