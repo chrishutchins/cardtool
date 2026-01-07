@@ -260,8 +260,8 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
         </div>
       )}
       
-      {/* 2-column grid of issuers */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Issuers - each full width with rules in 2-column grid */}
+      <div className="space-y-4">
         {Object.entries(rulesByIssuer)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([issuerName, issuerRules]) => (
@@ -274,10 +274,23 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
                 <span className="text-lg font-semibold text-white">{issuerName}</span>
               </div>
 
-              {/* Rules List */}
-              <div className="divide-y divide-zinc-800">
-                {issuerRules.map((rule) => (
-                  <div key={rule.id} className="px-4 py-3">
+              {/* Rules in 2-column grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2">
+                {issuerRules.map((rule, idx) => (
+                  <div 
+                    key={rule.id} 
+                    className={`px-4 py-3 ${
+                      // Add border between cells
+                      idx % 2 === 0 ? "md:border-r md:border-zinc-800" : ""
+                    } ${
+                      // Add border below rows (except last row)
+                      idx < issuerRules.length - 2 || (issuerRules.length % 2 === 1 && idx < issuerRules.length - 1)
+                        ? "border-b border-zinc-800"
+                        : idx === issuerRules.length - 2 && issuerRules.length % 2 === 0
+                        ? "border-b border-zinc-800"
+                        : ""
+                    }`}
+                  >
                     {/* Count and time window */}
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-baseline gap-1.5">
