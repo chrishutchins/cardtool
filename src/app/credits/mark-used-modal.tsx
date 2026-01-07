@@ -58,13 +58,11 @@ export function MarkUsedModal({
     const slotNumber = 'slotNumber' in credit ? credit.slotNumber : 1;
     formData.set("slot_number", slotNumber.toString());
     
-    // For dollar credits, convert to a ratio of the max
-    // For quantity credits, use directly
+    // For dollar credits, store the dollar amount directly
+    // For quantity credits, store the quantity
     if (isDollarCredit) {
-      const maxValue = credit.default_value_cents! / 100;
       const usedValue = parseFloat(amountUsed) || 0;
-      const ratio = usedValue / maxValue;
-      formData.set("amount_used", (ratio * maxAmount).toString());
+      formData.set("amount_used", usedValue.toString());
     } else {
       formData.set("amount_used", amountUsed);
     }
