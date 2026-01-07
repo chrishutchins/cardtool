@@ -9,6 +9,7 @@ import { UserHeader } from "@/components/user-header";
 import { ReturnsSummary } from "./returns-summary";
 import { isAdminEmail } from "@/lib/admin";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
+import { calculateCreditPeriod } from "@/lib/credit-matcher";
 import {
   calculatePortfolioReturns,
   calculateCardRecommendations,
@@ -801,11 +802,59 @@ export default async function WalletPage() {
     if (!userId) return;
 
     const supabase = await createClient();
+    
+    // Update the approval date
     await supabase
       .from("user_wallets")
       .update({ approval_date: date })
       .eq("id", walletId)
       .eq("user_id", userId);
+
+    // Recalculate credit periods for cardmember_year credits on this wallet
+    if (date) {
+      // Get all usage records for this wallet with cardmember_year credits
+      const { data: usageRecords } = await supabase
+        .from("user_credit_usage")
+        .select(`
+          id,
+          used_at,
+          card_credits:credit_id (
+            reset_cycle,
+            reset_day_of_month
+          )
+        `)
+        .eq("user_wallet_id", walletId);
+
+      if (usageRecords && usageRecords.length > 0) {
+        for (const usage of usageRecords) {
+          const credit = usage.card_credits as unknown as { 
+            reset_cycle: string; 
+            reset_day_of_month: number | null 
+          };
+          
+          if (credit?.reset_cycle === "cardmember_year") {
+            // Recalculate the period based on the new approval date
+            const usedAtDate = usage.used_at.split("T")[0];
+            const { periodStart, periodEnd } = calculateCreditPeriod(
+              usedAtDate,
+              "cardmember_year",
+              date,
+              credit.reset_day_of_month
+            );
+
+            // Update the period
+            await supabase
+              .from("user_credit_usage")
+              .update({
+                period_start: periodStart.toISOString().split("T")[0],
+                period_end: periodEnd.toISOString().split("T")[0],
+              })
+              .eq("id", usage.id);
+          }
+        }
+      }
+    }
+
     revalidatePath("/wallet");
     revalidatePath("/credits");
   }
