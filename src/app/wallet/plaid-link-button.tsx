@@ -22,12 +22,35 @@ function PlaidLinkHandler({
   onError: (error: string) => void;
 }) {
   const hasOpened = useRef(false);
+  const [initTimeout, setInitTimeout] = useState(false);
   
   const { open, ready, error } = usePlaidLink({
     token: linkToken,
     onSuccess: onPlaidSuccess,
     onExit,
+    onEvent: (eventName, metadata) => {
+      console.log("Plaid Link event:", eventName, metadata);
+    },
   });
+
+  // Log initialization state
+  useEffect(() => {
+    console.log("PlaidLinkHandler mounted with token:", linkToken.substring(0, 20) + "...");
+    console.log("Ready state:", ready, "Error:", error);
+  }, [linkToken, ready, error]);
+
+  // Set a timeout to detect if Plaid never becomes ready
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!ready && !error) {
+        console.error("Plaid Link initialization timeout - never became ready");
+        setInitTimeout(true);
+        onError("Plaid Link failed to load - please check your popup blocker or try again");
+      }
+    }, 10000); // 10 second timeout
+    
+    return () => clearTimeout(timer);
+  }, [ready, error, onError]);
 
   // Report any Plaid Link errors
   useEffect(() => {
@@ -39,11 +62,12 @@ function PlaidLinkHandler({
 
   // Open Plaid Link when ready (only once)
   useEffect(() => {
-    if (ready && !hasOpened.current) {
+    if (ready && !hasOpened.current && !initTimeout) {
       hasOpened.current = true;
+      console.log("Opening Plaid Link modal...");
       open();
     }
-  }, [ready, open]);
+  }, [ready, open, initTimeout]);
 
   return null; // This component just handles the Plaid logic
 }

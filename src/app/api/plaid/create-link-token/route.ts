@@ -12,6 +12,15 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Log environment for debugging
+    const plaidEnv = process.env.PLAID_ENV || 'sandbox';
+    logger.info({ 
+      plaidEnv,
+      hasClientId: !!process.env.PLAID_CLIENT_ID,
+      hasSecret: !!process.env.PLAID_SECRET,
+      userId: user.id,
+    }, 'Creating Plaid link token');
+
     const response = await plaidClient.linkTokenCreate({
       user: {
         client_user_id: user.id,
@@ -22,9 +31,19 @@ export async function POST() {
       language: 'en',
     });
 
+    logger.info({ 
+      hasLinkToken: !!response.data.link_token,
+      expiration: response.data.expiration,
+    }, 'Plaid link token created successfully');
+
     return NextResponse.json({ link_token: response.data.link_token });
   } catch (error) {
-    logger.error({ err: error }, 'Failed to create Plaid link token');
+    const plaidError = error as { response?: { data?: unknown } };
+    logger.error({ 
+      err: error,
+      plaidErrorData: plaidError.response?.data,
+      plaidEnv: process.env.PLAID_ENV,
+    }, 'Failed to create Plaid link token');
     return NextResponse.json(
       { error: 'Failed to create link token' },
       { status: 500 }
