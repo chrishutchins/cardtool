@@ -52,6 +52,17 @@ interface InventoryClientProps {
 
 type GroupBy = "expiration" | "brand" | "type";
 
+// Helper to get quarter from month (0-indexed)
+function getQuarter(month: number): number {
+  return Math.floor(month / 3) + 1;
+}
+
+// Helper to get quarter label with year suffix
+function getQuarterLabel(quarter: number, year: number): string {
+  const yearSuffix = `'${String(year).slice(-2)}`;
+  return `Q${quarter} ${yearSuffix}`;
+}
+
 // Get expiration bucket for grouping
 function getExpirationBucket(date: string | null): { key: string; label: string; sortOrder: number } {
   if (!date) {
@@ -63,21 +74,55 @@ function getExpirationBucket(date: string | null): { key: string; label: string;
   const diffMs = expDate.getTime() - now.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
+  // Expired items
   if (diffDays < 0) {
     return { key: "expired", label: "Expired", sortOrder: -1 };
-  } else if (diffDays <= 7) {
-    return { key: "this-week", label: "This Week", sortOrder: 1 };
-  } else if (diffDays <= 30) {
-    return { key: "this-month", label: "This Month", sortOrder: 2 };
-  } else if (diffDays <= 60) {
-    return { key: "next-month", label: "Next Month", sortOrder: 3 };
-  } else if (diffDays <= 90) {
-    return { key: "next-3-months", label: "Next 3 Months", sortOrder: 4 };
-  } else if (diffDays <= 365) {
-    return { key: "this-year", label: "This Year", sortOrder: 5 };
-  } else {
-    return { key: "later", label: "Later", sortOrder: 6 };
   }
+
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+  const currentQuarter = getQuarter(currentMonth);
+  const expYear = expDate.getFullYear();
+  const expMonth = expDate.getMonth();
+  const expQuarter = getQuarter(expMonth);
+
+  // This Month - same year and month as now
+  if (expYear === currentYear && expMonth === currentMonth) {
+    return { key: "this-month", label: "This Month", sortOrder: 1 };
+  }
+
+  // Current year quarters (excluding current month from its quarter)
+  if (expYear === currentYear) {
+    // Calculate sort order: base 10 + quarter number
+    const sortOrder = 10 + expQuarter;
+    return { 
+      key: `q${expQuarter}-${currentYear}`, 
+      label: getQuarterLabel(expQuarter, currentYear), 
+      sortOrder 
+    };
+  }
+
+  // Next year - show quarters only if we're currently in Q4
+  const nextYear = currentYear + 1;
+  if (expYear === nextYear) {
+    if (currentQuarter === 4) {
+      // In Q4, show next year's quarters
+      const sortOrder = 20 + expQuarter;
+      return { 
+        key: `q${expQuarter}-${nextYear}`, 
+        label: getQuarterLabel(expQuarter, nextYear), 
+        sortOrder 
+      };
+    } else {
+      // Not in Q4, show next year as whole year
+      return { key: `year-${nextYear}`, label: String(nextYear), sortOrder: 30 };
+    }
+  }
+
+  // Future years - show as whole years
+  // Sort order: 30 + (year - currentYear) to keep them in order
+  const yearOffset = expYear - currentYear;
+  return { key: `year-${expYear}`, label: String(expYear), sortOrder: 30 + yearOffset };
 }
 
 export function InventoryClient({
