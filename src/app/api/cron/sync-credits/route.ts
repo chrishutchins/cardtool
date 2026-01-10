@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { plaidClient } from '@/lib/plaid';
 import { matchTransactionsToCredits } from '@/lib/credit-matcher';
+import { Transaction } from 'plaid';
 import logger from '@/lib/logger';
+
+// Extended transaction type that includes original_description when requested
+type TransactionWithDescription = Transaction & { original_description?: string | null };
 
 // Verify the request is from Vercel Cron
 function verifyCronRequest(request: NextRequest): boolean {
@@ -107,17 +111,7 @@ export async function GET(request: NextRequest) {
             const endDateStr = endDate.toISOString().split('T')[0];
 
             // Fetch transactions from Plaid
-            let allTransactions: Array<{
-              transaction_id: string;
-              account_id: string;
-              name: string;
-              amount: number;
-              date: string;
-              authorized_date?: string | null;
-              pending: boolean;
-              category?: string[] | null;
-              merchant_name?: string | null;
-            }> = [];
+            let allTransactions: TransactionWithDescription[] = [];
 
             let hasMore = true;
             let offset = 0;
@@ -135,7 +129,10 @@ export async function GET(request: NextRequest) {
                 },
               });
 
-              allTransactions = allTransactions.concat(response.data.transactions);
+              // Cast to extended type since we requested original_description
+              allTransactions = allTransactions.concat(
+                response.data.transactions as TransactionWithDescription[]
+              );
               offset += response.data.transactions.length;
               hasMore = offset < response.data.total_transactions;
             }

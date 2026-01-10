@@ -7,6 +7,9 @@ import { matchTransactionsToCredits } from '@/lib/credit-matcher';
 import logger from '@/lib/logger';
 import { RemovedTransaction, Transaction } from 'plaid';
 
+// Extended transaction type that includes original_description when requested
+type TransactionWithDescription = Transaction & { original_description?: string | null };
+
 export async function POST(request: NextRequest) {
   try {
     const user = await currentUser();
@@ -116,8 +119,9 @@ export async function POST(request: NextRequest) {
         }, 'Starting transaction sync');
 
         // Collect all transactions from paginated sync
-        const addedTransactions: Transaction[] = [];
-        const modifiedTransactions: Transaction[] = [];
+        // Using extended type since we request original_description
+        const addedTransactions: TransactionWithDescription[] = [];
+        const modifiedTransactions: TransactionWithDescription[] = [];
         const removedTransactions: RemovedTransaction[] = [];
 
         let hasMore = true;
@@ -133,8 +137,9 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          addedTransactions.push(...response.data.added);
-          modifiedTransactions.push(...response.data.modified);
+          // Cast to extended type since we requested original_description
+          addedTransactions.push(...(response.data.added as TransactionWithDescription[]));
+          modifiedTransactions.push(...(response.data.modified as TransactionWithDescription[]));
           removedTransactions.push(...response.data.removed);
 
           hasMore = response.data.has_more;

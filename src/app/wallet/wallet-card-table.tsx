@@ -860,7 +860,7 @@ export function WalletCardTable({
           const needsSetup = !hasDate && !row.statement_close_day && !row.payment_due_day;
           
           // Determine primary field based on formula - BoA uses close, most others use due
-          const formula = row.cards.issuers?.billing_cycle_formula ?? null;
+          const formula = row.cards?.issuers?.billing_cycle_formula ?? null;
           const primaryField = requiresCloseDay(formula) ? "statementCloseDay" : "paymentDueDay";
           
           return (
@@ -901,7 +901,7 @@ export function WalletCardTable({
           const needsSetup = !hasDate && !row.statement_close_day && !row.payment_due_day;
           
           // Determine primary field based on formula - BoA uses close, most others use due
-          const formula = row.cards.issuers?.billing_cycle_formula ?? null;
+          const formula = row.cards?.issuers?.billing_cycle_formula ?? null;
           const primaryField = requiresCloseDay(formula) ? "statementCloseDay" : "paymentDueDay";
           
           return (
@@ -942,7 +942,7 @@ export function WalletCardTable({
           const needsSetup = !hasDate && !row.statement_close_day && !row.payment_due_day;
           
           // Determine primary field based on formula - BoA uses close, most others use due
-          const formula = row.cards.issuers?.billing_cycle_formula ?? null;
+          const formula = row.cards?.issuers?.billing_cycle_formula ?? null;
           const primaryField = requiresCloseDay(formula) ? "statementCloseDay" : "paymentDueDay";
           
           return (
