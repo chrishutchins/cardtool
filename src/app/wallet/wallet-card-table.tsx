@@ -1002,9 +1002,22 @@ export function WalletCardTable({
     return cols;
   }, [playerCount, playerDescriptions, debitPayEnabled, accountLinkingEnabled]);
 
-  // Default visible columns
+  // Default visible columns - show all except card_type, limit_type, currency, and Plaid columns
   const defaultVisibleColumns = useMemo(() => {
-    const visible = ["name", "issuer", "earns", "bonuses", "credits", "annual_fee", "perks", "net_fee", "opened"];
+    const visible = [
+      "name",
+      "issuer",
+      "earns",
+      "bonuses",
+      "credits",
+      "annual_fee",
+      "perks",
+      "net_fee",
+      "last_close",
+      "next_close",
+      "payment_due",
+      "opened",
+    ];
     if (playerCount > 1) visible.splice(1, 0, "player");
     if (debitPayEnabled) visible.push("debit_pay");
     return visible;
