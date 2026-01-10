@@ -8,26 +8,31 @@ interface EarningsSummaryProps {
   cardCount: number;
 }
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(2)}%`;
+}
+
 export function EarningsSummary({ returns, cardCount }: EarningsSummaryProps) {
   if (!returns || cardCount === 0) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">Earnings Summary</h2>
-          <Link href="/returns" className="text-sm text-blue-400 hover:text-blue-300">
-            View details →
-          </Link>
-        </div>
-        <div className="text-center py-8">
-          <p className="text-zinc-400 mb-4">
-            {cardCount === 0 
-              ? "Add cards to your wallet to see earnings projections" 
-              : "Set up your spending categories to see earnings projections"
-            }
-          </p>
+      <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold text-white mb-1">Total Earnings</h2>
+            <p className="text-sm text-zinc-400">Based on your spending allocation</p>
+          </div>
           <Link
             href={cardCount === 0 ? "/wallet" : "/spending"}
-            className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors whitespace-nowrap"
           >
             {cardCount === 0 ? "Add Cards" : "Set Up Spending"}
           </Link>
@@ -36,62 +41,43 @@ export function EarningsSummary({ returns, cardCount }: EarningsSummaryProps) {
     );
   }
 
-  // Note: totalSpend is in cents, but other summary values are in dollars
-  const totalSpend = (returns.totalSpend ?? 0) / 100;
-  const totalEarnings = returns.totalValue ?? 0;
+  // Note: totalSpend is already in dollars
+  const totalSpend = returns.totalSpend ?? 0;
+  const netEarnings = returns.netValueEarned ?? 0;
   const returnRate = returns.netReturnRate ?? 0;
-  const netFees = returns.netAnnualFees ?? 0;
-  const netReturn = returns.netValueEarned ?? 0;
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-white">Earnings Summary</h2>
-        <Link href="/returns" className="text-sm text-blue-400 hover:text-blue-300">
-          View details →
-        </Link>
-      </div>
-
-      <div className="space-y-4">
-        {/* Main Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 rounded-lg bg-zinc-800/50">
-            <p className="text-sm text-zinc-400 mb-1">Total Earnings</p>
-            <p className="text-2xl font-bold text-emerald-400">
-              ${totalEarnings.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-            </p>
-          </div>
-          <div className="p-4 rounded-lg bg-zinc-800/50">
-            <p className="text-sm text-zinc-400 mb-1">Return Rate</p>
-            <p className="text-2xl font-bold text-white">
-              {returnRate.toFixed(2)}%
-            </p>
-          </div>
+    <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-white mb-1">Total Earnings</h2>
+          <p className="text-sm text-zinc-400">Based on your spending allocation</p>
         </div>
-
-        {/* Breakdown */}
-        <div className="space-y-2 pt-4 border-t border-zinc-800">
-          <div className="flex justify-between text-sm">
-            <span className="text-zinc-400">Annual Spend</span>
-            <span className="text-zinc-300">
-              ${totalSpend.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-            </span>
+        
+        <div className="flex flex-wrap items-center gap-6 md:gap-8">
+          <div className="text-center">
+            <div className="text-xs text-zinc-500 uppercase mb-0.5">Total Spend</div>
+            <div className="text-lg font-semibold text-white">{formatCurrency(totalSpend)}</div>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-zinc-400">Net Card Fees</span>
-            <span className={netFees <= 0 ? "text-emerald-400" : "text-red-400"}>
-              {netFees > 0 ? `-$${netFees.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : `+$${Math.abs(netFees).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
-            </span>
+          
+          <div className="text-center">
+            <div className="text-xs text-zinc-500 uppercase mb-0.5">Net Earnings</div>
+            <div className="text-lg font-semibold text-emerald-400">{formatCurrency(netEarnings)}</div>
           </div>
-          <div className="flex justify-between text-sm font-medium pt-2 border-t border-zinc-800">
-            <span className="text-zinc-300">Net Value</span>
-            <span className={netReturn > 0 ? "text-emerald-400" : "text-red-400"}>
-              {netReturn > 0 ? "+" : ""}${netReturn.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-            </span>
+          
+          <div className="text-center">
+            <div className="text-xs text-zinc-500 uppercase mb-0.5">Return Rate</div>
+            <div className="text-lg font-bold text-emerald-400">{formatPercent(returnRate)}</div>
           </div>
+          
+          <Link
+            href="/returns"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors whitespace-nowrap"
+          >
+            View Details →
+          </Link>
         </div>
       </div>
     </div>
   );
 }
-

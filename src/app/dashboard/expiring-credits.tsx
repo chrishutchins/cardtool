@@ -72,17 +72,11 @@ export function ExpiringCredits({ credits }: ExpiringCreditsProps) {
             return (
               <div
                 key={`${credit.creditId}-${index}`}
-                className={`
-                  p-3 rounded-lg border
-                  ${isUrgent 
-                    ? "bg-amber-950/30 border-amber-700/50" 
-                    : "bg-zinc-800/30 border-zinc-700/50"
-                  }
-                `}
+                className="p-3 rounded-lg border bg-zinc-800/30 border-zinc-700/50"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <p className={`font-medium truncate ${isUrgent ? "text-amber-200" : "text-white"}`}>
+                    <p className="font-medium truncate text-white">
                       {credit.creditName}
                     </p>
                     <p className="text-sm text-zinc-500 truncate">{credit.cardName}</p>
@@ -91,7 +85,12 @@ export function ExpiringCredits({ credits }: ExpiringCreditsProps) {
                     <p className={`text-sm font-medium ${isUrgent ? "text-amber-400" : "text-emerald-400"}`}>
                       {formatValue(credit)}
                     </p>
-                    <p className={`text-xs ${isUrgent ? "text-amber-400/70" : "text-zinc-500"}`}>
+                    <p className={`text-xs flex items-center justify-end gap-1 ${isUrgent ? "text-amber-400/70" : "text-zinc-500"}`}>
+                      {isUrgent && (
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      )}
                       {formatDaysUntil(credit.expiresAt)}
                     </p>
                   </div>
@@ -113,4 +112,3 @@ export function ExpiringCredits({ credits }: ExpiringCreditsProps) {
     </div>
   );
 }
-

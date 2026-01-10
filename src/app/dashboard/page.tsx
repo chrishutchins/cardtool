@@ -30,7 +30,7 @@ import {
   getCachedSpecialCategoryIds,
 } from "@/lib/cached-data";
 import { EarningsSummary } from "./earnings-summary";
-import { ExpiringCredits } from "./expiring-credits";
+// import { ExpiringCredits } from "./expiring-credits"; // Hidden for now
 import { StatsCard } from "./stats-card";
 import { CardRecommendationsSection } from "./card-recommendations-section";
 import { DashboardClient } from "./dashboard-client";
@@ -685,6 +685,7 @@ export default async function DashboardPage() {
     "use server";
     const { createClient } = await import("@/lib/supabase/server");
     const { getEffectiveUserId } = await import("@/lib/emulation");
+    const { revalidatePath } = await import("next/cache");
     const supabase = createClient();
     const userId = await getEffectiveUserId();
     
@@ -696,6 +697,8 @@ export default async function DashboardPage() {
         user_id: userId,
         onboarding_completed: true,
       }, { onConflict: "user_id" });
+    
+    revalidatePath("/dashboard");
   }
 
   return (
@@ -713,6 +716,7 @@ export default async function DashboardPage() {
           </p>
         </div>
 
+        {/* Stats Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
           <StatsCard
             title="Cards in Wallet"
@@ -723,7 +727,7 @@ export default async function DashboardPage() {
           <StatsCard
             title="Annual Fees"
             value={`$${totalAnnualFees.toLocaleString()}`}
-            subtitle={netFees < 0 ? `Net -$${Math.abs(netFees)}` : netFees > 0 ? `Net $${netFees}` : undefined}
+            subtitle={netFees < 0 ? `Net -$${Math.abs(netFees).toLocaleString()}` : netFees > 0 ? `Net $${netFees.toLocaleString()}` : undefined}
             subtitleColor={netFees < 0 ? "text-emerald-400" : undefined}
             href="/wallet"
             icon="fees"
@@ -734,13 +738,12 @@ export default async function DashboardPage() {
             subtitle="Next 30 days"
             href="/credits"
             icon="credits"
-            highlight={expiringCredits.length > 0}
           />
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2 mb-8">
+        {/* Earnings Summary Banner */}
+        <div className="mb-8">
           <EarningsSummary returns={returns} cardCount={cards.length} />
-          <ExpiringCredits credits={expiringCredits.slice(0, 5)} />
         </div>
 
         {recommendations.length > 0 && (

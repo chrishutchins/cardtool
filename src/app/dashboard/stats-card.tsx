@@ -39,14 +39,7 @@ export function StatsCard({ title, value, subtitle, subtitleColor, href, icon, h
   return (
     <Link
       href={href}
-      className={`
-        block p-5 rounded-xl border transition-all duration-200
-        ${highlight 
-          ? "bg-amber-950/30 border-amber-700/50 hover:border-amber-600" 
-          : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"
-        }
-        hover:bg-zinc-800/50
-      `}
+      className="block p-5 rounded-xl border transition-all duration-200 bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50"
     >
       <div className="flex items-start justify-between">
         <div>
@@ -67,5 +60,3 @@ export function StatsCard({ title, value, subtitle, subtitleColor, href, icon, h
     </Link>
   );
 }
-
-
