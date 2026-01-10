@@ -684,12 +684,16 @@ export default async function DashboardPage() {
   async function completeOnboarding() {
     "use server";
     const { createClient } = await import("@/lib/supabase/server");
+    const { getEffectiveUserId } = await import("@/lib/emulation");
     const supabase = createClient();
+    const userId = await getEffectiveUserId();
+    
+    if (!userId) return;
     
     await supabase
       .from("user_feature_flags")
       .upsert({
-        user_id: effectiveUserId,
+        user_id: userId,
         onboarding_completed: true,
       }, { onConflict: "user_id" });
   }
