@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { parseLocalDate } from './utils';
+import logger from './logger';
 
 interface MatchingRule {
   id: string;
@@ -14,6 +15,7 @@ interface PlaidTransaction {
   linked_account_id: string | null;
   plaid_transaction_id: string;
   name: string;
+  original_description: string | null;
   amount_cents: number;
   date: string;
   authorized_date?: string | null;
@@ -61,21 +63,33 @@ interface CreditUsage {
 }
 
 /**
- * Matches a transaction name against a pattern (case-insensitive exact match)
+ * Matches a transaction name against a pattern (case-insensitive)
+ * Returns true if the pattern is found anywhere in the text (contains match)
  */
-export function matchesPattern(transactionName: string, pattern: string): boolean {
-  return transactionName.toLowerCase() === pattern.toLowerCase();
+export function matchesPattern(text: string, pattern: string): boolean {
+  return text.toLowerCase().includes(pattern.toLowerCase());
+}
+
+/**
+ * Gets the best description for a transaction (original_description if available, otherwise name)
+ */
+export function getTransactionDescription(transaction: { name: string; original_description?: string | null }): string {
+  return transaction.original_description || transaction.name;
 }
 
 /**
  * Matches a transaction against a rule (pattern + optional amount)
+ * Prefers original_description for matching (falls back to name if null)
  */
 export function matchesRule(
-  transaction: { name: string; amount_cents: number },
+  transaction: { name: string; original_description?: string | null; amount_cents: number },
   rule: MatchingRule
 ): boolean {
-  // Check pattern match
-  if (!matchesPattern(transaction.name, rule.pattern)) {
+  // Prefer original_description for matching (it has the real bank text)
+  // Fall back to normalized name if original_description is not available
+  const textToMatch = getTransactionDescription(transaction);
+  
+  if (!matchesPattern(textToMatch, rule.pattern)) {
     return false;
   }
 
@@ -273,7 +287,7 @@ export async function matchTransactionsToCredits(
     return { matched, clawbacks, errors };
   }
 
-  // Fetch user's wallet cards with card details
+  // Fetch user's active wallet cards with card details (closed cards don't have linked accounts)
   const { data: walletCards, error: walletError } = await supabase
     .from('user_wallets')
     .select(`
@@ -286,7 +300,8 @@ export async function matchTransactionsToCredits(
         issuer_id
       )
     `)
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .is('closed_date', null);
 
   if (walletError) {
     errors.push(`Failed to fetch wallet cards: ${walletError.message}`);
@@ -364,6 +379,17 @@ export async function matchTransactionsToCredits(
   const walletById = new Map<string, UserWallet>();
   walletCards?.forEach(w => walletById.set(w.id, w as unknown as UserWallet));
 
+  // Debug: Log matcher state
+  logger.info({
+    transactionCount: transactions.length,
+    rulesCount: rules.length,
+    walletsCount: walletById.size,
+    linkedAccountsCount: walletByLinkedAccountId.size,
+    creditsByCardIdKeys: Array.from(creditsByCardId.keys()),
+    walletByIdKeys: Array.from(walletById.keys()).slice(0, 10),
+    walletByLinkedAccountIdEntries: Array.from(walletByLinkedAccountId.entries()).slice(0, 10),
+  }, '[credit-matcher] Starting match');
+
   // Process each transaction
   for (const txn of transactions) {
     // Skip pending transactions
@@ -373,19 +399,39 @@ export async function matchTransactionsToCredits(
 
     // Skip transactions without a linked account
     if (!txn.linked_account_id) {
+      logger.warn({ txnId: txn.id }, '[credit-matcher] Skipping - no linked_account_id');
       continue;
     }
 
     // Find the wallet this transaction belongs to
     const walletId = walletByLinkedAccountId.get(txn.linked_account_id);
     if (!walletId) {
+      logger.warn({ 
+        txnId: txn.id, 
+        linkedAccountId: txn.linked_account_id,
+        availableLinkedAccounts: Array.from(walletByLinkedAccountId.keys()).slice(0, 5)
+      }, '[credit-matcher] Skipping - linked_account_id not in map');
       continue;
     }
     
     const wallet = walletById.get(walletId);
     if (!wallet) {
+      logger.warn({ 
+        txnId: txn.id, 
+        walletId,
+        availableWallets: Array.from(walletById.keys()).slice(0, 5)
+      }, '[credit-matcher] Skipping - walletId not in walletById');
       continue;
     }
+
+    // Debug: Log wallet structure to find card_id issue
+    logger.info({
+      txnId: txn.id,
+      walletId: wallet.id,
+      walletCardId: wallet.card_id,
+      walletKeys: Object.keys(wallet),
+      walletRaw: JSON.stringify(wallet).slice(0, 500),
+    }, '[credit-matcher] Wallet object structure');
 
     // Find matching rule
     const matchingRule = rules.find(rule => matchesRule(txn, rule));
@@ -397,6 +443,16 @@ export async function matchTransactionsToCredits(
     // Find the credit on this transaction's wallet that matches the rule
     const credit = findCreditForTransaction(matchingRule, wallet, creditById, creditsByCardId);
     if (!credit) {
+      const ruleCredit = creditById.get(matchingRule.credit_id);
+      const creditsOnCard = creditsByCardId.get(wallet.card_id);
+      logger.warn({ 
+        txnId: txn.id,
+        txnName: txn.name,
+        walletCardId: wallet.card_id,
+        ruleCreditName: ruleCredit?.name,
+        ruleCreditIssuerId: ruleCredit?.cards?.issuer_id,
+        creditsOnCard: creditsOnCard?.map(c => ({ name: c.name, issuerId: c.cards?.issuer_id })),
+      }, '[credit-matcher] Skipping - no credit found on wallet card');
       continue;
     }
 
@@ -667,20 +723,21 @@ export async function getCreditBrandNames(supabase: SupabaseClient): Promise<str
  * Checks if a transaction looks like a potential credit based on amount, name, and brand matches
  */
 export function isPotentialCreditTransaction(
-  transaction: { name: string; amount_cents: number },
+  transaction: { name: string; original_description?: string | null; amount_cents: number },
   brandNames: string[]
 ): boolean {
   // Must be a credit (negative amount)
   if (transaction.amount_cents >= 0) return false;
 
-  const nameLower = transaction.name.toLowerCase();
+  // Use original_description when available for more accurate matching
+  const description = getTransactionDescription(transaction).toLowerCase();
 
-  // Check if name contains "credit"
-  if (nameLower.includes('credit')) return true;
+  // Check if description contains "credit"
+  if (description.includes('credit')) return true;
 
-  // Check if name matches any brand
+  // Check if description matches any brand
   for (const brand of brandNames) {
-    if (nameLower.includes(brand)) return true;
+    if (description.includes(brand)) return true;
   }
 
   return false;

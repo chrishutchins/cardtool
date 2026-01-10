@@ -71,3 +71,4 @@ ALTER TABLE card_credits
 CREATE INDEX idx_card_credits_inventory_type ON card_credits(inventory_type_id);
 
 
+

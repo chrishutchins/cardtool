@@ -11,6 +11,7 @@ type SortDirection = "asc" | "desc";
 interface MatchedTransaction {
   id: string;
   name: string;
+  original_description: string | null;
   amount_cents: number;
   date: string;
   authorized_date?: string | null;
@@ -196,7 +197,7 @@ function TransactionsModal({
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-zinc-200 truncate">
-                        {txn.name}
+                        {txn.original_description || txn.name}
                         {txn.card_name && (
                           <span className="text-zinc-500 font-normal ml-2">
                             ({txn.card_name})
@@ -446,10 +447,10 @@ export function RulesClient({ rules, creditOptions }: RulesClientProps) {
       </div>
 
       {/* Rules list */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-auto max-h-[calc(100vh-200px)]">
         <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-800 text-left">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-zinc-800 text-left bg-zinc-900">
               <th className="px-4 py-3">
                 <SortableHeader label="Pattern" sortKey="pattern" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort} />
               </th>

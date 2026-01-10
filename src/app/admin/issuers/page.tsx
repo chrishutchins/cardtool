@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { IssuerForm } from "./issuer-form";
-import { IssuerRow } from "./issuer-row";
+import { IssuersTable } from "./issuers-table";
 
 export default async function IssuersPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: issuers, error } = await supabase
     .from("issuers")
     .select("*")
@@ -16,7 +16,7 @@ export default async function IssuersPage() {
 
   async function createIssuer(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
 
@@ -26,14 +26,14 @@ export default async function IssuersPage() {
 
   async function deleteIssuer(id: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("issuers").delete().eq("id", id);
     revalidatePath("/admin/issuers");
   }
 
   async function updateIssuer(id: string, formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
 
@@ -54,38 +54,11 @@ export default async function IssuersPage() {
       </div>
 
       {/* Issuers Table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-800/50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Slug
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {issuers?.map((issuer) => (
-              <IssuerRow
-                key={issuer.id}
-                issuer={issuer}
-                onDelete={deleteIssuer}
-                onUpdate={updateIssuer}
-              />
-            ))}
-          </tbody>
-        </table>
-        {issuers?.length === 0 && (
-          <div className="px-6 py-12 text-center text-zinc-500">
-            No issuers yet. Add one above.
-          </div>
-        )}
-      </div>
+      <IssuersTable
+        issuers={issuers ?? []}
+        onDelete={deleteIssuer}
+        onUpdate={updateIssuer}
+      />
     </div>
   );
 }

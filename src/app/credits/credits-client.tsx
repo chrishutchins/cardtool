@@ -118,6 +118,7 @@ export interface WalletCard {
   display_name: string;
   card_name: string;
   approval_date: string | null;
+  closed_date: string | null;
 }
 
 export interface Credit {
@@ -155,6 +156,7 @@ export interface CreditWithSlot extends Credit {
 export interface LinkedTransaction {
   id: string;
   name: string;
+  original_description: string | null;
   amount_cents: number;
   date: string;
   authorized_date?: string | null;
@@ -200,6 +202,7 @@ interface CreditsClientProps {
   creditUsage: CreditUsage[];
   creditSettings: CreditSettings[];
   inventoryTypes: InventoryType[];
+  isAdmin?: boolean;
   onMarkUsed: (formData: FormData) => Promise<void>;
   onDeleteUsage: (usageId: string) => Promise<void>;
   onUpdateSettings: (formData: FormData) => Promise<void>;
@@ -276,6 +279,7 @@ export function CreditsClient({
   creditUsage,
   creditSettings,
   inventoryTypes,
+  isAdmin = false,
   onMarkUsed,
   onDeleteUsage,
   onUpdateSettings,
@@ -300,6 +304,81 @@ export function CreditsClient({
     credit: Credit;
     usageId?: string;
   } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  // Sync transactions from Plaid (what they already have)
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const response = await fetch("/api/plaid/sync-credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceRefresh: true }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        setSyncMessage(`Sync failed: ${response.status}${errorText ? ` - ${errorText}` : ""}`);
+        return;
+      }
+      
+      const data = await response.json();
+      if (data.success) {
+        const parts = [];
+        if (data.transactionsAdded > 0) parts.push(`${data.transactionsAdded} added`);
+        if (data.transactionsModified > 0) parts.push(`${data.transactionsModified} modified`);
+        if (data.transactionsRemoved > 0) parts.push(`${data.transactionsRemoved} removed`);
+        if (data.creditsMatched > 0) parts.push(`${data.creditsMatched} credits matched`);
+        setSyncMessage(parts.length > 0 ? `Synced: ${parts.join(", ")}` : "Already up to date");
+        // Refresh the page to show new data
+        if (data.transactionsAdded > 0 || data.creditsMatched > 0) {
+          window.location.reload();
+        }
+      } else {
+        setSyncMessage(data.error || "Sync failed");
+      }
+    } catch {
+      setSyncMessage("Sync failed");
+    } finally {
+      setIsSyncing(false);
+      // Clear message after 5 seconds
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
+
+  // Refresh data from banks (admin only - triggers new data pull)
+  const handleRefreshFromBank = async () => {
+    setIsRefreshing(true);
+    setSyncMessage(null);
+    try {
+      const response = await fetch("/api/plaid/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        setSyncMessage(`Refresh failed: ${response.status}${errorText ? ` - ${errorText}` : ""}`);
+        return;
+      }
+      
+      const data = await response.json();
+      if (data.success || data.refreshed > 0) {
+        setSyncMessage(data.message || `Refresh triggered for ${data.refreshed} institution(s)`);
+        // After refresh, trigger a sync to get the new data
+        setTimeout(() => handleSync(), 2000);
+      } else {
+        setSyncMessage(data.error || "Refresh failed");
+      }
+    } catch {
+      setSyncMessage("Refresh failed");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Build wallet card map
   const walletCardMap = useMemo(() => {
@@ -373,10 +452,21 @@ export function CreditsClient({
   // Check if a credit slot is fully used in current period
   // For multi-count credits, each slot is checked independently
   const isFullyUsed = (credit: CreditWithSlot, walletCard: WalletCard, usage: CreditUsage[]): boolean => {
-    const periodStart = getCurrentPeriodStart(credit, walletCard);
     const maxAmount = credit.default_quantity ?? 1;
+    const now = new Date();
+    const nowStr = now.toISOString().split("T")[0];
     
-    // Compare dates as strings to avoid timezone issues
+    // For usage_based credits (like Global Entry), check if period_end has passed
+    // If it has, the credit is available for a new usage period
+    if (credit.reset_cycle === "usage_based") {
+      // Find usage records where period_end is still in the future
+      const activeUsage = usage.filter(u => u.period_end >= nowStr);
+      const totalUsed = activeUsage.reduce((sum, u) => sum + u.amount_used, 0);
+      return totalUsed >= maxAmount;
+    }
+    
+    // For regular credits, compare against the calculated period start
+    const periodStart = getCurrentPeriodStart(credit, walletCard);
     const periodStartStr = periodStart.toISOString().split("T")[0];
     const currentUsage = usage.filter(u => u.period_start === periodStartStr);
     
@@ -422,6 +512,7 @@ export function CreditsClient({
       settings: CreditSettings | null;
       usage: CreditUsage[];
       periodEnd: Date;
+      isClosed: boolean;
     }> = [];
 
     for (const credit of credits) {
@@ -436,6 +527,7 @@ export function CreditsClient({
 
         const periodEnd = getCurrentPeriodEnd(credit, walletCard);
         const totalSlots = credit.credit_count ?? 1;
+        const isClosed = !!walletCard.closed_date;
 
         // Expand multi-count credits into separate visual rows
         for (let slotNumber = 1; slotNumber <= totalSlots; slotNumber++) {
@@ -463,7 +555,8 @@ export function CreditsClient({
             walletCard, 
             settings, 
             usage: slotUsage, 
-            periodEnd 
+            periodEnd,
+            isClosed,
           });
         }
       }
@@ -495,10 +588,18 @@ export function CreditsClient({
   const groupedCredits = useMemo(() => {
     const groups = new Map<string, { label: string; credits: typeof userCredits; sortOrder: number }>();
 
-    // Filter credits based on hideUsed (only in current view)
-    const visibleCredits = viewMode === "current" && hideUsed
-      ? userCredits.filter(item => !isFullyUsed(item.credit, item.walletCard, item.usage))
-      : userCredits;
+    // Filter credits based on view mode and other filters
+    let visibleCredits = userCredits;
+    
+    // In current (Active) view: filter out closed cards entirely
+    if (viewMode === "current") {
+      visibleCredits = visibleCredits.filter(item => !item.isClosed);
+      // Also filter out fully used credits if hideUsed is enabled
+      if (hideUsed) {
+        visibleCredits = visibleCredits.filter(item => !isFullyUsed(item.credit, item.walletCard, item.usage));
+      }
+    }
+    // In history view: keep all credits (including closed cards) for historical display
 
     for (const item of visibleCredits) {
       let key: string;
@@ -566,47 +667,108 @@ export function CreditsClient({
     return result;
   }, [userCredits, effectiveSortMode, viewMode, hideUsed]);
 
-  // Calculate totals based on visible credits
-  // Credits Used: includes ALL credits (even hidden ones)
-  // Credits Left: excludes hidden credits
+  // Calculate totals based on view mode
+  // Active view: current period used/left
+  // History view: selected year used/left
+  // Credits Left always excludes hidden credits
   // For multi-slot credits, each slot contributes its share of the total value
+  //
+  // IMPORTANT: Three types of credits based on how amount_used is interpreted:
+  // 1. Usage-based credits (reset_cycle = "usage_based"): amount_used is a COUNT (1 = used once = full value)
+  // 2. Dollar credits (default_value_cents !== null): amount_used is the DOLLAR amount (e.g., 300 = $300)
+  // 3. Quantity credits (default_value_cents === null): amount_used is a COUNT, use perceived_value_cents
   const totals = useMemo(() => {
     let creditsUsed = 0;
     let creditsLeft = 0;
 
-    for (const item of userCredits) {
-      const maxAmount = item.credit.default_quantity ?? 1;
-      const periodStart = getCurrentPeriodStart(item.credit, item.walletCard);
+    // Helper to calculate used value in cents based on credit type
+    const calculateUsedValueCents = (
+      credit: Credit,
+      usage: CreditUsage[],
+      effectiveValue: number | null
+    ): number => {
+      const totalUsedAmount = usage.reduce((sum, u) => sum + u.amount_used, 0);
       
-      // Compare dates as strings to avoid timezone issues
-      const periodStartStr = periodStart.toISOString().split("T")[0];
-      const currentUsage = item.usage.filter(u => u.period_start === periodStartStr);
+      // Usage-based credits (like Global Entry): amount_used is a count, multiply by credit value
+      if (credit.reset_cycle === "usage_based" && effectiveValue) {
+        return totalUsedAmount * effectiveValue;
+      }
       
-      const totalUsed = currentUsage.reduce((sum, u) => sum + u.amount_used, 0);
-      const remaining = Math.max(0, maxAmount - totalUsed);
+      // Dollar credits: amount_used is already in dollars, convert to cents
+      if (credit.default_value_cents !== null) {
+        return totalUsedAmount * 100;
+      }
       
-      // For multi-slot credits, divide the effective value by total slots
-      // so each slot contributes its fair share
-      const baseValue = item.settings?.user_value_override_cents ?? item.credit.default_value_cents;
-      const effectiveValue = baseValue ? baseValue / item.credit.totalSlots : null;
-      
-      if (effectiveValue) {
-        const usedValue = (totalUsed / maxAmount) * effectiveValue;
-        const remainingValue = (remaining / maxAmount) * effectiveValue;
+      // Quantity credits: use perceived_value_cents if available
+      return usage.reduce((sum, u) => sum + (u.perceived_value_cents ?? 0), 0);
+    };
+
+    if (viewMode === "current") {
+      // Active view: calculate for current period
+      for (const item of userCredits) {
+        // Skip closed cards for totals calculation
+        if (item.isClosed) continue;
+
+        const periodStart = getCurrentPeriodStart(item.credit, item.walletCard);
         
-        // Credits Used always includes everything (even hidden)
-        creditsUsed += usedValue;
+        // Compare dates as strings to avoid timezone issues
+        const periodStartStr = periodStart.toISOString().split("T")[0];
+        const currentUsage = item.usage.filter(u => u.period_start === periodStartStr);
         
-        // Credits Left excludes hidden credits
+        // For multi-slot credits, divide the effective value by total slots
+        const baseValue = item.settings?.user_value_override_cents ?? item.credit.default_value_cents;
+        const effectiveValue = baseValue ? baseValue / item.credit.totalSlots : null;
+        
+        const usedValueCents = calculateUsedValueCents(item.credit, currentUsage, effectiveValue);
+        creditsUsed += usedValueCents;
+        
+        // Calculate remaining for credits with dollar values
+        if (effectiveValue) {
+          const remainingValueCents = Math.max(0, effectiveValue - usedValueCents);
+          const isHidden = item.settings?.is_hidden ?? false;
+          if (!isHidden) {
+            creditsLeft += remainingValueCents;
+          }
+        }
+      }
+    } else {
+      // History view: calculate for selected year
+      for (const item of userCredits) {
+        const baseValue = item.settings?.user_value_override_cents ?? item.credit.default_value_cents;
+        const effectiveValue = baseValue ? baseValue / item.credit.totalSlots : null;
         const isHidden = item.settings?.is_hidden ?? false;
-        if (!isHidden) {
-          creditsLeft += remainingValue;
+        
+        // Filter usage to selected year
+        const yearUsage = item.usage.filter(u => {
+          const usedDate = new Date(u.used_at);
+          return usedDate.getFullYear() === selectedYear;
+        });
+        
+        const usedValueCents = calculateUsedValueCents(item.credit, yearUsage, effectiveValue);
+        creditsUsed += usedValueCents;
+        
+        // Calculate remaining based on how much could have been used this year
+        if (effectiveValue && !isHidden) {
+          let periodsPerYear = 1;
+          switch (item.credit.reset_cycle) {
+            case "monthly": periodsPerYear = 12; break;
+            case "quarterly": periodsPerYear = 4; break;
+            case "semiannual": periodsPerYear = 2; break;
+            case "annual": 
+            case "cardmember_year": 
+            case "usage_based":
+            default: periodsPerYear = 1; break;
+          }
+          
+          const yearlyValueCents = effectiveValue * periodsPerYear;
+          const remainingValueCents = Math.max(0, yearlyValueCents - usedValueCents);
+          creditsLeft += remainingValueCents;
         }
       }
     }
 
     return { creditsUsed, creditsLeft };
-  }, [userCredits]);
+  }, [userCredits, viewMode, selectedYear]);
 
   const handleMarkUsed = (credit: CreditWithSlot, walletCard: WalletCard, periodStart: string, periodEnd: string) => {
     setMarkUsedModal({ credit, walletCard, periodStart, periodEnd });
@@ -704,18 +866,81 @@ export function CreditsClient({
           </div>
         </div>
 
-        {/* Totals */}
-        <div className="flex items-center gap-6">
-          <div className="text-right">
-            <div className="text-xs text-zinc-500">Credits Used</div>
-            <div className="text-lg font-semibold text-emerald-400">
-              ${Math.round(totals.creditsUsed / 100).toLocaleString()}
-            </div>
+        {/* Sync Controls & Totals */}
+        <div className="flex items-center gap-4">
+          {/* Sync Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSync}
+              disabled={isSyncing || isRefreshing}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Sync transactions from Plaid"
+            >
+              <svg
+                className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              {isSyncing ? "Syncing..." : "Sync"}
+            </button>
+            
+            {isAdmin && (
+              <button
+                onClick={handleRefreshFromBank}
+                disabled={isSyncing || isRefreshing}
+                className="flex items-center gap-1.5 rounded-lg border border-amber-700/50 bg-amber-900/20 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Trigger fresh data pull from banks (admin only)"
+              >
+                <svg
+                  className={`w-4 h-4 ${isRefreshing ? "animate-pulse" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                  />
+                </svg>
+                {isRefreshing ? "Refreshing..." : "Refresh Banks"}
+              </button>
+            )}
           </div>
-          <div className="text-right">
-            <div className="text-xs text-zinc-500">Credits Left</div>
-            <div className="text-lg font-semibold text-amber-400">
-              ${Math.round(totals.creditsLeft / 100).toLocaleString()}
+
+          {/* Sync Status Message */}
+          {syncMessage && (
+            <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
+              {syncMessage}
+            </span>
+          )}
+
+          {/* Totals */}
+          <div className="flex items-center gap-6 ml-auto">
+            <div className="text-right">
+              <div className="text-xs text-zinc-500">
+                {viewMode === "history" ? `${selectedYear} Used` : "Credits Used"}
+              </div>
+              <div className="text-lg font-semibold text-emerald-400">
+                ${Math.round(totals.creditsUsed / 100).toLocaleString()}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-zinc-500">
+                {viewMode === "history" ? `${selectedYear} Unused` : "Credits Left"}
+              </div>
+              <div className="text-lg font-semibold text-amber-400">
+                ${Math.round(totals.creditsLeft / 100).toLocaleString()}
+              </div>
             </div>
           </div>
         </div>

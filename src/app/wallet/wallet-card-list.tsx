@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { parseLocalDate } from "@/lib/utils";
+import { BonusCategoriesPopup, EarningRule, CategoryBonus } from "@/components/bonus-categories-popup";
 
 interface WalletCard {
   id: string;
@@ -43,6 +44,8 @@ interface WalletCardListProps {
   players?: Player[];
   playerCount?: number;
   onUpdatePlayerNumber?: (walletId: string, playerNumber: number) => Promise<void>;
+  earningRulesPerCard?: Map<string, EarningRule[]>;
+  categoryBonusesPerCard?: Map<string, CategoryBonus[]>;
 }
 
 type SortField = "name" | "issuer" | "currency" | "annual_fee" | "perks" | "net_fee" | "debit_pay" | "player";
@@ -106,6 +109,8 @@ export function WalletCardList({
   players = [],
   playerCount = 1,
   onUpdatePlayerNumber,
+  earningRulesPerCard = new Map(),
+  categoryBonusesPerCard = new Map(),
 }: WalletCardListProps) {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [editingPerksId, setEditingPerksId] = useState<string | null>(null);
@@ -450,6 +455,11 @@ export function WalletCardList({
               >
                 <span className="inline-flex items-center">Issuer<SortIcon field="issuer" /></span>
               </th>
+              <th 
+                className="px-4 py-3 text-center text-xs font-medium text-zinc-400 uppercase whitespace-nowrap hidden lg:table-cell"
+              >
+                Bonuses
+              </th>
               {/* Currency column - hidden for now
               <th 
                 className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white whitespace-nowrap hidden sm:table-cell"
@@ -616,6 +626,18 @@ export function WalletCardList({
                   {/* Issuer */}
                   <td className="px-4 py-3 text-zinc-400 hidden md:table-cell">
                     {card.issuers?.name}
+                  </td>
+
+                  {/* Bonus Categories */}
+                  <td className="px-4 py-3 text-center hidden lg:table-cell">
+                    <BonusCategoriesPopup
+                      cardName={displayName}
+                      earningRules={earningRulesPerCard.get(card.id) ?? []}
+                      categoryBonuses={categoryBonusesPerCard.get(card.id) ?? []}
+                      defaultEarnRate={card.default_earn_rate}
+                      currencyType={activeCurrency?.currency_type}
+                      currencyName={activeCurrency?.name}
+                    />
                   </td>
 
                   {/* Currency Badge - hidden for now

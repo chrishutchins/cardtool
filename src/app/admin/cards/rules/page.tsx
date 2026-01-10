@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { RulesClient } from "./rules-client";
 
 export default async function ApplicationRulesPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const [rulesResult, issuersResult] = await Promise.all([
     supabase
@@ -22,7 +22,7 @@ export default async function ApplicationRulesPage() {
 
   async function createRule(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const issuer_id = formData.get("issuer_id") as string;
     const rule_type = formData.get("rule_type") as "velocity" | "limit";
@@ -57,7 +57,7 @@ export default async function ApplicationRulesPage() {
 
   async function updateRule(id: string, formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const issuer_id = formData.get("issuer_id") as string;
     const rule_type = formData.get("rule_type") as "velocity" | "limit";
@@ -97,14 +97,14 @@ export default async function ApplicationRulesPage() {
 
   async function deleteRule(id: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("application_rules").delete().eq("id", id);
     revalidatePath("/admin/cards/rules");
   }
 
   async function toggleRuleActive(id: string, isActive: boolean) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("application_rules").update({ is_active: isActive }).eq("id", id);
     revalidatePath("/admin/cards/rules");
   }

@@ -10,6 +10,8 @@ const isDev = process.env.NODE_ENV === "development";
 
 const nextConfig: NextConfig = {
   env: {
+    // Preserve the original prod key before overriding (for admin user list)
+    CLERK_SECRET_KEY_PROD: process.env.CLERK_SECRET_KEY,
     // Override Clerk keys in development when dev keys are available
     ...(isDev && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV && {
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV,

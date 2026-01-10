@@ -30,11 +30,11 @@ export default async function CreditsPage() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
-  // Fetch user's wallet cards with card details
+  // Fetch user's wallet cards with card details (including closed cards for history)
   const { data: walletCards } = await supabase
     .from("user_wallets")
     .select(`
@@ -42,6 +42,8 @@ export default async function CreditsPage() {
       card_id,
       custom_name,
       approval_date,
+      closed_date,
+      closed_reason,
       cards:card_id (
         id,
         name,
@@ -107,6 +109,7 @@ export default async function CreditsPage() {
         user_plaid_transactions:transaction_id (
           id,
           name,
+          original_description,
           amount_cents,
           date,
           authorized_date,
@@ -136,7 +139,7 @@ export default async function CreditsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const userWalletId = formData.get("user_wallet_id") as string;
     const creditId = formData.get("credit_id") as string;
@@ -223,7 +226,7 @@ export default async function CreditsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // First verify the usage record belongs to a wallet owned by this user
     const { data: usage } = await supabase
@@ -246,7 +249,7 @@ export default async function CreditsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const userWalletId = formData.get("user_wallet_id") as string;
     const creditId = formData.get("credit_id") as string;
@@ -298,7 +301,7 @@ export default async function CreditsPage() {
       return;
     }
 
-    const supabase = await createClient();
+    const supabase = createClient();
     const { error } = await supabase
       .from("user_wallets")
       .update({ approval_date: date })
@@ -322,7 +325,7 @@ export default async function CreditsPage() {
       return;
     }
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // First, get the usage record with its credit and wallet info
     const { data: usage, error: usageError } = await supabase
@@ -395,7 +398,7 @@ export default async function CreditsPage() {
       return;
     }
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Get the transaction with its linked usage record
     const { data: txnLink, error: txnLinkError } = await supabase
@@ -574,7 +577,7 @@ export default async function CreditsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const typeId = formData.get("type_id") as string;
     const name = formData.get("name") as string;
@@ -625,6 +628,8 @@ export default async function CreditsPage() {
     card_id: string;
     custom_name: string | null;
     approval_date: string | null;
+    closed_date: string | null;
+    closed_reason: string | null;
     cards: { id: string; name: string; slug: string } | null;
   };
 
@@ -649,11 +654,13 @@ export default async function CreditsPage() {
             display_name: wc.custom_name ?? wc.cards?.name ?? "",
             card_name: wc.cards?.name ?? "",
             approval_date: wc.approval_date,
+            closed_date: wc.closed_date,
           }))}
           credits={credits ?? []}
           creditUsage={creditUsage ?? []}
           creditSettings={creditSettings ?? []}
           inventoryTypes={inventoryTypes ?? []}
+          isAdmin={isAdmin}
           onMarkUsed={markCreditUsed}
           onDeleteUsage={deleteCreditUsage}
           onUpdateSettings={updateCreditSettings}

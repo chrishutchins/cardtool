@@ -5,7 +5,8 @@ import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { useState } from "react";
 
 const navItems = [
-  { href: "/wallet", label: "My Wallet", onboardingId: "wallet" },
+  { href: "/dashboard", label: "Dashboard", onboardingId: "dashboard" },
+  { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
   { href: "/returns", label: "Earnings", onboardingId: "earnings" },
   { href: "/compare", label: "Compare", onboardingId: "compare" },
   { href: "/credits", label: "Credits", onboardingId: "credits" },

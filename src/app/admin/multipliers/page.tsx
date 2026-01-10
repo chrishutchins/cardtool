@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 
 export default async function MultipliersPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const { data: programs, error } = await supabase
     .from("earning_multiplier_programs")
@@ -21,7 +21,7 @@ export default async function MultipliersPage() {
 
   async function createProgram(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     const name = formData.get("name") as string;
     const slug = name
       .toLowerCase()
@@ -39,7 +39,7 @@ export default async function MultipliersPage() {
 
   async function deleteProgram(id: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("earning_multiplier_programs").delete().eq("id", id);
     revalidatePath("/admin/multipliers");
   }

@@ -7,6 +7,7 @@ import { EarningRulesEditor } from "./earning-rules-editor";
 import { CapsEditor } from "./caps-editor";
 import Link from "next/link";
 import { Enums } from "@/lib/database.types";
+import { invalidateCardCaches, invalidateEarningRuleCaches, invalidateCardCapCaches } from "@/lib/cache-invalidation";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -23,7 +24,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       .filter(([, v]) => v !== undefined)
       .map(([k, v]) => [k, Array.isArray(v) ? v[0] : v] as [string, string])
   ).toString();
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // Get current user for checking their wallet (for "Enabled" indicator)
   const user = await currentUser();
@@ -57,7 +58,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
 
   async function updateCard(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
@@ -86,13 +87,14 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       })
       .eq("id", id);
 
+    invalidateCardCaches();
     revalidatePath(`/admin/cards/${id}`);
     revalidatePath("/admin/cards");
   }
 
   async function addRule(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const category_id = parseInt(formData.get("category_id") as string);
     const rate = parseFloat(formData.get("rate") as string);
@@ -117,19 +119,21 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       brand_name: booking_method === "brand" ? brand_name : null,
     });
 
+    invalidateEarningRuleCaches();
     revalidatePath(`/admin/cards/${id}`);
   }
 
   async function deleteRule(ruleId: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("card_earning_rules").delete().eq("id", ruleId);
+    invalidateEarningRuleCaches();
     revalidatePath(`/admin/cards/${id}`);
   }
 
   async function updateRule(ruleId: string, formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const rate = parseFloat(formData.get("rate") as string);
     const has_cap = formData.get("has_cap") === "true";
@@ -151,12 +155,13 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       brand_name: booking_method === "brand" ? brand_name : null,
     }).eq("id", ruleId);
 
+    invalidateEarningRuleCaches();
     revalidatePath(`/admin/cards/${id}`);
   }
 
   async function addCap(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const cap_type = formData.get("cap_type") as Enums<"cap_type">;
     const cap_amount = formData.get("cap_amount") ? parseFloat(formData.get("cap_amount") as string) : null;
@@ -192,20 +197,22 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       );
     }
 
+    invalidateCardCapCaches();
     revalidatePath(`/admin/cards/${id}`);
   }
 
   async function deleteCap(capId: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     // Categories will be deleted via cascade
     await supabase.from("card_caps").delete().eq("id", capId);
+    invalidateCardCapCaches();
     revalidatePath(`/admin/cards/${id}`);
   }
 
   async function updateCapCategories(capId: string, categoryIds: number[]) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     
     // Delete existing category associations
     await supabase.from("card_cap_categories").delete().eq("cap_id", capId);
@@ -220,12 +227,13 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       );
     }
 
+    invalidateCardCapCaches();
     revalidatePath(`/admin/cards/${id}`);
   }
 
   async function updateCap(capId: string, formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const cap_type = formData.get("cap_type") as Enums<"cap_type">;
     const cap_amount = formData.get("cap_amount") ? parseFloat(formData.get("cap_amount") as string) : null;
@@ -260,6 +268,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       );
     }
 
+    invalidateCardCapCaches();
     revalidatePath(`/admin/cards/${id}`);
   }
 

@@ -12,11 +12,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { transactionId } = await request.json();
+    const { transactionId, transactionIds } = await request.json();
 
-    if (!transactionId) {
+    // Support both single ID and array of IDs
+    const idsToUpdate = transactionIds || (transactionId ? [transactionId] : []);
+
+    if (idsToUpdate.length === 0) {
       return NextResponse.json(
-        { error: "Missing required field: transactionId" },
+        { error: "Missing required field: transactionId or transactionIds" },
         { status: 400 }
       );
     }
@@ -24,21 +27,21 @@ export async function POST(request: NextRequest) {
     // Use admin client for admin operations
     const supabase = createAdminClient();
 
-    // Mark the transaction as dismissed
-    const { error } = await supabase
+    // Mark the transaction(s) as dismissed
+    const { error, count } = await supabase
       .from("user_plaid_transactions")
       .update({ dismissed: true })
-      .eq("id", transactionId);
+      .in("id", idsToUpdate);
 
     if (error) {
-      logger.error({ err: error, transactionId }, "Failed to dismiss transaction");
+      logger.error({ err: error, transactionIds: idsToUpdate }, "Failed to dismiss transactions");
       return NextResponse.json(
-        { error: "Failed to dismiss transaction" },
+        { error: "Failed to dismiss transactions" },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, dismissedCount: count || idsToUpdate.length });
   } catch (error) {
     logger.error({ err: error }, "Failed to dismiss transaction");
     return NextResponse.json(

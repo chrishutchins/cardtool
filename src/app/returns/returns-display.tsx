@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PortfolioReturns, EarningsGoal, CardRecommendation, CategoryAllocation, AllocationEntry, BonusDetail } from "@/lib/returns-calculator";
+import { PortfolioReturns, EarningsGoal, CardRecommendation, CategoryAllocation, AllocationEntry, BonusDetail, CardEarnings } from "@/lib/returns-calculator";
 import { CardRecommendations } from "@/app/wallet/card-recommendations";
 
 // Tooltip component for showing allocation breakdown on click/hover
@@ -316,6 +316,86 @@ function formatRate(value: number, suffix: string): string {
   return `${formatted}${suffix}`;
 }
 
+// Aggregated card type for display (groups multiple instances of same card type)
+interface AggregatedCardEarnings {
+  baseCardId: string;
+  baseCardName: string;
+  currencyType: string;
+  currencyName: string;
+  isCashback: boolean;
+  totalAnnualFee: number;     // Sum of all instances
+  totalPerksValue: number;    // Sum of all instances
+  totalNetFee: number;        // Sum of all instances
+  totalSpend: number;         // Sum of all instances
+  totalEarned: number;        // Sum of all instances
+  totalEarnedValue: number;   // Sum of all instances
+  totalDebitPay: number;      // Sum of all instances
+  totalBonusValue: number;    // Sum of all instances
+  bonusDetails: BonusDetail[];
+  instanceCount: number;      // Number of wallet instances
+  // Marginal value per card (average across instances)
+  marginalValuePerCard: number;
+}
+
+// Aggregate cards by their base card type for display
+function aggregateCardsByType(cards: CardEarnings[]): AggregatedCardEarnings[] {
+  const groupedCards = new Map<string, CardEarnings[]>();
+  
+  // Group by baseCardId (falls back to cardId if not set)
+  cards.forEach(card => {
+    const key = card.baseCardId ?? card.cardId;
+    const existing = groupedCards.get(key) ?? [];
+    existing.push(card);
+    groupedCards.set(key, existing);
+  });
+  
+  // Aggregate each group
+  const aggregated: AggregatedCardEarnings[] = [];
+  groupedCards.forEach((instances, baseCardId) => {
+    const first = instances[0];
+    const instanceCount = instances.length;
+    
+    // Sum totals across all instances
+    const totalAnnualFee = instances.reduce((sum, c) => sum + c.annualFee, 0);
+    const totalPerksValue = instances.reduce((sum, c) => sum + c.perksValue, 0);
+    const totalNetFee = instances.reduce((sum, c) => sum + c.netFee, 0);
+    const totalSpend = instances.reduce((sum, c) => sum + c.totalSpend, 0);
+    const totalEarned = instances.reduce((sum, c) => sum + c.totalEarned, 0);
+    const totalEarnedValue = instances.reduce((sum, c) => sum + c.totalEarnedValue, 0);
+    const totalDebitPay = instances.reduce((sum, c) => sum + c.totalDebitPay, 0);
+    const totalBonusValue = instances.reduce((sum, c) => sum + c.totalBonusValue, 0);
+    
+    // Calculate average marginal value per card
+    const totalMarginalValue = instances.reduce((sum, c) => sum + (c.marginalValue ?? 0), 0);
+    const marginalValuePerCard = totalMarginalValue / instanceCount;
+    
+    // Combine bonus details
+    const allBonusDetails: BonusDetail[] = [];
+    instances.forEach(c => allBonusDetails.push(...c.bonusDetails));
+    
+    aggregated.push({
+      baseCardId,
+      baseCardName: first.baseCardName ?? first.cardName,
+      currencyType: first.currencyType,
+      currencyName: first.currencyName,
+      isCashback: first.isCashback,
+      totalAnnualFee,
+      totalPerksValue,
+      totalNetFee,
+      totalSpend,
+      totalEarned,
+      totalEarnedValue,
+      totalDebitPay,
+      totalBonusValue,
+      bonusDetails: allBonusDetails,
+      instanceCount,
+      marginalValuePerCard,
+    });
+  });
+  
+  return aggregated;
+}
+
 export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: ReturnsDisplayProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -522,7 +602,9 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
           </div>
           <div className="flex justify-between items-center py-2 border-b border-zinc-700/50">
             <span className="text-zinc-400">Net Annual Fees</span>
-            <span className="text-xl font-semibold text-red-400">-{formatCurrency(returns.netAnnualFees)}</span>
+            <span className={`text-xl font-semibold ${returns.netAnnualFees <= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {returns.netAnnualFees > 0 ? `-${formatCurrency(returns.netAnnualFees)}` : `+${formatCurrency(Math.abs(returns.netAnnualFees))}`}
+            </span>
           </div>
           <div className="flex justify-between items-center py-3 bg-amber-900/20 rounded-lg px-4 -mx-4">
             <span className="text-amber-300 font-medium">Total Net Earnings</span>
@@ -672,61 +754,65 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
                   <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Spend</th>
                   <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Earned</th>
                   <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3">Value</th>
-                  <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3" title="What this card earns minus what other cards would earn if removed, minus net fee">
+                  <th className="text-right text-xs font-medium text-zinc-400 uppercase px-4 py-3" title="Marginal value per card - what each card earns minus what other cards would earn if removed, minus net fee">
                     Marginal Value
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-700/50">
-                {returns.cardBreakdown
-                  .filter(c => c.totalSpend > 0 || c.netFee !== 0)
-                  .sort((a, b) => (b.marginalValue ?? 0) - (a.marginalValue ?? 0))
+                {aggregateCardsByType(
+                  returns.cardBreakdown.filter(c => c.totalSpend > 0 || c.netFee !== 0 || c.annualFee > 0 || c.perksValue > 0)
+                )
+                  .sort((a, b) => b.marginalValuePerCard - a.marginalValuePerCard)
                   .map((card) => (
                     <tr 
-                      key={card.cardId} 
+                      key={card.baseCardId} 
                       className={`hover:bg-zinc-800/30 ${
-                        (card.marginalValue ?? 0) < 0 ? "bg-red-950/20" : ""
+                        card.marginalValuePerCard < 0 ? "bg-red-950/20" : ""
                       }`}
                     >
                       <td className="px-4 py-3">
-                        <div className="text-white font-medium">{card.cardName}</div>
+                        <div className="text-white font-medium">
+                          {card.baseCardName}
+                          {card.instanceCount > 1 && (
+                            <span className="text-zinc-500 font-normal ml-1">(×{card.instanceCount})</span>
+                          )}
+                        </div>
                         <div className="text-xs text-zinc-500">{card.currencyName}</div>
                       </td>
                       <td className="px-4 py-3 text-right text-zinc-400">
                         {formatCurrency(card.totalSpend)}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <CardEarningsTooltip card={card}>
-                          <span className="text-zinc-300">
-                            {card.isCashback 
-                              ? formatCurrency(card.totalEarned)
-                              : formatNumber(card.totalEarned, 0) + " pts"
-                            }
-                            {(card.totalDebitPay > 0 || card.totalBonusValue > 0) && (
-                              <span className="text-zinc-400"> + {formatCurrency(card.totalDebitPay + card.totalBonusValue)}</span>
-                            )}
-                          </span>
-                        </CardEarningsTooltip>
+                        <span className="text-zinc-300">
+                          {card.isCashback 
+                            ? formatCurrency(card.totalEarned)
+                            : formatNumber(card.totalEarned, 0) + " pts"
+                          }
+                          {(card.totalDebitPay > 0 || card.totalBonusValue > 0) && (
+                            <span className="text-zinc-400"> + {formatCurrency(card.totalDebitPay + card.totalBonusValue)}</span>
+                          )}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-right text-emerald-400">
                         {formatCurrency(card.totalEarnedValue)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className={
-                          (card.marginalValue ?? 0) < 0 
+                          card.marginalValuePerCard < 0 
                             ? "text-red-400 font-semibold" 
-                            : (card.marginalValue ?? 0) > 0 
+                            : card.marginalValuePerCard > 0 
                               ? "text-emerald-400" 
                               : "text-zinc-400"
                         }>
-                          {(card.marginalValue ?? 0) < 0 
-                            ? `-${formatCurrency(Math.abs(card.marginalValue ?? 0))}`
-                            : (card.marginalValue ?? 0) > 0 
-                              ? `+${formatCurrency(card.marginalValue ?? 0)}`
+                          {card.marginalValuePerCard < 0 
+                            ? `-${formatCurrency(Math.abs(card.marginalValuePerCard))}`
+                            : card.marginalValuePerCard > 0 
+                              ? `+${formatCurrency(card.marginalValuePerCard)}`
                               : "$0"
                           }
                         </span>
-                        {(card.marginalValue ?? 0) < 0 && (
+                        {card.marginalValuePerCard < 0 && (
                           <div className="text-xs text-red-400 mt-0.5">Consider removing</div>
                         )}
                       </td>
@@ -735,7 +821,7 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
               </tbody>
             </table>
             <div className="px-4 py-3 text-xs text-zinc-500 border-t border-zinc-700/50">
-              Marginal Value = Card Value - Replacement Value - Net Fee. Negative values indicate cards that cost more than they contribute.
+              Marginal Value = Card Value - Replacement Value - Net Fee (per card). Negative values indicate cards that cost more than they contribute.
             </div>
 
             {/* Card Recommendations - shown when card breakdown is expanded */}

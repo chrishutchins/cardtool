@@ -18,19 +18,22 @@ async function saveCompareCategories(categoryIds: number[]) {
   const user = await currentUser();
   if (!user) return;
   
-  const supabase = await createClient();
+  const effectiveUserId = await getEffectiveUserId();
+  if (!effectiveUserId) return;
+  
+  const supabase = createClient();
   
   // Delete existing
   await supabase
     .from("user_compare_categories")
     .delete()
-    .eq("user_id", user.id);
+    .eq("user_id", effectiveUserId);
   
   // Insert new
   if (categoryIds.length > 0) {
     await supabase
       .from("user_compare_categories")
-      .insert(categoryIds.map((id) => ({ user_id: user.id, category_id: id })));
+      .insert(categoryIds.map((id) => ({ user_id: effectiveUserId, category_id: id })));
   }
 }
 
@@ -39,19 +42,22 @@ async function saveCompareEvalCards(cardIds: string[]) {
   const user = await currentUser();
   if (!user) return;
   
-  const supabase = await createClient();
+  const effectiveUserId = await getEffectiveUserId();
+  if (!effectiveUserId) return;
+  
+  const supabase = createClient();
   
   // Delete existing
   await supabase
     .from("user_compare_evaluation_cards")
     .delete()
-    .eq("user_id", user.id);
+    .eq("user_id", effectiveUserId);
   
   // Insert new
   if (cardIds.length > 0) {
     await supabase
       .from("user_compare_evaluation_cards")
-      .insert(cardIds.map((id) => ({ user_id: user.id, card_id: id })));
+      .insert(cardIds.map((id) => ({ user_id: effectiveUserId, card_id: id })));
   }
 }
 
@@ -60,10 +66,13 @@ async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includ
   const user = await currentUser();
   if (!user) return;
 
-  const supabase = await createClient();
+  const effectiveUserId = await getEffectiveUserId();
+  if (!effectiveUserId) return;
+
+  const supabase = createClient();
   await supabase.from("user_bonus_display_settings").upsert(
     {
-      user_id: user.id,
+      user_id: effectiveUserId,
       include_welcome_bonuses: includeWelcomeBonuses,
       include_spend_bonuses: includeSpendBonuses,
       include_debit_pay: includeDebitPay,
@@ -89,9 +98,9 @@ export default async function ComparePage() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
-  // Get all active cards with their details
+  // Get all active cards with their details (including secondary currency for UR pooling, etc.)
   const { data: allCards } = await supabase
     .from("cards")
     .select(`
@@ -101,18 +110,36 @@ export default async function ComparePage() {
       annual_fee,
       default_earn_rate,
       primary_currency_id,
+      secondary_currency_id,
+      product_type,
+      card_charge_type,
       issuers:issuer_id (id, name),
       primary_currency:reward_currencies!cards_primary_currency_id_fkey (
+        id, name, code, base_value_cents, currency_type
+      ),
+      secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (
         id, name, code, base_value_cents, currency_type
       )
     `)
     .eq("is_active", true)
     .order("name");
 
-  // Get all earning rules
+  // Get all earning rules with category names for preview modal
   const { data: allEarningRules } = await supabase
     .from("card_earning_rules")
-    .select("card_id, category_id, rate, booking_method, has_cap, cap_amount, cap_period, post_cap_rate");
+    .select(`
+      card_id, 
+      category_id, 
+      rate, 
+      booking_method, 
+      has_cap, 
+      cap_amount, 
+      cap_period,
+      cap_unit,
+      post_cap_rate,
+      brand_name,
+      earning_categories:category_id (id, name)
+    `);
 
   // Get all category bonuses (card_caps) with their categories
   const { data: allCategoryBonuses } = await supabase
@@ -125,22 +152,43 @@ export default async function ComparePage() {
       post_cap_rate,
       cap_amount,
       cap_period,
-      card_cap_categories (category_id)
+      card_cap_categories (
+        category_id,
+        earning_categories:category_id (id, name)
+      )
     `);
 
-  // Get user's wallet cards with custom names
+  // Get all card credits for preview modal
+  const { data: allCredits } = await supabase
+    .from("card_credits")
+    .select(`
+      id,
+      card_id,
+      name,
+      brand_name,
+      reset_cycle,
+      default_value_cents,
+      default_quantity,
+      unit_name,
+      notes,
+      credit_count
+    `)
+    .eq("is_active", true);
+
+  // Get user's wallet cards with custom names and player number (exclude closed cards)
   const { data: userWallet } = await supabase
     .from("user_wallets")
-    .select("id, card_id, custom_name")
-    .eq("user_id", effectiveUserId);
+    .select("id, card_id, custom_name, player_number")
+    .eq("user_id", effectiveUserId)
+    .is("closed_date", null);
 
   const userCardIds = new Set(userWallet?.map((w) => w.card_id) ?? []);
   
   // Build a map of card_id to wallet entries for multi-instance support
-  const walletEntriesByCardId = new Map<string, { walletId: string; customName: string | null }[]>();
+  const walletEntriesByCardId = new Map<string, { walletId: string; customName: string | null; playerNumber: number | null }[]>();
   for (const entry of userWallet ?? []) {
     const existing = walletEntriesByCardId.get(entry.card_id) ?? [];
-    existing.push({ walletId: entry.id, customName: entry.custom_name });
+    existing.push({ walletId: entry.id, customName: entry.custom_name, playerNumber: entry.player_number });
     walletEntriesByCardId.set(entry.card_id, existing);
   }
 
@@ -515,8 +563,8 @@ export default async function ComparePage() {
     userSpending[over5kCategory.id] = over5kTotal;
   }
 
-  // Get user's saved compare preferences
-  const [{ data: savedCategories }, { data: savedEvalCards }] = await Promise.all([
+  // Get user's saved compare preferences and player count
+  const [{ data: savedCategories }, { data: savedEvalCards }, { data: userPlayers }] = await Promise.all([
     supabase
       .from("user_compare_categories")
       .select("category_id")
@@ -525,10 +573,15 @@ export default async function ComparePage() {
       .from("user_compare_evaluation_cards")
       .select("card_id")
       .eq("user_id", effectiveUserId),
+    supabase
+      .from("user_players")
+      .select("player_number")
+      .eq("user_id", effectiveUserId),
   ]);
 
   const savedCategoryIds = savedCategories?.map((c) => c.category_id) ?? [];
   const savedEvalCardIds = savedEvalCards?.map((c) => c.card_id) ?? [];
+  const playerCount = Math.max(1, userPlayers?.length ?? 1);
 
   // Get all categories
   const { data: allCategories } = await supabase
@@ -744,6 +797,136 @@ export default async function ComparePage() {
     .filter((cat) => !cat.excluded_by_default)
     .map((cat) => cat.id);
 
+  // Build a map of which primary currencies each player has access to
+  // This is used to determine if a card's secondary currency should be used
+  // (e.g., Ink Cash earns UR when the player also has Ink Preferred or Sapphire)
+  const playerCurrencies = new Map<number, Set<string>>();
+  for (const entry of userWallet ?? []) {
+    const playerNum = entry.player_number ?? 1;
+    if (!playerCurrencies.has(playerNum)) {
+      playerCurrencies.set(playerNum, new Set());
+    }
+    // Find the card to get its primary currency
+    const card = (allCards ?? []).find(c => c.id === entry.card_id);
+    if (card?.primary_currency_id) {
+      playerCurrencies.get(playerNum)!.add(card.primary_currency_id);
+    }
+  }
+
+  // Build preview data maps for each card
+  // Earning rules per card for preview modal
+  type EarningRuleData = {
+    category_id: number;
+    category_name: string;
+    rate: number;
+    booking_method: string;
+    has_cap: boolean;
+    cap_amount: number | null;
+    cap_period: string | null;
+    cap_unit: string | null;
+    post_cap_rate: number | null;
+    brand_name: string | null;
+  };
+  
+  const earningRulesForPreview = new Map<string, EarningRuleData[]>();
+  for (const rule of (allEarningRules ?? [])) {
+    const cardId = rule.card_id;
+    if (!earningRulesForPreview.has(cardId)) {
+      earningRulesForPreview.set(cardId, []);
+    }
+    const categoryData = rule.earning_categories as { id: number; name: string } | null;
+    earningRulesForPreview.get(cardId)!.push({
+      category_id: rule.category_id,
+      category_name: categoryData?.name ?? `Category ${rule.category_id}`,
+      rate: rule.rate,
+      booking_method: rule.booking_method ?? "",
+      has_cap: rule.has_cap ?? false,
+      cap_amount: rule.cap_amount,
+      cap_period: rule.cap_period,
+      cap_unit: rule.cap_unit ?? null,
+      post_cap_rate: rule.post_cap_rate,
+      brand_name: rule.brand_name ?? null,
+    });
+  }
+
+  // Category bonuses per card for preview modal  
+  type CategoryBonusData = {
+    id: string;
+    cap_type: string;
+    cap_amount: number | null;
+    cap_period: string | null;
+    elevated_rate: number;
+    post_cap_rate: number | null;
+    categories: { id: number; name: string }[];
+  };
+
+  const categoryBonusesForPreview = new Map<string, CategoryBonusData[]>();
+  type BonusEntry = {
+    id: string;
+    card_id: string;
+    cap_type: string;
+    elevated_rate: number | null;
+    post_cap_rate: number | null;
+    cap_amount: number | null;
+    cap_period: string | null;
+    card_cap_categories: Array<{
+      category_id: number;
+      earning_categories: { id: number; name: string } | null;
+    }> | null;
+  };
+  
+  for (const bonus of (allCategoryBonuses ?? []) as BonusEntry[]) {
+    const cardId = bonus.card_id;
+    if (!categoryBonusesForPreview.has(cardId)) {
+      categoryBonusesForPreview.set(cardId, []);
+    }
+    const categories = (bonus.card_cap_categories ?? []).map(cc => ({
+      id: cc.category_id,
+      name: cc.earning_categories?.name ?? `Category ${cc.category_id}`,
+    }));
+    categoryBonusesForPreview.get(cardId)!.push({
+      id: bonus.id,
+      cap_type: bonus.cap_type,
+      cap_amount: bonus.cap_amount,
+      cap_period: bonus.cap_period,
+      elevated_rate: bonus.elevated_rate ?? 0,
+      post_cap_rate: bonus.post_cap_rate,
+      categories,
+    });
+  }
+
+  // Credits per card for preview modal
+  type CreditData = {
+    id: string;
+    name: string;
+    brand_name: string | null;
+    reset_cycle: string;
+    default_value_cents: number | null;
+    default_quantity: number | null;
+    unit_name: string | null;
+    notes: string | null;
+    credit_count: number;
+  };
+
+  const creditsForPreview = new Map<string, CreditData[]>();
+  for (const credit of (allCredits ?? [])) {
+    const cardId = credit.card_id;
+    if (!creditsForPreview.has(cardId)) {
+      creditsForPreview.set(cardId, []);
+    }
+    creditsForPreview.get(cardId)!.push({
+      id: credit.id,
+      name: credit.name,
+      brand_name: credit.brand_name,
+      reset_cycle: credit.reset_cycle,
+      default_value_cents: credit.default_value_cents,
+      default_quantity: credit.default_quantity,
+      unit_name: credit.unit_name,
+      notes: credit.notes,
+      credit_count: credit.credit_count,
+    });
+  }
+
   // Transform cards for the client component
   // For owned cards with multiple instances, create one row per wallet entry
   type CardData = {
@@ -753,8 +936,12 @@ export default async function ComparePage() {
     annual_fee: number;
     default_earn_rate: number;
     primary_currency_id: string;
+    secondary_currency_id: string | null;
+    product_type: "personal" | "business";
+    card_charge_type: "credit" | "charge" | null;
     issuers: { id: string; name: string } | null;
     primary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
+    secondary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
   };
   
   const cardsForTable: {
@@ -767,8 +954,12 @@ export default async function ComparePage() {
     issuerName: string;
     currencyCode: string;
     currencyName: string;
+    currencyType: string;
+    productType: "personal" | "business";
+    chargeType: "credit" | "charge" | null;
     pointValue: number;
     isOwned: boolean;
+    playerNumber: number | null;
     earningRates: Record<number, number>;
     multiplier: number;
     spendBonusRate: number;
@@ -776,18 +967,43 @@ export default async function ComparePage() {
     // Bonus info for proper capped calculations
     spendBonuses: BonusInfo[];
     welcomeBonuses: BonusInfo[];
+    // Preview modal data
+    previewEarningRules: EarningRuleData[];
+    previewCategoryBonuses: CategoryBonusData[];
+    previewCredits: CreditData[];
+    primaryCurrency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
   }[] = [];
   
-  for (const card of (allCards ?? []) as unknown as CardData[]) {
-    const currency = card.primary_currency;
-    // Priority: user override > template value > base value
-    const pointValue = currency?.id 
-      ? userValuesByCurrency.get(currency.id) 
-        ?? templateValuesByCurrency.get(currency.id) 
-        ?? currency.base_value_cents 
-        ?? 1
-      : 1;
+  // Helper to get the effective currency for a card given a player number
+  // If the card has a secondary currency and the player has another card that earns it,
+  // use the secondary currency (e.g., Ink Cash earns UR when player has Sapphire/Ink Preferred)
+  const getEffectiveCurrency = (
+    card: CardData,
+    playerNumber: number | null
+  ): { currency: CardData["primary_currency"]; isSecondary: boolean } => {
+    const playerNum = playerNumber ?? 1;
+    const playerCurrencySet = playerCurrencies.get(playerNum);
+    
+    // Check if player has access to the secondary currency via another card
+    if (card.secondary_currency_id && card.secondary_currency && playerCurrencySet) {
+      if (playerCurrencySet.has(card.secondary_currency_id)) {
+        return { currency: card.secondary_currency, isSecondary: true };
+      }
+    }
+    
+    return { currency: card.primary_currency, isSecondary: false };
+  };
 
+  // Helper to get point value for a currency
+  const getCurrencyValue = (currency: CardData["primary_currency"]): number => {
+    if (!currency?.id) return 1;
+    return userValuesByCurrency.get(currency.id) 
+      ?? templateValuesByCurrency.get(currency.id) 
+      ?? currency.base_value_cents 
+      ?? 1;
+  };
+
+  for (const card of (allCards ?? []) as unknown as CardData[]) {
     // Build earning rates using "highest rate wins" logic (with multiplier applied)
     const earningRates: Record<number, number> = {};
     for (const categoryId of nonExcludedCategoryIds) {
@@ -795,52 +1011,89 @@ export default async function ComparePage() {
       earningRates[categoryId] = getBestRate(card.id, categoryId, card.default_earn_rate ?? 1);
     }
 
-    const baseCardData = {
-      cardId: card.id, // Keep original card_id for lookups
-      slug: card.slug,
-      annualFee: card.annual_fee,
-      defaultEarnRate: (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1),
-      issuerName: card.issuers?.name ?? "Unknown",
-      currencyCode: currency?.code ?? "???",
-      currencyName: currency?.name ?? "Unknown",
-      pointValue,
-      earningRates,
-      multiplier: cardMultipliers[card.id] ?? 1,
-      // Bonus rates are set per-instance below
-      spendBonusRate: 0,
-      welcomeBonusRate: 0,
-      // Bonus info for proper capped calculations
-      spendBonuses: [] as BonusInfo[],
-      welcomeBonuses: [] as BonusInfo[],
-    };
-
     const walletEntries = walletEntriesByCardId.get(card.id);
     
     if (walletEntries && walletEntries.length > 0) {
-      // Card is owned - create one row per wallet instance with instance-specific bonus info
+      // Card is owned - create one row per wallet instance with instance-specific currency
       for (const entry of walletEntries) {
+        // Determine which currency to use based on player's other cards
+        const { currency, isSecondary } = getEffectiveCurrency(card, entry.playerNumber);
+        const pointValue = getCurrencyValue(currency);
+        
         cardsForTable.push({
-          ...baseCardData,
           id: entry.walletId, // Use wallet_id as the unique identifier
+          cardId: card.id, // Keep original card_id for lookups
           name: entry.customName ?? card.name, // Use custom name if set
+          slug: card.slug,
+          annualFee: card.annual_fee,
+          defaultEarnRate: (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1),
+          issuerName: card.issuers?.name ?? "Unknown",
+          // Show the effective currency (may be secondary if player has access)
+          currencyCode: isSecondary ? `↑ ${currency?.code ?? "???"}` : (currency?.code ?? "???"),
+          currencyName: currency?.name ?? "Unknown",
+          currencyType: currency?.currency_type ?? "other",
+          productType: card.product_type ?? "personal",
+          chargeType: card.card_charge_type,
+          pointValue,
           isOwned: true,
+          playerNumber: entry.playerNumber,
+          earningRates,
+          multiplier: cardMultipliers[card.id] ?? 1,
           spendBonusRate: walletSpendBonusRates[entry.walletId] ?? 0,
           welcomeBonusRate: walletWelcomeBonusRates[entry.walletId] ?? 0,
           spendBonuses: walletSpendBonuses[entry.walletId] ?? [],
           welcomeBonuses: walletWelcomeBonuses[entry.walletId] ?? [],
+          // Preview modal data
+          previewEarningRules: earningRulesForPreview.get(card.id) ?? [],
+          previewCategoryBonuses: categoryBonusesForPreview.get(card.id) ?? [],
+          previewCredits: creditsForPreview.get(card.id) ?? [],
+          primaryCurrency: card.primary_currency ? {
+            id: card.primary_currency.id,
+            name: card.primary_currency.name,
+            code: card.primary_currency.code,
+            currency_type: card.primary_currency.currency_type,
+            base_value_cents: card.primary_currency.base_value_cents,
+          } : null,
         });
       }
     } else {
-      // Card is not owned - show once with card_id (no user-defined bonuses)
+      // Card is not owned - show once with primary currency (no user-defined bonuses)
+      const currency = card.primary_currency;
+      const pointValue = getCurrencyValue(currency);
+      
       cardsForTable.push({
-        ...baseCardData,
         id: card.id,
+        cardId: card.id,
         name: card.name,
+        slug: card.slug,
+        annualFee: card.annual_fee,
+        defaultEarnRate: (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1),
+        issuerName: card.issuers?.name ?? "Unknown",
+        currencyCode: currency?.code ?? "???",
+        currencyName: currency?.name ?? "Unknown",
+        currencyType: currency?.currency_type ?? "other",
+        productType: card.product_type ?? "personal",
+        chargeType: card.card_charge_type,
+        pointValue,
         isOwned: false,
+        playerNumber: null,
+        earningRates,
+        multiplier: cardMultipliers[card.id] ?? 1,
         spendBonusRate: 0,
         welcomeBonusRate: 0,
         spendBonuses: [],
         welcomeBonuses: [],
+        // Preview modal data
+        previewEarningRules: earningRulesForPreview.get(card.id) ?? [],
+        previewCategoryBonuses: categoryBonusesForPreview.get(card.id) ?? [],
+        previewCredits: creditsForPreview.get(card.id) ?? [],
+        primaryCurrency: card.primary_currency ? {
+          id: card.primary_currency.id,
+          name: card.primary_currency.name,
+          code: card.primary_currency.code,
+          currency_type: card.primary_currency.currency_type,
+          base_value_cents: card.primary_currency.base_value_cents,
+        } : null,
       });
     }
   }
@@ -903,6 +1156,7 @@ export default async function ComparePage() {
           availableCredit={availableCreditMap}
           creditLimits={creditLimitMap}
           accountLinkingEnabled={accountLinkingEnabled}
+          playerCount={playerCount}
           onSaveCategories={saveCompareCategories}
           onSaveEvalCards={saveCompareEvalCards}
           onUpdateBonusSettings={updateBonusDisplaySettings}

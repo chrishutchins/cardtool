@@ -11,7 +11,7 @@ interface Props {
 
 export default async function TemplateDetailPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const [templateResult, currenciesResult, valuesResult] = await Promise.all([
     supabase
@@ -59,7 +59,7 @@ export default async function TemplateDetailPage({ params }: Props) {
 
   async function updateTemplateValue(currencyId: string, valueCents: number) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     
     // Manual edits are marked as is_manual = true
     await supabase.from("template_currency_values").upsert(
@@ -77,7 +77,7 @@ export default async function TemplateDetailPage({ params }: Props) {
 
   async function bulkUpdateTemplateValues(updates: Array<{ currencyId: string; valueCents: number }>) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     
     console.log("[IMPORT] Bulk updating template values:", {
       templateId: id,
@@ -109,7 +109,7 @@ export default async function TemplateDetailPage({ params }: Props) {
 
   async function updateTemplateInfo(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;

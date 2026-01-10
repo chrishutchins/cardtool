@@ -1,8 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { clerkClient } from "@clerk/nextjs/server";
+import { createClerkClient } from "@clerk/backend";
 import { UsersTable } from "./users-table";
 import { startEmulation } from "@/lib/emulation";
+
+// Always use Clerk Prod for admin user list
+// In dev, CLERK_SECRET_KEY might be the dev key, so check for explicit prod key first
+function getProdClerkClient() {
+  const prodKey = process.env.CLERK_SECRET_KEY_PROD || process.env.CLERK_SECRET_KEY;
+  return createClerkClient({ secretKey: prodKey });
+}
 
 interface UserStats {
   userId: string;
@@ -16,13 +23,20 @@ interface UserStats {
 }
 
 export default async function UsersPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
+  const prodClerk = getProdClerkClient();
 
-  // Get all unique user IDs from wallet and spending tables
+  // Fetch all users from Clerk Prod first (source of truth)
+  const clerkUsers = await prodClerk.users.getUserList({ limit: 500 });
+
+  // Get user IDs that exist in Clerk Prod
+  const prodUserIds = clerkUsers.data.map((u) => u.id);
+
+  // Only fetch database stats for Clerk Prod users
   const [walletResult, spendingResult, featureFlagsResult] = await Promise.all([
-    supabase.from("user_wallets").select("user_id, added_at"),
-    supabase.from("user_category_spend").select("user_id, created_at"),
-    supabase.from("user_feature_flags").select("user_id, account_linking_enabled"),
+    supabase.from("user_wallets").select("user_id, added_at").in("user_id", prodUserIds),
+    supabase.from("user_category_spend").select("user_id, created_at").in("user_id", prodUserIds),
+    supabase.from("user_feature_flags").select("user_id, account_linking_enabled").in("user_id", prodUserIds),
   ]);
 
   // Build feature flags map
@@ -51,29 +65,9 @@ export default async function UsersPage() {
     }
   }
 
-  // Get all unique user IDs
-  const allUserIds = new Set([...Object.keys(cardsByUser), ...Object.keys(spendingByUser)]);
-
-  // Fetch user details from Clerk
-  const clerk = await clerkClient();
-  const users: UserStats[] = [];
-
-  for (const userId of allUserIds) {
-    let email: string | null = null;
-    let firstName: string | null = null;
-    let lastName: string | null = null;
-
-    try {
-      const clerkUser = await clerk.users.getUser(userId);
-      email = clerkUser.emailAddresses?.[0]?.emailAddress ?? null;
-      firstName = clerkUser.firstName;
-      lastName = clerkUser.lastName;
-    } catch {
-      // User might not exist in Clerk anymore
-      email = null;
-    }
-
-    // Get earliest date from either wallet or spending
+  // Build user stats from Clerk users
+  const users: UserStats[] = clerkUsers.data.map((clerkUser) => {
+    const userId = clerkUser.id;
     const walletDate = earliestWalletDate[userId];
     const spendDate = earliestSpendingDate[userId];
     let createdAt: string | null = null;
@@ -83,19 +77,19 @@ export default async function UsersPage() {
       createdAt = walletDate ?? spendDate ?? null;
     }
 
-    users.push({
+    return {
       userId,
-      email,
-      firstName,
-      lastName,
+      email: clerkUser.emailAddresses?.[0]?.emailAddress ?? null,
+      firstName: clerkUser.firstName,
+      lastName: clerkUser.lastName,
       cardsAdded: cardsByUser[userId] ?? 0,
       spendingEdits: spendingByUser[userId] ?? 0,
-      createdAt,
+      createdAt: createdAt ?? new Date(clerkUser.createdAt).toISOString(),
       accountLinkingEnabled: accountLinkingByUser[userId] ?? false,
-    });
-  }
+    };
+  });
 
-  // Sort by most recent activity first
+  // Sort by most recent first (using Clerk createdAt as fallback)
   users.sort((a, b) => {
     if (!a.createdAt && !b.createdAt) return 0;
     if (!a.createdAt) return 1;
@@ -105,7 +99,7 @@ export default async function UsersPage() {
 
   async function deleteUser(userId: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Delete all user data from all tables
     // First delete linked accounts (has FK to plaid_items)
@@ -140,7 +134,7 @@ export default async function UsersPage() {
 
   async function toggleAccountLinking(userId: string, enabled: boolean) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     await supabase.from("user_feature_flags").upsert(
       {

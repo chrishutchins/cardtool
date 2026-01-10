@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
                 options: {
                   count,
                   offset,
-                  include_original_description: false,
+                  include_original_description: true,
                 },
               });
 
@@ -157,6 +157,7 @@ export async function GET(request: NextRequest) {
                 linked_account_id: linkedAccountId,
                 plaid_transaction_id: txn.transaction_id,
                 name: txn.name,
+                original_description: txn.original_description || null,
                 amount_cents: Math.round(txn.amount * 100),
                 date: txn.date,
                 authorized_date: txn.authorized_date || null,

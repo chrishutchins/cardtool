@@ -13,6 +13,7 @@ import { LinkedAccounts } from "@/app/wallet/linked-accounts";
 import { PlayerSettings } from "./player-settings";
 import { isAdminEmail } from "@/lib/admin";
 import { AccountManagement } from "./account-management";
+import { EarningCategoriesReference } from "./earning-categories-reference";
 import { Metadata } from "next";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 
@@ -36,7 +37,7 @@ export default async function SettingsPage() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // ============ BATCH 1: All independent queries in parallel ============
   const [
@@ -52,6 +53,7 @@ export default async function SettingsPage() {
     everythingElseCategoryResult,
     linkedAccountsResult,
     playersResult,
+    allCategoriesForReferenceResult,
   ] = await Promise.all([
     supabase
       .from("user_wallets")
@@ -70,17 +72,18 @@ export default async function SettingsPage() {
           secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (name, code, currency_type)
         )
       `)
-      .eq("user_id", effectiveUserId),
+      .eq("user_id", effectiveUserId)
+      .is("closed_date", null),
     supabase.from("issuers").select("id, name").order("name"),
     supabase
       .from("user_travel_booking_preferences")
       .select("category_slug, preference_type, brand_name, portal_issuer_id")
       .eq("user_id", effectiveUserId),
-    // Get travel subcategories (Flights, Hotels, Rental Car - children of All Travel)
+    // Get travel subcategories (Flights, Hotels, Rental Car)
     supabase
       .from("earning_categories")
-      .select("id, name, slug, parent_category_id, parent:earning_categories!parent_category_id(slug)")
-      .not("parent_category_id", "is", null),
+      .select("id, name, slug")
+      .in("slug", ["flights", "hotels", "rental-car"]),
     supabase
       .from("earning_categories")
       .select("id, name, slug")
@@ -136,6 +139,11 @@ export default async function SettingsPage() {
       .select("player_number, description")
       .eq("user_id", effectiveUserId)
       .order("player_number"),
+    // All earning categories for reference section (including excluded ones)
+    supabase
+      .from("earning_categories")
+      .select("id, name, slug, parent_category_id, excluded_by_default")
+      .order("name"),
   ]);
 
   const walletCards = walletCardsResult.data;
@@ -151,6 +159,7 @@ export default async function SettingsPage() {
   const everythingElseCategoryId = everythingElseCategoryResult.data?.id ?? null;
   const linkedAccounts = linkedAccountsResult.data;
   const players = (playersResult.data ?? []) as { player_number: number; description: string | null }[];
+  const allCategoriesForReference = (allCategoriesForReferenceResult.data ?? []) as { id: number; name: string; slug: string; parent_category_id: number | null; excluded_by_default: boolean }[];
 
   // Process wallet cards
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
@@ -269,7 +278,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase.from("user_card_selections").upsert(
       {
         user_id: userId,
@@ -286,7 +295,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     if (tierId) {
       await supabase.from("user_multiplier_tiers").upsert(
         {
@@ -316,7 +325,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase.from("user_travel_booking_preferences").upsert(
       {
         user_id: userId,
@@ -335,7 +344,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     if (selected) {
       await supabase.from("user_mobile_pay_categories").upsert(
         {
@@ -361,7 +370,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     if (selected) {
       await supabase.from("user_paypal_categories").upsert(
         {
@@ -387,7 +396,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     if (selected) {
       await supabase.from("user_large_purchase_categories").upsert(
         {
@@ -411,7 +420,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // Set debit_pay_enabled to false
     await supabase
@@ -435,7 +444,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase
       .from("user_linked_accounts")
       .update({ wallet_card_id: walletCardId })
@@ -450,7 +459,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // First, get the plaid_item_id for this account
     const { data: accountData } = await supabase
@@ -495,7 +504,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase
       .from("user_linked_accounts")
       .update({ manual_credit_limit: creditLimit })
@@ -511,7 +520,7 @@ export default async function SettingsPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // Reassign any wallet cards with player_number > new playerCount to P1
     // This prevents orphaned cards when decreasing player count
@@ -577,14 +586,12 @@ export default async function SettingsPage() {
     .filter((i) => portalIssuerIds.has(i.id))
     .map((i) => ({ issuerId: i.id, issuerName: i.name }));
 
-  // Build travel subcategories (only those whose parent is "All Travel")
+  // Build travel subcategories (Flights, Hotels, Rental Car)
   type TravelCategoryData = {
     slug: string;
     name: string;
-    parent: { slug: string } | null;
   };
   const travelSubcategories = ((travelCategories ?? []) as unknown as TravelCategoryData[])
-    .filter((c) => c.parent?.slug === "all-travel")
     .map((c) => ({
       slug: c.slug,
       name: c.name,
@@ -614,6 +621,7 @@ export default async function SettingsPage() {
   const hasAnySettings = cardsNeedingSelection.length > 0 || programsWithTiers.length > 0 || 
     (travelSubcategories.length > 0 && (airlineBrands.length > 0 || hotelBrands.length > 0 || portalIssuers.length > 0)) ||
     (hasMobilePayCards && (allCategories ?? []).length > 0);
+
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
@@ -759,6 +767,11 @@ export default async function SettingsPage() {
                   onToggleCategory={toggleLargePurchaseCategory}
                 />
               </div>
+            )}
+
+            {/* Earning Categories Reference */}
+            {allCategoriesForReference.length > 0 && (
+              <EarningCategoriesReference categories={allCategoriesForReference} />
             )}
 
             {/* Debit Pay Disable - only show if enabled */}

@@ -1,161 +1,198 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useTransition, useCallback } from "react";
+import { CardPreviewModal, CardPreviewData } from "@/components/card-preview-modal";
 
-// Fast tooltip component - appears on hover (desktop) or tap (mobile)
-// Smart positioning: appears above by default, below if not enough space
+// ============================================================================
+// DraggableItem Component for reorderable lists
+// Uses IDs instead of indices to avoid issues with filtered arrays
+
+interface DraggableItemProps {
+  id: string;
+  onDragStart: (id: string) => void;
+  onDragOver: (id: string) => void;
+  onDragEnd: () => void;
+  children: React.ReactNode;
+}
+
+function DraggableItem({ id, onDragStart, onDragOver, onDragEnd, children }: DraggableItemProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        setIsDragging(true);
+        onDragStart(id);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", id);
+      }}
+      onDragEnd={() => {
+        setIsDragging(false);
+        onDragEnd();
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setIsDragOver(true);
+        onDragOver(id);
+      }}
+      onDragLeave={() => {
+        setIsDragOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+      }}
+      className={`
+        transition-all duration-150
+        ${isDragging ? "opacity-50" : ""}
+        ${isDragOver ? "border-t-2 border-blue-500" : ""}
+      `}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Fast tooltip component - uses fixed positioning to escape overflow containers
 function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<"above" | "below">("above");
+  const [isVisible, setIsVisible] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, showBelow: false });
   const ref = useRef<HTMLSpanElement>(null);
-  const justOpenedRef = useRef(false);
 
-  // Check position on open and update if needed
-  useEffect(() => {
-    if (isOpen && ref.current) {
+  const updatePosition = useCallback(() => {
+    if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      // If less than 60px from top of viewport, show below
-      setPosition(rect.top < 60 ? "below" : "above");
+      const showBelow = rect.top < 60;
+      setCoords({
+        top: showBelow ? rect.bottom + 4 : rect.top - 4,
+        left: rect.left,
+        showBelow,
+      });
     }
-  }, [isOpen]);
+  }, []);
 
-  // Close on outside click/touch
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      // Skip if we just opened (prevents immediate close on mobile)
-      if (justOpenedRef.current) {
-        justOpenedRef.current = false;
-        return;
-      }
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    
-    // Small delay to avoid race condition with the opening click
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("click", handleClickOutside);
-      document.addEventListener("touchend", handleClickOutside);
-    }, 10);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("click", handleClickOutside);
-      document.removeEventListener("touchend", handleClickOutside);
-    };
-  }, [isOpen]);
+  const handleMouseEnter = useCallback(() => {
+    updatePosition();
+    setIsVisible(true);
+  }, [updatePosition]);
 
-  const handleClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isOpen) {
-      justOpenedRef.current = true;
-    }
-    setIsOpen(!isOpen);
-  }, [isOpen]);
-
-  const positionClasses = position === "above" 
-    ? "bottom-full mb-1" 
-    : "top-full mt-1";
+  const handleMouseLeave = useCallback(() => {
+    setIsVisible(false);
+  }, []);
 
   return (
     <span 
       ref={ref}
-      className="relative group/tooltip inline-flex"
-      onClick={handleClick}
-      onMouseEnter={() => {
-        if (ref.current) {
-          const rect = ref.current.getBoundingClientRect();
-          setPosition(rect.top < 60 ? "below" : "above");
-        }
-      }}
+      className="inline-flex"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {children}
-      <span className={`pointer-events-none absolute left-0 ${positionClasses} px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-[100] transition-opacity duration-75 ${isOpen ? "opacity-100" : "opacity-0 group-hover/tooltip:opacity-100"}`}>
-        {text}
-      </span>
+      {isVisible && (
+        <span 
+          className="fixed px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-[9999] pointer-events-none"
+          style={{
+            top: coords.showBelow ? coords.top : 'auto',
+            bottom: coords.showBelow ? 'auto' : `calc(100vh - ${coords.top}px)`,
+            left: coords.left,
+          }}
+        >
+          {text}
+        </span>
+      )}
     </span>
   );
 }
 
 // Rich tooltip with ReactNode content support for colored breakdowns
 // Smart positioning: appears above by default, below if not enough space
+// Rich tooltip component - uses fixed positioning to escape overflow containers
 function RichTooltip({ children, content }: { children: React.ReactNode; content: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<"above" | "below">("above");
+  const [isVisible, setIsVisible] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, showBelow: false });
   const ref = useRef<HTMLSpanElement>(null);
-  const justOpenedRef = useRef(false);
 
-  // Check position on open and update if needed
-  useEffect(() => {
-    if (isOpen && ref.current) {
+  const updatePosition = useCallback(() => {
+    if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      // If less than 80px from top of viewport, show below
-      setPosition(rect.top < 80 ? "below" : "above");
+      const showBelow = rect.top < 80;
+      setCoords({
+        top: showBelow ? rect.bottom + 4 : rect.top - 4,
+        left: rect.left + rect.width / 2,
+        showBelow,
+      });
     }
-  }, [isOpen]);
+  }, []);
 
-  // Close on outside click/touch
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      // Skip if we just opened (prevents immediate close on mobile)
-      if (justOpenedRef.current) {
-        justOpenedRef.current = false;
-        return;
-      }
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    
-    // Small delay to avoid race condition with the opening click
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("click", handleClickOutside);
-      document.addEventListener("touchend", handleClickOutside);
-    }, 10);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("click", handleClickOutside);
-      document.removeEventListener("touchend", handleClickOutside);
-    };
-  }, [isOpen]);
+  const handleMouseEnter = useCallback(() => {
+    updatePosition();
+    setIsVisible(true);
+  }, [updatePosition]);
 
-  const handleClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isOpen) {
-      justOpenedRef.current = true;
-    }
-    setIsOpen(!isOpen);
-  }, [isOpen]);
-
-  const positionClasses = position === "above" 
-    ? "bottom-full mb-1" 
-    : "top-full mt-1";
+  const handleMouseLeave = useCallback(() => {
+    setIsVisible(false);
+  }, []);
 
   return (
     <span 
       ref={ref}
-      className="relative group/richtooltip inline-flex cursor-help"
-      onClick={handleClick}
-      onMouseEnter={() => {
-        if (ref.current) {
-          const rect = ref.current.getBoundingClientRect();
-          setPosition(rect.top < 80 ? "below" : "above");
-        }
-      }}
+      className="inline-flex cursor-help"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {children}
-      <span className={`pointer-events-none absolute left-1/2 -translate-x-1/2 ${positionClasses} px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-600 rounded shadow-lg z-[100] whitespace-nowrap transition-opacity duration-75 ${isOpen ? "opacity-100" : "opacity-0 group-hover/richtooltip:opacity-100"}`}>
-        {content}
-      </span>
+      {isVisible && (
+        <span 
+          className="fixed px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-600 rounded shadow-lg z-[9999] whitespace-nowrap pointer-events-none -translate-x-1/2"
+          style={{
+            top: coords.showBelow ? coords.top : 'auto',
+            bottom: coords.showBelow ? 'auto' : `calc(100vh - ${coords.top}px)`,
+            left: coords.left,
+          }}
+        >
+          {content}
+        </span>
+      )}
     </span>
   );
+}
+
+interface CardPreviewEarningRule {
+  category_id: number;
+  category_name: string;
+  rate: number;
+  booking_method: string;
+  has_cap: boolean;
+  cap_amount: number | null;
+  cap_period: string | null;
+  cap_unit: string | null;
+  post_cap_rate: number | null;
+  brand_name: string | null;
+}
+
+interface CardPreviewCategoryBonus {
+  id: string;
+  cap_type: string;
+  cap_amount: number | null;
+  cap_period: string | null;
+  elevated_rate: number;
+  post_cap_rate: number | null;
+  categories: { id: number; name: string }[];
+}
+
+interface CardPreviewCredit {
+  id: string;
+  name: string;
+  brand_name: string | null;
+  reset_cycle: string;
+  default_value_cents: number | null;
+  default_quantity: number | null;
+  unit_name: string | null;
+  notes: string | null;
+  credit_count: number;
 }
 
 interface Card {
@@ -168,8 +205,12 @@ interface Card {
   issuerName: string;
   currencyCode: string;
   currencyName: string;
+  currencyType: string;
+  productType: "personal" | "business";
+  chargeType: "credit" | "charge" | null;
   pointValue: number;
   isOwned: boolean;
+  playerNumber: number | null;
   earningRates: Record<number, number>;
   multiplier: number;
   spendBonusRate: number;
@@ -177,6 +218,11 @@ interface Card {
   // Detailed bonus info for proper capped calculations
   spendBonuses: BonusInfo[];
   welcomeBonuses: BonusInfo[];
+  // Preview modal data
+  previewEarningRules: CardPreviewEarningRule[];
+  previewCategoryBonuses: CardPreviewCategoryBonus[];
+  previewCredits: CardPreviewCredit[];
+  primaryCurrency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
 }
 
 interface BonusInfo {
@@ -225,6 +271,7 @@ interface ComparisonTableProps {
   availableCredit: Record<string, number>;
   creditLimits: Record<string, number>;
   accountLinkingEnabled: boolean;
+  playerCount: number;
   onSaveCategories?: (categoryIds: number[]) => Promise<void>;
   onSaveEvalCards?: (cardIds: string[]) => Promise<void>;
   onUpdateBonusSettings?: (includeWelcomeBonuses: boolean, includeSpendBonuses: boolean, includeDebitPay: boolean, showAvailableCredit: boolean) => Promise<void>;
@@ -314,6 +361,7 @@ export function ComparisonTable({
   availableCredit,
   creditLimits,
   accountLinkingEnabled,
+  playerCount,
   onSaveCategories,
   onSaveEvalCards,
   onUpdateBonusSettings,
@@ -337,6 +385,47 @@ export function ComparisonTable({
   const [showCardSelector, setShowCardSelector] = useState(false);
   const [cardSearchQuery, setCardSearchQuery] = useState("");
   const [isPending, startTransition] = useTransition();
+  
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [issuerFilter, setIssuerFilter] = useState("");
+  const [productTypeFilter, setProductTypeFilter] = useState<"" | "personal" | "business">("");
+  const [currencyTypeFilter, setCurrencyTypeFilter] = useState("");
+  const [playerFilter, setPlayerFilter] = useState<number | "">("");
+  
+  // Preview modal state
+  const [previewCard, setPreviewCard] = useState<CardPreviewData | null>(null);
+  
+  // Category order state - for custom column ordering (persisted to localStorage)
+  const [categoryOrder, setCategoryOrder] = useState<string[]>(() => {
+    if (typeof window === "undefined") return categories.map(c => c.slug);
+    try {
+      const stored = localStorage.getItem("compare-category-order");
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[];
+        // Merge persisted order with any new categories
+        const persistedSet = new Set(parsed);
+        const allSlugs = categories.map(c => c.slug);
+        const newCategories = allSlugs.filter(slug => !persistedSet.has(slug));
+        return [...parsed.filter(slug => allSlugs.includes(slug)), ...newCategories];
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return categories.map(c => c.slug);
+  });
+  
+  // Drag state for category reordering
+  
+  // Persist category order to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("compare-category-order", JSON.stringify(categoryOrder));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [categoryOrder]);
   
   // Local state for bonus toggles (optimistic updates)
   const [includeWelcomeBonuses, setIncludeWelcomeBonuses] = useState(bonusDisplaySettings.includeWelcomeBonuses);
@@ -386,10 +475,23 @@ export function ComparisonTable({
     return () => clearTimeout(timeout);
   }, [evaluationCardIds, onSaveEvalCards]);
 
-  // Selected categories in order
+  // Selected categories in custom order
   const selectedCategories = useMemo(() => {
-    return categories.filter((cat) => selectedCategorySlugs.has(cat.slug));
-  }, [categories, selectedCategorySlugs]);
+    // Create a map for quick category lookup
+    const categoryMap = new Map(categories.map(c => [c.slug, c]));
+    // Return categories in the custom order, filtering to only selected ones
+    return categoryOrder
+      .map(slug => categoryMap.get(slug))
+      .filter((cat): cat is Category => cat != null && selectedCategorySlugs.has(cat.slug));
+  }, [categories, selectedCategorySlugs, categoryOrder]);
+  
+  // All categories in custom order (for the dropdown)
+  const orderedCategories = useMemo(() => {
+    const categoryMap = new Map(categories.map(c => [c.slug, c]));
+    return categoryOrder
+      .map(slug => categoryMap.get(slug))
+      .filter((cat): cat is Category => cat != null);
+  }, [categories, categoryOrder]);
 
   // Calculate effective value for a card and category (rate in cents)
   // Includes bonus rates if enabled (converted from decimal to cents)
@@ -569,6 +671,31 @@ export function ComparisonTable({
     }
   };
 
+  // Get unique filter options from all cards
+  const { uniqueIssuers, uniqueCurrencyTypes } = useMemo(() => {
+    const issuers = new Set<string>();
+    const currencyTypes = new Set<string>();
+    cards.forEach((c) => {
+      if (c.issuerName) issuers.add(c.issuerName);
+      if (c.currencyType) currencyTypes.add(c.currencyType);
+    });
+    return {
+      uniqueIssuers: Array.from(issuers).sort(),
+      uniqueCurrencyTypes: Array.from(currencyTypes).sort(),
+    };
+  }, [cards]);
+
+  // Currency type labels for filter dropdown
+  const currencyTypeLabels: Record<string, string> = {
+    airline_miles: "Airline Miles",
+    hotel_points: "Hotel Points",
+    transferable_points: "Transferable Points",
+    non_transferable_points: "Non-Transferable Points",
+    cash_back: "Cash Back",
+    crypto: "Crypto",
+    other: "Other",
+  };
+
   // Cards available for evaluation (not owned)
   const cardsForEvaluation = useMemo(() => {
     return cards.filter((c) => !c.isOwned);
@@ -587,12 +714,41 @@ export function ComparisonTable({
   const sortedCards = useMemo(() => {
     let filtered: Card[];
     
+    // First apply mode filter (my-cards, evaluate, all)
     if (filterMode === "my-cards") {
       filtered = cards.filter((c) => c.isOwned);
     } else if (filterMode === "evaluate") {
       filtered = cards.filter((c) => c.isOwned || evaluationCardIds.has(c.id));
     } else {
       filtered = [...cards];
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (c) => c.name.toLowerCase().includes(query) || c.issuerName.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply issuer filter
+    if (issuerFilter) {
+      filtered = filtered.filter((c) => c.issuerName === issuerFilter);
+    }
+    
+    // Apply product type filter
+    if (productTypeFilter) {
+      filtered = filtered.filter((c) => c.productType === productTypeFilter);
+    }
+    
+    // Apply currency type filter
+    if (currencyTypeFilter) {
+      filtered = filtered.filter((c) => c.currencyType === currencyTypeFilter);
+    }
+    
+    // Apply player filter (only for owned cards)
+    if (playerFilter !== "") {
+      filtered = filtered.filter((c) => !c.isOwned || c.playerNumber === playerFilter);
     }
 
     filtered.sort((a, b) => {
@@ -629,7 +785,7 @@ export function ComparisonTable({
     });
 
     return filtered;
-  }, [cards, filterMode, sortConfig, evaluationCardIds, showSpending, userSpending, includeSpendBonuses, includeWelcomeBonuses, includeDebitPay]);
+  }, [cards, filterMode, sortConfig, evaluationCardIds, showSpending, userSpending, includeSpendBonuses, includeWelcomeBonuses, includeDebitPay, searchQuery, issuerFilter, productTypeFilter, currencyTypeFilter, playerFilter]);
 
   // Handle sort click
   const handleSort = (type: "card" | "category", categoryId?: number) => {
@@ -686,7 +842,37 @@ export function ComparisonTable({
   // Category selection helpers
   const selectAllCategories = () => setSelectedCategorySlugs(new Set(categories.map((c) => c.slug)));
   const clearCategories = () => setSelectedCategorySlugs(new Set());
-  const resetToDefaults = () => setSelectedCategorySlugs(new Set(defaultCategorySlugs));
+  const resetToDefaults = () => {
+    setSelectedCategorySlugs(new Set(defaultCategorySlugs));
+    setCategoryOrder(categories.map(c => c.slug)); // Reset order too
+  };
+  
+  // Category drag handlers for reordering (using IDs instead of indices)
+  const [categoryDragSlug, setCategoryDragSlug] = useState<string | null>(null);
+  
+  const handleCategoryDragStart = useCallback((slug: string) => {
+    setCategoryDragSlug(slug);
+  }, []);
+  
+  const handleCategoryDragOver = useCallback((targetSlug: string) => {
+    if (categoryDragSlug === null || categoryDragSlug === targetSlug) return;
+    
+    setCategoryOrder(prev => {
+      const newOrder = [...prev];
+      const dragIndex = newOrder.indexOf(categoryDragSlug);
+      const targetIndex = newOrder.indexOf(targetSlug);
+      
+      if (dragIndex === -1 || targetIndex === -1) return prev;
+      
+      const [draggedItem] = newOrder.splice(dragIndex, 1);
+      newOrder.splice(targetIndex, 0, draggedItem);
+      return newOrder;
+    });
+  }, [categoryDragSlug]);
+  
+  const handleCategoryDragEnd = useCallback(() => {
+    setCategoryDragSlug(null);
+  }, []);
 
   // Format currency
   const formatCurrency = (cents: number): string => {
@@ -698,9 +884,67 @@ export function ComparisonTable({
     }).format(cents / 100);
   };
 
+  // Check if any filters are active
+  const hasActiveFilters = searchQuery || issuerFilter || productTypeFilter || currencyTypeFilter || playerFilter !== "";
+
+  // Helper to open card preview modal
+  const openCardPreview = useCallback((card: Card) => {
+    setPreviewCard({
+      card: {
+        id: card.cardId,
+        name: card.name,
+        slug: card.slug,
+        annual_fee: card.annualFee,
+        default_earn_rate: card.defaultEarnRate,
+        issuer_name: card.issuerName,
+        card_charge_type: card.chargeType,
+      },
+      primaryCurrency: card.primaryCurrency,
+      earningRules: card.previewEarningRules,
+      categoryBonuses: card.previewCategoryBonuses,
+      credits: card.previewCredits,
+      welcomeBonuses: [],
+      isOwned: card.isOwned,
+    });
+  }, []);
+
+  // Calculate card counts for each mode (respecting current filters)
+  const filteredCardsBase = useMemo(() => {
+    let filtered = [...cards];
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((c) => 
+        c.name.toLowerCase().includes(query) || 
+        c.issuerName.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply filters
+    if (productTypeFilter) {
+      filtered = filtered.filter((c) => c.productType === productTypeFilter);
+    }
+    if (issuerFilter) {
+      filtered = filtered.filter((c) => c.issuerName === issuerFilter);
+    }
+    if (currencyTypeFilter) {
+      filtered = filtered.filter((c) => c.currencyType === currencyTypeFilter);
+    }
+    if (playerFilter !== "") {
+      filtered = filtered.filter((c) => !c.isOwned || c.playerNumber === playerFilter);
+    }
+    
+    return filtered;
+  }, [cards, searchQuery, productTypeFilter, issuerFilter, currencyTypeFilter, playerFilter]);
+
+  const allCardsCount = filteredCardsBase.length;
+  const myCardsCount = filteredCardsBase.filter((c) => c.isOwned).length;
+  const evaluateCardsCount = filteredCardsBase.filter((c) => c.isOwned || evaluationCardIds.has(c.id)).length;
+
   return (
     <div className="space-y-4">
-      {/* Controls */}
+      {/* Controls - Row 1: Mode Toggle, My Spending, Checkboxes */}
       <div className="flex flex-wrap items-center gap-4">
         {/* Filter Toggle */}
         <div className="flex rounded-lg border border-zinc-700 overflow-hidden">
@@ -712,7 +956,7 @@ export function ComparisonTable({
                 : "bg-zinc-800 text-zinc-400 hover:text-white"
             }`}
           >
-            All Cards
+            All Cards ({allCardsCount})
           </button>
           <button
             onClick={() => setFilterMode("my-cards")}
@@ -722,7 +966,7 @@ export function ComparisonTable({
                 : "bg-zinc-800 text-zinc-400 hover:text-white"
             }`}
           >
-            My Cards
+            My Cards ({myCardsCount})
           </button>
           <button
             onClick={() => setFilterMode("evaluate")}
@@ -732,12 +976,7 @@ export function ComparisonTable({
                 : "bg-zinc-800 text-zinc-400 hover:text-white"
             }`}
           >
-            Evaluate
-            {evaluationCardIds.size > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-500/30">
-                {evaluationCardIds.size}
-              </span>
-            )}
+            Evaluate ({evaluateCardsCount})
           </button>
         </div>
 
@@ -755,7 +994,7 @@ export function ComparisonTable({
             </button>
 
             {showCardSelector && (
-              <div className="absolute top-full left-0 mt-2 w-80 max-h-96 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl z-50 flex flex-col">
+              <div className="absolute top-full left-0 mt-2 w-80 max-h-96 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl z-[9999] flex flex-col">
                 <div className="sticky top-0 bg-zinc-900 border-b border-zinc-700 p-2">
                   <input
                     type="text"
@@ -891,6 +1130,84 @@ export function ComparisonTable({
             )}
           </div>
         )}
+      </div>
+
+      {/* Controls - Row 2: Filters and Categories */}
+      <div className="flex flex-wrap items-center gap-4">
+        {/* Search Box */}
+        <input
+          type="text"
+          placeholder="Search cards..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none w-40"
+        />
+
+        {/* Filter Dropdowns */}
+        <select
+          value={productTypeFilter}
+          onChange={(e) => setProductTypeFilter(e.target.value as "" | "personal" | "business")}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">All Types</option>
+          <option value="personal">Personal</option>
+          <option value="business">Business</option>
+        </select>
+
+        <select
+          value={issuerFilter}
+          onChange={(e) => setIssuerFilter(e.target.value)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">All Issuers</option>
+          {uniqueIssuers.map((issuer) => (
+            <option key={issuer} value={issuer}>{issuer}</option>
+          ))}
+        </select>
+
+        <select
+          value={currencyTypeFilter}
+          onChange={(e) => setCurrencyTypeFilter(e.target.value)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">All Currencies</option>
+          {uniqueCurrencyTypes.map((type) => (
+            <option key={type} value={type}>{currencyTypeLabels[type] ?? type}</option>
+          ))}
+        </select>
+
+        {/* Player Filter - only show if multi-player */}
+        {playerCount > 1 && (
+          <select
+            value={playerFilter}
+            onChange={(e) => setPlayerFilter(e.target.value === "" ? "" : parseInt(e.target.value))}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+          >
+            <option value="">All Players</option>
+            {Array.from({ length: playerCount }, (_, i) => i + 1).map((num) => (
+              <option key={num} value={num}>Player {num}</option>
+            ))}
+          </select>
+        )}
+
+        {/* Clear Filters */}
+        {hasActiveFilters && (
+          <button
+            onClick={() => {
+              setSearchQuery("");
+              setIssuerFilter("");
+              setProductTypeFilter("");
+              setCurrencyTypeFilter("");
+              setPlayerFilter("");
+            }}
+            className="text-xs text-zinc-500 hover:text-zinc-300 px-2"
+          >
+            Clear filters
+          </button>
+        )}
+
+        {/* Spacer to push Categories to the right */}
+        <div className="flex-1" />
 
         {/* Category Selector */}
         <div className="relative">
@@ -910,7 +1227,7 @@ export function ComparisonTable({
           </button>
 
           {showCategorySelector && (
-            <div className="absolute top-full left-0 mt-2 w-72 max-h-96 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl z-50">
+            <div className="absolute top-full left-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl z-[9999]">
               <div className="sticky top-0 bg-zinc-900 border-b border-zinc-700 p-2 flex gap-2">
                 <button
                   onClick={selectAllCategories}
@@ -931,50 +1248,60 @@ export function ComparisonTable({
                   Defaults
                 </button>
               </div>
-              <div className="p-2 space-y-1">
-                {categories.map((cat) => {
+              <div className="p-1 text-[10px] text-zinc-500 text-center border-b border-zinc-800">
+                Drag handles to reorder columns
+              </div>
+              <div className="p-2">
+                {orderedCategories.map((cat) => {
                   const spendCents = userSpending[cat.id] ?? 0;
                   return (
-                    <label
+                    <DraggableItem
                       key={cat.id}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-800 cursor-pointer"
+                      id={cat.slug}
+                      onDragStart={handleCategoryDragStart}
+                      onDragOver={handleCategoryDragOver}
+                      onDragEnd={handleCategoryDragEnd}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedCategorySlugs.has(cat.slug)}
-                        onChange={() => toggleCategory(cat.slug)}
-                        className="rounded border-zinc-600 bg-zinc-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
-                      />
-                      <span className="text-sm text-zinc-300 flex-1">{cat.name}</span>
-                      {spendCents > 0 && (
-                        <span className="text-xs text-zinc-500">{formatCurrency(spendCents)}</span>
-                      )}
-                    </label>
+                      <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedCategorySlugs.has(cat.slug)}
+                          onChange={() => toggleCategory(cat.slug)}
+                          className="rounded border-zinc-600 bg-zinc-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-zinc-300 flex-1">{cat.name}</span>
+                        {spendCents > 0 && (
+                          <span className="text-xs text-zinc-500 mr-2">{formatCurrency(spendCents)}</span>
+                        )}
+                        {/* Drag handle on the right */}
+                        <span 
+                          className="cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-300 shrink-0"
+                          title="Drag to reorder"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                          </svg>
+                        </span>
+                      </label>
+                    </DraggableItem>
                   );
                 })}
               </div>
             </div>
           )}
         </div>
-
-        {/* Card count */}
-        <span className="text-sm text-zinc-500">
-          {sortedCards.length} cards
-          {filterMode === "all" && ` (${cards.filter((c) => c.isOwned).length} owned)`}
-          {filterMode === "evaluate" && evaluationCardIds.size > 0 && ` (${evaluationCardIds.size} evaluating)`}
-        </span>
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-zinc-800 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-zinc-800/50">
-                {/* Sticky Card Column Header */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-auto max-h-[calc(100vh-280px)]">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+                {/* Sticky Card Column Header - sticky both left AND top */}
                 <th
                   onClick={() => handleSort("card")}
-                  className="sticky left-0 z-10 bg-zinc-800 px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white border-r border-zinc-700 whitespace-nowrap"
+                  className={`sticky left-0 top-0 z-30 bg-zinc-800 px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white whitespace-nowrap w-[220px] min-w-[220px] max-w-[220px] ${!showAvailableCredit ? "border-r border-zinc-700" : ""}`}
+                  style={!showAvailableCredit ? { boxShadow: '2px 0 8px -2px rgba(0,0,0,0.4)' } : undefined}
                 >
                   <span className="inline-flex items-center">
                     Card
@@ -985,21 +1312,21 @@ export function ComparisonTable({
                   </span>
                 </th>
                 
-                {/* Available Credit Column Header */}
+                {/* Available Credit Column Header - sticky both left AND top */}
                 {showAvailableCredit && (
-                  <th className="px-3 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap min-w-[100px]">
-                    Available Credit
+                  <th className="sticky left-[220px] top-0 z-30 bg-zinc-800 px-3 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap min-w-[110px] border-r border-zinc-700" style={{ boxShadow: '2px 0 8px -2px rgba(0,0,0,0.4)' }}>
+                    Avail Credit
                   </th>
                 )}
                 
-                {/* Category Headers */}
+                {/* Category Headers - each individually sticky to top */}
                 {selectedCategories.map((cat) => {
                   const spendCents = userSpending[cat.id] ?? 0;
                   return (
                     <th
                       key={cat.id}
                       onClick={() => handleSort("category", cat.id)}
-                      className="px-3 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white min-w-[100px] whitespace-nowrap"
+                      className="sticky top-0 z-20 px-3 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-white min-w-[100px] whitespace-nowrap bg-zinc-800"
                     >
                       <span className="inline-flex items-center justify-center">
                         {cat.name}
@@ -1028,7 +1355,10 @@ export function ComparisonTable({
                     className={`hover:bg-zinc-800/30 ${isEvaluating ? "bg-amber-950/10" : ""}`}
                   >
                     {/* Sticky Card Info */}
-                    <td className={`sticky left-0 z-10 px-4 py-3 border-r border-zinc-700 ${isEvaluating ? "bg-amber-950" : "bg-zinc-900"}`}>
+                    <td 
+                      className={`sticky left-0 z-20 px-4 py-3 w-[220px] min-w-[220px] max-w-[220px] ${!showAvailableCredit ? "border-r border-zinc-700" : ""} ${isEvaluating ? "bg-amber-950" : "bg-zinc-900"}`}
+                      style={!showAvailableCredit ? { boxShadow: '2px 0 8px -2px rgba(0,0,0,0.4)' } : undefined}
+                    >
                       <div className="flex items-center gap-2">
                         {card.isOwned && (
                           <Tooltip text="In your wallet">
@@ -1041,23 +1371,28 @@ export function ComparisonTable({
                           </Tooltip>
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-white">{card.name}</div>
-                          <div className="text-xs text-zinc-500 flex items-center gap-2">
-                            <span>{card.issuerName}</span>
-                            <span>·</span>
-                            <span className="text-zinc-600">{card.currencyCode}</span>
-                            <span>·</span>
-                            <span className="text-zinc-600">
-                              {card.annualFee > 0 ? `$${card.annualFee}` : "$0"}
-                            </span>
+                          <div className="font-medium text-white text-sm truncate flex items-center gap-1">
+                            <span className="truncate">{card.name}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCardPreview(card);
+                              }}
+                              className="shrink-0 p-0.5 text-zinc-500 hover:text-blue-400 transition-colors"
+                              title="View card details"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
                       </div>
                     </td>
 
-                    {/* Available Credit Cell */}
+                    {/* Available Credit Cell - sticky */}
                     {showAvailableCredit && (
-                      <td className="px-3 py-3 text-center text-sm font-mono">
+                      <td className={`sticky left-[220px] z-20 px-3 py-3 text-center text-sm font-mono min-w-[110px] border-r border-zinc-700 ${isEvaluating ? "bg-amber-950" : "bg-zinc-900"}`} style={{ boxShadow: '2px 0 8px -2px rgba(0,0,0,0.4)' }}>
                         {/* For owned cards, use card.id (wallet ID) since linking is by wallet instance */}
                         {availableCredit[card.id] != null ? (
                           (() => {
@@ -1126,7 +1461,7 @@ export function ComparisonTable({
                             key={cat.id}
                             className={`px-3 py-3 text-center text-sm ${colorClass}`}
                           >
-                            <div className="font-mono">
+                            <span className="font-mono inline-flex items-center justify-center">
                               {hasBreakdown ? (
                                 <RichTooltip content={breakdownContent}>
                                   <span className="border-b border-dotted border-current">${Math.round(totalEarnings).toLocaleString()}</span>
@@ -1134,12 +1469,12 @@ export function ComparisonTable({
                               ) : (
                                 <span>${Math.round(earnings).toLocaleString()}</span>
                               )}
-                            </div>
-                            {cap && (
-                              <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
-                                <span className="text-amber-500 cursor-help ml-0.5">†</span>
-                              </Tooltip>
-                            )}
+                              {cap && (
+                                <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
+                                  <span className="text-amber-500 cursor-help ml-0.5">†</span>
+                                </Tooltip>
+                              )}
+                            </span>
                           </td>
                         );
                       } else {
@@ -1172,12 +1507,12 @@ export function ComparisonTable({
                         
                         const breakdownContent = hasBreakdown ? (
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-zinc-400">Base: {baseValue.toFixed(1)}¢</span>
+                            <span className="text-zinc-400">Base: {baseValue.toFixed(2)}¢</span>
                             {bonusLines.map((line, idx) => (
-                              <span key={idx} className="text-zinc-400">{line.name}: +{line.value.toFixed(1)}¢</span>
+                              <span key={idx} className="text-zinc-400">{line.name}: +{line.value.toFixed(2)}¢</span>
                             ))}
-                            {debitPay > 0 && <span className="text-zinc-400">Debit Pay: +{debitPay}¢</span>}
-                            <span className="text-emerald-400 font-semibold border-t border-zinc-600 pt-0.5 mt-0.5">Total: {totalValue.toFixed(1)}¢</span>
+                            {debitPay > 0 && <span className="text-zinc-400">Debit Pay: +{debitPay.toFixed(2)}¢</span>}
+                            <span className="text-emerald-400 font-semibold border-t border-zinc-600 pt-0.5 mt-0.5">Total: {totalValue.toFixed(2)}¢</span>
                           </div>
                         ) : null;
                         
@@ -1186,18 +1521,20 @@ export function ComparisonTable({
                             key={cat.id}
                             className={`px-3 py-3 text-center text-sm font-mono ${colorClass}`}
                           >
-                            {hasBreakdown ? (
-                              <RichTooltip content={breakdownContent}>
-                                <span className="border-b border-dotted border-current">{totalValue.toFixed(1)}¢</span>
-                              </RichTooltip>
-                            ) : (
-                              <span>{baseValue.toFixed(1)}¢</span>
-                            )}
-                            {cap && (
-                              <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
-                                <span className="text-amber-500 cursor-help ml-0.5">†</span>
-                              </Tooltip>
-                            )}
+                            <span className="inline-flex items-center justify-center">
+                              {hasBreakdown ? (
+                                <RichTooltip content={breakdownContent}>
+                                  <span className="border-b border-dotted border-current">{totalValue.toFixed(2)}¢</span>
+                                </RichTooltip>
+                              ) : (
+                                <span>{baseValue.toFixed(2)}¢</span>
+                              )}
+                              {cap && (
+                                <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
+                                  <span className="text-amber-500 cursor-help ml-0.5">†</span>
+                                </Tooltip>
+                              )}
+                            </span>
                           </td>
                         );
                       }
@@ -1206,8 +1543,7 @@ export function ComparisonTable({
                 );
               })}
             </tbody>
-          </table>
-        </div>
+        </table>
       </div>
 
       {/* Legend */}
@@ -1266,6 +1602,13 @@ export function ComparisonTable({
           }}
         />
       )}
+
+      {/* Card Preview Modal */}
+      <CardPreviewModal
+        isOpen={previewCard !== null}
+        onClose={() => setPreviewCard(null)}
+        data={previewCard}
+      />
     </div>
   );
 }

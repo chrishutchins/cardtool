@@ -2,9 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { CardForm } from "../card-form";
+import { invalidateCardCaches } from "@/lib/cache-invalidation";
 
 export default async function NewCardPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const [issuersResult, currenciesResult] = await Promise.all([
     supabase.from("issuers").select("*").order("name"),
@@ -13,7 +14,7 @@ export default async function NewCardPage() {
 
   async function createCard(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
@@ -48,6 +49,7 @@ export default async function NewCardPage() {
       return;
     }
 
+    invalidateCardCaches();
     revalidatePath("/admin/cards");
     redirect(`/admin/cards/${data.id}`);
   }

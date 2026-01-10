@@ -199,6 +199,9 @@ export interface CardEarnings {
   // Marginal value fields (calculated separately)
   marginalValue?: number;         // Value this card adds over replacement
   replacementValue?: number;      // What other cards would earn if this card removed
+  // Base card info for aggregation (when multiple instances of same card type)
+  baseCardId?: string;            // Original card_id (for grouping multiple instances)
+  baseCardName?: string;          // Original card name (for display when aggregated)
 }
 
 export interface CurrencyEarningsBreakdown {
@@ -552,6 +555,9 @@ export interface CalculatorInput {
   // Multi-instance support: how many wallet instances of each card (for fee calculation)
   // If not provided, assumes 1 instance per card
   cardInstanceCounts?: Map<string, number>;
+  // Base card info for split instances: maps cardId (wallet_id) -> { baseCardId, baseCardName }
+  // Used for aggregating multiple instances of the same card type in display
+  cardBaseInfo?: Map<string, { baseCardId: string; baseCardName: string }>;
 }
 
 export function calculatePortfolioReturns(input: CalculatorInput): PortfolioReturns {
@@ -580,6 +586,7 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     spendBonuses = [],
     includeBonusesInCalculation = false,
     cardInstanceCounts = new Map(),
+    cardBaseInfo = new Map(),
   } = input;
 
   // Expand spending to handle >$5k tracking
@@ -771,13 +778,14 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
 
   // Initialize card earnings for all cards
   // Note: fees are multiplied by instance count (for users with multiple of the same card)
+  // Perks values are already aggregated from all instances before being passed to the calculator,
+  // so we don't multiply them by instance count
   cards.forEach(card => {
     const currencyInfo = getCardCurrencyInfo(card);
     const instanceCount = cardInstanceCounts.get(card.id) ?? 1;
-    const perksPerCard = perksValues.get(card.id) ?? 0;
-    // Total fees = fee per card × instance count, same for perks
+    const totalPerksValue = perksValues.get(card.id) ?? 0; // Already aggregated from all instances
     const totalAnnualFee = card.annual_fee * instanceCount;
-    const totalPerksValue = perksPerCard * instanceCount;
+    const baseInfo = cardBaseInfo.get(card.id);
     cardEarningsMap.set(card.id, {
       cardId: card.id,
       cardName: card.name,
@@ -794,6 +802,9 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
       totalBonusValue: 0,
       bonusDetails: [],
       categoryBreakdown: [],
+      // Base card info for aggregation (if this is a split instance)
+      baseCardId: baseInfo?.baseCardId ?? card.id,
+      baseCardName: baseInfo?.baseCardName ?? card.name,
     });
   });
 

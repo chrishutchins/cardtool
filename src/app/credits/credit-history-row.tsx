@@ -500,6 +500,12 @@ export function CreditHistoryRow({
           <span className="font-medium text-white">
             {credit.displayName}{formatValue() && ` - ${formatValue()}`}
           </span>
+          {/* Closed card indicator */}
+          {walletCard.closed_date && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-400">
+              Closed
+            </span>
+          )}
           {/* Notes Tooltip */}
           {allNotes.length > 0 && (
             <Tooltip 

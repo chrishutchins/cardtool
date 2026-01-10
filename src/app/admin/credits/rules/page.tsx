@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 interface MatchedTransaction {
   id: string;
   name: string;
+  original_description: string | null;
   amount_cents: number;
   date: string;
   authorized_date?: string | null;
@@ -82,7 +83,7 @@ export default async function RulesPage() {
         )
       )
     `)
-    .order("created_at", { ascending: false });
+    .order("pattern", { ascending: true });
 
   // Get all matched transactions grouped by rule, with card info
   // Relationship chain: user_plaid_transactions → user_linked_accounts → user_wallets → cards
@@ -90,7 +91,8 @@ export default async function RulesPage() {
     .from("user_plaid_transactions")
     .select(`
       id, 
-      name, 
+      name,
+      original_description,
       amount_cents, 
       date,
       authorized_date, 
@@ -124,6 +126,7 @@ export default async function RulesPage() {
       txnsByRuleId.get(t.matched_rule_id)!.push({
         id: t.id,
         name: t.name,
+        original_description: t.original_description,
         amount_cents: t.amount_cents,
         date: t.date,
         authorized_date: t.authorized_date,

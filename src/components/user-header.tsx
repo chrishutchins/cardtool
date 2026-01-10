@@ -8,7 +8,8 @@ import { EmulationBanner } from "./emulation-banner";
 import { stopEmulation } from "@/lib/emulation";
 
 const baseNavItems = [
-  { href: "/wallet", label: "My Wallet", onboardingId: "wallet" },
+  { href: "/dashboard", label: "Dashboard", onboardingId: "dashboard" },
+  { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
   { href: "/returns", label: "Earnings", onboardingId: "earnings" },
   { href: "/compare", label: "Compare", onboardingId: "compare" },
   { href: "/spending", label: "Spending", onboardingId: "spending" },

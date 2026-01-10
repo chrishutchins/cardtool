@@ -11,7 +11,7 @@ interface PageProps {
 
 export default async function MultiplierProgramPage({ params }: PageProps) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const [
     programResult,
@@ -43,7 +43,7 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
 
   async function updateProgram(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     const name = formData.get("name") as string;
     const description = (formData.get("description") as string | null) || null;
 
@@ -56,7 +56,7 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
 
   async function addTier(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     const name = formData.get("name") as string;
     const multiplier = parseFloat(formData.get("multiplier") as string);
     const sort_order = parseInt(formData.get("sort_order") as string) || 0;
@@ -83,7 +83,7 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
 
   async function updateTier(tierId: string, formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     const name = formData.get("name") as string;
     const multiplier = parseFloat(formData.get("multiplier") as string);
     const sort_order = parseInt(formData.get("sort_order") as string) || 0;
@@ -112,14 +112,14 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
 
   async function deleteTier(tierId: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("earning_multiplier_tiers").delete().eq("id", tierId);
     revalidatePath(`/admin/multipliers/${id}`);
   }
 
   async function updateEligibleCurrencies(currencyIds: string[]) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     // Delete existing
     await supabase.from("earning_multiplier_currencies").delete().eq("program_id", id);
     // Insert new
@@ -133,7 +133,7 @@ export default async function MultiplierProgramPage({ params }: PageProps) {
 
   async function updateEligibleCards(cardIds: string[]) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     // Delete existing
     await supabase.from("earning_multiplier_cards").delete().eq("program_id", id);
     // Insert new

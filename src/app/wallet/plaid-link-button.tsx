@@ -116,6 +116,14 @@ export function PlaidLinkButton({ onSuccess }: PlaidLinkButtonProps) {
         }
         
         if (data.success) {
+          // Trigger a background sync to fetch transactions for newly linked accounts
+          // Don't await - let it run in background while user continues
+          fetch("/api/plaid/sync-credits", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ forceRefresh: true }),
+          }).catch(err => console.error("Background sync failed:", err));
+          
           onSuccess();
         } else {
           setError(data.error || "Failed to link account");

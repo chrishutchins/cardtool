@@ -2,7 +2,7 @@ import { clerkMiddleware, clerkClient, createRouteMatcher } from "@clerk/nextjs/
 import { NextResponse } from "next/server";
 
 // Define protected routes - user pages require auth
-const isProtectedRoute = createRouteMatcher(["/wallet(.*)", "/returns(.*)", "/compare(.*)", "/spending(.*)", "/point-values(.*)", "/settings(.*)"]);
+const isProtectedRoute = createRouteMatcher(["/dashboard(.*)", "/wallet(.*)", "/returns(.*)", "/compare(.*)", "/spending(.*)", "/point-values(.*)", "/settings(.*)", "/credits(.*)", "/inventory(.*)", "/rules(.*)"]);
 
 // Admin routes require auth + admin role
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);

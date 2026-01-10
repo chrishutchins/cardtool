@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { InventoryTypeForm } from "./type-form";
-import { InventoryTypeRow } from "./type-row";
+import { InventoryTypesTable } from "./inventory-types-table";
 
 export default async function InventoryTypesPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: types, error } = await supabase
     .from("inventory_types")
     .select("*")
@@ -16,7 +16,7 @@ export default async function InventoryTypesPage() {
 
   async function createType(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
     const trackingType = formData.get("tracking_type") as "quantity" | "dollar_value" | "single_use";
@@ -42,14 +42,14 @@ export default async function InventoryTypesPage() {
 
   async function deleteType(id: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("inventory_types").delete().eq("id", id);
     revalidatePath("/admin/inventory");
   }
 
   async function updateType(id: string, formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
     const trackingType = formData.get("tracking_type") as "quantity" | "dollar_value" | "single_use";
@@ -66,7 +66,7 @@ export default async function InventoryTypesPage() {
 
   async function reorderTypes(typeIds: string[]) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     
     // Update each type's display_order based on its position in the array
     for (let i = 0; i < typeIds.length; i++) {
@@ -95,53 +95,15 @@ export default async function InventoryTypesPage() {
       </div>
 
       {/* Types Table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-800/50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Order
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Slug
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Tracking Type
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {types?.map((type, index) => (
-              <InventoryTypeRow
-                key={type.id}
-                type={type}
-                index={index}
-                totalCount={types.length}
-                onDelete={deleteType}
-                onUpdate={updateType}
-                onReorder={reorderTypes}
-                allTypes={types}
-              />
-            ))}
-          </tbody>
-        </table>
-        {types?.length === 0 && (
-          <div className="px-6 py-12 text-center text-zinc-500">
-            No inventory types yet. Add one above.
-          </div>
-        )}
-      </div>
+      <InventoryTypesTable
+        types={types ?? []}
+        onDelete={deleteType}
+        onUpdate={updateType}
+        onReorder={reorderTypes}
+      />
     </div>
   );
 }
+
 
 

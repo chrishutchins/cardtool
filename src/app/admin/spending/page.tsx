@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useTransition } from "react";
 import { useSupabaseClient } from "@/lib/supabase/client";
+import { DataTable, DataTableColumn, Badge, formatCurrency } from "@/components/data-table";
 
 interface Category {
   id: number;
@@ -18,6 +19,7 @@ interface SpendingDefault {
 
 interface CategoryWithSpending extends Category {
   spending?: SpendingDefault;
+  group: string;
 }
 
 // Display names for spending UI to clarify mutually exclusive categories
@@ -63,40 +65,17 @@ const CATEGORY_GROUPS: { name: string; slugs: string[] }[] = [
   },
 ];
 
-function getDisplayName(category: CategoryWithSpending): string {
+function getDisplayName(category: { slug: string; name: string }): string {
   return DISPLAY_NAME_OVERRIDES[category.slug] || category.name;
 }
 
-function groupCategories(categories: CategoryWithSpending[]): { name: string; categories: CategoryWithSpending[] }[] {
-  // Filter out hidden/virtual categories first
-  const filteredCategories = categories.filter((c) => !HIDDEN_CATEGORY_SLUGS.includes(c.slug));
-  const slugToCategory = new Map(filteredCategories.map((c) => [c.slug, c]));
-  const usedSlugs = new Set<string>();
-  
-  const groups = CATEGORY_GROUPS.map((group) => {
-    const groupCategories = group.slugs
-      .map((slug) => {
-        const cat = slugToCategory.get(slug);
-        if (cat) usedSlugs.add(slug);
-        return cat;
-      })
-      .filter((c): c is CategoryWithSpending => c !== undefined);
-    
-    return { name: group.name, categories: groupCategories };
-  }).filter((g) => g.categories.length > 0);
-  
-  // Add any uncategorized items to "Other"
-  const uncategorized = filteredCategories.filter((c) => !usedSlugs.has(c.slug));
-  if (uncategorized.length > 0) {
-    const otherGroup = groups.find((g) => g.name === "Other");
-    if (otherGroup) {
-      otherGroup.categories.push(...uncategorized);
-    } else {
-      groups.push({ name: "Other", categories: uncategorized });
+function getCategoryGroup(slug: string): string {
+  for (const group of CATEGORY_GROUPS) {
+    if (group.slugs.includes(slug)) {
+      return group.name;
     }
   }
-  
-  return groups;
+  return "Other";
 }
 
 function formatDollars(cents: number): string {
@@ -140,10 +119,32 @@ export default function AdminSpendingPage() {
     const categoriesData = categoriesResult.data ?? [];
     const spendingData = spendingResult.data ?? [];
 
-    const merged: CategoryWithSpending[] = categoriesData.map((cat) => ({
-      ...cat,
-      spending: spendingData.find((s) => s.category_id === cat.id),
-    }));
+    // Filter out hidden categories and merge with spending data + group info
+    const merged: CategoryWithSpending[] = categoriesData
+      .filter((cat) => !HIDDEN_CATEGORY_SLUGS.includes(cat.slug))
+      .map((cat) => ({
+        ...cat,
+        spending: spendingData.find((s) => s.category_id === cat.id),
+        group: getCategoryGroup(cat.slug),
+      }));
+
+    // Sort by group order, then by name within group
+    const groupOrder = CATEGORY_GROUPS.map(g => g.name);
+    merged.sort((a, b) => {
+      const aGroupIndex = groupOrder.indexOf(a.group);
+      const bGroupIndex = groupOrder.indexOf(b.group);
+      if (aGroupIndex !== bGroupIndex) {
+        return aGroupIndex - bGroupIndex;
+      }
+      // Within same group, sort by the order in CATEGORY_GROUPS.slugs
+      const groupSlugs = CATEGORY_GROUPS.find(g => g.name === a.group)?.slugs ?? [];
+      const aSlugIndex = groupSlugs.indexOf(a.slug);
+      const bSlugIndex = groupSlugs.indexOf(b.slug);
+      if (aSlugIndex !== -1 && bSlugIndex !== -1) {
+        return aSlugIndex - bSlugIndex;
+      }
+      return a.name.localeCompare(b.name);
+    });
 
     setCategories(merged);
     setLoading(false);
@@ -206,8 +207,6 @@ export default function AdminSpendingPage() {
     0
   );
 
-  const groupedCategories = groupCategories(categories);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -215,6 +214,73 @@ export default function AdminSpendingPage() {
       </div>
     );
   }
+
+  const columns: DataTableColumn<CategoryWithSpending>[] = [
+    {
+      id: "category",
+      label: "Category",
+      accessor: "name",
+      sticky: true,
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <span className="text-white font-medium">{getDisplayName(row)}</span>
+          {row.excluded_by_default && (
+            <Badge variant="default">Excluded</Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "group",
+      label: "Group",
+      accessor: "group",
+      render: (row) => (
+        <Badge variant="warning">{row.group}</Badge>
+      ),
+    },
+    {
+      id: "spend",
+      label: "Default Annual Spend",
+      accessor: (row) => row.spending?.annual_spend_cents ?? 0,
+      align: "right",
+      sortAccessor: (row) => row.spending?.annual_spend_cents ?? 0,
+      render: (row) => {
+        if (editingId === row.id) {
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <span className="text-zinc-400">$</span>
+              <input
+                type="number"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => saveEdit(row.id)}
+                onKeyDown={(e) => handleKeyDown(e, row.id)}
+                placeholder="0"
+                disabled={isPending}
+                className="w-28 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-right text-white text-sm focus:border-emerald-500 focus:outline-none"
+                autoFocus
+              />
+            </div>
+          );
+        }
+        return (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              startEdit(row);
+            }}
+            className="text-right hover:text-emerald-400 transition-colors cursor-pointer"
+          >
+            <span className={row.spending?.annual_spend_cents ? "text-white" : "text-zinc-600"}>
+              {row.spending?.annual_spend_cents 
+                ? formatDollars(row.spending.annual_spend_cents)
+                : "$0"}
+            </span>
+          </button>
+        );
+      },
+    },
+  ];
 
   return (
     <div>
@@ -231,83 +297,23 @@ export default function AdminSpendingPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-800/50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Default Annual Spend
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {groupedCategories.map((group) => (
-              <React.Fragment key={`group-${group.name}`}>
-                {/* Group header */}
-                <tr className="bg-zinc-800/30">
-                  <td colSpan={2} className="px-6 py-2">
-                    <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">
-                      {group.name}
-                    </span>
-                  </td>
-                </tr>
-                {/* Categories in group */}
-                {group.categories.map((category) => (
-                  <tr key={category.id} className="hover:bg-zinc-800/30">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{getDisplayName(category)}</span>
-                        {category.excluded_by_default && (
-                          <span className="px-1.5 py-0.5 text-xs rounded bg-zinc-700 text-zinc-400">
-                            Excluded
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {editingId === category.id ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <span className="text-zinc-400">$</span>
-                          <input
-                            type="number"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={() => saveEdit(category.id)}
-                            onKeyDown={(e) => handleKeyDown(e, category.id)}
-                            placeholder="0"
-                            disabled={isPending}
-                            className="w-28 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-right text-white text-sm focus:border-emerald-500 focus:outline-none"
-                            autoFocus
-                          />
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => startEdit(category)}
-                          className="text-right hover:text-emerald-400 transition-colors cursor-pointer"
-                        >
-                          <span className={category.spending?.annual_spend_cents ? "text-white" : "text-zinc-600"}>
-                            {category.spending?.annual_spend_cents 
-                              ? formatDollars(category.spending.annual_spend_cents)
-                              : "$0"}
-                          </span>
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-        {categories.length === 0 && (
-          <div className="px-6 py-12 text-center text-zinc-500">
-            No categories found.
-          </div>
-        )}
-      </div>
+      <DataTable
+        data={categories}
+        columns={columns}
+        keyAccessor={(row) => row.id.toString()}
+        searchPlaceholder="Search categories..."
+        searchFilter={(row, query) => {
+          const q = query.toLowerCase();
+          return (
+            row.name.toLowerCase().includes(q) ||
+            row.slug.toLowerCase().includes(q) ||
+            row.group.toLowerCase().includes(q) ||
+            getDisplayName(row).toLowerCase().includes(q)
+          );
+        }}
+        showColumnSelector={false}
+        emptyMessage="No categories found."
+      />
     </div>
   );
 }

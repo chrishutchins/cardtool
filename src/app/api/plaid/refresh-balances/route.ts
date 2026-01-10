@@ -19,7 +19,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Get all Plaid items for this user
     const { data: plaidItems, error: itemsError } = await supabase

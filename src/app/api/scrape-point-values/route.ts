@@ -435,7 +435,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Fetch currencies from database to build dynamic mappings
-    const supabase = await createClient();
+    const supabase = createClient();
     const { data: currencies, error: currencyError } = await supabase
       .from("reward_currencies")
       .select("code, name");

@@ -5,9 +5,7 @@ import { getEffectiveUserId } from '@/lib/emulation';
 import { plaidClient } from '@/lib/plaid';
 import { matchTransactionsToCredits } from '@/lib/credit-matcher';
 import logger from '@/lib/logger';
-
-// Maximum days of history to fetch (Plaid typically allows 24 months)
-const MAX_HISTORY_DAYS = 730; // ~2 years
+import { RemovedTransaction, Transaction } from 'plaid';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,14 +22,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Use admin client since we're already authenticated via Clerk
-    // and RLS policies use auth.uid() which only works with Supabase Auth
     const supabase = createAdminClient();
 
     // Check for force refresh option
     const body = await request.json().catch(() => ({}));
     const forceRefresh = body.forceRefresh === true;
 
-    // Check if we've synced recently (debounce to once per day unless forced)
+    // Check if we've synced recently (debounce to once per hour unless forced)
     if (!forceRefresh) {
       const { data: syncState } = await supabase
         .from('user_plaid_sync_state')
@@ -45,7 +42,7 @@ export async function POST(request: NextRequest) {
         const lastSync = new Date(syncState.last_synced_at);
         const hoursSinceSync = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
 
-        if (hoursSinceSync < 24) {
+        if (hoursSinceSync < 1) {
           return NextResponse.json({
             success: true,
             message: 'Already synced recently',
@@ -70,12 +67,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: 'No linked accounts to sync',
-        transactionsStored: 0,
+        transactionsAdded: 0,
+        transactionsModified: 0,
+        transactionsRemoved: 0,
         creditsMatched: 0,
       });
     }
 
-    // Fetch linked accounts to map plaid_item_id to linked_account_id
+    // Fetch linked accounts to map plaid_account_id to linked_account_id
     const { data: linkedAccounts } = await supabase
       .from('user_linked_accounts')
       .select('id, plaid_item_id, plaid_account_id')
@@ -86,139 +85,166 @@ export async function POST(request: NextRequest) {
       accountByPlaidAccountId.set(acc.plaid_account_id, acc.id);
     });
 
-    let totalTransactionsStored = 0;
+    let totalAdded = 0;
+    let totalModified = 0;
+    let totalRemoved = 0;
     let totalCreditsMatched = 0;
     let totalClawbacks = 0;
     const syncErrors: string[] = [];
 
-    // Process each Plaid item
+    // Process each Plaid item using transactionsSync
     for (const plaidItem of plaidItems) {
       try {
-        // Get sync state for this item (may not exist on first sync)
+        // Get sync state for this item (cursor may not exist on first sync)
         const { data: syncState } = await supabase
           .from('user_plaid_sync_state')
-          .select('last_transaction_date')
+          .select('*')
           .eq('user_id', effectiveUserId)
           .eq('plaid_item_id', plaidItem.id)
           .maybeSingle();
 
-        // Calculate date range
-        const endDate = new Date();
-        let startDate: Date;
-
-        if (syncState?.last_transaction_date && !forceRefresh) {
-          // Incremental sync: start from last synced date minus a few days for safety
-          startDate = new Date(syncState.last_transaction_date);
-          startDate.setDate(startDate.getDate() - 7); // 7-day overlap for safety
-        } else {
-          // Full sync: go back max history
-          startDate = new Date();
-          startDate.setDate(startDate.getDate() - MAX_HISTORY_DAYS);
-        }
-
-        const startDateStr = startDate.toISOString().split('T')[0];
-        const endDateStr = endDate.toISOString().split('T')[0];
+        // sync_cursor column was added via migration - cast for type safety
+        let cursor = (syncState as { sync_cursor?: string } | null)?.sync_cursor || '';
+        const isFirstSync = !cursor;
 
         logger.info({
           userId: effectiveUserId,
           plaidItemId: plaidItem.id,
           institution: plaidItem.institution_name,
-          startDate: startDateStr,
-          endDate: endDateStr,
-        }, 'Fetching transactions from Plaid');
+          isFirstSync,
+          hasCursor: !!cursor,
+        }, 'Starting transaction sync');
 
-        // Fetch transactions from Plaid
-        let allTransactions: Array<{
-          transaction_id: string;
-          account_id: string;
-          name: string;
-          amount: number;
-          date: string;
-          authorized_date?: string | null;
-          pending: boolean;
-          category?: string[] | null;
-          merchant_name?: string | null;
-        }> = [];
+        // Collect all transactions from paginated sync
+        const addedTransactions: Transaction[] = [];
+        const modifiedTransactions: Transaction[] = [];
+        const removedTransactions: RemovedTransaction[] = [];
 
         let hasMore = true;
-        let offset = 0;
-        const count = 500;
-
         while (hasMore) {
-          const response = await plaidClient.transactionsGet({
+          // Note: days_requested is configured in linkTokenCreate, not here
+          // Setting it in both places violates Plaid's guidance
+          const response = await plaidClient.transactionsSync({
             access_token: plaidItem.access_token,
-            start_date: startDateStr,
-            end_date: endDateStr,
+            cursor: cursor,
+            count: 500,
             options: {
-              count,
-              offset,
-              include_original_description: false,
+              include_original_description: true,
             },
           });
 
-          allTransactions = allTransactions.concat(response.data.transactions);
-          offset += response.data.transactions.length;
-          hasMore = offset < response.data.total_transactions;
+          addedTransactions.push(...response.data.added);
+          modifiedTransactions.push(...response.data.modified);
+          removedTransactions.push(...response.data.removed);
+
+          hasMore = response.data.has_more;
+          cursor = response.data.next_cursor;
         }
 
         logger.info({
           userId: effectiveUserId,
           plaidItemId: plaidItem.id,
-          transactionCount: allTransactions.length,
+          added: addedTransactions.length,
+          modified: modifiedTransactions.length,
+          removed: removedTransactions.length,
         }, 'Fetched transactions from Plaid');
 
-        // Store transactions in database
-        let latestTransactionDate: string | null = null;
-        const transactionsToInsert = [];
+        // Process ADDED transactions
+        if (addedTransactions.length > 0) {
+          const transactionsToInsert = addedTransactions
+            .map(txn => {
+              const linkedAccountId = accountByPlaidAccountId.get(txn.account_id);
+              if (!linkedAccountId) return null;
 
-        for (const txn of allTransactions) {
-          const linkedAccountId = accountByPlaidAccountId.get(txn.account_id);
-          if (!linkedAccountId) continue;
+              return {
+                user_id: effectiveUserId,
+                linked_account_id: linkedAccountId,
+                plaid_transaction_id: txn.transaction_id,
+                name: txn.name,
+                original_description: txn.original_description || null,
+                amount_cents: Math.round(txn.amount * 100),
+                date: txn.date,
+                authorized_date: txn.authorized_date || null,
+                pending: txn.pending,
+                category: txn.category || null,
+                merchant_name: txn.merchant_name || null,
+              };
+            })
+            .filter((t): t is NonNullable<typeof t> => t !== null);
 
-          // Track latest date for sync state
-          if (!latestTransactionDate || txn.date > latestTransactionDate) {
-            latestTransactionDate = txn.date;
+          if (transactionsToInsert.length > 0) {
+            const { error: insertError } = await supabase
+              .from('user_plaid_transactions')
+              .upsert(transactionsToInsert, {
+                onConflict: 'plaid_transaction_id',
+                ignoreDuplicates: false,
+              });
+
+            if (insertError) {
+              logger.error({ err: insertError, userId: effectiveUserId }, 'Failed to insert transactions');
+              syncErrors.push(`Failed to store transactions for ${plaidItem.institution_name}`);
+            } else {
+              totalAdded += transactionsToInsert.length;
+            }
           }
-
-          transactionsToInsert.push({
-            user_id: effectiveUserId,
-            linked_account_id: linkedAccountId,
-            plaid_transaction_id: txn.transaction_id,
-            name: txn.name,
-            amount_cents: Math.round(txn.amount * 100), // Plaid returns positive for debits, negative for credits
-            date: txn.date,
-            authorized_date: txn.authorized_date || null,
-            pending: txn.pending,
-            category: txn.category || null,
-            merchant_name: txn.merchant_name || null,
-          });
         }
 
-        // Upsert transactions (update if exists, insert if new)
-        if (transactionsToInsert.length > 0) {
-          const { error: insertError } = await supabase
+        // Process MODIFIED transactions (e.g., pending → posted)
+        if (modifiedTransactions.length > 0) {
+          let modifiedErrors = 0;
+          for (const txn of modifiedTransactions) {
+            const linkedAccountId = accountByPlaidAccountId.get(txn.account_id);
+            if (!linkedAccountId) continue;
+
+            const { error: updateError } = await supabase
+              .from('user_plaid_transactions')
+              .update({
+                name: txn.name,
+                original_description: txn.original_description || null,
+                amount_cents: Math.round(txn.amount * 100),
+                date: txn.date,
+                authorized_date: txn.authorized_date || null,
+                pending: txn.pending,
+                category: txn.category || null,
+                merchant_name: txn.merchant_name || null,
+              })
+              .eq('plaid_transaction_id', txn.transaction_id);
+
+            if (updateError) {
+              logger.error({ err: updateError, userId: effectiveUserId, transactionId: txn.transaction_id }, 'Failed to update modified transaction');
+              modifiedErrors++;
+            } else {
+              totalModified++;
+            }
+          }
+          if (modifiedErrors > 0) {
+            syncErrors.push(`Failed to update ${modifiedErrors} modified transaction(s) for ${plaidItem.institution_name}`);
+          }
+        }
+
+        // Process REMOVED transactions
+        if (removedTransactions.length > 0) {
+          const removedIds = removedTransactions.map(t => t.transaction_id);
+          
+          // Delete the transactions (will cascade to usage links)
+          const { error: deleteError } = await supabase
             .from('user_plaid_transactions')
-            .upsert(transactionsToInsert, {
-              onConflict: 'plaid_transaction_id',
-              ignoreDuplicates: false,
-            });
+            .delete()
+            .in('plaid_transaction_id', removedIds);
 
-          if (insertError) {
-            logger.error({ err: insertError, userId: effectiveUserId }, 'Failed to store transactions');
-            syncErrors.push(`Failed to store transactions for ${plaidItem.institution_name}`);
-          } else {
-            totalTransactionsStored += transactionsToInsert.length;
+          if (!deleteError) {
+            totalRemoved += removedTransactions.length;
           }
         }
 
-        // Update sync state
+        // Update sync state with new cursor
         await supabase
           .from('user_plaid_sync_state')
           .upsert({
             user_id: effectiveUserId,
             plaid_item_id: plaidItem.id,
             last_synced_at: new Date().toISOString(),
-            last_transaction_date: latestTransactionDate,
+            sync_cursor: cursor,
           }, {
             onConflict: 'user_id,plaid_item_id',
           });
@@ -230,15 +256,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Now match stored transactions to credits
-    // Fetch all unmatched transactions for matching
-    const { data: unmatchedTxns } = await supabase
-      .from('user_plaid_transactions')
-      .select('*')
-      .eq('user_id', effectiveUserId)
-      .is('matched_credit_id', null)
-      .eq('dismissed', false)
-      .eq('pending', false);
+    // Match newly added transactions to credits
+    // Fetch all unmatched transactions with pagination (Supabase has default row limits)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allUnmatchedTxns: any[] = [];
+    let matchOffset = 0;
+    const matchBatchSize = 1000;
+    let hasMoreToMatch = true;
+
+    while (hasMoreToMatch) {
+      const { data: batch } = await supabase
+        .from('user_plaid_transactions')
+        .select('*')
+        .eq('user_id', effectiveUserId)
+        .is('matched_credit_id', null)
+        .eq('dismissed', false)
+        .eq('pending', false)
+        .range(matchOffset, matchOffset + matchBatchSize - 1);
+
+      if (batch && batch.length > 0) {
+        allUnmatchedTxns.push(...batch);
+        matchOffset += matchBatchSize;
+        hasMoreToMatch = batch.length === matchBatchSize;
+      } else {
+        hasMoreToMatch = false;
+      }
+    }
+
+    const unmatchedTxns = allUnmatchedTxns;
+
+    logger.info({ userId: effectiveUserId, unmatchedCount: unmatchedTxns?.length ?? 0 }, 'Starting credit matching');
 
     if (unmatchedTxns && unmatchedTxns.length > 0) {
       const matchResult = await matchTransactionsToCredits(supabase, effectiveUserId, unmatchedTxns);
@@ -252,15 +299,19 @@ export async function POST(request: NextRequest) {
 
     logger.info({
       userId: effectiveUserId,
-      transactionsStored: totalTransactionsStored,
+      added: totalAdded,
+      modified: totalModified,
+      removed: totalRemoved,
       creditsMatched: totalCreditsMatched,
       clawbacks: totalClawbacks,
       errors: syncErrors.length,
-    }, 'Credit sync completed');
+    }, 'Transaction sync completed');
 
     return NextResponse.json({
       success: true,
-      transactionsStored: totalTransactionsStored,
+      transactionsAdded: totalAdded,
+      transactionsModified: totalModified,
+      transactionsRemoved: totalRemoved,
       creditsMatched: totalCreditsMatched,
       clawbacks: totalClawbacks,
       errors: syncErrors.length > 0 ? syncErrors : undefined,
@@ -284,7 +335,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Use effective user ID to support admin emulation
     const effectiveUserId = await getEffectiveUserId();
     if (!effectiveUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -297,7 +347,7 @@ export async function GET() {
       .from('user_plaid_sync_state')
       .select(`
         last_synced_at,
-        last_transaction_date,
+        sync_cursor,
         user_plaid_items:plaid_item_id (
           institution_name
         )
@@ -331,4 +381,3 @@ export async function GET() {
     );
   }
 }
-

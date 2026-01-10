@@ -27,7 +27,7 @@ export default async function InventoryPage() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
@@ -98,7 +98,7 @@ export default async function InventoryPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const typeId = formData.get("type_id") as string;
     const name = formData.get("name") as string;
@@ -147,7 +147,7 @@ export default async function InventoryPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Verify ownership
     const { data: item } = await supabase
@@ -208,7 +208,7 @@ export default async function InventoryPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Get current item with type info
     const { data: item } = await supabase
@@ -274,7 +274,7 @@ export default async function InventoryPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Verify ownership
     const { data: item } = await supabase
@@ -306,7 +306,7 @@ export default async function InventoryPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Verify ownership before delete
     const { data: item } = await supabase

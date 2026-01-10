@@ -143,8 +143,8 @@ function LinkedTransactions({
               <span className={isClawback ? "text-amber-400/70" : "text-emerald-400/70"}>
                 {formatAmount(txn.amount_cents)}
               </span>
-              <span className="truncate max-w-[200px]" title={txn.name}>
-                "{txn.name}"
+              <span className="truncate max-w-[200px]" title={txn.original_description || txn.name}>
+                "{txn.original_description || txn.name}"
               </span>
               <span className="text-zinc-600">on {formatDate(txn.authorized_date || txn.date)}</span>
             </div>
@@ -330,6 +330,12 @@ export function CreditCard({
         const lastUsedDate = parseLocalDate(lastUsage.used_at);
         const nextReset = new Date(lastUsedDate);
         nextReset.setMonth(nextReset.getMonth() + credit.renewal_period_months);
+        
+        // Check if the period has expired - if so, credit is available again
+        if (nextReset < now) {
+          return { start: new Date(year, 0, 1), end: new Date(year + 10, 11, 31), label: "Available", shortLabel: "Available" };
+        }
+        
         return { start: lastUsedDate, end: nextReset, label: "Current", shortLabel: "Current" };
       }
       return { start: new Date(year, 0, 1), end: new Date(year + 10, 11, 31), label: "Available", shortLabel: "Available" };
@@ -366,9 +372,16 @@ export function CreditCard({
   }, [currentPeriodUsageRecords]);
 
   // Determine if credit is fully used
-  // For value-based credits (default_value_cents), compare usage in cents to value
-  // For quantity-based credits (default_quantity), compare usage count
+  // For usage-based credits (like Global Entry): amount_used is a COUNT (1 = used once = full credit)
+  // For value-based credits (default_value_cents): amount_used is in dollars
+  // For quantity-based credits (default_quantity): amount_used is a count
   const isFullyUsed = useMemo(() => {
+    // Usage-based credits: amount_used is a count, compare to 1 (or credit_count)
+    if (credit.reset_cycle === "usage_based") {
+      const maxCount = credit.credit_count ?? 1;
+      return currentPeriodUsage >= maxCount;
+    }
+    
     if (credit.default_value_cents) {
       // Value-based: currentPeriodUsage is in dollars, compare to value in cents
       return currentPeriodUsage * 100 >= credit.default_value_cents;
@@ -376,7 +389,7 @@ export function CreditCard({
     // Quantity-based: compare to quantity (default 1)
     const maxQuantity = credit.default_quantity ?? 1;
     return currentPeriodUsage >= maxQuantity;
-  }, [currentPeriodUsage, credit.default_value_cents, credit.default_quantity]);
+  }, [currentPeriodUsage, credit.default_value_cents, credit.default_quantity, credit.reset_cycle, credit.credit_count]);
 
   const maxAmount = credit.default_quantity ?? 1;
 
@@ -452,6 +465,15 @@ export function CreditCard({
 
   // Format remaining for current period
   const formatRemaining = () => {
+    // For usage-based credits: amount_used is a count, show dollar value remaining
+    if (credit.reset_cycle === "usage_based" && credit.default_value_cents) {
+      const maxCount = credit.credit_count ?? 1;
+      const remainingCount = Math.max(0, maxCount - currentPeriodUsage);
+      const valuePerCount = credit.default_value_cents / maxCount;
+      const remainingDollars = (remainingCount * valuePerCount) / 100;
+      return `$${remainingDollars.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    }
+    
     if (credit.default_value_cents) {
       // For dollar credits: currentPeriodUsage is in dollars, default_value_cents is in cents
       const totalValueDollars = (settings?.user_value_override_cents ?? credit.default_value_cents) / 100;
@@ -696,10 +718,18 @@ export function CreditCard({
                 }
               }}
               className="w-8 h-8 rounded-lg bg-amber-500/60 flex items-center justify-center flex-shrink-0 hover:bg-amber-500/80 transition-all"
-              title={`$${formatCompactDollar(currentPeriodUsage)} used - click to view details`}
+              title={
+                credit.reset_cycle === "usage_based" 
+                  ? `${currentPeriodUsage} of ${credit.credit_count ?? 1} used - click to view details`
+                  : `$${formatCompactDollar(currentPeriodUsage)} used - click to view details`
+              }
             >
-              {/* Show percentage used for dollar credits */}
-              {credit.default_value_cents ? (
+              {/* For usage-based credits, show count-based percentage */}
+              {credit.reset_cycle === "usage_based" ? (
+                <span className="text-[10px] font-bold text-white">
+                  {Math.round((currentPeriodUsage * 100) / (credit.credit_count ?? 1))}%
+                </span>
+              ) : credit.default_value_cents ? (
                 <span className="text-[10px] font-bold text-white">
                   {Math.round((currentPeriodUsage * 100) / (credit.default_value_cents / 100))}%
                 </span>

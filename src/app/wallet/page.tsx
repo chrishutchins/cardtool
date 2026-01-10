@@ -3,16 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { WalletCardList } from "./wallet-card-list";
+import { WalletCardTable } from "./wallet-card-table";
 import { AddCardModal } from "./add-card-modal";
+import { RefreshBalancesButton } from "./refresh-balances-button";
+import { ClosedCardsSection, ClosedCardDisplay } from "./closed-cards-section";
 import { UserHeader } from "@/components/user-header";
-import { ReturnsSummary } from "./returns-summary";
 import { isAdminEmail } from "@/lib/admin";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import { calculateCreditPeriod } from "@/lib/credit-matcher";
+import { calculateBillingDates } from "@/lib/billing-cycle";
+import { calculateStatementBalance, type StatementEstimate } from "@/lib/statement-calculator";
 import {
-  calculatePortfolioReturns,
-  calculateCardRecommendations,
   CardInput,
   CategorySpending,
   EarningRuleInput,
@@ -27,7 +28,6 @@ export const metadata: Metadata = {
   title: "My Wallet | CardTool",
   description: "Manage your credit cards and track rewards",
 };
-import { CardRecommendations } from "./card-recommendations";
 import { UserBonusSection, UserWelcomeBonus, UserSpendBonus } from "./user-bonus-section";
 import { WalletClient } from "./wallet-client";
 
@@ -46,7 +46,7 @@ export default async function WalletPage() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // Fetch wallet cards and returns data in parallel
   const [
@@ -76,8 +76,13 @@ export default async function WalletPage() {
     userBonusDisplaySettingsResult,
     allCurrenciesResult,
     playersResult,
+    cardCreditsResult,
+    linkedAccountsResult,
+    transactionsResult,
   ] = await Promise.all([
-    // User's wallet cards with full details
+    // User's wallet cards with full details (including closed cards)
+    // Note: closed_date, closed_reason, product_changed_to_id require migration 20260110000000_wallet_card_closure.sql
+    // Note: statement_close_day, payment_due_day require billing_cycle_formulas migration
     supabase
       .from("user_wallets")
       .select(`
@@ -87,6 +92,11 @@ export default async function WalletPage() {
         added_at,
         approval_date,
         player_number,
+        closed_date,
+        closed_reason,
+        product_changed_to_id,
+        statement_close_day,
+        payment_due_day,
         cards:card_id (
           id,
           name,
@@ -96,7 +106,9 @@ export default async function WalletPage() {
           primary_currency_id,
           secondary_currency_id,
           issuer_id,
-          issuers:issuer_id (name),
+          product_type,
+          card_charge_type,
+          issuers:issuer_id (id, name, billing_cycle_formula),
           primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
           secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
         )
@@ -289,6 +301,49 @@ export default async function WalletPage() {
       .select("player_number, description")
       .eq("user_id", effectiveUserId)
       .order("player_number"),
+    // Card credits for display in table
+    supabase
+      .from("card_credits")
+      .select(`
+        id,
+        card_id,
+        name,
+        brand_name,
+        reset_cycle,
+        default_value_cents,
+        default_quantity,
+        unit_name,
+        notes,
+        credit_count
+      `)
+      .eq("is_active", true),
+    // User's linked Plaid accounts for balance/credit limit data
+    supabase
+      .from("user_linked_accounts")
+      .select(`
+        id,
+        wallet_card_id,
+        current_balance,
+        credit_limit,
+        manual_credit_limit,
+        available_balance,
+        last_balance_update
+      `)
+      .eq("user_id", effectiveUserId),
+    // Recent transactions for statement balance calculation (last 60 days)
+    supabase
+      .from("user_plaid_transactions")
+      .select(`
+        id,
+        linked_account_id,
+        amount_cents,
+        date,
+        pending
+      `)
+      .eq("user_id", effectiveUserId)
+      .eq("pending", false)
+      .gte("date", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+      .order("date", { ascending: false }),
   ]);
 
   // Players data
@@ -296,6 +351,9 @@ export default async function WalletPage() {
   const playerCount = players.length > 0 ? Math.max(...players.map(p => p.player_number)) : 1;
 
   // Type assertion for wallet cards since Supabase types don't infer relations correctly
+  // Note: statement_close_day, payment_due_day, manual_balance_cents, manual_credit_limit_cents
+  // are optional until migration 20260109000000_wallet_card_fields.sql is applied
+  // Note: closed_date, closed_reason, product_changed_to_id are from migration 20260110000000_wallet_card_closure.sql
   type WalletCardData = {
     id: string;
     card_id: string;
@@ -303,6 +361,13 @@ export default async function WalletPage() {
     added_at: string | null;
     approval_date: string | null;
     player_number: number | null;
+    closed_date: string | null;
+    closed_reason: string | null;
+    product_changed_to_id: string | null;
+    statement_close_day?: number | null;
+    payment_due_day?: number | null;
+    manual_balance_cents?: number | null;
+    manual_credit_limit_cents?: number | null;
     cards: {
       id: string;
       name: string;
@@ -312,28 +377,43 @@ export default async function WalletPage() {
       primary_currency_id: string;
       secondary_currency_id: string | null;
       issuer_id: string;
-      issuers: { name: string } | null;
+      card_charge_type?: "credit" | "charge" | null;
+      issuers: { id: string; name: string; billing_cycle_formula?: string | null } | null;
       primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
       secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
     } | null;
   };
-  const walletCards = (walletResult.data ?? []) as unknown as WalletCardData[];
+  const allWalletCards = (walletResult.data ?? []) as unknown as WalletCardData[];
+  
+  // Separate active and closed cards
+  const walletCards = allWalletCards.filter((wc) => !wc.closed_date);
+  const closedWalletCards = allWalletCards.filter((wc) => wc.closed_date);
+  
   const userCardIds = walletCards.map((wc) => wc.card_id);
   
-  // Build set of currency IDs the user "owns" (from cards in wallet)
-  const userPrimaryCurrencyIds = new Set(
-    walletCards
-      .map((wc) => wc.cards?.primary_currency_id)
-      .filter((id): id is string => !!id)
-  );
-
-  // Cards with secondary currency enabled if user has a card with that as primary
-  const enabledSecondaryCards = new Set<string>();
+  // Build set of primary currency IDs per player (currency is only "owned" if same player has the card)
+  // Map: player_number -> Set<currency_id>
+  const primaryCurrencyIdsByPlayer = new Map<number, Set<string>>();
   walletCards.forEach((wc) => {
-    if (wc.cards?.secondary_currency_id && 
-        userPrimaryCurrencyIds.has(wc.cards.secondary_currency_id)) {
-      enabledSecondaryCards.add(wc.cards.id);
+    if (!wc.cards?.primary_currency_id) return;
+    const player = wc.player_number ?? 1;
+    if (!primaryCurrencyIdsByPlayer.has(player)) {
+      primaryCurrencyIdsByPlayer.set(player, new Set());
     }
+    primaryCurrencyIdsByPlayer.get(player)!.add(wc.cards.primary_currency_id);
+  });
+
+  // Cards with secondary currency enabled - per wallet card ID (player-scoped)
+  // A wallet card has secondary enabled if the same player has another card that earns that currency as primary
+  const enabledSecondaryCards = new Map<string, boolean>();
+  walletCards.forEach((wc) => {
+    if (!wc.cards?.secondary_currency_id) {
+      enabledSecondaryCards.set(wc.id, false);
+      return;
+    }
+    const player = wc.player_number ?? 1;
+    const playerCurrencies = primaryCurrencyIdsByPlayer.get(player) ?? new Set();
+    enabledSecondaryCards.set(wc.id, playerCurrencies.has(wc.cards.secondary_currency_id));
   });
 
   // Build a mapping from wallet_card_id → card_id for lookups
@@ -465,9 +545,178 @@ export default async function WalletPage() {
   // Build category maps
   const categoryExclusionMap = new Map<number, boolean>();
   const categoryParentMap = new Map<number, number | null>();
+  const categoryNameMap = new Map<number, string>();
+  const categorySlugMap = new Map<number, string>();
   categoriesResult.data?.forEach((c) => {
     categoryExclusionMap.set(c.id, c.excluded_by_default);
     categoryParentMap.set(c.id, c.parent_category_id);
+    categoryNameMap.set(c.id, c.name);
+    categorySlugMap.set(c.id, c.slug);
+  });
+  
+  // Build earning rules map per card_id for display in WalletCardList
+  const earningRulesPerCard = new Map<string, Array<{
+    id: string;
+    category_id: number;
+    category_name: string;
+    category_slug: string;
+    rate: number;
+    has_cap: boolean;
+    cap_amount: number | null;
+    cap_period: "month" | "quarter" | "year" | "lifetime" | null;
+    cap_unit: "spend" | "points" | null;
+    post_cap_rate: number | null;
+    booking_method: "any" | "portal" | "brand";
+    brand_name: string | null;
+  }>>();
+  allEarningRules.forEach((rule) => {
+    const existing = earningRulesPerCard.get(rule.card_id) ?? [];
+    existing.push({
+      id: rule.id,
+      category_id: rule.category_id,
+      category_name: categoryNameMap.get(rule.category_id) ?? "Unknown",
+      category_slug: categorySlugMap.get(rule.category_id) ?? "",
+      rate: rule.rate,
+      has_cap: rule.has_cap,
+      cap_amount: rule.cap_amount,
+      cap_period: rule.cap_period as "month" | "quarter" | "year" | "lifetime" | null,
+      cap_unit: rule.cap_unit as "spend" | "points" | null,
+      post_cap_rate: rule.post_cap_rate,
+      booking_method: rule.booking_method as "any" | "portal" | "brand",
+      brand_name: rule.brand_name,
+    });
+    earningRulesPerCard.set(rule.card_id, existing);
+  });
+  
+  // Build category bonuses map per card_id for display in WalletCardList
+  const categoryBonusesPerCard = new Map<string, Array<{
+    id: string;
+    cap_type: string;
+    cap_amount: number | null;
+    cap_period: string | null;
+    elevated_rate: number;
+    post_cap_rate: number | null;
+    category_ids: number[];
+    category_names: string[];
+  }>>();
+  allCategoryBonuses.forEach((bonus) => {
+    const existing = categoryBonusesPerCard.get(bonus.card_id) ?? [];
+    existing.push({
+      id: bonus.id,
+      cap_type: bonus.cap_type,
+      cap_amount: bonus.cap_amount,
+      cap_period: bonus.cap_period,
+      elevated_rate: bonus.elevated_rate,
+      post_cap_rate: bonus.post_cap_rate,
+      category_ids: bonus.category_ids,
+      category_names: bonus.category_ids.map(id => categoryNameMap.get(id) ?? "Unknown"),
+    });
+    categoryBonusesPerCard.set(bonus.card_id, existing);
+  });
+  
+  // Build credits per card map for display in table
+  type CardCreditData = {
+    id: string;
+    card_id: string;
+    name: string;
+    brand_name: string | null;
+    reset_cycle: string;
+    default_value_cents: number | null;
+    default_quantity: number | null;
+    unit_name: string | null;
+    notes: string | null;
+    credit_count: number;
+  };
+  const creditsPerCard = new Map<string, CardCreditData[]>();
+  (cardCreditsResult.data ?? []).forEach((credit: unknown) => {
+    const c = credit as CardCreditData;
+    const existing = creditsPerCard.get(c.card_id) ?? [];
+    existing.push(c);
+    creditsPerCard.set(c.card_id, existing);
+  });
+  
+  // Build linked accounts map (keyed by wallet_card_id)
+  type LinkedAccountData = {
+    id: string;
+    wallet_card_id: string | null;
+    current_balance: number | null;
+    credit_limit: number | null;
+    manual_credit_limit: number | null;
+    available_balance: number | null;
+    last_balance_update: string | null;
+  };
+  const linkedAccountsMap = new Map<string, LinkedAccountData>();
+  // Also build reverse map: linked_account_id -> wallet_card_id
+  const linkedAccountIdToWalletCardId = new Map<string, string>();
+  (linkedAccountsResult.data ?? []).forEach((account: unknown) => {
+    const a = account as LinkedAccountData;
+    if (a.wallet_card_id) {
+      linkedAccountsMap.set(a.wallet_card_id, a);
+      linkedAccountIdToWalletCardId.set(a.id, a.wallet_card_id);
+    }
+  });
+
+  // Build transactions map (keyed by wallet_card_id)
+  type TransactionData = {
+    id: string;
+    linked_account_id: string | null;
+    amount_cents: number;
+    date: string;
+    pending: boolean;
+  };
+  const transactionsByWalletCardId = new Map<string, TransactionData[]>();
+  (transactionsResult.data ?? []).forEach((tx: unknown) => {
+    const t = tx as TransactionData;
+    if (t.linked_account_id) {
+      const walletCardId = linkedAccountIdToWalletCardId.get(t.linked_account_id);
+      if (walletCardId) {
+        const existing = transactionsByWalletCardId.get(walletCardId) ?? [];
+        existing.push(t);
+        transactionsByWalletCardId.set(walletCardId, existing);
+      }
+    }
+  });
+
+  // Calculate statement estimates for wallet cards with billing dates and linked accounts
+  const statementEstimatesMap = new Map<string, StatementEstimate>();
+  walletCards.forEach((wc) => {
+    if (!wc.cards) return;
+    
+    // Need linked account with current balance
+    const linkedAccount = linkedAccountsMap.get(wc.id);
+    if (!linkedAccount?.current_balance) return;
+    
+    // Need statement close day to calculate billing dates
+    const formula = wc.cards.issuers?.billing_cycle_formula ?? null;
+    // For Chase, use different formula for business vs personal cards
+    let billingFormula = formula;
+    if (billingFormula === 'due_plus_3' && wc.cards.name.toLowerCase().includes('business')) {
+      billingFormula = 'due_plus_6';
+    }
+    
+    const billingDates = calculateBillingDates(
+      billingFormula,
+      wc.statement_close_day ?? null,
+      wc.payment_due_day ?? null
+    );
+    
+    // Need last statement close date
+    if (!billingDates.lastCloseDate) return;
+    
+    // Get transactions for this card
+    const transactions = transactionsByWalletCardId.get(wc.id) ?? [];
+    
+    // Current balance from Plaid is in dollars, convert to cents
+    const currentBalanceCents = Math.round(linkedAccount.current_balance * 100);
+    
+    // Calculate statement estimate
+    const estimate = calculateStatementBalance(
+      currentBalanceCents,
+      transactions.map(t => ({ amount_cents: t.amount_cents, date: t.date })),
+      billingDates.lastCloseDate
+    );
+    
+    statementEstimatesMap.set(wc.id, estimate);
   });
 
   // Process spending with >$5k tracking
@@ -699,60 +948,58 @@ export default async function WalletPage() {
     includeSpendBonuses: userBonusDisplaySettingsResult.data?.include_spend_bonuses ?? false,
   };
 
-  // Calculate returns (only if user has cards)
-  const calculatorInput = {
-    cards,
-    spending,
-    earningRules,
-    categoryBonuses,
-    userCurrencyValues,
-    defaultCurrencyValues,
-    cashOutValues: new Map<string, number>(), // Not used on wallet summary
-    perksValues: perksMapByCardId,
-    debitPayValues: debitPayMapByCardId,
-    multiplierPrograms,
-    mobilePayCategories,
-    mobilePayCategoryId,
-    paypalCategories,
-    paypalCategoryId,
-    largePurchaseCategoryId,
-    userSelections,
-    travelPreferences,
-    enabledSecondaryCards,
-    earningsGoal: "maximize" as const, // Default to maximize for wallet summary
-    // User-defined bonus inputs (is_active and valuations are built into each bonus)
-    welcomeBonuses,
-    spendBonuses,
-    includeBonusesInCalculation,
-    // Multi-instance support: count how many of each card for fee calculation
-    cardInstanceCounts,
-  };
-  
-  const returns = cards.length > 0 ? calculatePortfolioReturns(calculatorInput) : null;
+  // Build closed cards display data with product_changed_to_name lookup
+  const closedCardsForDisplay: ClosedCardDisplay[] = closedWalletCards.map((wc) => {
+    // Find the card that this was product changed to
+    let productChangedToName: string | null = null;
+    if (wc.product_changed_to_id) {
+      const targetCard = allWalletCards.find((c) => c.id === wc.product_changed_to_id);
+      if (targetCard?.cards) {
+        productChangedToName = targetCard.custom_name ?? targetCard.cards.name;
+      }
+    }
 
-  // Calculate card recommendations (only if user has spending data)
-  const recommendations = returns && returns.totalSpend > 0 ? calculateCardRecommendations(
-    {
-      ...calculatorInput,
-      allCards: allCards.map(c => ({
-        ...c,
-        issuer_id: c.issuer_id,
-        primary_currency: c.primary_currency,
-        secondary_currency: c.secondary_currency,
-      })),
-      allEarningRules,
-      allCategoryBonuses,
-    },
-    returns,
-    3 // Top 3 recommendations
-  ) : [];
+    return {
+      id: wc.id,
+      card_id: wc.card_id,
+      card_name: wc.cards?.name ?? "Unknown",
+      custom_name: wc.custom_name,
+      approval_date: wc.approval_date,
+      closed_date: wc.closed_date,
+      closed_reason: wc.closed_reason as "product_change" | "closed" | null,
+      product_changed_to_id: wc.product_changed_to_id,
+      product_changed_to_name: productChangedToName,
+      player_number: wc.player_number,
+      issuer_name: wc.cards?.issuers?.name ?? null,
+    };
+  });
+
+  // Build data for product change modal (all cards from same issuer, closed cards for reactivation)
+  const allCardsForProductChange = allCards.map((c) => ({
+    id: c.id,
+    name: c.name,
+    issuer_id: c.issuer_id,
+    issuer_name: c.issuers?.name ?? "",
+    annual_fee: c.annual_fee,
+    primary_currency_name: c.primary_currency?.name ?? null,
+  }));
+
+  const closedCardsForReactivation = closedWalletCards.map((wc) => ({
+    id: wc.id,
+    card_id: wc.card_id,
+    card_name: wc.cards?.name ?? "Unknown",
+    custom_name: wc.custom_name,
+    approval_date: wc.approval_date,
+    closed_date: wc.closed_date,
+    closed_reason: wc.closed_reason,
+  }));
 
   async function addToWallet(cardId: string) {
     "use server";
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     
     // Get the card's name and default perks value
     const { data: card } = await supabase
@@ -800,7 +1047,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase
       .from("user_wallets")
       .delete()
@@ -814,7 +1061,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase
       .from("user_wallets")
       .update({ custom_name: customName })
@@ -828,7 +1075,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     
     // Update the approval date
     await supabase
@@ -891,7 +1138,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase
       .from("user_wallets")
       .update({ player_number: playerNumber })
@@ -906,7 +1153,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_card_perks_values").upsert(
       {
         user_id: userId,
@@ -923,7 +1170,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_feature_flags").upsert(
       {
         user_id: userId,
@@ -939,7 +1186,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_card_debit_pay").upsert(
       {
         user_id: userId,
@@ -951,12 +1198,40 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
+  async function updateStatementFields(walletId: string, fields: {
+    statement_close_day: number | null;
+    payment_due_day: number | null;
+    manual_balance_cents: number | null;
+    manual_credit_limit_cents: number | null;
+  }) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("[updateStatementFields] No user ID");
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("user_wallets")
+      .update(fields)
+      .eq("id", walletId)
+      .eq("user_id", userId);
+    
+    if (error) {
+      console.error("[updateStatementFields] Error:", error);
+      throw new Error(`Failed to update statement fields: ${error.message}`);
+    }
+    
+    revalidatePath("/wallet");
+  }
+
   async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) {
     "use server";
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_bonus_display_settings").upsert(
       {
         user_id: userId,
@@ -974,7 +1249,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     const componentType = formData.get("component_type") as string;
     
     await supabase.from("user_welcome_bonuses").insert({
@@ -997,7 +1272,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     const componentType = formData.get("component_type") as string;
     
     await supabase.from("user_welcome_bonuses").update({
@@ -1018,7 +1293,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_welcome_bonuses").delete().eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
@@ -1028,7 +1303,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_welcome_bonuses").update({ is_active: isActive }).eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
@@ -1039,7 +1314,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     const bonusType = formData.get("bonus_type") as string;
     const rewardType = formData.get("reward_type") as string;
     
@@ -1080,7 +1355,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     const bonusType = formData.get("bonus_type") as string;
     const rewardType = formData.get("reward_type") as string;
     
@@ -1130,7 +1405,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_spend_bonuses").delete().eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
@@ -1140,7 +1415,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_spend_bonuses").update({ is_active: isActive }).eq("id", bonusId).eq("user_id", userId);
     revalidatePath("/wallet");
   }
@@ -1151,7 +1426,7 @@ export default async function WalletPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("user_feature_flags").upsert(
       {
         user_id: userId,
@@ -1160,6 +1435,210 @@ export default async function WalletPage() {
       { onConflict: "user_id" }
     );
     revalidatePath("/wallet");
+  }
+
+  async function productChangeCard(data: {
+    currentWalletId: string;
+    newCardId: string;
+    effectiveDate: string;
+    customName: string | null;
+    reactivateWalletId: string | null;
+  }) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    
+    // Get current wallet card details (include all account-level settings to transfer)
+    const { data: currentWallet } = await supabase
+      .from("user_wallets")
+      .select("id, player_number, approval_date, statement_close_day, payment_due_day")
+      .eq("id", data.currentWalletId)
+      .eq("user_id", userId)
+      .single();
+    
+    if (!currentWallet) return;
+
+    let newWalletId: string;
+
+    if (data.reactivateWalletId) {
+      // Reactivating an existing closed card
+      // Clear the closed fields to reactivate
+      const { error: reactivateError } = await supabase
+        .from("user_wallets")
+        .update({
+          closed_date: null,
+          closed_reason: null,
+          product_changed_to_id: null,
+        })
+        .eq("id", data.reactivateWalletId)
+        .eq("user_id", userId);
+      
+      if (reactivateError) {
+        console.error("Error reactivating card:", reactivateError);
+        return;
+      }
+      
+      newWalletId = data.reactivateWalletId;
+    } else {
+      // Create new wallet entry
+      const { data: newWallet, error: createError } = await supabase
+        .from("user_wallets")
+        .insert({
+          user_id: userId,
+          card_id: data.newCardId,
+          custom_name: data.customName,
+          player_number: currentWallet.player_number,
+          // Product change preserves the original account opened date
+          approval_date: currentWallet.approval_date,
+          // Transfer statement/payment day settings from old card (these are account-level settings)
+          statement_close_day: currentWallet.statement_close_day,
+          payment_due_day: currentWallet.payment_due_day,
+        })
+        .select("id")
+        .single();
+      
+      if (createError || !newWallet) {
+        console.error("Error creating new wallet entry:", createError);
+        return;
+      }
+      
+      newWalletId = newWallet.id;
+      
+      // Copy perks value from old card if it exists
+      const { data: oldPerks } = await supabase
+        .from("user_card_perks_values")
+        .select("perks_value")
+        .eq("wallet_card_id", data.currentWalletId)
+        .eq("user_id", userId)
+        .single();
+      
+      if (oldPerks) {
+        await supabase.from("user_card_perks_values").insert({
+          user_id: userId,
+          wallet_card_id: newWalletId,
+          perks_value: oldPerks.perks_value,
+        });
+      }
+      
+      // Copy debit pay if exists
+      const { data: oldDebitPay } = await supabase
+        .from("user_card_debit_pay")
+        .select("debit_pay_percent")
+        .eq("wallet_card_id", data.currentWalletId)
+        .eq("user_id", userId)
+        .single();
+      
+      if (oldDebitPay) {
+        await supabase.from("user_card_debit_pay").insert({
+          user_id: userId,
+          wallet_card_id: newWalletId,
+          debit_pay_percent: oldDebitPay.debit_pay_percent,
+        });
+      }
+    }
+
+    // Archive the current card
+    await supabase
+      .from("user_wallets")
+      .update({
+        closed_date: data.effectiveDate,
+        closed_reason: "product_change",
+        product_changed_to_id: newWalletId,
+      })
+      .eq("id", data.currentWalletId)
+      .eq("user_id", userId);
+
+    // Transfer Plaid linked account to new wallet
+    await supabase
+      .from("user_linked_accounts")
+      .update({ wallet_card_id: newWalletId })
+      .eq("wallet_card_id", data.currentWalletId)
+      .eq("user_id", userId);
+
+    revalidatePath("/wallet");
+    revalidatePath("/credits");
+  }
+
+  async function closeCard(walletId: string, closedDate: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    
+    await supabase
+      .from("user_wallets")
+      .update({
+        closed_date: closedDate,
+        closed_reason: "closed",
+      })
+      .eq("id", walletId)
+      .eq("user_id", userId);
+
+    revalidatePath("/wallet");
+    revalidatePath("/credits");
+  }
+
+  async function deleteCard(walletId: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    
+    // Delete related records first
+    await supabase
+      .from("user_credit_usage")
+      .delete()
+      .eq("user_wallet_id", walletId);
+    
+    await supabase
+      .from("user_credit_settings")
+      .delete()
+      .eq("user_wallet_id", walletId);
+    
+    await supabase
+      .from("user_card_perks_values")
+      .delete()
+      .eq("wallet_card_id", walletId)
+      .eq("user_id", userId);
+    
+    await supabase
+      .from("user_card_debit_pay")
+      .delete()
+      .eq("wallet_card_id", walletId)
+      .eq("user_id", userId);
+    
+    await supabase
+      .from("user_welcome_bonuses")
+      .delete()
+      .eq("wallet_card_id", walletId)
+      .eq("user_id", userId);
+    
+    await supabase
+      .from("user_spend_bonuses")
+      .delete()
+      .eq("wallet_card_id", walletId)
+      .eq("user_id", userId);
+    
+    // Unlink Plaid account (but don't delete the connection)
+    await supabase
+      .from("user_linked_accounts")
+      .update({ wallet_card_id: null })
+      .eq("wallet_card_id", walletId)
+      .eq("user_id", userId);
+    
+    // Finally delete the wallet entry
+    await supabase
+      .from("user_wallets")
+      .delete()
+      .eq("id", walletId)
+      .eq("user_id", userId);
+
+    revalidatePath("/wallet");
+    revalidatePath("/credits");
   }
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
@@ -1175,7 +1654,7 @@ export default async function WalletPage() {
           creditTrackingEnabled={creditTrackingEnabled}
           emulationInfo={emulationInfo}
         />
-        <div className="mx-auto max-w-5xl px-4 py-12">
+        <div className="mx-auto max-w-[1600px] px-4 py-12">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-white">My Wallet</h1>
@@ -1183,52 +1662,51 @@ export default async function WalletPage() {
                 {walletCards.length} card{walletCards.length !== 1 ? "s" : ""} in your wallet
               </p>
             </div>
-            <AddCardModal
-              availableCards={availableCardsForModal.map(c => ({
-                id: c.id,
-                name: c.name,
-                slug: c.slug,
-                annual_fee: c.annual_fee,
-                issuer_name: c.issuers?.name,
-                primary_currency_name: c.primary_currency?.name,
-              }))}
-              onAddCard={addToWallet}
-              debitPayEnabled={debitPayEnabled}
-              onEnableDebitPay={enableDebitPay}
-              ownedCardIds={userCardIds}
-            />
-          </div>
-
-          {/* Returns Summary */}
-          {returns && returns.totalSpend > 0 && (
-            <ReturnsSummary returns={returns} />
-          )}
-
-          {/* Card Recommendations */}
-          {recommendations.length > 0 && (
-            <div className="mb-8">
-              <CardRecommendations 
-                recommendations={recommendations}
+            <div className="flex items-center gap-3">
+              <RefreshBalancesButton hasLinkedAccounts={!!(linkedAccountsResult.data && linkedAccountsResult.data.length > 0)} />
+              <AddCardModal
+                availableCards={availableCardsForModal.map(c => ({
+                  id: c.id,
+                  name: c.name,
+                  slug: c.slug,
+                  annual_fee: c.annual_fee,
+                  issuer_name: c.issuers?.name,
+                  primary_currency_name: c.primary_currency?.name,
+                }))}
                 onAddCard={addToWallet}
+                debitPayEnabled={debitPayEnabled}
+                onEnableDebitPay={enableDebitPay}
+                ownedCardIds={userCardIds}
               />
             </div>
-          )}
+          </div>
 
           {walletCards.length > 0 ? (
-            <WalletCardList
+            <WalletCardTable
               walletCards={walletCards}
               enabledSecondaryCards={enabledSecondaryCards}
               perksMap={perksMapByWalletId}
               debitPayMap={debitPayMapByWalletId}
               debitPayEnabled={debitPayEnabled}
+              players={players}
+              playerCount={playerCount}
+              earningRulesPerCard={earningRulesPerCard}
+              categoryBonusesPerCard={categoryBonusesPerCard}
+              creditsPerCard={creditsPerCard}
+              linkedAccountsMap={linkedAccountsMap}
+              statementEstimatesMap={statementEstimatesMap}
+              allCardsForProductChange={allCardsForProductChange}
+              closedCardsForReactivation={closedCardsForReactivation}
               onRemove={removeFromWallet}
               onUpdatePerks={updatePerksValue}
               onUpdateDebitPay={updateDebitPay}
               onUpdateCustomName={updateCustomName}
               onUpdateApprovalDate={updateApprovalDate}
-              players={players}
-              playerCount={playerCount}
               onUpdatePlayerNumber={updatePlayerNumber}
+              onUpdateStatementFields={updateStatementFields}
+              onProductChange={productChangeCard}
+              onCloseCard={closeCard}
+              onDeleteCard={deleteCard}
             />
           ) : (
             <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
@@ -1238,6 +1716,12 @@ export default async function WalletPage() {
               </p>
             </div>
           )}
+
+          {/* Closed Cards Section */}
+          <ClosedCardsSection
+            closedCards={closedCardsForDisplay}
+            playerCount={playerCount}
+          />
 
           {/* User Bonus Section */}
           {walletCards.length > 0 && (

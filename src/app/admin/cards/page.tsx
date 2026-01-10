@@ -2,9 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { CardsTable } from "./cards-table";
+import { invalidateCardCaches } from "@/lib/cache-invalidation";
 
 export default async function CardsPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
   
   const { data: cards, error } = await supabase
     .from("card_with_currency")
@@ -18,28 +19,31 @@ export default async function CardsPage() {
 
   async function deleteCard(id: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("cards").delete().eq("id", id);
+    invalidateCardCaches();
     revalidatePath("/admin/cards");
   }
 
   async function updatePerksValue(id: string, value: number | null) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase
       .from("cards")
       .update({ default_perks_value: value })
       .eq("id", id);
+    invalidateCardCaches();
     revalidatePath("/admin/cards");
   }
 
   async function toggleExcludeRecommendations(id: string, exclude: boolean) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase
       .from("cards")
       .update({ exclude_from_recommendations: exclude })
       .eq("id", id);
+    invalidateCardCaches();
     revalidatePath("/admin/cards");
   }
 

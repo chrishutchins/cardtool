@@ -9,7 +9,7 @@ export default async function AdminDashboard() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const [issuersResult, currenciesResult, categoriesResult, cardsResult, templatesResult, usersResult] =
     await Promise.all([

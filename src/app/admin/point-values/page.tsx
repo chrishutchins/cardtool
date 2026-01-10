@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { headers } from "next/headers";
+import { TemplatesTable } from "./templates-table";
 
 interface Template {
   id: string;
@@ -27,7 +27,7 @@ interface TemplateValue {
 }
 
 export default async function AdminPointValuesPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const [templatesResult, currenciesResult] = await Promise.all([
     supabase
@@ -45,7 +45,7 @@ export default async function AdminPointValuesPage() {
 
   async function createTemplate(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     
     const name = formData.get("name") as string;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -168,19 +168,17 @@ export default async function AdminPointValuesPage() {
     redirect(`/admin/point-values/${templateId}`);
   }
 
-  async function deleteTemplate(formData: FormData) {
+  async function deleteTemplateAction(templateId: string) {
     "use server";
-    const supabase = await createClient();
-    const templateId = formData.get("template_id") as string;
+    const supabase = createClient();
     
     await supabase.from("point_value_templates").delete().eq("id", templateId);
     revalidatePath("/admin/point-values");
   }
 
-  async function setDefaultTemplate(formData: FormData) {
+  async function setDefaultTemplateAction(templateId: string) {
     "use server";
-    const supabase = await createClient();
-    const templateId = formData.get("template_id") as string;
+    const supabase = createClient();
     
     // Clear all defaults first (set all templates to non-default)
     await supabase
@@ -256,88 +254,11 @@ export default async function AdminPointValuesPage() {
       </div>
 
       {/* Templates List */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-zinc-800/50">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Name</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Description</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Source</th>
-              <th className="px-4 py-3 text-center text-sm font-medium text-zinc-400">Default</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {templates.map((template) => (
-              <tr key={template.id} className="hover:bg-zinc-800/30">
-                <td className="px-4 py-3">
-                  <Link
-                    href={`/admin/point-values/${template.id}`}
-                    className="text-white font-medium hover:text-amber-400 transition-colors"
-                  >
-                    {template.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-zinc-400 text-sm">
-                  {template.description || "—"}
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  {template.source_url ? (
-                    <a
-                      href={template.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-amber-400 hover:text-amber-300"
-                    >
-                      Link ↗
-                    </a>
-                  ) : (
-                    <span className="text-zinc-500">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-center">
-                  {template.is_default ? (
-                    <span className="inline-flex items-center rounded-full bg-emerald-900/50 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
-                      Default
-                    </span>
-                  ) : (
-                    <form action={setDefaultTemplate} className="inline">
-                      <input type="hidden" name="template_id" value={template.id} />
-                      <button
-                        type="submit"
-                        className="text-zinc-500 hover:text-white text-sm transition-colors"
-                      >
-                        Set Default
-                      </button>
-                    </form>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Link
-                      href={`/admin/point-values/${template.id}`}
-                      className="text-amber-400 hover:text-amber-300 text-sm"
-                    >
-                      Edit Values
-                    </Link>
-                    {!template.is_default && (
-                      <form action={deleteTemplate} className="inline">
-                        <input type="hidden" name="template_id" value={template.id} />
-                        <button
-                          type="submit"
-                          className="text-red-400 hover:text-red-300 text-sm ml-3"
-                        >
-                          Delete
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TemplatesTable
+        templates={templates}
+        onDelete={deleteTemplateAction}
+        onSetDefault={setDefaultTemplateAction}
+      />
     </div>
   );
 }

@@ -26,7 +26,7 @@ export async function GET() {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Get wallet IDs first for credit usage query
     const { data: wallets } = await supabase

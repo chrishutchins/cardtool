@@ -23,7 +23,7 @@ export async function GET() {
 
   try {
     // Test DB connectivity with a simple query
-    const supabase = await createClient();
+    const supabase = createClient();
     const { error } = await supabase.from("cards").select("id").limit(1);
 
     if (error) {

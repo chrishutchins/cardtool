@@ -128,7 +128,8 @@ export async function PUT(request: NextRequest) {
         .eq("matched_rule_id", id);
     }
 
-    // Find transactions that exactly match the new pattern (case-insensitive)
+    // Find transactions that match the new pattern (case-insensitive)
+    // Check both original_description (preferred) and name fields
     const patternToMatch = pattern || oldRule?.pattern;
     if (patternToMatch) {
       const { data: potentialMatches } = await supabase
@@ -137,7 +138,7 @@ export async function PUT(request: NextRequest) {
         .is("matched_credit_id", null)
         .eq("dismissed", false)
         .eq("pending", false)
-        .ilike("name", patternToMatch);
+        .or(`original_description.ilike.%${patternToMatch}%,name.ilike.%${patternToMatch}%`);
 
       // Also include the previously matched transactions that we just cleared
       const allTxnsToRematch = [

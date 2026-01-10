@@ -67,9 +67,10 @@ export default async function RulesPage() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const [walletResult, rulesResult, featureFlagsResult, playersResult] = await Promise.all([
+    // Only fetch active cards for application rule tracking
     supabase
       .from("user_wallets")
       .select(`
@@ -87,7 +88,8 @@ export default async function RulesPage() {
           issuers:issuer_id (id, name)
         )
       `)
-      .eq("user_id", effectiveUserId),
+      .eq("user_id", effectiveUserId)
+      .is("closed_date", null),
     supabase
       .from("application_rules")
       .select(`

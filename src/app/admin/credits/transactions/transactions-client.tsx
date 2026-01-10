@@ -21,6 +21,7 @@ interface Transaction {
   linked_account_id: string | null;
   plaid_transaction_id: string;
   name: string;
+  original_description: string | null;
   amount_cents: number;
   date: string;
   authorized_date?: string | null;
@@ -211,14 +212,21 @@ export function TransactionsClient({
   const [createRuleType, setCreateRuleType] = useState<Record<string, "name" | "name_amount">>({});
   const [actionPending, setActionPending] = useState<string | null>(null);
 
-  // Group transactions by name pattern for easier bulk handling
+  // Group transactions by description AND card for easier bulk handling
+  // Uses original_description when available, falls back to name
+  // This ensures "Hilton" on Aspire and "Hilton" on Business Platinum are separate groups
   const groupedTransactions = transactions.reduce((acc, txn) => {
-    // Normalize name for grouping (remove numbers, trim)
-    const normalizedName = txn.name.replace(/\d+/g, "").trim().toUpperCase();
-    if (!acc[normalizedName]) {
-      acc[normalizedName] = [];
+    // Use original_description if available (more specific), otherwise fall back to name
+    const description = txn.original_description || txn.name;
+    // Normalize for grouping (remove numbers, trim)
+    const normalizedName = description.replace(/\d+/g, "").trim().toUpperCase();
+    // Include card name in the grouping key
+    const cardName = txn.user_linked_accounts?.user_wallets?.cards?.name || "Unknown Card";
+    const groupKey = `${normalizedName}|||${cardName}`;
+    if (!acc[groupKey]) {
+      acc[groupKey] = [];
     }
-    acc[normalizedName].push(txn);
+    acc[groupKey].push(txn);
     return acc;
   }, {} as Record<string, Transaction[]>);
 
@@ -287,18 +295,19 @@ export function TransactionsClient({
     }
   };
 
-  const handleDismiss = async (transactionId: string) => {
-    setActionPending(transactionId);
+  const handleDismiss = async (transactionIds: string[]) => {
+    const pendingKey = `dismiss-${transactionIds[0]}`;
+    setActionPending(pendingKey);
     
     try {
       const response = await fetch("/api/admin/credits/dismiss-transaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactionId }),
+        body: JSON.stringify({ transactionIds }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to dismiss transaction");
+        throw new Error("Failed to dismiss transactions");
       }
 
       router.refresh();
@@ -351,6 +360,35 @@ export function TransactionsClient({
       router.refresh();
     } catch (error) {
       console.error("Failed to refresh:", error);
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  const [rematchMessage, setRematchMessage] = useState<string | null>(null);
+  
+  const rematchAll = async () => {
+    setActionPending("rematch");
+    setRematchMessage(null);
+    
+    try {
+      const response = await fetch("/api/plaid/rematch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        setRematchMessage(`Error: ${data.error || 'Failed to rematch'}`);
+        return;
+      }
+      
+      setRematchMessage(`Matched ${data.matched} of ${data.totalUnmatched} transactions`);
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to rematch:", error);
+      setRematchMessage("Error: Network error");
     } finally {
       setActionPending(null);
     }
@@ -421,16 +459,33 @@ export function TransactionsClient({
 
         <div className="flex-1" />
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={refreshSync}
-          disabled={actionPending === "refresh" || isPending}
-          className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${actionPending === "refresh" ? "animate-spin" : ""}`} />
-          Sync All Users
-        </Button>
+        <div className="flex items-center gap-2">
+          {rematchMessage && (
+            <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
+              {rematchMessage}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={rematchAll}
+            disabled={actionPending === "rematch" || isPending}
+            className="border-emerald-700 text-emerald-400 hover:bg-emerald-900/20"
+          >
+            <Check className={`h-4 w-4 mr-2 ${actionPending === "rematch" ? "animate-pulse" : ""}`} />
+            Rematch All
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshSync}
+            disabled={actionPending === "refresh" || isPending}
+            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${actionPending === "refresh" ? "animate-spin" : ""}`} />
+            Sync All Users
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -464,7 +519,7 @@ export function TransactionsClient({
             const uniqueAmounts = [...new Set(txns.map(t => t.amount_cents))];
 
             return (
-              <div key={group} className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
+              <div key={group} className="bg-zinc-900 rounded-lg border border-zinc-800">
                 {/* Group Header */}
                 <div
                   className="flex items-center justify-between p-4 cursor-pointer hover:bg-zinc-800/50"
@@ -480,7 +535,7 @@ export function TransactionsClient({
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-white">{sampleTxn.name}</span>
+                        <span className="font-medium text-white">{sampleTxn.original_description || sampleTxn.name}</span>
                         <span className="text-xs bg-zinc-700 px-2 py-0.5 rounded text-zinc-300">
                           {txns.length} transaction{txns.length > 1 ? "s" : ""}
                         </span>
@@ -497,6 +552,9 @@ export function TransactionsClient({
                       </div>
                       <div className="text-sm text-zinc-500">
                         Amounts: {uniqueAmounts.map(a => formatAmount(a)).join(", ")}
+                      </div>
+                      <div className="text-xs text-zinc-600">
+                        {sampleTxn.user_linked_accounts?.user_wallets?.cards?.name || "Unknown Card"}
                       </div>
                     </div>
                   </div>
@@ -542,7 +600,7 @@ export function TransactionsClient({
                         <Button
                           size="sm"
                           onClick={() => handleAssignCredit(
-                            sampleTxn.name,
+                            sampleTxn.original_description || sampleTxn.name,
                             selectedCredit[group],
                             createRuleType[group] || "name",
                             sampleTxn
@@ -557,19 +615,19 @@ export function TransactionsClient({
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDismiss(sampleTxn.id)}
-                          disabled={actionPending === sampleTxn.id}
+                          onClick={() => handleDismiss(txns.map(t => t.id))}
+                          disabled={actionPending === `dismiss-${sampleTxn.id}`}
                           className="border-zinc-700 text-zinc-300 hover:bg-zinc-700"
                         >
                           <X className="h-4 w-4 mr-2" />
-                          Dismiss
+                          Dismiss{txns.length > 1 ? ` (${txns.length})` : ""}
                         </Button>
 
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleExcludePattern(sampleTxn.name)}
-                          disabled={actionPending === `exclude-${sampleTxn.name}`}
+                          onClick={() => handleExcludePattern(sampleTxn.original_description || sampleTxn.name)}
+                          disabled={actionPending === `exclude-${sampleTxn.original_description || sampleTxn.name}`}
                           className="border-red-900/50 text-red-400 hover:bg-red-900/20"
                           title="Permanently exclude this pattern from future reviews"
                         >
@@ -590,8 +648,8 @@ export function TransactionsClient({
                           >
                             <div className="flex items-center gap-4">
                               <span className="text-zinc-500">{formatDate(txn.authorized_date || txn.date)}</span>
-                              <span className="text-zinc-300">{txn.name}</span>
-                              {txn.merchant_name && (
+                              <span className="text-zinc-300">{txn.original_description || txn.name}</span>
+                              {!txn.original_description && txn.merchant_name && (
                                 <span className="text-zinc-500">({txn.merchant_name})</span>
                               )}
                             </div>

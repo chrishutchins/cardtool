@@ -5,6 +5,8 @@ import { Footer } from "@/components/footer";
 import { CheckCircle, Lock, Target, Wallet, BarChart3 } from "lucide-react";
 import { Metadata } from "next";
 import { HomeNav } from "@/components/home-nav";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "CardTool - Maximize Your Credit Card Rewards",
@@ -13,6 +15,12 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
+  // Redirect authenticated users to dashboard
+  const { userId } = await auth();
+  if (userId) {
+    redirect("/dashboard");
+  }
+
   const isAdmin = await isCurrentUserAdmin();
 
   return (
@@ -54,10 +62,10 @@ export default async function Home() {
             <div className="mt-10 flex items-center justify-center gap-4">
               <SignedIn>
                 <Link
-                  href="/wallet"
+                  href="/dashboard"
                   className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
                 >
-                  Open My Wallet
+                  Open Dashboard
                 </Link>
               </SignedIn>
               <SignedOut>

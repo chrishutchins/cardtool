@@ -18,7 +18,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const { data: accounts, error } = await supabase
       .from('user_linked_accounts')

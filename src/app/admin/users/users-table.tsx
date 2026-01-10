@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { UserRow } from "./user-row";
+import { useState, useTransition } from "react";
+import { DataTable, DataTableColumn, Badge, formatDate } from "@/components/data-table";
 
 interface UserStats {
   userId: string;
@@ -27,116 +27,183 @@ export function UsersTable({
   onToggleAccountLinking,
   onEmulate,
 }: UsersTableProps) {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return users;
-
-    const query = searchQuery.toLowerCase();
-    return users.filter((user) => {
-      const email = user.email?.toLowerCase() ?? "";
-      const firstName = user.firstName?.toLowerCase() ?? "";
-      const lastName = user.lastName?.toLowerCase() ?? "";
-      const fullName = `${firstName} ${lastName}`.trim();
-      const userId = user.userId.toLowerCase();
-
-      return (
-        email.includes(query) ||
-        firstName.includes(query) ||
-        lastName.includes(query) ||
-        fullName.includes(query) ||
-        userId.includes(query)
-      );
+  const handleDelete = (user: UserStats) => {
+    if (!confirm(`Delete all data for ${user.email || user.userId}? This cannot be undone.`)) {
+      return;
+    }
+    setPendingUserId(user.userId);
+    startTransition(async () => {
+      await onDelete(user.userId);
+      setPendingUserId(null);
     });
-  }, [users, searchQuery]);
+  };
+
+  const handleToggleAccountLinking = (user: UserStats) => {
+    setPendingUserId(user.userId);
+    startTransition(async () => {
+      await onToggleAccountLinking(user.userId, !user.accountLinkingEnabled);
+      setPendingUserId(null);
+    });
+  };
+
+  const handleEmulate = (user: UserStats) => {
+    setPendingUserId(user.userId);
+    startTransition(async () => {
+      await onEmulate(user.userId, user.email);
+      setPendingUserId(null);
+    });
+  };
+
+  const columns: DataTableColumn<UserStats>[] = [
+    {
+      id: "user",
+      label: "User",
+      accessor: "email",
+      sticky: true,
+      render: (row) => (
+        <div>
+          {row.email ? (
+            <div className="text-white font-medium">{row.email}</div>
+          ) : (
+            <div className="text-zinc-500 italic">No email found</div>
+          )}
+          {(row.firstName || row.lastName) && (
+            <div className="text-sm text-zinc-400">
+              {[row.firstName, row.lastName].filter(Boolean).join(" ")}
+            </div>
+          )}
+          <div className="text-xs text-zinc-600 font-mono">{row.userId}</div>
+        </div>
+      ),
+    },
+    {
+      id: "cardsAdded",
+      label: "Cards Added",
+      accessor: "cardsAdded",
+      align: "center",
+      sortAccessor: (row) => row.cardsAdded,
+      render: (row) => (
+        <span className={`font-mono ${row.cardsAdded > 0 ? "text-white" : "text-zinc-600"}`}>
+          {row.cardsAdded}
+        </span>
+      ),
+    },
+    {
+      id: "spendingEdits",
+      label: "Spending Edits",
+      accessor: "spendingEdits",
+      align: "center",
+      sortAccessor: (row) => row.spendingEdits,
+      render: (row) => (
+        <span className={`font-mono ${row.spendingEdits > 0 ? "text-white" : "text-zinc-600"}`}>
+          {row.spendingEdits}
+        </span>
+      ),
+    },
+    {
+      id: "createdAt",
+      label: "First Activity",
+      accessor: "createdAt",
+      sortAccessor: (row) => row.createdAt ?? "",
+      render: (row) => (
+        <span className="text-zinc-400 text-sm">
+          {formatDate(row.createdAt, { year: "numeric", month: "short", day: "numeric" })}
+        </span>
+      ),
+    },
+    {
+      id: "accountLinking",
+      label: "Account Linking",
+      accessor: "accountLinkingEnabled",
+      align: "center",
+      render: (row) => {
+        const isRowPending = pendingUserId === row.userId && isPending;
+        return (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleAccountLinking(row);
+            }}
+            disabled={isRowPending}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
+              row.accountLinkingEnabled
+                ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
+            }`}
+          >
+            {row.accountLinkingEnabled ? "Enabled" : "Disabled"}
+          </button>
+        );
+      },
+    },
+    {
+      id: "actions",
+      label: "Actions",
+      accessor: () => null,
+      sortable: false,
+      hideFromPicker: true,
+      align: "right",
+      render: (row) => {
+        const isRowPending = pendingUserId === row.userId && isPending;
+        return (
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEmulate(row);
+              }}
+              disabled={isRowPending}
+              className="text-amber-400 hover:text-amber-300 text-sm disabled:opacity-50"
+            >
+              {isRowPending ? "Loading..." : "Emulate"}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(row);
+              }}
+              disabled={isRowPending}
+              className="text-red-400 hover:text-red-300 text-sm disabled:opacity-50"
+            >
+              Delete
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
-    <div>
-      {/* Search Input */}
-      <div className="mb-4">
-        <div className="relative">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, email, or user ID..."
-            className="w-full pl-10 pr-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-        {searchQuery && (
-          <p className="mt-2 text-sm text-zinc-500">
-            Showing {filteredUsers.length} of {users.length} users
-          </p>
-        )}
-      </div>
+    <DataTable
+      data={users}
+      columns={columns}
+      keyAccessor={(row) => row.userId}
+      searchPlaceholder="Search by name, email, or user ID..."
+      searchFilter={(row, query) => {
+        const q = query.toLowerCase();
+        const email = row.email?.toLowerCase() ?? "";
+        const firstName = row.firstName?.toLowerCase() ?? "";
+        const lastName = row.lastName?.toLowerCase() ?? "";
+        const fullName = `${firstName} ${lastName}`.trim();
+        const userId = row.userId.toLowerCase();
 
-      {/* Users Table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-800/50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                User
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Cards Added
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Spending Edits
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                First Activity
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Account Linking
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {filteredUsers.map((user) => (
-              <UserRow
-                key={user.userId}
-                user={user}
-                onDelete={onDelete}
-                onToggleAccountLinking={onToggleAccountLinking}
-                onEmulate={onEmulate}
-              />
-            ))}
-          </tbody>
-        </table>
-        {filteredUsers.length === 0 && (
-          <div className="px-6 py-12 text-center text-zinc-500">
-            {searchQuery ? "No users match your search." : "No users yet."}
-          </div>
-        )}
-      </div>
-    </div>
+        return (
+          email.includes(q) ||
+          firstName.includes(q) ||
+          lastName.includes(q) ||
+          fullName.includes(q) ||
+          userId.includes(q)
+        );
+      }}
+      showColumnSelector={false}
+      defaultSortColumn="createdAt"
+      defaultSortDirection="desc"
+      emptyMessage="No users yet."
+      rowClassName={(row) => pendingUserId === row.userId && isPending ? "opacity-50" : ""}
+    />
   );
 }
 

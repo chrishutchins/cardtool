@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
+import { getEffectiveUserId } from '@/lib/emulation';
 import { plaidClient } from '@/lib/plaid';
 import logger from '@/lib/logger';
 
@@ -9,6 +10,12 @@ export async function POST(request: NextRequest) {
     const user = await currentUser();
     
     if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Use effective user ID (respects DEV_USER_ID_OVERRIDE in development)
+    const effectiveUserId = await getEffectiveUserId();
+    if (!effectiveUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -26,13 +33,15 @@ export async function POST(request: NextRequest) {
     const accessToken = exchangeResponse.data.access_token;
     const itemId = exchangeResponse.data.item_id;
 
-    const supabase = await createClient();
+    // Use admin client since we're authenticated via Clerk, not Supabase Auth
+    // RLS policies use auth.jwt() which won't work with Clerk
+    const supabase = createAdminClient();
 
     // Store the Plaid Item
     const { data: plaidItem, error: itemError } = await supabase
       .from('user_plaid_items')
       .insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         access_token: accessToken,
         item_id: itemId,
         institution_id: metadata?.institution?.institution_id || null,
@@ -42,14 +51,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (itemError || !plaidItem) {
-      logger.error({ err: itemError, userId: user.id }, 'Failed to store plaid item');
+      logger.error({ err: itemError, userId: effectiveUserId }, 'Failed to store plaid item');
       return NextResponse.json(
         { error: 'Failed to store plaid item' },
         { status: 500 }
       );
     }
 
-    logger.debug({ plaidItemId: plaidItem.id, userId: user.id }, 'Fetching balances for item');
+    logger.debug({ plaidItemId: plaidItem.id, userId: effectiveUserId }, 'Fetching balances for item');
     
     // Helper function to fetch balances with retries
     async function fetchBalancesWithRetry(token: string, maxRetries = 3, delayMs = 1000) {
@@ -91,7 +100,7 @@ export async function POST(request: NextRequest) {
     } catch (balanceError: unknown) {
       const errorMessage = balanceError instanceof Error ? balanceError.message : 'Unknown error';
       logger.error(
-        { err: balanceError, userId: user.id, institution: metadata?.institution?.name },
+        { err: balanceError, userId: effectiveUserId, institution: metadata?.institution?.name },
         'Failed to fetch balances from Plaid'
       );
       
@@ -104,7 +113,7 @@ export async function POST(request: NextRequest) {
       if (creditFromMetadata.length > 0) {
         logger.info({ count: creditFromMetadata.length }, 'Using credit accounts from Link metadata');
         const accountsToInsert = creditFromMetadata.map((account: { id: string; name: string; type: string; subtype?: string; mask?: string }) => ({
-          user_id: user.id,
+          user_id: effectiveUserId,
           plaid_item_id: plaidItem.id,
           plaid_account_id: account.id,
           name: account.name,
@@ -124,7 +133,7 @@ export async function POST(request: NextRequest) {
           .insert(accountsToInsert);
           
         if (insertError) {
-          logger.error({ err: insertError, userId: user.id }, 'Failed to insert accounts from metadata');
+          logger.error({ err: insertError, userId: effectiveUserId }, 'Failed to insert accounts from metadata');
           // Clean up orphaned plaid_item
           await supabase.from('user_plaid_items').delete().eq('id', plaidItem.id);
           return NextResponse.json({
@@ -163,7 +172,7 @@ export async function POST(request: NextRequest) {
 
     if (creditAccounts.length > 0) {
       const accountsToInsert = creditAccounts.map((account) => ({
-        user_id: user.id,
+        user_id: effectiveUserId,
         plaid_item_id: plaidItem.id,
         plaid_account_id: account.account_id,
         name: account.name,
@@ -183,7 +192,7 @@ export async function POST(request: NextRequest) {
         .insert(accountsToInsert);
 
       if (accountsError) {
-        logger.error({ err: accountsError, userId: user.id }, 'Failed to store linked accounts');
+        logger.error({ err: accountsError, userId: effectiveUserId }, 'Failed to store linked accounts');
         return NextResponse.json(
           { error: 'Failed to store linked accounts', details: accountsError.message, code: accountsError.code },
           { status: 500 }
@@ -191,14 +200,14 @@ export async function POST(request: NextRequest) {
       }
       
       logger.info(
-        { count: creditAccounts.length, userId: user.id, institution: metadata?.institution?.name },
+        { count: creditAccounts.length, userId: effectiveUserId, institution: metadata?.institution?.name },
         'Successfully linked accounts'
       );
       accountsLinked = creditAccounts.length;
     } else {
       // No credit accounts found - delete the plaid_item to avoid orphans
       logger.info(
-        { userId: user.id, institution: metadata?.institution?.name },
+        { userId: effectiveUserId, institution: metadata?.institution?.name },
         'No credit accounts found for institution'
       );
       await supabase

@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      application_rules: {
+        Row: {
+          card_limit: number
+          card_type: string | null
+          charge_type: string | null
+          counts_all_issuers: boolean | null
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          issuer_id: string
+          name: string
+          requires_banking: boolean | null
+          rule_type: string
+          time_unit: string | null
+          time_window: number | null
+        }
+        Insert: {
+          card_limit: number
+          card_type?: string | null
+          charge_type?: string | null
+          counts_all_issuers?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          issuer_id: string
+          name: string
+          requires_banking?: boolean | null
+          rule_type: string
+          time_unit?: string | null
+          time_window?: number | null
+        }
+        Update: {
+          card_limit?: number
+          card_type?: string | null
+          charge_type?: string | null
+          counts_all_issuers?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          issuer_id?: string
+          name?: string
+          requires_banking?: boolean | null
+          rule_type?: string
+          time_unit?: string | null
+          time_window?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_rules_issuer_id_fkey"
+            columns: ["issuer_id"]
+            isOneToOne: false
+            referencedRelation: "issuers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       card_cap_categories: {
         Row: {
           cap_id: string
@@ -439,7 +501,9 @@ export type Database = {
       cards: {
         Row: {
           annual_fee: number
-          card_charge_type: Database["public"]["Enums"]["card_charge_type"] | null
+          card_charge_type:
+            | Database["public"]["Enums"]["card_charge_type"]
+            | null
           created_at: string | null
           default_earn_rate: number
           default_perks_value: number | null
@@ -456,7 +520,9 @@ export type Database = {
         }
         Insert: {
           annual_fee?: number
-          card_charge_type?: Database["public"]["Enums"]["card_charge_type"] | null
+          card_charge_type?:
+            | Database["public"]["Enums"]["card_charge_type"]
+            | null
           created_at?: string | null
           default_earn_rate?: number
           default_perks_value?: number | null
@@ -473,7 +539,9 @@ export type Database = {
         }
         Update: {
           annual_fee?: number
-          card_charge_type?: Database["public"]["Enums"]["card_charge_type"] | null
+          card_charge_type?:
+            | Database["public"]["Enums"]["card_charge_type"]
+            | null
           created_at?: string | null
           default_earn_rate?: number
           default_perks_value?: number | null
@@ -790,70 +858,9 @@ export type Database = {
         }
         Relationships: []
       }
-      application_rules: {
-        Row: {
-          id: string
-          issuer_id: string
-          rule_type: string
-          name: string
-          description: string | null
-          card_limit: number
-          card_type: string | null
-          time_window: number | null
-          time_unit: string | null
-          counts_all_issuers: boolean | null
-          charge_type: string | null
-          requires_banking: boolean | null
-          display_order: number | null
-          is_active: boolean | null
-          created_at: string | null
-        }
-        Insert: {
-          id?: string
-          issuer_id: string
-          rule_type: string
-          name: string
-          description?: string | null
-          card_limit: number
-          card_type?: string | null
-          time_window?: number | null
-          time_unit?: string | null
-          counts_all_issuers?: boolean | null
-          charge_type?: string | null
-          requires_banking?: boolean | null
-          display_order?: number | null
-          is_active?: boolean | null
-          created_at?: string | null
-        }
-        Update: {
-          id?: string
-          issuer_id?: string
-          rule_type?: string
-          name?: string
-          description?: string | null
-          card_limit?: number
-          card_type?: string | null
-          time_window?: number | null
-          time_unit?: string | null
-          counts_all_issuers?: boolean | null
-          charge_type?: string | null
-          requires_banking?: boolean | null
-          display_order?: number | null
-          is_active?: boolean | null
-          created_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "application_rules_issuer_id_fkey"
-            columns: ["issuer_id"]
-            isOneToOne: false
-            referencedRelation: "issuers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       issuers: {
         Row: {
+          billing_cycle_formula: string | null
           created_at: string | null
           id: string
           name: string
@@ -861,6 +868,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          billing_cycle_formula?: string | null
           created_at?: string | null
           id?: string
           name: string
@@ -868,6 +876,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          billing_cycle_formula?: string | null
           created_at?: string | null
           id?: string
           name?: string
@@ -1635,6 +1644,7 @@ export type Database = {
           id: string
           is_used: boolean
           name: string
+          no_expiration: boolean | null
           notes: string | null
           original_value_cents: number | null
           pin: string | null
@@ -1656,6 +1666,7 @@ export type Database = {
           id?: string
           is_used?: boolean
           name: string
+          no_expiration?: boolean | null
           notes?: string | null
           original_value_cents?: number | null
           pin?: string | null
@@ -1677,6 +1688,7 @@ export type Database = {
           id?: string
           is_used?: boolean
           name?: string
+          no_expiration?: boolean | null
           notes?: string | null
           original_value_cents?: number | null
           pin?: string | null
@@ -1975,6 +1987,7 @@ export type Database = {
           last_synced_at: string | null
           last_transaction_date: string | null
           plaid_item_id: string | null
+          sync_cursor: string | null
           user_id: string
         }
         Insert: {
@@ -1983,6 +1996,7 @@ export type Database = {
           last_synced_at?: string | null
           last_transaction_date?: string | null
           plaid_item_id?: string | null
+          sync_cursor?: string | null
           user_id: string
         }
         Update: {
@@ -1991,6 +2005,7 @@ export type Database = {
           last_synced_at?: string | null
           last_transaction_date?: string | null
           plaid_item_id?: string | null
+          sync_cursor?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2018,6 +2033,7 @@ export type Database = {
           matched_rule_id: string | null
           merchant_name: string | null
           name: string
+          original_description: string | null
           pending: boolean | null
           plaid_transaction_id: string
           user_id: string
@@ -2036,6 +2052,7 @@ export type Database = {
           matched_rule_id?: string | null
           merchant_name?: string | null
           name: string
+          original_description?: string | null
           pending?: boolean | null
           plaid_transaction_id: string
           user_id: string
@@ -2054,6 +2071,7 @@ export type Database = {
           matched_rule_id?: string | null
           merchant_name?: string | null
           name?: string
+          original_description?: string | null
           pending?: boolean | null
           plaid_transaction_id?: string
           user_id?: string
@@ -2081,6 +2099,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_players: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          player_number: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          player_number: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          player_number?: number
+          user_id?: string
+        }
+        Relationships: []
       }
       user_point_value_settings: {
         Row: {
@@ -2284,56 +2326,53 @@ export type Database = {
           },
         ]
       }
-      user_players: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          id: string
-          player_number: number
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          player_number: number
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          player_number?: number
-          user_id?: string
-        }
-        Relationships: []
-      }
       user_wallets: {
         Row: {
           added_at: string | null
           approval_date: string | null
           card_id: string
+          closed_date: string | null
+          closed_reason: string | null
           custom_name: string | null
           id: string
+          manual_balance_cents: number | null
+          manual_credit_limit_cents: number | null
+          payment_due_day: number | null
           player_number: number | null
+          product_changed_to_id: string | null
+          statement_close_day: number | null
           user_id: string
         }
         Insert: {
           added_at?: string | null
           approval_date?: string | null
           card_id: string
+          closed_date?: string | null
+          closed_reason?: string | null
           custom_name?: string | null
           id?: string
+          manual_balance_cents?: number | null
+          manual_credit_limit_cents?: number | null
+          payment_due_day?: number | null
           player_number?: number | null
+          product_changed_to_id?: string | null
+          statement_close_day?: number | null
           user_id: string
         }
         Update: {
           added_at?: string | null
           approval_date?: string | null
           card_id?: string
+          closed_date?: string | null
+          closed_reason?: string | null
           custom_name?: string | null
           id?: string
+          manual_balance_cents?: number | null
+          manual_credit_limit_cents?: number | null
+          payment_due_day?: number | null
           player_number?: number | null
+          product_changed_to_id?: string | null
+          statement_close_day?: number | null
           user_id?: string
         }
         Relationships: [
@@ -2349,6 +2388,13 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_wallets_product_changed_to_id_fkey"
+            columns: ["product_changed_to_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
             referencedColumns: ["id"]
           },
         ]

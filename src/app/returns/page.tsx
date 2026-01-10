@@ -50,7 +50,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // Fetch all required data in parallel
   const [
@@ -79,7 +79,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     userSpendBonusesResult,
     userBonusDisplaySettingsResult,
   ] = await Promise.all([
-    // User's wallet cards with full details
+    // User's wallet cards with full details (exclude closed cards)
     supabase
       .from("user_wallets")
       .select(`
@@ -103,7 +103,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
           )
         )
       `)
-      .eq("user_id", effectiveUserId),
+      .eq("user_id", effectiveUserId)
+      .is("closed_date", null),
     
     // User's spending per category (including >$5k portions)
     supabase
@@ -292,11 +293,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     }
   });
   
-  // Pre-fetch bonus data to check for differences between wallet instances
-  const walletWelcomeBonuses = (userWelcomeBonusesResult.data ?? []);
-  const walletSpendBonuses = (userSpendBonusesResult.data ?? []);
-  
-  // Group wallet instances by card_id to check for bonus differences
+  // Group wallet instances by card_id
   const walletsByCardId = new Map<string, WalletRow[]>();
   walletRows.forEach((w) => {
     if (w.cards) {
@@ -306,45 +303,33 @@ export default async function ReturnsPage({ searchParams }: Props) {
     }
   });
   
-  // Helper to get bonus signature for a wallet instance
-  const getBonusSignature = (walletId: string): string => {
-    const welcomeCount = walletWelcomeBonuses.filter(wb => wb.wallet_card_id === walletId && wb.is_active).length;
-    const spendCount = walletSpendBonuses.filter(sb => sb.wallet_card_id === walletId && sb.is_active).length;
-    const welcomeValue = walletWelcomeBonuses
-      .filter(wb => wb.wallet_card_id === walletId && wb.is_active)
-      .reduce((sum, wb) => sum + (wb.value_cents ?? wb.cash_amount_cents ?? wb.points_amount ?? 0), 0);
-    const spendValue = walletSpendBonuses
-      .filter(sb => sb.wallet_card_id === walletId && sb.is_active)
-      .reduce((sum, sb) => sum + (sb.value_cents ?? sb.cash_amount_cents ?? sb.points_amount ?? 0), 0);
-    return `${welcomeCount}:${welcomeValue}:${spendCount}:${spendValue}`;
-  };
-  
-  // Determine which card types need to be split into separate wallet instances
+  // Always split multiple instances of the same card into separate entries
+  // This allows each card to have its own marginal value calculation
+  // (e.g., "should I keep THIS Amex Platinum" vs "should I keep ANY Amex Platinums")
   const cardTypesNeedingSplit = new Set<string>();
   walletsByCardId.forEach((wallets, cardId) => {
     if (wallets.length > 1) {
-      const signatures = wallets.map(w => getBonusSignature(w.id));
-      const uniqueSignatures = new Set(signatures);
-      if (uniqueSignatures.size > 1) {
-        // Different wallet instances have different bonuses - need to split
-        cardTypesNeedingSplit.add(cardId);
-      }
+      cardTypesNeedingSplit.add(cardId);
     }
   });
   
-  // Build cards array: de-duplicate unless instances have different bonuses
+  // Build cards array: each wallet instance is a separate entry
   const cards: CardInput[] = [];
   const walletIdToEffectiveCardId = new Map<string, string>();
   
   // First, handle the normal de-duplication (most common case)
   const processedCardIds = new Set<string>();
   
+  // Track base card info for split instances (wallet_id -> original card info)
+  // This allows the display to aggregate multiple instances of the same card type
+  const cardBaseInfo = new Map<string, { baseCardId: string; baseCardName: string }>();
+  
   walletsByCardId.forEach((wallets, cardId) => {
     if (cardTypesNeedingSplit.has(cardId)) {
       // Split: each wallet instance becomes a separate "card" with wallet_id as id
       wallets.forEach((w) => {
         if (w.cards) {
-          const displayName = w.custom_name ?? w.cards.name;
+          const displayName = w.custom_name || w.cards.name;
           cards.push({
             ...w.cards,
             id: w.id, // Use wallet_id as the card id
@@ -353,6 +338,11 @@ export default async function ReturnsPage({ searchParams }: Props) {
           walletIdToEffectiveCardId.set(w.id, w.id);
           // Each split instance has count of 1
           cardInstanceCounts.set(w.id, 1);
+          // Track base card info for aggregation in display
+          cardBaseInfo.set(w.id, {
+            baseCardId: w.card_id,
+            baseCardName: w.cards.name,
+          });
         }
       });
       processedCardIds.add(cardId);
@@ -690,6 +680,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     includeBonusesInCalculation,
     // Multi-instance support: count how many of each card for fee calculation
     cardInstanceCounts,
+    // Base card info for split instances (enables aggregation in display)
+    cardBaseInfo,
   };
   
   const returns = calculatePortfolioReturns(calculatorInput);

@@ -32,7 +32,7 @@ export default async function PointValuesPage() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // Get all templates, currencies, user's selected template, user's custom values, and template values
   const [
@@ -107,7 +107,7 @@ export default async function PointValuesPage() {
         return;
       }
 
-      const supabase = await createClient();
+      const supabase = createClient();
 
       if (templateId === null) {
         const { error } = await supabase
@@ -143,7 +143,7 @@ export default async function PointValuesPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     if (valueCents === null) {
       // Delete custom value (revert to template default)
@@ -172,7 +172,7 @@ export default async function PointValuesPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     // Delete all user currency overrides
     await supabase

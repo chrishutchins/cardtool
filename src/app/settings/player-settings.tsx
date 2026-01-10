@@ -88,6 +88,12 @@ export function PlayerSettings({ players, onSavePlayers }: PlayerSettingsProps) 
                     type="text"
                     value={descriptions[num] || ""}
                     onChange={(e) => handleDescriptionChange(num, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleSave();
+                      }
+                    }}
                     placeholder={num === 1 ? "Me" : `Player ${num}`}
                     maxLength={50}
                     className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"

@@ -10,7 +10,7 @@ type Props = {
 
 export default async function EditCreditPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const [creditResult, cardsResult, inventoryTypesResult] = await Promise.all([
     supabase
@@ -55,7 +55,7 @@ export default async function EditCreditPage({ params }: Props) {
 
   async function updateCredit(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const cardId = formData.get("card_id") as string;
     const name = formData.get("name") as string;

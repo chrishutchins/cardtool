@@ -186,9 +186,13 @@ export function LinkedTransactionModal({
             <div className="space-y-1">
               <div className="text-sm text-zinc-400">Total Applied</div>
               <div className={`text-lg font-semibold ${isClawback ? 'text-amber-400' : 'text-emerald-400'}`}>
-                {credit.default_value_cents 
-                  ? `$${formatCompactDollar(usage.amount_used)}`
-                  : usage.amount_used
+                {/* For usage_based credits: amount_used is a count, multiply by credit value */}
+                {/* For regular dollar credits: amount_used is already in dollars */}
+                {credit.reset_cycle === "usage_based" && credit.default_value_cents
+                  ? `$${formatCompactDollar(usage.amount_used * (credit.default_value_cents / (credit.credit_count || 1)) / 100)}`
+                  : credit.default_value_cents
+                    ? `$${formatCompactDollar(usage.amount_used)}`
+                    : usage.amount_used
                 }
                 {credit.default_value_cents && (
                   <span className="text-sm font-normal text-zinc-500 ml-1">
@@ -233,10 +237,10 @@ export function LinkedTransactionModal({
                         <div className={`font-medium ${isClawback ? 'text-amber-300' : 'text-emerald-400'}`}>
                           {formatAmount(txn.amount_cents)}
                         </div>
-                        <div className="text-sm text-white mt-1 truncate" title={txn.name}>
-                          {txn.name}
+                        <div className="text-sm text-white mt-1 truncate" title={txn.original_description || txn.name}>
+                          {txn.original_description || txn.name}
                         </div>
-                        {txn.merchant_name && txn.merchant_name !== txn.name && (
+                        {!txn.original_description && txn.merchant_name && txn.merchant_name !== txn.name && (
                           <div className="text-xs text-zinc-500 mt-0.5">{txn.merchant_name}</div>
                         )}
                         <div className="text-xs text-zinc-500 mt-1">

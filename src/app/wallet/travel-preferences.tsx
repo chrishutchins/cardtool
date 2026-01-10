@@ -58,6 +58,19 @@ export function TravelPreferences({
     return [];
   };
 
+  const getDirectOptionText = (categorySlug: string): string => {
+    if (categorySlug === "flights") return "Direct with different airlines";
+    if (categorySlug === "hotels") return "Direct with different hotel chains";
+    if (categorySlug === "rental-car") return "Direct with rental car agency";
+    return "Direct (with provider)";
+  };
+
+  const getBrandGroupLabel = (categorySlug: string): string => {
+    if (categorySlug === "flights") return "Direct with one airline";
+    if (categorySlug === "hotels") return "Direct with one hotel chain";
+    return "Book Direct with Brand";
+  };
+
   const handleChange = (
     categorySlug: string,
     value: string
@@ -95,7 +108,7 @@ export function TravelPreferences({
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-500">
-        Where do you book your travel? This affects which card earns the best rate for each category.
+        For the purpose of calculating bonuses, where should we assume you book all your travel?
       </p>
       
       <div className="grid gap-4 md:grid-cols-3">
@@ -118,14 +131,14 @@ export function TravelPreferences({
                 disabled={isPending}
                 className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-white text-sm focus:border-blue-500 focus:outline-none disabled:opacity-50"
               >
-                <option value="direct">Direct (with provider)</option>
+                <option value="direct">{getDirectOptionText(category.slug)}</option>
                 
                 {/* Brand options for flights/hotels */}
                 {brandOptions.length > 0 && (
-                  <optgroup label="Book Direct with Brand">
+                  <optgroup label={getBrandGroupLabel(category.slug)}>
                     {brandOptions.map((brand) => (
                       <option key={brand.name} value={`brand:${brand.name}`}>
-                        {brand.name} ({brand.currencyName})
+                        {brand.name}
                       </option>
                     ))}
                   </optgroup>
@@ -133,7 +146,7 @@ export function TravelPreferences({
 
                 {/* Portal options */}
                 {portalIssuers.length > 0 && (
-                  <optgroup label="Travel Portal">
+                  <optgroup label="In a Travel Portal">
                     {portalIssuers.map((portal) => (
                       <option key={portal.issuerId} value={`portal:${portal.issuerId}`}>
                         {portal.issuerName} Travel Portal

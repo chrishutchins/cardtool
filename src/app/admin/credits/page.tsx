@@ -33,7 +33,7 @@ interface PageProps {
 }
 
 export default async function AdminCreditsPage({ searchParams }: PageProps) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const params = await searchParams;
   const filterCardId = params.card ?? null;
 
@@ -77,7 +77,7 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
 
   async function createCredit(formData: FormData) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
 
     const cardId = formData.get("card_id") as string;
     const name = formData.get("name") as string;
@@ -119,14 +119,14 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
 
   async function deleteCredit(creditId: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("card_credits").delete().eq("id", creditId);
     revalidatePath("/admin/credits");
   }
 
   async function toggleCreditActive(creditId: string, isActive: boolean) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     await supabase.from("card_credits").update({ is_active: isActive }).eq("id", creditId);
     revalidatePath("/admin/credits");
   }

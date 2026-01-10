@@ -48,10 +48,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Dismiss all matching transactions that aren't already matched or dismissed
+    // Check both original_description (preferred) and name fields
+    const trimmedPattern = pattern.trim();
     const { data: matchingTxns, error: matchError } = await supabase
       .from("user_plaid_transactions")
       .update({ dismissed: true })
-      .ilike("name", `%${pattern.trim()}%`)
+      .or(`original_description.ilike.%${trimmedPattern}%,name.ilike.%${trimmedPattern}%`)
       .is("matched_credit_id", null)
       .eq("dismissed", false)
       .select("id");

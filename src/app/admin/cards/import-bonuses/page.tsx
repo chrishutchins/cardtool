@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ImportBonusForm } from "./import-form";
 
 export default async function ImportBonusesPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // Get all cards for reference
   const { data: cards } = await supabase
@@ -21,7 +21,7 @@ export default async function ImportBonusesPage() {
 
   async function importWelcomeBonuses(csvData: string) {
     "use server";
-    const supabase = await createClient();
+    const supabase = createClient();
     
     const lines = csvData.trim().split("\n");
     const header = lines[0].toLowerCase().split(",").map(h => h.trim());

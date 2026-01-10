@@ -31,7 +31,7 @@ export default async function SpendingPage() {
     redirect("/sign-in");
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // Get all categories with defaults and user's custom values
   const [categoriesResult, spendingDefaultsResult, userSpendingResult, largePurchaseCategoriesResult, everythingElseResult] = await Promise.all([
@@ -106,7 +106,7 @@ export default async function SpendingPage() {
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
-    const supabase = await createClient();
+    const supabase = createClient();
 
     if (annualSpendCents === null && largePurchaseSpendCents === undefined) {
       // Delete custom value (revert to default)

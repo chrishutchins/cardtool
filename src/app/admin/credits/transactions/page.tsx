@@ -112,6 +112,7 @@ export default async function AdminTransactionsPage({
       linked_account_id,
       plaid_transaction_id,
       name,
+      original_description,
       amount_cents,
       date,
       authorized_date,
@@ -176,15 +177,16 @@ export default async function AdminTransactionsPage({
 
   // Filter transactions to only show potential credits
   // (those with "credit" in name or matching brand names)
+  // Uses original_description when available for more accurate matching
   const potentialCreditTransactions = (transactions || []).filter(txn => {
-    const nameLower = txn.name.toLowerCase();
+    const description = (txn.original_description || txn.name).toLowerCase();
 
     // Always include if contains "credit"
-    if (nameLower.includes("credit")) return true;
+    if (description.includes("credit")) return true;
 
     // Check brand name matches
     for (const brand of brandNames) {
-      if (nameLower.includes(brand)) return true;
+      if (description.includes(brand)) return true;
     }
 
     // If status is matched or dismissed, include all
@@ -223,11 +225,12 @@ export default async function AdminTransactionsPage({
     .select("pattern");
 
   // Filter out transactions matching exclusion patterns (only for unmatched view)
+  // Uses original_description when available for accurate pattern matching
   if (statusFilter === "unmatched" && exclusionPatterns && exclusionPatterns.length > 0) {
     filteredTransactions = filteredTransactions.filter(txn => {
-      const nameLower = txn.name.toLowerCase();
+      const description = (txn.original_description || txn.name).toLowerCase();
       return !exclusionPatterns.some(ep => 
-        nameLower.includes(ep.pattern.toLowerCase())
+        description.includes(ep.pattern.toLowerCase())
       );
     });
   }
