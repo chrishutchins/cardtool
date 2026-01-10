@@ -12,9 +12,9 @@ interface OnboardingStep {
 
 const ONBOARDING_STEPS: OnboardingStep[] = [
   {
-    target: "add-card",
-    title: "Add Your Cards",
-    message: "Start by adding the credit cards you have in your wallet to track your rewards.",
+    target: "wallet",
+    title: "Your Wallet",
+    message: "Start by adding the credit cards you have to your wallet. This is where you'll manage all your cards and track their rewards.",
     position: "bottom",
   },
   {
@@ -36,9 +36,21 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     position: "bottom",
   },
   {
+    target: "inventory",
+    title: "Inventory Tracking",
+    message: "Keep track of perks you've earned but haven't used yet—like free nights, companion passes, or lounge passes. Never let them expire!",
+    position: "bottom",
+  },
+  {
     target: "spending",
     title: "Edit Spending",
     message: "Edit the default spending assumptions that drive the Earnings tab calculations.",
+    position: "bottom",
+  },
+  {
+    target: "rules",
+    title: "Application Rules",
+    message: "Track which cards you're eligible to apply for based on issuer-specific rules like Chase 5/24 and Amex 2/90.",
     position: "bottom",
   },
   {
@@ -227,7 +239,7 @@ interface OnboardingTourProps {
 }
 
 // Nav items that live in the mobile menu
-const NAV_TARGETS = ["earnings", "compare", "credits", "spending", "point-values", "settings", "wallet"];
+const NAV_TARGETS = ["dashboard", "wallet", "earnings", "compare", "credits", "inventory", "spending", "rules", "point-values", "settings"];
 
 export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   const [currentStep, setCurrentStep] = useState(0);

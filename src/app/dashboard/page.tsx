@@ -33,6 +33,7 @@ import { EarningsSummary } from "./earnings-summary";
 import { ExpiringCredits } from "./expiring-credits";
 import { StatsCard } from "./stats-card";
 import { CardRecommendationsSection } from "./card-recommendations-section";
+import { DashboardClient } from "./dashboard-client";
 
 export const metadata: Metadata = {
   title: "Dashboard | CardTool",
@@ -82,6 +83,7 @@ export default async function DashboardPage() {
     userWelcomeBonusesResult,
     userSpendBonusesResult,
     userBonusDisplaySettingsResult,
+    featureFlagsResult,
   ] = await Promise.all([
     // Cached data (hits cache, not DB on subsequent requests)
     getCachedCards(),
@@ -131,6 +133,10 @@ export default async function DashboardPage() {
       .eq("user_id", effectiveUserId),
     supabase.from("user_bonus_display_settings")
       .select("include_welcome_bonuses, include_spend_bonuses")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle(),
+    supabase.from("user_feature_flags")
+      .select("onboarding_completed")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
   ]);
@@ -672,7 +678,27 @@ export default async function DashboardPage() {
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
+  // Check if onboarding has been completed
+  const onboardingCompleted = featureFlagsResult.data?.onboarding_completed ?? false;
+
+  async function completeOnboarding() {
+    "use server";
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = createClient();
+    
+    await supabase
+      .from("user_feature_flags")
+      .upsert({
+        user_id: effectiveUserId,
+        onboarding_completed: true,
+      }, { onConflict: "user_id" });
+  }
+
   return (
+    <DashboardClient
+      showOnboarding={!onboardingCompleted}
+      onCompleteOnboarding={completeOnboarding}
+    >
     <div className="min-h-screen bg-zinc-950">
       <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-5xl px-4 py-12">
@@ -721,6 +747,7 @@ export default async function DashboardPage() {
         )}
       </div>
     </div>
+    </DashboardClient>
   );
 }
 
