@@ -85,8 +85,8 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
               <span>Tool</span>
             </Link>
             
-            {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-1">
+            {/* Desktop nav - show at 1100px+ to fit all nav items */}
+            <div className="hidden min-[1100px]:flex items-center gap-1">
               {navItems.map((item) => {
                 const isActive = pathname.startsWith(item.href);
                 return (
@@ -106,8 +106,8 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
               })}
             </div>
 
-            {/* Mobile dropdown button */}
-            <div className="md:hidden relative">
+            {/* Mobile dropdown button - show below 1100px */}
+            <div className="min-[1100px]:hidden relative">
               <button
                 onClick={() => setIsOpen(!isOpen)}
                 data-mobile-menu-button

@@ -33,7 +33,7 @@ export function HomeNav({ isAdmin = false }: HomeNavProps) {
             </Link>
 
             {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden min-[1100px]:flex items-center gap-4">
               {isAdmin && (
                 <Link
                   href="/admin"
@@ -58,7 +58,7 @@ export function HomeNav({ isAdmin = false }: HomeNavProps) {
 
             {/* Mobile dropdown button */}
             <SignedIn>
-              <div className="md:hidden relative">
+              <div className="min-[1100px]:hidden relative">
                 <button
                   onClick={() => setIsOpen(!isOpen)}
                   data-mobile-menu-button
