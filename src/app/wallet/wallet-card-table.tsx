@@ -55,6 +55,7 @@ interface WalletCardTableProps {
   perksMap: Map<string, number>;
   debitPayMap: Map<string, number>;
   debitPayEnabled: boolean;
+  accountLinkingEnabled: boolean;
   players: Player[];
   playerCount: number;
   earningRulesPerCard: Map<string, EarningRule[]>;
@@ -179,6 +180,7 @@ export function WalletCardTable({
   perksMap,
   debitPayMap,
   debitPayEnabled,
+  accountLinkingEnabled,
   players,
   playerCount,
   earningRulesPerCard,
@@ -726,6 +728,7 @@ export function WalletCardTable({
         align: "right" as const,
         minWidth: "90px",
         hidden: true,
+        hideFromPicker: !accountLinkingEnabled, // Only show in picker when Plaid is enabled
         accessor: (row) => row.effectiveBalanceCents,
         sortAccessor: (row) => row.effectiveBalanceCents ?? 0,
         render: (row) => {
@@ -771,6 +774,7 @@ export function WalletCardTable({
         align: "right" as const,
         minWidth: "90px",
         hidden: true,
+        hideFromPicker: !accountLinkingEnabled, // Only show in picker when Plaid is enabled
         accessor: (row) => row.effectiveCreditLimitCents,
         sortAccessor: (row) => row.effectiveCreditLimitCents ?? 0,
         render: (row) => {
@@ -816,6 +820,7 @@ export function WalletCardTable({
         align: "right" as const,
         minWidth: "90px",
         hidden: true,
+        hideFromPicker: !accountLinkingEnabled, // Only show in picker when Plaid is enabled
         accessor: (row) => row.availableCreditCents,
         sortAccessor: (row) => row.availableCreditCents ?? 0,
         render: (row) => {
@@ -995,7 +1000,7 @@ export function WalletCardTable({
     ];
 
     return cols;
-  }, [playerCount, playerDescriptions, debitPayEnabled]);
+  }, [playerCount, playerDescriptions, debitPayEnabled, accountLinkingEnabled]);
 
   // Default visible columns
   const defaultVisibleColumns = useMemo(() => {

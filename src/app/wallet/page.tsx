@@ -195,10 +195,10 @@ export default async function WalletPage() {
       .from("earning_categories")
       .select("id, name, slug, parent_category_id, excluded_by_default"),
     
-    // User's feature flags (for debit pay and onboarding)
+    // User's feature flags (for debit pay, onboarding, and account linking)
     supabase
       .from("user_feature_flags")
-      .select("debit_pay_enabled, onboarding_completed")
+      .select("debit_pay_enabled, onboarding_completed, account_linking_enabled")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
     
@@ -441,6 +441,9 @@ export default async function WalletPage() {
 
   // Check if debit pay is enabled
   const debitPayEnabled = featureFlagsResult.data?.debit_pay_enabled ?? false;
+  
+  // Check if account linking (Plaid) is enabled
+  const accountLinkingEnabled = featureFlagsResult.data?.account_linking_enabled ?? false;
   
   // Check if onboarding has been completed
   const onboardingCompleted = featureFlagsResult.data?.onboarding_completed ?? false;
@@ -1688,6 +1691,7 @@ export default async function WalletPage() {
               perksMap={perksMapByWalletId}
               debitPayMap={debitPayMapByWalletId}
               debitPayEnabled={debitPayEnabled}
+              accountLinkingEnabled={accountLinkingEnabled}
               players={players}
               playerCount={playerCount}
               earningRulesPerCard={earningRulesPerCard}
