@@ -1,52 +1,55 @@
 /**
  * Server-side Supabase Client Configuration
  * 
- * IMPORTANT: This app uses Clerk for authentication, NOT Supabase Auth.
+ * ============================================================================
+ * AUTHENTICATION MODEL - READ THIS FIRST
+ * ============================================================================
  * 
- * Security Model:
- * - All routes verify authentication via Clerk's currentUser() BEFORE database access
- * - All queries filter by user_id manually (effectiveUserId)
- * - We use the service role client (bypasses RLS)
- * - This is secure because auth is enforced at the application layer via Clerk
+ * This app uses CLERK for authentication, NOT Supabase Auth.
+ * All Supabase clients here use the SERVICE ROLE KEY which BYPASSES RLS.
  * 
- * Note: The Clerk Supabase integration JWT template ('supabase') was not found.
- * If you want to use RLS with Clerk, create a JWT template named 'supabase' in Clerk Dashboard.
+ * Security is enforced at the APPLICATION layer:
+ * 1. Routes verify auth via Clerk's currentUser() BEFORE any database access
+ * 2. Queries filter by user_id manually (using effectiveUserId helper)
+ * 
+ * RLS policies exist in the database but are NOT used - the service role
+ * bypasses them entirely. See ARCHITECTURE.md for full details.
+ * ============================================================================
  */
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { Database } from "@/lib/database.types";
 
 /**
- * Creates a Supabase client for server-side operations.
- * Uses service role to bypass RLS since we authenticate via Clerk, not Supabase Auth.
+ * Creates a Supabase client using the SERVICE ROLE KEY (bypasses RLS).
  * 
- * ALWAYS verify the user is authenticated via Clerk (currentUser()) before calling this.
- * ALWAYS filter queries by effectiveUserId to ensure users only access their own data.
+ * Security checklist before using:
+ * - ✓ Verified user is authenticated via Clerk (currentUser())
+ * - ✓ Filtering queries by effectiveUserId for user-specific data
  */
-export function createClient() {
+export function createServiceRoleClient() {
   return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
 
-/**
- * Alias for createClient - both use service role.
- */
-export function createAdminClient() {
-  return createSupabaseClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+/** @deprecated Use createServiceRoleClient instead */
+export const createClient = createServiceRoleClient;
+
+/** @deprecated Use createServiceRoleClient instead */
+export const createAdminClient = createServiceRoleClient;
 
 /**
- * Creates an untyped Supabase client for tables not in generated types.
- * Use this sparingly - prefer regenerating types when possible.
+ * Creates an untyped Supabase client (service role) for tables not in generated types.
+ * Use sparingly - prefer regenerating types when possible.
  */
-export function createUntypedClient() {
+export function createUntypedServiceRoleClient() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
+
+/** @deprecated Use createUntypedServiceRoleClient instead */
+export const createUntypedClient = createUntypedServiceRoleClient;

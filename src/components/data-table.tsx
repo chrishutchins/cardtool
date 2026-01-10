@@ -742,7 +742,11 @@ export function formatPercent(value: number, decimals: number = 2): string {
 // Date formatter
 export function formatDate(dateStr: string | null, options?: Intl.DateTimeFormatOptions): string {
   if (!dateStr) return "—";
-  const date = new Date(dateStr + "T00:00:00"); // Parse as local date
+  // Handle both date-only strings (YYYY-MM-DD) and full ISO timestamps
+  const date = dateStr.includes("T") 
+    ? new Date(dateStr) 
+    : new Date(dateStr + "T00:00:00"); // Parse date-only as local date
+  if (isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("en-US", options ?? { month: "numeric", day: "numeric", year: "2-digit" });
 }
 

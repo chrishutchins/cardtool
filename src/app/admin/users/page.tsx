@@ -1,4 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
+/**
+ * Admin Users Page
+ * 
+ * NOTE: This uses the service role Supabase client which BYPASSES RLS.
+ * Auth is enforced via Clerk (admin check in layout.tsx), not Supabase RLS policies.
+ * See ARCHITECTURE.md for the full authentication model.
+ */
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createClerkClient } from "@clerk/backend";
 import { UsersTable } from "./users-table";
@@ -23,7 +30,7 @@ interface UserStats {
 }
 
 export default async function UsersPage() {
-  const supabase = createClient();
+  const supabase = createServiceRoleClient();
   const prodClerk = getProdClerkClient();
 
   // Fetch all users from Clerk Prod first (source of truth)
@@ -99,7 +106,7 @@ export default async function UsersPage() {
 
   async function deleteUser(userId: string) {
     "use server";
-    const supabase = createClient();
+    const supabase = createServiceRoleClient();
 
     // Delete all user data from all tables
     // First delete linked accounts (has FK to plaid_items)
@@ -134,7 +141,7 @@ export default async function UsersPage() {
 
   async function toggleAccountLinking(userId: string, enabled: boolean) {
     "use server";
-    const supabase = createClient();
+    const supabase = createServiceRoleClient();
 
     await supabase.from("user_feature_flags").upsert(
       {
