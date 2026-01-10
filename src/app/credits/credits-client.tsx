@@ -203,6 +203,7 @@ interface CreditsClientProps {
   creditSettings: CreditSettings[];
   inventoryTypes: InventoryType[];
   isAdmin?: boolean;
+  accountLinkingEnabled?: boolean;
   onMarkUsed: (formData: FormData) => Promise<void>;
   onDeleteUsage: (usageId: string) => Promise<void>;
   onUpdateSettings: (formData: FormData) => Promise<void>;
@@ -280,6 +281,7 @@ export function CreditsClient({
   creditSettings,
   inventoryTypes,
   isAdmin = false,
+  accountLinkingEnabled = false,
   onMarkUsed,
   onDeleteUsage,
   onUpdateSettings,
@@ -868,39 +870,17 @@ export function CreditsClient({
 
         {/* Sync Controls & Totals */}
         <div className="flex items-center gap-4">
-          {/* Sync Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSync}
-              disabled={isSyncing || isRefreshing}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Sync transactions from Plaid"
-            >
-              <svg
-                className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              {isSyncing ? "Syncing..." : "Sync"}
-            </button>
-            
-            {isAdmin && (
+          {/* Sync Buttons - only show when Plaid is enabled */}
+          {accountLinkingEnabled && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={handleRefreshFromBank}
+                onClick={handleSync}
                 disabled={isSyncing || isRefreshing}
-                className="flex items-center gap-1.5 rounded-lg border border-amber-700/50 bg-amber-900/20 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Trigger fresh data pull from banks (admin only)"
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Sync transactions from Plaid"
               >
                 <svg
-                  className={`w-4 h-4 ${isRefreshing ? "animate-pulse" : ""}`}
+                  className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -909,16 +889,40 @@ export function CreditsClient({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                {isRefreshing ? "Refreshing..." : "Refresh Banks"}
+                {isSyncing ? "Syncing..." : "Sync"}
               </button>
-            )}
-          </div>
+              
+              {isAdmin && (
+                <button
+                  onClick={handleRefreshFromBank}
+                  disabled={isSyncing || isRefreshing}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-700/50 bg-amber-900/20 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Trigger fresh data pull from banks (admin only)"
+                >
+                  <svg
+                    className={`w-4 h-4 ${isRefreshing ? "animate-pulse" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                    />
+                  </svg>
+                  {isRefreshing ? "Refreshing..." : "Refresh Banks"}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Sync Status Message */}
-          {syncMessage && (
+          {accountLinkingEnabled && syncMessage && (
             <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
               {syncMessage}
             </span>

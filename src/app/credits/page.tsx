@@ -133,6 +133,15 @@ export default async function CreditsPage() {
     `)
     .in("user_wallet_id", walletEntryIds.length > 0 ? walletEntryIds : ["none"]);
 
+  // Check if Plaid (account linking) is enabled for this user
+  const { data: featureFlags } = await supabase
+    .from("user_feature_flags")
+    .select("account_linking_enabled")
+    .eq("user_id", effectiveUserId)
+    .maybeSingle();
+  
+  const accountLinkingEnabled = featureFlags?.account_linking_enabled ?? false;
+
   // Server actions
   async function markCreditUsed(formData: FormData) {
     "use server";
@@ -637,7 +646,7 @@ export default async function CreditsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <PlaidSyncTrigger />
+      {accountLinkingEnabled && <PlaidSyncTrigger />}
       <UserHeader isAdmin={isAdmin} creditTrackingEnabled={true} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-6xl px-4 py-12">
         <div className="mb-8">
@@ -661,6 +670,7 @@ export default async function CreditsPage() {
           creditSettings={creditSettings ?? []}
           inventoryTypes={inventoryTypes ?? []}
           isAdmin={isAdmin}
+          accountLinkingEnabled={accountLinkingEnabled}
           onMarkUsed={markCreditUsed}
           onDeleteUsage={deleteCreditUsage}
           onUpdateSettings={updateCreditSettings}
