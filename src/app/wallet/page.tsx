@@ -97,6 +97,8 @@ export default async function WalletPage() {
         product_changed_to_id,
         statement_close_day,
         payment_due_day,
+        manual_balance_cents,
+        manual_credit_limit_cents,
         cards:card_id (
           id,
           name,

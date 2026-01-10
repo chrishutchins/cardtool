@@ -193,9 +193,23 @@ export function CardSettingsModal({
     ? linkedAccount.current_balance 
     : walletCard.manual_balance_cents;
   
-  const effectiveCreditLimit = hasPlaidData 
-    ? (linkedAccount.manual_credit_limit ?? linkedAccount.credit_limit)
-    : walletCard.manual_credit_limit_cents;
+  // For credit limit: use manual override if set, otherwise Plaid value
+  // Treat null or 0 as "no limit" (common for charge cards)
+  let effectiveCreditLimit: number | null = null;
+  if (hasPlaidData) {
+    if (linkedAccount.manual_credit_limit != null && linkedAccount.manual_credit_limit > 0) {
+      effectiveCreditLimit = linkedAccount.manual_credit_limit;
+    } else if (linkedAccount.credit_limit != null && linkedAccount.credit_limit > 0) {
+      effectiveCreditLimit = linkedAccount.credit_limit;
+    }
+  } else {
+    effectiveCreditLimit = walletCard.manual_credit_limit_cents ?? null;
+  }
+  
+  // Flag: does Plaid report no credit limit (common for charge cards)?
+  const plaidHasNoLimit = hasPlaidData && 
+    (linkedAccount.credit_limit == null || linkedAccount.credit_limit === 0) &&
+    (linkedAccount.manual_credit_limit == null || linkedAccount.manual_credit_limit === 0);
 
   // Billing cycle formula from issuer
   // For Chase, use different formula for business vs personal cards
@@ -555,80 +569,86 @@ export function CardSettingsModal({
             )}
           </div>
 
-          {/* Balance & Credit Settings (for credit cards, not charge cards) */}
-          {!isChargeCard && (
-            <div className="space-y-3 pt-4 border-t border-zinc-800">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-zinc-300">Balance & Credit</h3>
-                {hasPlaidData && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
-                    Plaid Linked
-                  </span>
-                )}
-              </div>
-              
-              {hasPlaidData ? (
-                <>
+          {/* Balance & Credit Settings */}
+          <div className="space-y-3 pt-4 border-t border-zinc-800">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-zinc-300">Balance & Credit</h3>
+              {hasPlaidData && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
+                  Plaid Linked
+                </span>
+              )}
+            </div>
+            
+            {hasPlaidData ? (
+              <>
+                {plaidHasNoLimit ? (
+                  // Plaid-linked but no credit limit (charge card or Cap One)
+                  <p className="text-xs text-zinc-500">
+                    No credit limit reported by Plaid{isChargeCard ? " (charge card)" : ""}. 
+                    Set a manual limit in Settings → Linked Accounts to track available credit.
+                  </p>
+                ) : (
                   <p className="text-xs text-zinc-500">
                     Synced from linked account. Override limit in Settings → Linked Accounts.
                   </p>
-                  {/* Show effective values inline for Plaid-linked */}
-                  <div className="flex gap-6 text-sm">
-                    {effectiveBalance != null && (
-                      <div>
-                        <span className="text-zinc-500">Balance: </span>
-                        <span className="text-zinc-300">${(effectiveBalance / 100).toFixed(2)}</span>
-                      </div>
-                    )}
-                    {effectiveCreditLimit != null && (
-                      <div>
-                        <span className="text-zinc-500">Limit: </span>
-                        <span className="text-zinc-300">${(effectiveCreditLimit / 100).toFixed(2)}</span>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* Manual Balance */}
+                )}
+                {/* Show effective values inline for Plaid-linked (values are in dollars) */}
+                <div className="flex gap-6 text-sm">
+                  {linkedAccount.current_balance != null && (
                     <div>
-                      <label className="block text-xs text-zinc-400 mb-1">Balance</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
-                        <input
-                          ref={manualBalanceRef}
-                          type="text"
-                          value={manualBalance}
-                          onChange={(e) => setManualBalance(e.target.value)}
-                          onKeyDown={handleKeyDown}
-                          placeholder="0.00"
-                          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 pl-7 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
+                      <span className="text-zinc-500">Balance: </span>
+                      <span className="text-zinc-300">${linkedAccount.current_balance.toFixed(2)}</span>
                     </div>
-                    
-                    {/* Manual Credit Limit */}
+                  )}
+                  {effectiveCreditLimit != null && (
                     <div>
-                      <label className="block text-xs text-zinc-400 mb-1">Limit</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
-                        <input
-                          ref={manualCreditLimitRef}
-                          type="text"
-                          value={manualCreditLimit}
-                          onChange={(e) => setManualCreditLimit(e.target.value)}
-                          onKeyDown={handleKeyDown}
-                          placeholder="0.00"
-                          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 pl-7 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
+                      <span className="text-zinc-500">Limit: </span>
+                      <span className="text-zinc-300">${effectiveCreditLimit.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Manual Balance */}
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Balance</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
+                      <input
+                        ref={manualBalanceRef}
+                        type="text"
+                        value={manualBalance}
+                        onChange={(e) => setManualBalance(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="0.00"
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 pl-7 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+                      />
                     </div>
                   </div>
-                </>
-              )}
-            </div>
-          )}
+                  
+                  {/* Manual Credit Limit */}
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">{isChargeCard ? "Spending Power" : "Credit Limit"}</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
+                      <input
+                        ref={manualCreditLimitRef}
+                        type="text"
+                        value={manualCreditLimit}
+                        onChange={(e) => setManualCreditLimit(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="0.00"
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 pl-7 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Actions - all buttons equally spaced */}
           <div className="flex gap-2 pt-4 border-t border-zinc-800">

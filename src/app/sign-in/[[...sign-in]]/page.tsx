@@ -11,6 +11,7 @@ export default function SignInPage() {
           </Link>
         </div>
         <SignIn 
+          signUpUrl="/sign-up"
           appearance={{
             elements: {
               rootBox: "mx-auto",

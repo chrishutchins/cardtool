@@ -109,8 +109,15 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
   };
 
   // Get effective credit limit (manual override takes precedence)
-  const getEffectiveCreditLimit = (account: LinkedAccount) => {
-    return account.manual_credit_limit ?? account.credit_limit;
+  // Returns null if no valid limit exists (treats 0 as no limit - common for charge cards)
+  const getEffectiveCreditLimit = (account: LinkedAccount): number | null => {
+    if (account.manual_credit_limit != null && account.manual_credit_limit > 0) {
+      return account.manual_credit_limit;
+    }
+    if (account.credit_limit != null && account.credit_limit > 0) {
+      return account.credit_limit;
+    }
+    return null;
   };
 
   const refreshAccounts = async () => {
@@ -268,7 +275,7 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
                 <div>
                   <p className="text-xs text-zinc-500 uppercase flex items-center gap-1">
                     Credit Limit
-                    {account.manual_credit_limit != null && (
+                    {account.manual_credit_limit != null && account.manual_credit_limit > 0 && (
                       <span className="text-amber-500 text-[10px]">(manual)</span>
                     )}
                   </p>
@@ -304,14 +311,18 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
                     </div>
                   ) : (
                     <div className="flex items-center gap-1">
-                      <p className="text-lg font-semibold text-zinc-300">
-                        {formatCurrency(getEffectiveCreditLimit(account), account.iso_currency_code)}
-                      </p>
+                      {getEffectiveCreditLimit(account) != null ? (
+                        <p className="text-lg font-semibold text-zinc-300">
+                          {formatCurrency(getEffectiveCreditLimit(account), account.iso_currency_code)}
+                        </p>
+                      ) : (
+                        <p className="text-lg font-semibold text-zinc-500">—</p>
+                      )}
                       {onUpdateCreditLimit && (
                         <button
                           onClick={() => startEditingLimit(account)}
                           className="p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 rounded"
-                          title="Edit credit limit"
+                          title={getEffectiveCreditLimit(account) != null ? "Edit credit limit" : "Set credit limit"}
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
@@ -321,18 +332,20 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Available Credit</p>
-                  <p className="text-lg font-semibold text-emerald-400">
-                    {(() => {
-                      const effectiveLimit = getEffectiveCreditLimit(account);
-                      if (effectiveLimit != null && account.current_balance != null) {
-                        return formatCurrency(
-                          effectiveLimit - account.current_balance,
-                          account.iso_currency_code
-                        );
-                      }
-                      return formatCurrency(account.available_balance, account.iso_currency_code);
-                    })()}
-                  </p>
+                  {(() => {
+                    const effectiveLimit = getEffectiveCreditLimit(account);
+                    if (effectiveLimit != null && account.current_balance != null) {
+                      const available = effectiveLimit - account.current_balance;
+                      const isNegative = available < 0;
+                      return (
+                        <p className={`text-lg font-semibold ${isNegative ? "text-red-400" : "text-emerald-400"}`}>
+                          {formatCurrency(available, account.iso_currency_code)}
+                        </p>
+                      );
+                    }
+                    // No credit limit set - show dash
+                    return <p className="text-lg font-semibold text-zinc-500">—</p>;
+                  })()}
                 </div>
               </div>
 

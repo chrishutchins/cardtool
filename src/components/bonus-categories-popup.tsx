@@ -3,6 +3,57 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { formatRate } from "@/lib/earning-calculator";
 
+// Tooltip component - uses fixed positioning to escape overflow containers (modals, etc.)
+function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
+  const [isVisible, setIsVisible] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, showBelow: false });
+  const ref = useRef<HTMLSpanElement>(null);
+
+  const updatePosition = useCallback(() => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      const showBelow = rect.top < 60;
+      setCoords({
+        top: showBelow ? rect.bottom + 4 : rect.top - 4,
+        left: rect.left + rect.width / 2,
+        showBelow,
+      });
+    }
+  }, []);
+
+  const handleMouseEnter = useCallback(() => {
+    updatePosition();
+    setIsVisible(true);
+  }, [updatePosition]);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsVisible(false);
+  }, []);
+
+  return (
+    <span 
+      ref={ref}
+      className="inline-flex"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {children}
+      {isVisible && (
+        <span 
+          className="fixed px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-[99999] pointer-events-none whitespace-nowrap -translate-x-1/2"
+          style={{
+            top: coords.showBelow ? coords.top : 'auto',
+            bottom: coords.showBelow ? 'auto' : `calc(100vh - ${coords.top}px)`,
+            left: coords.left,
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export interface EarningRule {
   id: string;
   category_id: number;
@@ -257,12 +308,9 @@ export function BonusCategoriesPopup({
                     {formatRate(rule.rate, currencyType as never)}
                   </span>
                   {rule.has_cap && rule.cap_amount && (
-                    <span 
-                      className="text-xs text-amber-500 cursor-help group/cap relative"
-                      title={`Cap: $${rule.cap_amount.toLocaleString()}${formatCapPeriod(rule.cap_period)}${rule.post_cap_rate != null ? ` → ${formatRate(rule.post_cap_rate, currencyType as never)} after` : ''}`}
-                    >
-                      †
-                    </span>
+                    <Tooltip text={`Cap: $${rule.cap_amount.toLocaleString()}${formatCapPeriod(rule.cap_period)}${rule.post_cap_rate != null ? ` → ${formatRate(rule.post_cap_rate, currencyType as never)} after` : ''}`}>
+                      <span className="text-xs text-amber-500 cursor-help">†</span>
+                    </Tooltip>
                   )}
                 </div>
               </div>

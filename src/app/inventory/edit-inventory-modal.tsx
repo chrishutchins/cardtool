@@ -9,6 +9,7 @@ interface EditInventoryModalProps {
   brandSuggestions: string[];
   onClose: () => void;
   onSubmit: (formData: FormData) => Promise<void>;
+  onDelete: (itemId: string) => Promise<void>;
 }
 
 export function EditInventoryModal({
@@ -17,8 +18,11 @@ export function EditInventoryModal({
   brandSuggestions,
   onClose,
   onSubmit,
+  onDelete,
 }: EditInventoryModalProps) {
   const [isPending, startTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedTypeId, setSelectedTypeId] = useState(item.type_id);
   const [brandInput, setBrandInput] = useState(item.brand ?? "");
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
@@ -274,18 +278,68 @@ export function EditInventoryModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={isPending}
+              disabled={isPending || isDeleting}
               className="flex-1 rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || isDeleting}
               className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
             >
               {isPending ? "Saving..." : "Save Changes"}
             </button>
+          </div>
+
+          {/* Delete section */}
+          <div className="pt-4 mt-4 border-t border-zinc-800">
+            {!showDeleteConfirm ? (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={isPending || isDeleting}
+                className="w-full text-sm text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+              >
+                Delete this item
+              </button>
+            ) : (
+              <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-red-400">Delete this item?</p>
+                    <p className="text-xs text-zinc-400 mt-1">This action cannot be undone.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeleting}
+                    className="flex-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                  >
+                    Keep
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      startDeleteTransition(async () => {
+                        await onDelete(item.id);
+                      });
+                    }}
+                    disabled={isDeleting}
+                    className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </form>
       </div>

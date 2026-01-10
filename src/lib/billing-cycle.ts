@@ -14,10 +14,12 @@
 export type BillingCycleFormula = 
   | 'due_minus_25'              // Cap1: Close = 25 days before due
   | 'due_minus_25_skip_sat'     // Amex, Wells Fargo: Close = 25 days before (26 if Saturday)
+  | 'bilt_formula'              // Bilt: Same as Amex/Wells Fargo
   | 'due_plus_3'                // Chase Personal: Close = Due day + 3
   | 'due_plus_6'                // Chase Business: Close = Due day + 6
   | 'close_plus_27_skip_weekend' // BoA: Due = 27 days after close (adjust for Fri/Sat)
-  | 'citi_formula';             // Citi: Complex formula with month boundary handling
+  | 'citi_formula'              // Citi: Complex formula with month boundary handling
+  | 'usbank_formula';           // US Bank: Close = (due - 3)th weekday of month
 
 export interface BillingDates {
   lastCloseDate: Date | null;
@@ -50,6 +52,11 @@ export const FORMULA_INFO: Record<BillingCycleFormula, FormulaInfo> = {
     description: 'Statement closes 25 days before payment due date (26 if that falls on Saturday)',
     shortDescription: 'Close = Due - 25 days (skip Sat)',
   },
+  'bilt_formula': {
+    primaryInput: 'due',
+    description: 'Statement closes 25 days before payment due date (26 if that falls on Saturday)',
+    shortDescription: 'Close = Due - 25 days (skip Sat)',
+  },
   'due_plus_3': {
     primaryInput: 'due',
     description: 'Statement closes on the day-of-month that is 3 days after the due day (Chase Personal)',
@@ -69,6 +76,11 @@ export const FORMULA_INFO: Record<BillingCycleFormula, FormulaInfo> = {
     primaryInput: 'due',
     description: 'Close day = Due day + 4, unless due is 27th/28th then 26 days before. Weekend adjustments apply.',
     shortDescription: 'Citi formula',
+  },
+  'usbank_formula': {
+    primaryInput: 'due',
+    description: 'Statement closes on the (due day - 3)th weekday of the month. E.g., due 16th → close on 13th weekday.',
+    shortDescription: 'Close = (Due - 3)th weekday',
   },
 };
 
@@ -474,6 +486,61 @@ function calculateCitiFormula(dueDay: number, referenceDate: Date): { closeDay: 
 }
 
 /**
+ * US Bank: Close = (due day - 3)th weekday of the month
+ * E.g., if due is 16th, close is on the 13th weekday of the month
+ */
+function calculateUSBankFormula(dueDay: number, referenceDate: Date): { closeDay: number; nextClose: Date; nextDue: Date; lastClose: Date } {
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  
+  // Calculate which weekday number the close falls on
+  const weekdayNumber = dueDay - 3;
+  
+  // Helper to find the Nth weekday of a given month
+  const getNthWeekdayOfMonth = (year: number, month: number, n: number): Date => {
+    const result = new Date(year, month, 1);
+    let weekdayCount = 0;
+    
+    while (weekdayCount < n) {
+      const dayOfWeek = result.getDay();
+      // Monday = 1, Tuesday = 2, ..., Friday = 5 (weekdays)
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        weekdayCount++;
+        if (weekdayCount === n) {
+          return result;
+        }
+      }
+      result.setDate(result.getDate() + 1);
+    }
+    return result;
+  };
+  
+  // Get previous due and next due
+  const prevDue = getPreviousOccurrenceOfDay(dueDay, referenceDate, true);
+  const nextDue = getNextOccurrenceOfDay(dueDay, referenceDate, true);
+  
+  // Calculate last close (Nth weekday of the month containing prevDue)
+  const lastClose = getNthWeekdayOfMonth(prevDue.getFullYear(), prevDue.getMonth(), weekdayNumber);
+  
+  // Calculate next close (Nth weekday of the month containing nextDue)
+  let nextClose = getNthWeekdayOfMonth(nextDue.getFullYear(), nextDue.getMonth(), weekdayNumber);
+  
+  // If nextClose is in the past, advance to next month
+  if (nextClose < today) {
+    const futureMonth = new Date(nextDue);
+    futureMonth.setMonth(futureMonth.getMonth() + 1);
+    nextClose = getNthWeekdayOfMonth(futureMonth.getFullYear(), futureMonth.getMonth(), weekdayNumber);
+  }
+  
+  return {
+    closeDay: lastClose.getDate(),
+    nextClose,
+    nextDue,
+    lastClose,
+  };
+}
+
+/**
  * Citi weekend adjustment:
  * Push to Friday unless that would cross month boundary, then push to Monday
  */
@@ -615,6 +682,7 @@ export function calculateBillingDates(
         result = calculateDueMinus25(paymentDueDay, refDate);
         break;
       case 'due_minus_25_skip_sat':
+      case 'bilt_formula':
         result = calculateDueMinus25SkipSat(paymentDueDay, refDate);
         break;
       case 'due_plus_3':
@@ -625,6 +693,9 @@ export function calculateBillingDates(
         break;
       case 'citi_formula':
         result = calculateCitiFormula(paymentDueDay, refDate);
+        break;
+      case 'usbank_formula':
+        result = calculateUSBankFormula(paymentDueDay, refDate);
         break;
       default:
         return calculateBillingDates(null, statementCloseDay, paymentDueDay, referenceDate);

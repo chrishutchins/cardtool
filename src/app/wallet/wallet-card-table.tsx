@@ -290,9 +290,24 @@ export function WalletCardTable({
       const effectiveBalanceCents = linkedAccount?.current_balance != null 
         ? Math.round(linkedAccount.current_balance * 100)  // Plaid: dollars -> cents
         : (wc.manual_balance_cents ?? null);               // Manual: already in cents
-      const effectiveCreditLimitCents = linkedAccount 
-        ? Math.round((linkedAccount.manual_credit_limit ?? linkedAccount.credit_limit ?? 0) * 100)  // Plaid: dollars -> cents
-        : (wc.manual_credit_limit_cents ?? null);          // Manual: already in cents
+      
+      // For credit limit: use manual override if set, otherwise use Plaid's value
+      // Treat null or 0 from Plaid as "no limit" (common for charge cards like Amex Gold/Platinum)
+      let effectiveCreditLimitCents: number | null = null;
+      if (linkedAccount) {
+        // Linked account: check manual override first, then Plaid value
+        if (linkedAccount.manual_credit_limit != null && linkedAccount.manual_credit_limit > 0) {
+          effectiveCreditLimitCents = Math.round(linkedAccount.manual_credit_limit * 100);
+        } else if (linkedAccount.credit_limit != null && linkedAccount.credit_limit > 0) {
+          effectiveCreditLimitCents = Math.round(linkedAccount.credit_limit * 100);
+        }
+        // If both are null/0, effectiveCreditLimitCents stays null
+      } else {
+        // No linked account: use manual wallet value
+        effectiveCreditLimitCents = wc.manual_credit_limit_cents ?? null;
+      }
+      
+      // Only calculate available credit if we have both a valid limit and balance
       const availableCreditCents = effectiveCreditLimitCents !== null && effectiveBalanceCents !== null
         ? effectiveCreditLimitCents - effectiveBalanceCents
         : null;
@@ -868,6 +883,15 @@ export function WalletCardTable({
           const formula = row.cards?.issuers?.billing_cycle_formula ?? null;
           const primaryField = requiresCloseDay(formula) ? "statementCloseDay" : "paymentDueDay";
           
+          // Dynamic tooltip based on formula type
+          const isClosePrimary = requiresCloseDay(formula);
+          const autoTooltip = isClosePrimary 
+            ? "User-entered close day. Click to edit."
+            : "Auto-calculated from due date. Click to override.";
+          const manualTooltip = isClosePrimary
+            ? "Click to set statement close day"
+            : "Click to set payment due day";
+          
           return (
             <button
               onClick={(e) => {
@@ -875,7 +899,7 @@ export function WalletCardTable({
                 openSettingsWithFocus(row, primaryField);
               }}
               className={hasDate ? STYLES.editable : STYLES.editableEmpty}
-              title={isAuto ? "Auto-calculated from due date. Click to override." : "Click to set statement close day"}
+              title={isAuto ? autoTooltip : manualTooltip}
             >
               {hasDate ? (
                 <span className={isAuto ? "italic" : undefined}>
@@ -909,6 +933,15 @@ export function WalletCardTable({
           const formula = row.cards?.issuers?.billing_cycle_formula ?? null;
           const primaryField = requiresCloseDay(formula) ? "statementCloseDay" : "paymentDueDay";
           
+          // Dynamic tooltip based on formula type
+          const isClosePrimary = requiresCloseDay(formula);
+          const autoTooltip = isClosePrimary 
+            ? "User-entered close day. Click to edit."
+            : "Auto-calculated from due date. Click to override.";
+          const manualTooltip = isClosePrimary
+            ? "Click to set statement close day"
+            : "Click to set payment due day";
+          
           return (
             <button
               onClick={(e) => {
@@ -916,7 +949,7 @@ export function WalletCardTable({
                 openSettingsWithFocus(row, primaryField);
               }}
               className={hasDate ? STYLES.editable : STYLES.editableEmpty}
-              title={isAuto ? "Auto-calculated from due date. Click to override." : "Click to set statement close day"}
+              title={isAuto ? autoTooltip : manualTooltip}
             >
               {hasDate ? (
                 <span className={isAuto ? "italic" : undefined}>
@@ -950,6 +983,15 @@ export function WalletCardTable({
           const formula = row.cards?.issuers?.billing_cycle_formula ?? null;
           const primaryField = requiresCloseDay(formula) ? "statementCloseDay" : "paymentDueDay";
           
+          // Dynamic tooltip based on formula type
+          const isClosePrimary = requiresCloseDay(formula);
+          const autoTooltip = isClosePrimary 
+            ? "Auto-calculated from close date. Click to override."
+            : "User-entered due day. Click to edit.";
+          const manualTooltip = isClosePrimary
+            ? "Click to set statement close day"
+            : "Click to set payment due day";
+          
           return (
             <button
               onClick={(e) => {
@@ -957,7 +999,7 @@ export function WalletCardTable({
                 openSettingsWithFocus(row, primaryField);
               }}
               className={hasDate ? STYLES.editable : STYLES.editableEmpty}
-              title={isAuto ? "Auto-calculated from close date. Click to override." : "Click to set payment due day"}
+              title={isAuto ? autoTooltip : manualTooltip}
             >
               {hasDate ? (
                 <span className={isAuto ? "italic" : undefined}>

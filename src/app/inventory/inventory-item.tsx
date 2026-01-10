@@ -396,6 +396,10 @@ export function InventoryItem({
             await onUpdateItem(item.id, formData);
             setShowEditModal(false);
           }}
+          onDelete={async (itemId) => {
+            await onDeleteItem(itemId);
+            setShowEditModal(false);
+          }}
         />
       )}
 
