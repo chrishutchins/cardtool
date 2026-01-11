@@ -440,7 +440,7 @@ export function BalanceTable({
                             // Build tooltip text
                             const tooltipLines: string[] = [];
                             if (hasExpiration) {
-                              tooltipLines.push(`Expires: ${new Date(balance.expiration_date!).toLocaleDateString()}`);
+                              tooltipLines.push(`Expire: ${new Date(balance.expiration_date!).toLocaleDateString()}`);
                             }
                             if (balance?.notes) {
                               tooltipLines.push(`Note: ${balance.notes}`);
