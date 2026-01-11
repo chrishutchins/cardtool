@@ -20,7 +20,7 @@ interface TransferPartner {
   destination_units: number;
   transfer_timing: string | null;
   notes: string | null;
-  is_active: boolean;
+  is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
   source_currency: {
@@ -96,7 +96,7 @@ export function TransferPartnersTable({ transferPartners, currencies, onDelete, 
             <span className="text-white font-medium">{row.destination_currency?.name || "Unknown"}</span>
             <div className="flex items-center gap-2">
               <span className="text-zinc-500 text-xs font-mono">{row.destination_currency?.code}</span>
-              <Badge variant={variant} className="text-[10px] px-1 py-0">
+              <Badge variant={variant}>
                 {type.replace(/_/g, " ")}
               </Badge>
             </div>
@@ -241,7 +241,7 @@ export function TransferPartnersTable({ transferPartners, currencies, onDelete, 
                 destination_units: editingPartner.destination_units,
                 transfer_timing: editingPartner.transfer_timing,
                 notes: editingPartner.notes,
-                is_active: editingPartner.is_active,
+                is_active: editingPartner.is_active ?? true,
               }}
               onCancel={() => setEditingPartner(null)}
             />

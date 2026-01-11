@@ -74,6 +74,11 @@ export function CurrencyRow({ currency, onDelete, onUpdate }: CurrencyRowProps) 
               base_value_cents: currency.base_value_cents,
               cash_out_value_cents: currency.cash_out_value_cents,
               notes: currency.notes,
+              program_name: currency.program_name,
+              alliance: currency.alliance,
+              expiration_policy: currency.expiration_policy,
+              is_transferable: currency.is_transferable,
+              transfer_increment: currency.transfer_increment,
             }}
             onCancel={() => setIsEditing(false)}
           />

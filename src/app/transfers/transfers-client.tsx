@@ -21,7 +21,7 @@ type TransferPartner = {
   destination_units: number;
   transfer_timing: string | null;
   notes: string | null;
-  is_active: boolean;
+  is_active: boolean | null;
 };
 
 interface TransfersClientProps {
