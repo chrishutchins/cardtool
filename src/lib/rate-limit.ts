@@ -37,6 +37,16 @@ export const inviteCodeRateLimit = redis
     })
   : null;
 
+// Rate limiter for points import (60 per minute per user - for Tampermonkey scripts)
+export const pointsImportRateLimit = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(60, "1 m"),
+      analytics: true,
+      prefix: "points-import",
+    })
+  : null;
+
 // Helper function to check rate limit with fallback
 export async function checkRateLimit(
   limiter: Ratelimit | null,
