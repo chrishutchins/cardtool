@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.4.2
+// @version      1.4.3
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -427,13 +427,15 @@
     }
 
     function findMatchingConfig(hostname) {
-        // Normalize hostname (remove www.)
+        // Normalize hostname (remove www. and lowercase)
         const normalizedHost = hostname.replace(/^www\./, '').toLowerCase();
         
         // Server configs take priority (more up-to-date)
         for (const config of serverConfigs) {
+            // Normalize config domain for case-insensitive comparison
+            const configDomain = (config.domain || '').toLowerCase();
             // Match if hostname ends with the config domain
-            if (normalizedHost === config.domain || normalizedHost.endsWith('.' + config.domain)) {
+            if (normalizedHost === configDomain || normalizedHost.endsWith('.' + configDomain)) {
                 return config;
             }
         }
