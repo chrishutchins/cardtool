@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.5.1
+// @version      1.6.0
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -355,7 +355,8 @@
     // STATE
     // ============================================
 
-    let currentConfig = null;
+    let matchingConfigs = [];  // All configs that match this domain
+    let currentConfig = null;  // The config that found a balance (or first match for display)
     let players = null;
     let extractedBalance = null;
     let badgeElement = null;
@@ -367,12 +368,15 @@
     function init() {
         // Load server configs first, then initialize
         loadServerConfigs(() => {
-            // Find matching site config by domain (server configs take priority)
-            currentConfig = findMatchingConfig(window.location.hostname);
+            // Find ALL matching site configs by domain
+            matchingConfigs = findMatchingConfigs(window.location.hostname);
 
-            if (!currentConfig) {
+            if (matchingConfigs.length === 0) {
                 return; // Site not configured
             }
+
+            // Use first config as default for display purposes
+            currentConfig = matchingConfigs[0];
 
             // Inject styles
             const styleEl = document.createElement('style');
@@ -383,7 +387,7 @@
             createBadge();
 
             // Try to find balance on page (wait longer for SPAs to load)
-            console.log('CardTool: Config matched:', currentConfig.name, '- starting balance checks');
+            console.log('CardTool: Found', matchingConfigs.length, 'config(s) for this domain');
             setTimeout(tryExtractBalance, 2000);
 
             // Re-check periodically (for SPAs that load content dynamically)
@@ -428,9 +432,10 @@
         });
     }
 
-    function findMatchingConfig(hostname) {
+    function findMatchingConfigs(hostname) {
         // Normalize hostname (remove www. and lowercase)
         const normalizedHost = hostname.replace(/^www\./, '').toLowerCase();
+        const matches = [];
         
         // Server configs take priority (more up-to-date)
         for (const config of serverConfigs) {
@@ -438,16 +443,26 @@
             const configDomain = (config.domain || '').toLowerCase();
             // Match if hostname ends with the config domain
             if (normalizedHost === configDomain || normalizedHost.endsWith('.' + configDomain)) {
-                return config;
+                matches.push(config);
             }
         }
-        // Fall back to hardcoded configs
-        for (const config of FALLBACK_CONFIGS) {
-            if (config.sitePattern.test(hostname)) {
-                return config;
+        
+        // Fall back to hardcoded configs if no server matches
+        if (matches.length === 0) {
+            for (const config of FALLBACK_CONFIGS) {
+                if (config.sitePattern.test(hostname)) {
+                    matches.push(config);
+                }
             }
         }
-        return null;
+        
+        return matches;
+    }
+    
+    // For backward compatibility - returns first match
+    function findMatchingConfig(hostname) {
+        const matches = findMatchingConfigs(hostname);
+        return matches.length > 0 ? matches[0] : null;
     }
 
     // ============================================
@@ -500,8 +515,12 @@
     }
 
     function showNoBalance() {
-        const linkHtml = currentConfig.balancePageUrl
-            ? `<a href="${currentConfig.balancePageUrl}" class="cardtool-badge-link">View your balance &rarr;</a>`
+        // Find the first config with a balance page URL to show as the link
+        const configWithUrl = matchingConfigs.find(c => c.balancePageUrl);
+        const balancePageUrl = configWithUrl ? configWithUrl.balancePageUrl : null;
+        
+        const linkHtml = balancePageUrl
+            ? `<a href="${balancePageUrl}" class="cardtool-badge-link">View your balance &rarr;</a>`
             : '';
         
         updateBadgeContent(`
@@ -581,29 +600,34 @@
     // ============================================
 
     function tryExtractBalance() {
-        if (!currentConfig) {
-            console.log('CardTool: No config matched');
+        if (matchingConfigs.length === 0) {
+            console.log('CardTool: No configs matched');
             return;
         }
 
         try {
-            const selectors = currentConfig.selector.split(',').map(s => s.trim());
-            console.log('CardTool: Checking selectors:', selectors);
+            // Try each matching config's selectors until one finds a balance
+            for (const config of matchingConfigs) {
+                const selectors = config.selector.split(',').map(s => s.trim());
+                console.log('CardTool: Trying config:', config.name, 'selectors:', selectors);
 
-            for (const selector of selectors) {
-                const element = document.querySelector(selector);
-                console.log('CardTool: Selector', selector, '-> element:', element ? 'FOUND' : 'not found');
-                
-                if (element) {
-                    const text = element.textContent.trim();
-                    console.log('CardTool: Element text:', text);
-                    const balance = currentConfig.parseBalance(text);
-                    console.log('CardTool: Parsed balance:', balance);
+                for (const selector of selectors) {
+                    const element = document.querySelector(selector);
+                    console.log('CardTool: Selector', selector, '-> element:', element ? 'FOUND' : 'not found');
+                    
+                    if (element) {
+                        const text = element.textContent.trim();
+                        console.log('CardTool: Element text:', text);
+                        const balance = config.parseBalance(text);
+                        console.log('CardTool: Parsed balance:', balance);
 
-                    if (balance > 0) {
-                        extractedBalance = balance;
-                        showBalanceFound(balance);
-                        return;
+                        if (balance > 0) {
+                            // Found a balance - use this config
+                            currentConfig = config;
+                            extractedBalance = balance;
+                            showBalanceFound(balance);
+                            return;
+                        }
                     }
                 }
             }
