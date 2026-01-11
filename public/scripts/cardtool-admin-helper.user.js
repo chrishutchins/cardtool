@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.2.1
+// @version      1.3.0
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -185,7 +185,35 @@
             color: #fcd34d;
             margin-bottom: 16px;
         }
+        .cardtool-hint {
+            font-size: 11px;
+            color: #71717a;
+            margin-top: 4px;
+        }
     `;
+
+    // Extract base domain from hostname (strip www. and subdomains for common patterns)
+    function extractBaseDomain(hostname) {
+        // Remove www.
+        let domain = hostname.replace(/^www\./, '');
+        
+        // For common bank subdomains, extract base domain
+        // e.g., secure.bankofamerica.com -> bankofamerica.com
+        // e.g., onlinebanking.usbank.com -> usbank.com
+        const parts = domain.split('.');
+        if (parts.length > 2) {
+            // Keep last two parts for most domains
+            // Special case for co.uk, com.au, etc.
+            const tld = parts.slice(-2).join('.');
+            if (['co.uk', 'com.au', 'co.nz', 'co.jp'].includes(tld)) {
+                domain = parts.slice(-3).join('.');
+            } else {
+                domain = parts.slice(-2).join('.');
+            }
+        }
+        
+        return domain;
+    }
 
     // Create the UI
     function createUI() {
@@ -208,13 +236,15 @@
                 </div>
 
                 <div class="cardtool-section">
-                    <label class="cardtool-label">Site Pattern (auto-detected)</label>
-                    <input type="text" class="cardtool-input" id="cardtool-site-pattern" readonly>
+                    <label class="cardtool-label">Domain</label>
+                    <input type="text" class="cardtool-input" id="cardtool-domain" placeholder="e.g., united.com">
+                    <div class="cardtool-hint">Base domain only - matches all subdomains and paths</div>
                 </div>
 
                 <div class="cardtool-section">
-                    <label class="cardtool-label">Balance Page URL</label>
+                    <label class="cardtool-label">Balance Page URL (optional)</label>
                     <input type="text" class="cardtool-input" id="cardtool-balance-url" placeholder="URL where balance is shown">
+                    <div class="cardtool-hint">Shown as "View Balance" link when balance not found</div>
                 </div>
 
                 <div class="cardtool-section">
@@ -271,8 +301,8 @@
         // Load currencies
         loadCurrencies();
 
-        // Auto-fill site pattern
-        document.getElementById('cardtool-site-pattern').value = window.location.hostname.replace('www.', '');
+        // Auto-fill domain and balance URL
+        document.getElementById('cardtool-domain').value = extractBaseDomain(window.location.hostname);
         document.getElementById('cardtool-balance-url').value = window.location.href;
     }
 
@@ -322,7 +352,7 @@
         });
 
         // Input changes
-        ['cardtool-selector', 'cardtool-currency', 'cardtool-name', 'cardtool-balance-url', 'cardtool-site-pattern']
+        ['cardtool-selector', 'cardtool-currency', 'cardtool-name', 'cardtool-balance-url', 'cardtool-domain']
             .forEach(id => {
                 document.getElementById(id).addEventListener('input', updateOutput);
                 document.getElementById(id).addEventListener('change', updateOutput);
@@ -544,20 +574,16 @@
     function updateOutput() {
         const name = document.getElementById('cardtool-name').value || 'Program Name';
         const currencyCode = document.getElementById('cardtool-currency').value || 'CODE';
-        const sitePattern = document.getElementById('cardtool-site-pattern').value || 'example.com';
+        const domain = document.getElementById('cardtool-domain').value || 'example.com';
         const balanceUrl = document.getElementById('cardtool-balance-url').value || '';
         const selector = document.getElementById('cardtool-selector').value || '.balance-selector';
-
-        // Escape regex special chars in site pattern
-        const escapedPattern = sitePattern.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&');
 
         const config = `{
   name: "${name}",
   currencyCode: "${currencyCode}",
-  sitePattern: /${escapedPattern}/i,
+  domain: "${domain}",
   balancePageUrl: "${balanceUrl}",
-  selector: "${selector}",
-  parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
+  selector: "${selector}"
 }`;
 
         document.getElementById('cardtool-output').textContent = config;
@@ -597,13 +623,13 @@
     function saveConfig() {
         const name = document.getElementById('cardtool-name').value;
         const currencyCode = document.getElementById('cardtool-currency').value;
-        const urlPattern = document.getElementById('cardtool-site-pattern').value;
+        const domain = document.getElementById('cardtool-domain').value;
         const balancePageUrl = document.getElementById('cardtool-balance-url').value;
         const selector = document.getElementById('cardtool-selector').value;
 
         // Validate required fields
-        if (!name || !currencyCode || !urlPattern || !selector) {
-            alert('Please fill in all required fields: Program Name, Currency, Site Pattern, and Selector');
+        if (!name || !currencyCode || !domain || !selector) {
+            alert('Please fill in all required fields: Program Name, Currency, Domain, and Selector');
             return;
         }
 
@@ -629,7 +655,7 @@
             data: JSON.stringify({
                 name,
                 currencyCode,
-                urlPattern,
+                domain,
                 balancePageUrl: balancePageUrl || null,
                 selector,
                 parseRegex: '[\\d,]+'

@@ -36,6 +36,7 @@ const navGroups: (NavItem | NavGroup)[] = [
       { href: "/admin/currencies", label: "Currencies" },
       { href: "/admin/transfer-partners", label: "Transfer Partners" },
       { href: "/admin/point-values", label: "Point Values" },
+      { href: "/admin/site-configs", label: "Balance Importing" },
     ],
   },
   {

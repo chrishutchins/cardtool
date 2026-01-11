@@ -1031,7 +1031,7 @@ export type Database = {
           id: string
           name: string
           currency_code: string
-          url_pattern: string
+          domain: string
           balance_page_url: string | null
           selector: string
           parse_regex: string | null
@@ -1044,7 +1044,7 @@ export type Database = {
           id?: string
           name: string
           currency_code: string
-          url_pattern: string
+          domain: string
           balance_page_url?: string | null
           selector: string
           parse_regex?: string | null
@@ -1057,7 +1057,7 @@ export type Database = {
           id?: string
           name?: string
           currency_code?: string
-          url_pattern?: string
+          domain?: string
           balance_page_url?: string | null
           selector?: string
           parse_regex?: string | null

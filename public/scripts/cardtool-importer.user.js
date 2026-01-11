@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.3.0
+// @version      1.4.0
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -331,9 +331,8 @@
     function init() {
         // Load server configs first, then initialize
         loadServerConfigs(() => {
-            // Find matching site config (server configs take priority)
-            // Use hostname + pathname to support path-specific patterns
-            currentConfig = findMatchingConfig(window.location.hostname + window.location.pathname);
+            // Find matching site config by domain (server configs take priority)
+            currentConfig = findMatchingConfig(window.location.hostname);
 
             if (!currentConfig) {
                 return; // Site not configured
@@ -364,18 +363,20 @@
                 try {
                     if (response.status === 200) {
                         const data = JSON.parse(response.responseText);
-                        serverConfigs = (data.configs || []).map(config => ({
-                            name: config.name,
-                            currencyCode: config.currency_code,
-                            sitePattern: new RegExp(config.url_pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
-                            balancePageUrl: config.balance_page_url,
-                            selector: config.selector,
-                            parseBalance: (text) => {
-                                const regex = new RegExp(config.parse_regex || '[\\d,]+');
-                                const match = text.match(regex);
-                                return match ? parseInt(match[0].replace(/[^0-9]/g, '')) || 0 : 0;
-                            }
-                        }));
+                        serverConfigs = (data.configs || [])
+                            .filter(config => config.is_active !== false)
+                            .map(config => ({
+                                name: config.name,
+                                currencyCode: config.currency_code,
+                                domain: config.domain,
+                                balancePageUrl: config.balance_page_url,
+                                selector: config.selector,
+                                parseBalance: (text) => {
+                                    const regex = new RegExp(config.parse_regex || '[\\d,]+');
+                                    const match = text.match(regex);
+                                    return match ? parseInt(match[0].replace(/[^0-9]/g, '')) || 0 : 0;
+                                }
+                            }));
                     }
                 } catch (e) {
                     console.error('CardTool: Error parsing server configs', e);
@@ -389,16 +390,20 @@
         });
     }
 
-    function findMatchingConfig(url) {
+    function findMatchingConfig(hostname) {
+        // Normalize hostname (remove www.)
+        const normalizedHost = hostname.replace(/^www\./, '').toLowerCase();
+        
         // Server configs take priority (more up-to-date)
         for (const config of serverConfigs) {
-            if (config.sitePattern.test(url)) {
+            // Match if hostname ends with the config domain
+            if (normalizedHost === config.domain || normalizedHost.endsWith('.' + config.domain)) {
                 return config;
             }
         }
         // Fall back to hardcoded configs
         for (const config of FALLBACK_CONFIGS) {
-            if (config.sitePattern.test(url)) {
+            if (config.sitePattern.test(hostname)) {
                 return config;
             }
         }
@@ -455,11 +460,13 @@
     }
 
     function showNoBalance() {
+        const linkHtml = currentConfig.balancePageUrl
+            ? `<a href="${currentConfig.balancePageUrl}" class="cardtool-badge-link">View your balance &rarr;</a>`
+            : '';
+        
         updateBadgeContent(`
             <div class="cardtool-badge-status">Balance not found on this page</div>
-            <a href="${currentConfig.balancePageUrl}" class="cardtool-badge-link">
-                View your balance &rarr;
-            </a>
+            ${linkHtml}
         `);
     }
 
