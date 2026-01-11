@@ -1,20 +1,15 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.2.2
+// @version      1.3.0
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
-// @match        *://*.united.com/*
-// @match        *://*.delta.com/*
-// @match        *://*.aa.com/*
-// @match        *://*.americanexpress.com/*
-// @match        *://*.chase.com/*
-// @match        *://*.marriott.com/*
-// @match        *://*.hilton.com/*
-// @match        *://*.hyatt.com/*
-// @match        *://*.southwest.com/*
-// @match        *://*.jetblue.com/*
-// @match        *://*.alaskaair.com/*
+// @match        *://*/*
+// @exclude      *://localhost:*/*
+// @exclude      *://cardtool.chrishutchins.com/*
+// @exclude      *://www.google.com/*
+// @exclude      *://www.google.com.*/*
+// @exclude      *://*.github.com/*
 // @grant        GM_notification
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
