@@ -75,6 +75,8 @@ export async function POST(request: Request) {
     const supabase = createClient();
 
     // Upsert - update if exists, insert if not
+    // Unique constraint is on (currency_code, domain, balance_page_url)
+    // This allows multiple configs per domain with different balance page URLs
     const { data, error } = await supabase
       .from("site_configs")
       .upsert(
@@ -90,7 +92,7 @@ export async function POST(request: Request) {
           created_by: createdBy,
         },
         {
-          onConflict: "currency_code,domain",
+          onConflict: "currency_code,domain,balance_page_url",
         }
       )
       .select()
