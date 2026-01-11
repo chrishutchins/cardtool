@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.2.1
+// @version      1.2.2
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*.united.com/*
@@ -337,7 +337,8 @@
         // Load server configs first, then initialize
         loadServerConfigs(() => {
             // Find matching site config (server configs take priority)
-            currentConfig = findMatchingConfig(window.location.hostname);
+            // Use hostname + pathname to support path-specific patterns
+            currentConfig = findMatchingConfig(window.location.hostname + window.location.pathname);
 
             if (!currentConfig) {
                 return; // Site not configured
@@ -393,16 +394,16 @@
         });
     }
 
-    function findMatchingConfig(hostname) {
+    function findMatchingConfig(url) {
         // Server configs take priority (more up-to-date)
         for (const config of serverConfigs) {
-            if (config.sitePattern.test(hostname)) {
+            if (config.sitePattern.test(url)) {
                 return config;
             }
         }
         // Fall back to hardcoded configs
         for (const config of FALLBACK_CONFIGS) {
-            if (config.sitePattern.test(hostname)) {
+            if (config.sitePattern.test(url)) {
                 return config;
             }
         }
