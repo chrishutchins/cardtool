@@ -1026,6 +1026,48 @@ export type Database = {
         }
         Relationships: []
       }
+      site_configs: {
+        Row: {
+          id: string
+          name: string
+          currency_code: string
+          url_pattern: string
+          balance_page_url: string | null
+          selector: string
+          parse_regex: string | null
+          is_active: boolean | null
+          created_at: string | null
+          updated_at: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          currency_code: string
+          url_pattern: string
+          balance_page_url?: string | null
+          selector: string
+          parse_regex?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          currency_code?: string
+          url_pattern?: string
+          balance_page_url?: string | null
+          selector?: string
+          parse_regex?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+          created_by?: string | null
+        }
+        Relationships: []
+      }
       spending_defaults: {
         Row: {
           annual_spend_cents: number

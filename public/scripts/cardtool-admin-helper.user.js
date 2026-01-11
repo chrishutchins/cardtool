@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.0.1
+// @version      1.1.0
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -247,7 +247,10 @@
                     <pre class="cardtool-code" id="cardtool-output">Fill in the fields above...</pre>
                 </div>
 
-                <button class="cardtool-btn cardtool-btn-primary" id="cardtool-copy">
+                <button class="cardtool-btn cardtool-btn-primary" id="cardtool-save">
+                    Save to CardTool
+                </button>
+                <button class="cardtool-btn cardtool-btn-secondary" id="cardtool-copy" style="margin-top: 8px;">
                     Copy Config to Clipboard
                 </button>
             </div>
@@ -300,6 +303,9 @@
 
         // Pick element button
         document.getElementById('cardtool-pick').addEventListener('click', togglePickMode);
+
+        // Save button
+        document.getElementById('cardtool-save').addEventListener('click', saveConfig);
 
         // Copy button
         document.getElementById('cardtool-copy').addEventListener('click', copyConfig);
@@ -550,6 +556,103 @@
             btn.textContent = originalText;
             btn.style.background = '';
         }, 2000);
+    }
+
+    function saveConfig() {
+        const name = document.getElementById('cardtool-name').value;
+        const currencyCode = document.getElementById('cardtool-currency').value;
+        const urlPattern = document.getElementById('cardtool-site-pattern').value;
+        const balancePageUrl = document.getElementById('cardtool-balance-url').value;
+        const selector = document.getElementById('cardtool-selector').value;
+
+        // Validate required fields
+        if (!name || !currencyCode || !urlPattern || !selector) {
+            alert('Please fill in all required fields: Program Name, Currency, Site Pattern, and Selector');
+            return;
+        }
+
+        const btn = document.getElementById('cardtool-save');
+        const originalText = btn.textContent;
+        btn.textContent = 'Saving...';
+        btn.disabled = true;
+
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: `${CARDTOOL_URL}/api/points/site-configs`,
+            withCredentials: true,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({
+                name,
+                currencyCode,
+                urlPattern,
+                balancePageUrl: balancePageUrl || null,
+                selector,
+                parseRegex: '[\\d,]+'
+            }),
+            onload: function(response) {
+                btn.disabled = false;
+                
+                if (response.status === 401) {
+                    btn.textContent = 'Not logged in!';
+                    btn.style.background = '#dc2626';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 3000);
+                    return;
+                }
+
+                if (response.status === 403) {
+                    btn.textContent = 'Admin only!';
+                    btn.style.background = '#dc2626';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 3000);
+                    return;
+                }
+
+                try {
+                    const data = JSON.parse(response.responseText);
+                    
+                    if (response.status === 200 && data.success) {
+                        btn.textContent = 'Saved!';
+                        btn.style.background = '#059669';
+                        
+                        if (typeof GM_notification !== 'undefined') {
+                            GM_notification({
+                                title: 'CardTool',
+                                text: `Config saved for ${name}`,
+                                timeout: 3000
+                            });
+                        }
+                    } else {
+                        btn.textContent = data.error || 'Error!';
+                        btn.style.background = '#dc2626';
+                    }
+                } catch (e) {
+                    btn.textContent = 'Error!';
+                    btn.style.background = '#dc2626';
+                }
+
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 3000);
+            },
+            onerror: function(error) {
+                btn.disabled = false;
+                btn.textContent = 'Network Error!';
+                btn.style.background = '#dc2626';
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 3000);
+            }
+        });
     }
 
     // Initialize

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.0.1
+// @version      1.1.0
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*.united.com/*
@@ -31,8 +31,11 @@
     // Change this to localhost:3000 for development
     const CARDTOOL_URL = 'https://cardtool.chrishutchins.com';
 
-    // Site configurations - add more using the Admin Helper script
-    const SITE_CONFIGS = [
+    // Server-loaded configs (populated on init)
+    let serverConfigs = [];
+
+    // Fallback site configurations (used if server configs unavailable)
+    const FALLBACK_CONFIGS = [
         // ============================================
         // AIRLINES
         // ============================================
@@ -329,28 +332,79 @@
     // ============================================
 
     function init() {
-        // Find matching site config
-        currentConfig = SITE_CONFIGS.find(config =>
-            config.sitePattern.test(window.location.hostname)
-        );
+        // Load server configs first, then initialize
+        loadServerConfigs(() => {
+            // Find matching site config (server configs take priority)
+            currentConfig = findMatchingConfig(window.location.hostname);
 
-        if (!currentConfig) {
-            return; // Site not configured
+            if (!currentConfig) {
+                return; // Site not configured
+            }
+
+            // Inject styles
+            const styleEl = document.createElement('style');
+            styleEl.textContent = styles;
+            document.head.appendChild(styleEl);
+
+            // Create badge
+            createBadge();
+
+            // Try to find balance on page
+            setTimeout(tryExtractBalance, 1000);
+
+            // Re-check periodically (for SPAs)
+            setInterval(tryExtractBalance, 5000);
+        });
+    }
+
+    function loadServerConfigs(callback) {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${CARDTOOL_URL}/api/points/site-configs`,
+            withCredentials: true,
+            onload: function(response) {
+                try {
+                    if (response.status === 200) {
+                        const data = JSON.parse(response.responseText);
+                        serverConfigs = (data.configs || []).map(config => ({
+                            name: config.name,
+                            currencyCode: config.currency_code,
+                            sitePattern: new RegExp(config.url_pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+                            balancePageUrl: config.balance_page_url,
+                            selector: config.selector,
+                            parseBalance: (text) => {
+                                const regex = new RegExp(config.parse_regex || '[\\d,]+');
+                                const match = text.match(regex);
+                                return match ? parseInt(match[0].replace(/[^0-9]/g, '')) || 0 : 0;
+                            }
+                        }));
+                    }
+                } catch (e) {
+                    console.error('CardTool: Error parsing server configs', e);
+                }
+                callback();
+            },
+            onerror: function() {
+                console.warn('CardTool: Could not load server configs, using fallbacks');
+                callback();
+            }
+        });
+    }
+
+    function findMatchingConfig(hostname) {
+        // Server configs take priority (more up-to-date)
+        for (const config of serverConfigs) {
+            if (config.sitePattern.test(hostname)) {
+                return config;
+            }
         }
-
-        // Inject styles
-        const styleEl = document.createElement('style');
-        styleEl.textContent = styles;
-        document.head.appendChild(styleEl);
-
-        // Create badge
-        createBadge();
-
-        // Try to find balance on page
-        setTimeout(tryExtractBalance, 1000);
-
-        // Re-check periodically (for SPAs)
-        setInterval(tryExtractBalance, 5000);
+        // Fall back to hardcoded configs
+        for (const config of FALLBACK_CONFIGS) {
+            if (config.sitePattern.test(hostname)) {
+                return config;
+            }
+        }
+        return null;
     }
 
     // ============================================
