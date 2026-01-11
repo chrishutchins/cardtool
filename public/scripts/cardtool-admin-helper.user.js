@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.6.0
+// @version      1.6.1
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -110,8 +110,15 @@
             background: #27272a;
             border: 1px solid #3f3f46;
             border-radius: 6px;
-            color: #e4e4e7;
+            color: #e4e4e7 !important;
             font-size: 13px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .cardtool-select option,
+        .cardtool-select optgroup {
+            background: #27272a !important;
+            color: #e4e4e7 !important;
         }
         .cardtool-btn {
             width: 100%;
