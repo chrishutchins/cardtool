@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.1.0
+// @version      1.1.1
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -317,6 +317,19 @@
                 document.getElementById(id).addEventListener('change', updateOutput);
             });
 
+        // Auto-fill program name when currency is selected
+        document.getElementById('cardtool-currency').addEventListener('change', (e) => {
+            const select = e.target;
+            const selectedOption = select.options[select.selectedIndex];
+            const nameInput = document.getElementById('cardtool-name');
+            
+            // Always auto-fill from currency name
+            if (selectedOption && selectedOption.dataset.name) {
+                nameInput.value = selectedOption.dataset.name;
+                updateOutput();
+            }
+        });
+
         // Selector input - test on change
         document.getElementById('cardtool-selector').addEventListener('input', testSelector);
     }
@@ -356,6 +369,7 @@
                             .forEach(c => {
                                 const opt = document.createElement('option');
                                 opt.value = c.code;
+                                opt.dataset.name = c.name; // Store name for auto-fill
                                 opt.textContent = `${c.name} (${c.code})`;
                                 group.appendChild(opt);
                             });
