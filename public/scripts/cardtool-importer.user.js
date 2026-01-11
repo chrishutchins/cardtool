@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.7.1
+// @version      1.7.4
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -287,21 +287,29 @@
         .cardtool-badge-success {
             color: #10b981 !important;
         }
-        .cardtool-player-select {
+        #cardtool-badge .cardtool-player-select,
+        #cardtool-badge select.cardtool-player-select {
             width: 100% !important;
             padding: 8px 10px !important;
             background: #27272a !important;
+            background-color: #27272a !important;
             border: 1px solid #3f3f46 !important;
             border-radius: 6px !important;
             color: #e4e4e7 !important;
             font-size: 13px !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
             margin: 0 0 10px 0 !important;
             -webkit-appearance: none !important;
             appearance: none !important;
+            opacity: 1 !important;
+            -webkit-text-fill-color: #e4e4e7 !important;
         }
-        .cardtool-player-select option {
+        #cardtool-badge .cardtool-player-select option,
+        #cardtool-badge select.cardtool-player-select option {
             background: #27272a !important;
+            background-color: #27272a !important;
             color: #e4e4e7 !important;
+            -webkit-text-fill-color: #e4e4e7 !important;
         }
         .cardtool-player-label {
             font-size: 11px !important;
@@ -425,9 +433,11 @@
                                 balancePageUrl: config.balance_page_url,
                                 selector: config.selector,
                                 parseBalance: (text) => {
-                                    // Default regex handles both US (1,000) and European (1.000) formats
-                                    const regex = new RegExp(config.parse_regex || '[\\d.,]+');
-                                    const match = text.match(regex);
+                                    // Normalize: replace nbsp and other whitespace between digits
+                                    const normalized = text.replace(/[\u00A0\s]+/g, ' ');
+                                    // Default regex handles US (1,000), European (1.000), and Scandinavian (1 000) formats
+                                    const regex = new RegExp(config.parse_regex || '[\\d][\\d.,\\s]*');
+                                    const match = normalized.match(regex);
                                     return match ? parseInt(match[0].replace(/[^0-9]/g, '')) || 0 : 0;
                                 }
                             }));
@@ -709,11 +719,12 @@
                     if (players.length > 1) {
                         const container = document.getElementById('cardtool-player-container');
                         if (container) {
+                            const lastPlayer = GM_getValue('lastPlayerNumber', 1);
                             container.innerHTML = `
                                 <div class="cardtool-player-label">Sync for</div>
                                 <select class="cardtool-player-select" id="cardtool-player-select">
                                     ${players.map(p => `
-                                        <option value="${p.player_number}">
+                                        <option value="${p.player_number}" ${p.player_number === lastPlayer ? 'selected' : ''}>
                                             ${p.description || `Player ${p.player_number}`}
                                         </option>
                                     `).join('')}
@@ -745,9 +756,10 @@
 
         showSyncing();
 
-        // Get selected player
+        // Get selected player and remember it
         const playerSelect = document.getElementById('cardtool-player-select');
         const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
+        GM_setValue('lastPlayerNumber', playerNumber);
 
         GM_xmlhttpRequest({
             method: 'POST',

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.6.3
+// @version      1.6.6
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -104,21 +104,30 @@
             outline: none;
             border-color: #10b981;
         }
-        .cardtool-select {
-            width: 100%;
-            padding: 8px 12px;
-            background: #27272a;
-            border: 1px solid #3f3f46;
-            border-radius: 6px;
-            color: #e4e4e7 !important;
-            font-size: 13px;
-            -webkit-appearance: none;
-            appearance: none;
-        }
-        .cardtool-select option,
-        .cardtool-select optgroup {
+        #cardtool-admin-panel .cardtool-select,
+        #cardtool-admin-panel select.cardtool-select {
+            width: 100% !important;
+            padding: 8px 12px !important;
             background: #27272a !important;
+            background-color: #27272a !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 6px !important;
             color: #e4e4e7 !important;
+            font-size: 13px !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
+            opacity: 1 !important;
+            -webkit-text-fill-color: #e4e4e7 !important;
+        }
+        #cardtool-admin-panel .cardtool-select option,
+        #cardtool-admin-panel .cardtool-select optgroup,
+        #cardtool-admin-panel select.cardtool-select option,
+        #cardtool-admin-panel select.cardtool-select optgroup {
+            background: #27272a !important;
+            background-color: #27272a !important;
+            color: #e4e4e7 !important;
+            -webkit-text-fill-color: #e4e4e7 !important;
         }
         .cardtool-btn {
             width: 100%;
@@ -603,8 +612,13 @@
     }
 
     function parseBalance(text) {
-        // Remove ALL non-numeric chars (including periods/commas used as thousands separators)
-        const cleaned = text.replace(/[^0-9]/g, '');
+        // Normalize whitespace (including nbsp)
+        const normalized = text.replace(/[\u00A0\s]+/g, ' ');
+        // Extract first number (handles 1,000 / 1.000 / 1 000 formats)
+        const match = normalized.match(/[\d][\d.,\s]*/);
+        if (!match) return 0;
+        // Strip all non-digits from matched portion only
+        const cleaned = match[0].replace(/[^0-9]/g, '');
         return parseInt(cleaned) || 0;
     }
 
@@ -695,7 +709,7 @@
                 domain,
                 balancePageUrl: balancePageUrl || null,
                 selector,
-                parseRegex: '[\\d.,]+'
+                parseRegex: '[\\d][\\d.,\\s]*'
             }),
             onload: function(response) {
                 btn.disabled = false;
