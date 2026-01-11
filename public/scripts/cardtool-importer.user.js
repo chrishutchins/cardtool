@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.0.0
+// @version      1.0.1
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*.united.com/*
@@ -510,46 +510,53 @@
         }
     }
 
-    async function loadPlayers() {
-        try {
-            const response = await fetch(`${CARDTOOL_URL}/api/points/players`, {
-                credentials: 'include'
-            });
+    function loadPlayers() {
+        // Use GM_xmlhttpRequest to bypass CORS and send cookies cross-origin
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${CARDTOOL_URL}/api/points/players`,
+            withCredentials: true,
+            onload: function(response) {
+                try {
+                    if (response.status === 401) {
+                        showNotLoggedIn();
+                        return;
+                    }
 
-            if (response.status === 401) {
-                showNotLoggedIn();
-                return;
-            }
+                    if (response.status !== 200) {
+                        throw new Error('Failed to fetch players');
+                    }
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch players');
-            }
+                    const data = JSON.parse(response.responseText);
+                    players = data.players || [{ player_number: 1, description: 'Me' }];
 
-            const data = await response.json();
-            players = data.players || [{ player_number: 1, description: 'Me' }];
-
-            // Only show player selector if multiple players
-            if (players.length > 1) {
-                const container = document.getElementById('cardtool-player-container');
-                if (container) {
-                    container.innerHTML = `
-                        <div class="cardtool-player-label">Sync for</div>
-                        <select class="cardtool-player-select" id="cardtool-player-select">
-                            ${players.map(p => `
-                                <option value="${p.player_number}">
-                                    ${p.description || `Player ${p.player_number}`}
-                                </option>
-                            `).join('')}
-                        </select>
-                    `;
+                    // Only show player selector if multiple players
+                    if (players.length > 1) {
+                        const container = document.getElementById('cardtool-player-container');
+                        if (container) {
+                            container.innerHTML = `
+                                <div class="cardtool-player-label">Sync for</div>
+                                <select class="cardtool-player-select" id="cardtool-player-select">
+                                    ${players.map(p => `
+                                        <option value="${p.player_number}">
+                                            ${p.description || `Player ${p.player_number}`}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                            `;
+                        }
+                    }
+                } catch (error) {
+                    console.error('CardTool: Error parsing players response', error);
                 }
+            },
+            onerror: function(error) {
+                console.error('CardTool: Error loading players', error);
             }
-        } catch (error) {
-            console.error('CardTool: Error loading players', error);
-        }
+        });
     }
 
-    async function handleSync() {
+    function handleSync() {
         if (extractedBalance === null) {
             showSyncError('No balance to sync');
             return;
@@ -561,36 +568,43 @@
         const playerSelect = document.getElementById('cardtool-player-select');
         const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
 
-        try {
-            const response = await fetch(`${CARDTOOL_URL}/api/points/import`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    currencyCode: currentConfig.currencyCode,
-                    balance: extractedBalance,
-                    playerNumber: playerNumber
-                })
-            });
+        // Use GM_xmlhttpRequest to bypass CORS and send cookies cross-origin
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: `${CARDTOOL_URL}/api/points/import`,
+            withCredentials: true,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({
+                currencyCode: currentConfig.currencyCode,
+                balance: extractedBalance,
+                playerNumber: playerNumber
+            }),
+            onload: function(response) {
+                try {
+                    if (response.status === 401) {
+                        showNotLoggedIn();
+                        return;
+                    }
 
-            if (response.status === 401) {
-                showNotLoggedIn();
-                return;
+                    const data = JSON.parse(response.responseText);
+
+                    if (response.status !== 200) {
+                        throw new Error(data.error || 'Sync failed');
+                    }
+
+                    showSyncSuccess(data);
+                } catch (error) {
+                    console.error('CardTool: Sync error', error);
+                    showSyncError(error.message || 'Failed to sync');
+                }
+            },
+            onerror: function(error) {
+                console.error('CardTool: Sync error', error);
+                showSyncError('Network error - check your connection');
             }
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Sync failed');
-            }
-
-            showSyncSuccess(data);
-        } catch (error) {
-            console.error('CardTool: Sync error', error);
-            showSyncError(error.message || 'Failed to sync');
-        }
+        });
     }
 
     // ============================================

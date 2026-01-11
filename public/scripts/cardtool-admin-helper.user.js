@@ -1,12 +1,15 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.0.0
+// @version      1.0.1
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_notification
+// @grant        GM_xmlhttpRequest
+// @connect      cardtool.chrishutchins.com
+// @connect      localhost
 // ==/UserScript==
 
 (function() {
@@ -312,53 +315,62 @@
         document.getElementById('cardtool-selector').addEventListener('input', testSelector);
     }
 
-    async function loadCurrencies() {
-        try {
-            const response = await fetch(`${CARDTOOL_URL}/api/points/currencies`, {
-                credentials: 'include'
-            });
+    function loadCurrencies() {
+        // Use GM_xmlhttpRequest to bypass CORS and send cookies cross-origin
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${CARDTOOL_URL}/api/points/currencies`,
+            withCredentials: true,
+            onload: function(response) {
+                try {
+                    if (response.status !== 200) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch currencies');
-            }
+                    const data = JSON.parse(response.responseText);
+                    currencies = data.currencies || [];
 
-            const data = await response.json();
-            currencies = data.currencies || [];
+                    const select = document.getElementById('cardtool-currency');
+                    select.innerHTML = '<option value="">Select a currency...</option>';
 
-            const select = document.getElementById('cardtool-currency');
-            select.innerHTML = '<option value="">Select a currency...</option>';
+                    // Group by type
+                    const groups = {
+                        'transferable_points': 'Transferable Points',
+                        'airline_miles': 'Airlines',
+                        'hotel_points': 'Hotels',
+                        'cash_back': 'Cash Back'
+                    };
 
-            // Group by type
-            const groups = {
-                'transferable_points': 'Transferable Points',
-                'airline_miles': 'Airlines',
-                'hotel_points': 'Hotels',
-                'cash_back': 'Cash Back'
-            };
+                    Object.entries(groups).forEach(([type, label]) => {
+                        const group = document.createElement('optgroup');
+                        group.label = label;
 
-            Object.entries(groups).forEach(([type, label]) => {
-                const group = document.createElement('optgroup');
-                group.label = label;
+                        currencies
+                            .filter(c => c.currency_type === type)
+                            .forEach(c => {
+                                const opt = document.createElement('option');
+                                opt.value = c.code;
+                                opt.textContent = `${c.name} (${c.code})`;
+                                group.appendChild(opt);
+                            });
 
-                currencies
-                    .filter(c => c.currency_type === type)
-                    .forEach(c => {
-                        const opt = document.createElement('option');
-                        opt.value = c.code;
-                        opt.textContent = `${c.name} (${c.code})`;
-                        group.appendChild(opt);
+                        if (group.children.length > 0) {
+                            select.appendChild(group);
+                        }
                     });
 
-                if (group.children.length > 0) {
-                    select.appendChild(group);
+                } catch (error) {
+                    console.error('Failed to parse currencies:', error);
+                    document.getElementById('cardtool-currency').innerHTML =
+                        '<option value="">Error loading - enter code manually</option>';
                 }
-            });
-
-        } catch (error) {
-            console.error('Failed to load currencies:', error);
-            document.getElementById('cardtool-currency').innerHTML =
-                '<option value="">Error loading - enter code manually</option>';
-        }
+            },
+            onerror: function(error) {
+                console.error('Failed to load currencies:', error);
+                document.getElementById('cardtool-currency').innerHTML =
+                    '<option value="">Error loading - enter code manually</option>';
+            }
+        });
     }
 
     function togglePickMode() {
