@@ -2344,6 +2344,38 @@ export type Database = {
           },
         ]
       }
+      user_tracked_currencies: {
+        Row: {
+          created_at: string | null
+          currency_id: string
+          id: string
+          is_archived: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          currency_id: string
+          id?: string
+          is_archived?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          currency_id?: string
+          id?: string
+          is_archived?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_tracked_currencies_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "reward_currencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_point_value_settings: {
         Row: {
           created_at: string | null

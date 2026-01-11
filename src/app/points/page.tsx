@@ -70,6 +70,8 @@ export default async function PointsPage() {
     userPointValueSettingsResult,
     pointValueTemplatesResult,
     featureFlagsResult,
+    walletCardsResult,
+    trackedCurrenciesResult,
   ] = await Promise.all([
     // All currencies
     supabase
@@ -114,6 +116,19 @@ export default async function PointsPage() {
       .select("credit_tracking_enabled")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
+    
+    // User's wallet cards (to get currencies earned by cards)
+    supabase
+      .from("user_wallets")
+      .select("cards:card_id(primary_currency_id, secondary_currency_id)")
+      .eq("user_id", effectiveUserId)
+      .is("closed_at", null),
+    
+    // User's tracked/archived currencies
+    supabase
+      .from("user_tracked_currencies")
+      .select("currency_id, is_archived")
+      .eq("user_id", effectiveUserId),
   ]);
 
   // Fetch template values if user has selected a template
@@ -196,10 +211,68 @@ export default async function PointsPage() {
     revalidatePath("/points");
   }
 
+  async function trackCurrency(currencyId: string) {
+    "use server";
+    const supabase = createClient();
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    // Upsert with is_archived = false (adds or un-archives)
+    await supabase
+      .from("user_tracked_currencies")
+      .upsert({
+        user_id: userId,
+        currency_id: currencyId,
+        is_archived: false,
+      }, {
+        onConflict: "user_id,currency_id"
+      });
+
+    revalidatePath("/points");
+  }
+
+  async function archiveCurrency(currencyId: string) {
+    "use server";
+    const supabase = createClient();
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    // Upsert with is_archived = true
+    await supabase
+      .from("user_tracked_currencies")
+      .upsert({
+        user_id: userId,
+        currency_id: currencyId,
+        is_archived: true,
+      }, {
+        onConflict: "user_id,currency_id"
+      });
+
+    revalidatePath("/points");
+  }
+
   const currencies = (currenciesResult.data ?? []) as Currency[];
   const balances = (balancesResult.data ?? []) as PointBalance[];
   const players = playersResult.data ?? [];
   const creditTrackingEnabled = featureFlagsResult.data?.credit_tracking_enabled ?? false;
+
+  // Build set of currencies earned by wallet cards
+  const walletCurrencyIds = new Set<string>();
+  (walletCardsResult.data ?? []).forEach((wc: { cards: { primary_currency_id: string | null; secondary_currency_id: string | null } | null }) => {
+    if (wc.cards?.primary_currency_id) walletCurrencyIds.add(wc.cards.primary_currency_id);
+    if (wc.cards?.secondary_currency_id) walletCurrencyIds.add(wc.cards.secondary_currency_id);
+  });
+
+  // Build tracked/archived maps
+  const trackedCurrencyIds = new Set<string>();
+  const archivedCurrencyIds = new Set<string>();
+  (trackedCurrenciesResult.data ?? []).forEach((tc: { currency_id: string; is_archived: boolean }) => {
+    if (tc.is_archived) {
+      archivedCurrencyIds.add(tc.currency_id);
+    } else {
+      trackedCurrencyIds.add(tc.currency_id);
+    }
+  });
 
   // Create a value lookup for each currency
   const currencyValues: Record<string, number> = {};
@@ -216,18 +289,18 @@ export default async function PointsPage() {
       />
       
       <main className="mx-auto max-w-7xl px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">Points Balances</h1>
-          <p className="text-zinc-400 mt-1">Track your points and miles across all currencies</p>
-        </div>
-
         <PointsClient
           currencies={currencies}
           balances={balances}
           players={players}
           currencyValues={currencyValues}
+          walletCurrencyIds={Array.from(walletCurrencyIds)}
+          trackedCurrencyIds={Array.from(trackedCurrencyIds)}
+          archivedCurrencyIds={Array.from(archivedCurrencyIds)}
           onUpdateBalance={updateBalance}
           onDeleteBalance={deleteBalance}
+          onTrackCurrency={trackCurrency}
+          onArchiveCurrency={archiveCurrency}
         />
       </main>
     </div>

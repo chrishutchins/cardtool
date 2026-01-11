@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { SummaryCards } from "./summary-cards";
 import { BalanceTable } from "./balance-table";
 
@@ -40,8 +40,13 @@ interface PointsClientProps {
   balances: PointBalance[];
   players: Player[];
   currencyValues: Record<string, number>;
+  walletCurrencyIds: string[];
+  trackedCurrencyIds: string[];
+  archivedCurrencyIds: string[];
   onUpdateBalance: (currencyId: string, playerNumber: number, balance: number, expirationDate: string | null, notes: string | null) => Promise<void>;
   onDeleteBalance: (currencyId: string, playerNumber: number) => Promise<void>;
+  onTrackCurrency: (currencyId: string) => Promise<void>;
+  onArchiveCurrency: (currencyId: string) => Promise<void>;
 }
 
 export function PointsClient({
@@ -49,9 +54,22 @@ export function PointsClient({
   balances,
   players,
   currencyValues,
+  walletCurrencyIds,
+  trackedCurrencyIds,
+  archivedCurrencyIds,
   onUpdateBalance,
   onDeleteBalance,
+  onTrackCurrency,
+  onArchiveCurrency,
 }: PointsClientProps) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addSearch, setAddSearch] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  // Convert to Sets for O(1) lookup
+  const walletCurrencySet = useMemo(() => new Set(walletCurrencyIds), [walletCurrencyIds]);
+  const trackedCurrencySet = useMemo(() => new Set(trackedCurrencyIds), [trackedCurrencyIds]);
+  const archivedCurrencySet = useMemo(() => new Set(archivedCurrencyIds), [archivedCurrencyIds]);
   // If no players defined, default to player 1
   const effectivePlayers = players.length > 0 ? players : [{ player_number: 1, description: null }];
   
@@ -70,6 +88,18 @@ export function PointsClient({
       const balance = balanceMap[`${currency.id}-${player.player_number}`];
       return balance && balance.balance > 0;
     });
+  };
+
+  // Determine if a currency should be visible
+  // Show if: (has balance > 0 OR earned by wallet card OR explicitly tracked) AND NOT archived
+  const shouldShowCurrency = (currency: Currency): boolean => {
+    if (archivedCurrencySet.has(currency.id)) return false;
+    return currencyHasBalance(currency) || walletCurrencySet.has(currency.id) || trackedCurrencySet.has(currency.id);
+  };
+
+  // Check if currency can be archived (only if total balance is 0)
+  const canArchive = (currency: Currency): boolean => {
+    return !currencyHasBalance(currency);
   };
 
   // Calculate summaries
@@ -149,19 +179,19 @@ export function PointsClient({
     return { totalPoints, totalValue, byType, byAlliance, byPlayer };
   }, [currencies, balanceMap, currencyValues, effectivePlayers]);
 
-  // Group currencies by type - only include those with balances
+  // Group currencies by type - using visibility rules
   // Banks = everything that's not airlines or hotels (includes transferable, non-transferable, cash back, crypto)
   const bankCurrencies = currencies
     .filter(c => c.currency_type !== "airline_miles" && c.currency_type !== "hotel_points")
-    .filter(currencyHasBalance);
+    .filter(shouldShowCurrency);
   
   const hotelPoints = currencies
     .filter(c => c.currency_type === "hotel_points")
-    .filter(currencyHasBalance);
+    .filter(shouldShowCurrency);
   
   const airlineMiles = currencies
     .filter(c => c.currency_type === "airline_miles")
-    .filter(currencyHasBalance);
+    .filter(shouldShowCurrency);
 
   // Sort airline miles by alliance
   const sortedAirlineMiles = [...airlineMiles].sort((a, b) => {
@@ -172,8 +202,104 @@ export function PointsClient({
     return a.name.localeCompare(b.name);
   });
 
+  // Currencies available to add (not already visible and not archived)
+  const addableCurrencies = useMemo(() => {
+    return currencies.filter(c => !shouldShowCurrency(c) && !archivedCurrencySet.has(c.id));
+  }, [currencies, shouldShowCurrency, archivedCurrencySet]);
+
+  // Filter addable currencies by search
+  const filteredAddable = useMemo(() => {
+    if (!addSearch.trim()) return addableCurrencies;
+    const search = addSearch.toLowerCase();
+    return addableCurrencies.filter(c => 
+      c.name.toLowerCase().includes(search) || 
+      c.code.toLowerCase().includes(search) ||
+      (c.program_name?.toLowerCase().includes(search))
+    );
+  }, [addableCurrencies, addSearch]);
+
+  const handleTrackCurrency = (currencyId: string) => {
+    startTransition(async () => {
+      await onTrackCurrency(currencyId);
+      setShowAddModal(false);
+      setAddSearch("");
+    });
+  };
+
   return (
     <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Points Balances</h1>
+          <p className="text-zinc-400 mt-1">Track your points and miles across all currencies</p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Program
+        </button>
+      </div>
+
+      {/* Add Program Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-700 w-full max-w-md max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b border-zinc-700 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Add Program to Track</h2>
+              <button
+                onClick={() => { setShowAddModal(false); setAddSearch(""); }}
+                className="p-1 text-zinc-400 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 border-b border-zinc-800">
+              <input
+                type="text"
+                value={addSearch}
+                onChange={(e) => setAddSearch(e.target.value)}
+                placeholder="Search programs..."
+                className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto p-2">
+              {filteredAddable.length === 0 ? (
+                <p className="text-center text-zinc-500 py-8">
+                  {addSearch ? "No matching programs found" : "All programs are already being tracked"}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {filteredAddable.map(currency => (
+                    <button
+                      key={currency.id}
+                      onClick={() => handleTrackCurrency(currency.id)}
+                      disabled={isPending}
+                      className="w-full px-3 py-2 rounded-lg text-left hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center justify-between"
+                    >
+                      <div>
+                        <span className="text-white font-medium">{currency.name}</span>
+                        {currency.program_name && (
+                          <span className="text-zinc-500 text-sm ml-2">{currency.program_name}</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-zinc-500 uppercase">{currency.currency_type.replace("_", " ")}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <SummaryCards summary={summary} />
 
@@ -187,6 +313,8 @@ export function PointsClient({
           currencyValues={currencyValues}
           onUpdateBalance={onUpdateBalance}
           onDeleteBalance={onDeleteBalance}
+          canArchive={canArchive}
+          onArchiveCurrency={onArchiveCurrency}
         />
       )}
 
@@ -201,6 +329,8 @@ export function PointsClient({
           onUpdateBalance={onUpdateBalance}
           onDeleteBalance={onDeleteBalance}
           showAlliance
+          canArchive={canArchive}
+          onArchiveCurrency={onArchiveCurrency}
         />
       )}
 
@@ -214,7 +344,22 @@ export function PointsClient({
           currencyValues={currencyValues}
           onUpdateBalance={onUpdateBalance}
           onDeleteBalance={onDeleteBalance}
+          canArchive={canArchive}
+          onArchiveCurrency={onArchiveCurrency}
         />
+      )}
+
+      {/* Empty state */}
+      {bankCurrencies.length === 0 && sortedAirlineMiles.length === 0 && hotelPoints.length === 0 && (
+        <div className="text-center py-16">
+          <p className="text-zinc-500 mb-4">No programs being tracked yet</p>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors"
+          >
+            Add Your First Program
+          </button>
+        </div>
       )}
     </div>
   );

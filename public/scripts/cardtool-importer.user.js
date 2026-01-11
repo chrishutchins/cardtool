@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.6.0
+// @version      1.7.0
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -359,6 +359,7 @@
     let currentConfig = null;  // The config that found a balance (or first match for display)
     let players = null;
     let extractedBalance = null;
+    let lastDisplayedBalance = null;  // Track what's shown to avoid UI flicker
     let badgeElement = null;
 
     // ============================================
@@ -390,8 +391,18 @@
             console.log('CardTool: Found', matchingConfigs.length, 'config(s) for this domain');
             setTimeout(tryExtractBalance, 2000);
 
-            // Re-check periodically (for SPAs that load content dynamically)
-            const intervalId = setInterval(tryExtractBalance, 3000);
+            // Re-check periodically for up to 15 seconds (5 checks at 3s intervals)
+            let checkCount = 0;
+            const maxChecks = 5;
+            const intervalId = setInterval(() => {
+                checkCount++;
+                if (checkCount >= maxChecks || extractedBalance !== null) {
+                    clearInterval(intervalId);
+                    console.log('CardTool: Stopped checking after', checkCount, 'checks');
+                    return;
+                }
+                tryExtractBalance();
+            }, 3000);
             console.log('CardTool: Interval started, ID:', intervalId);
         });
     }
@@ -622,19 +633,25 @@
                         console.log('CardTool: Parsed balance:', balance);
 
                         if (balance > 0) {
-                            // Found a balance - use this config
+                            // Found a balance - only update UI if balance changed
                             currentConfig = config;
                             extractedBalance = balance;
-                            showBalanceFound(balance);
+                            if (lastDisplayedBalance !== balance) {
+                                lastDisplayedBalance = balance;
+                                showBalanceFound(balance);
+                            }
                             return;
                         }
                     }
                 }
             }
 
-            // No balance found on this page - reset any stale balance
-            extractedBalance = null;
-            showNoBalance();
+            // No balance found on this page - only update UI if state changed
+            if (extractedBalance !== null || lastDisplayedBalance !== 'no-balance') {
+                extractedBalance = null;
+                lastDisplayedBalance = 'no-balance';
+                showNoBalance();
+            }
         } catch (e) {
             console.error('CardTool: Error extracting balance', e);
         }
