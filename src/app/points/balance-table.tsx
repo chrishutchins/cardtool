@@ -91,6 +91,7 @@ interface BalanceTableProps {
   players: Player[];
   balanceMap: Record<string, PointBalance>;
   currencyValues: Record<string, number>;
+  balancePageUrls?: Record<string, string>;
   onUpdateBalance: (currencyId: string, playerNumber: number, balance: number, expirationDate: string | null, notes: string | null) => Promise<void>;
   onDeleteBalance: (currencyId: string, playerNumber: number) => Promise<void>;
   showAlliance?: boolean;
@@ -162,6 +163,7 @@ export function BalanceTable({
   players,
   balanceMap,
   currencyValues,
+  balancePageUrls = {},
   onUpdateBalance,
   onDeleteBalance,
   showAlliance = false,
@@ -361,7 +363,19 @@ export function BalanceTable({
                   >
                     <div className="flex items-center gap-2">
                       <div className="flex items-baseline gap-2 min-w-0 flex-1">
-                        <span className="text-white font-medium truncate">{currency.name}</span>
+                        {balancePageUrls[currency.code] ? (
+                          <a
+                            href={balancePageUrls[currency.code]}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-white font-medium truncate hover:text-blue-400 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {currency.name}
+                          </a>
+                        ) : (
+                          <span className="text-white font-medium truncate">{currency.name}</span>
+                        )}
                         {currency.program_name && (
                           <span className="text-xs text-zinc-500 truncate">{currency.program_name}</span>
                         )}

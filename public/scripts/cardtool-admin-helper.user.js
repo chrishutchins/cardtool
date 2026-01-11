@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.6.1
+// @version      1.6.3
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -603,8 +603,8 @@
     }
 
     function parseBalance(text) {
-        // Remove currency symbols, commas, and other non-numeric chars except decimal point
-        const cleaned = text.replace(/[^0-9.]/g, '');
+        // Remove ALL non-numeric chars (including periods/commas used as thousands separators)
+        const cleaned = text.replace(/[^0-9]/g, '');
         return parseInt(cleaned) || 0;
     }
 
@@ -695,7 +695,7 @@
                 domain,
                 balancePageUrl: balancePageUrl || null,
                 selector,
-                parseRegex: '[\\d,]+'
+                parseRegex: '[\\d.,]+'
             }),
             onload: function(response) {
                 btn.disabled = false;

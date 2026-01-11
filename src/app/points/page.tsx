@@ -72,6 +72,7 @@ export default async function PointsPage() {
     featureFlagsResult,
     walletCardsResult,
     trackedCurrenciesResult,
+    siteConfigsResult,
   ] = await Promise.all([
     // All currencies
     supabase
@@ -129,6 +130,13 @@ export default async function PointsPage() {
       .from("user_tracked_currencies")
       .select("currency_id, is_archived")
       .eq("user_id", effectiveUserId),
+    
+    // Site configs for balance page URLs
+    supabase
+      .from("site_configs")
+      .select("currency_code, balance_page_url")
+      .eq("is_active", true)
+      .not("balance_page_url", "is", null),
   ]);
 
   // Fetch template values if user has selected a template
@@ -274,6 +282,15 @@ export default async function PointsPage() {
     }
   });
 
+  // Build balance page URL map (currency code → URL)
+  // Take the first URL for each currency code
+  const balancePageUrls: Record<string, string> = {};
+  (siteConfigsResult.data ?? []).forEach((sc: { currency_code: string; balance_page_url: string | null }) => {
+    if (sc.balance_page_url && !balancePageUrls[sc.currency_code]) {
+      balancePageUrls[sc.currency_code] = sc.balance_page_url;
+    }
+  });
+
   // Create a value lookup for each currency
   const currencyValues: Record<string, number> = {};
   currencies.forEach(c => {
@@ -297,6 +314,7 @@ export default async function PointsPage() {
           walletCurrencyIds={Array.from(walletCurrencyIds)}
           trackedCurrencyIds={Array.from(trackedCurrencyIds)}
           archivedCurrencyIds={Array.from(archivedCurrencyIds)}
+          balancePageUrls={balancePageUrls}
           onUpdateBalance={updateBalance}
           onDeleteBalance={deleteBalance}
           onTrackCurrency={trackCurrency}

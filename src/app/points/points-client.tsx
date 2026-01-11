@@ -43,6 +43,7 @@ interface PointsClientProps {
   walletCurrencyIds: string[];
   trackedCurrencyIds: string[];
   archivedCurrencyIds: string[];
+  balancePageUrls: Record<string, string>;
   onUpdateBalance: (currencyId: string, playerNumber: number, balance: number, expirationDate: string | null, notes: string | null) => Promise<void>;
   onDeleteBalance: (currencyId: string, playerNumber: number) => Promise<void>;
   onTrackCurrency: (currencyId: string) => Promise<void>;
@@ -57,6 +58,7 @@ export function PointsClient({
   walletCurrencyIds,
   trackedCurrencyIds,
   archivedCurrencyIds,
+  balancePageUrls,
   onUpdateBalance,
   onDeleteBalance,
   onTrackCurrency,
@@ -311,6 +313,7 @@ export function PointsClient({
           players={effectivePlayers}
           balanceMap={balanceMap}
           currencyValues={currencyValues}
+          balancePageUrls={balancePageUrls}
           onUpdateBalance={onUpdateBalance}
           onDeleteBalance={onDeleteBalance}
           canArchive={canArchive}
@@ -326,6 +329,7 @@ export function PointsClient({
           players={effectivePlayers}
           balanceMap={balanceMap}
           currencyValues={currencyValues}
+          balancePageUrls={balancePageUrls}
           onUpdateBalance={onUpdateBalance}
           onDeleteBalance={onDeleteBalance}
           showAlliance
@@ -342,6 +346,7 @@ export function PointsClient({
           players={effectivePlayers}
           balanceMap={balanceMap}
           currencyValues={currencyValues}
+          balancePageUrls={balancePageUrls}
           onUpdateBalance={onUpdateBalance}
           onDeleteBalance={onDeleteBalance}
           canArchive={canArchive}

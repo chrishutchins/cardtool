@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.7.0
+// @version      1.7.1
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -425,7 +425,8 @@
                                 balancePageUrl: config.balance_page_url,
                                 selector: config.selector,
                                 parseBalance: (text) => {
-                                    const regex = new RegExp(config.parse_regex || '[\\d,]+');
+                                    // Default regex handles both US (1,000) and European (1.000) formats
+                                    const regex = new RegExp(config.parse_regex || '[\\d.,]+');
                                     const match = text.match(regex);
                                     return match ? parseInt(match[0].replace(/[^0-9]/g, '')) || 0 : 0;
                                 }
