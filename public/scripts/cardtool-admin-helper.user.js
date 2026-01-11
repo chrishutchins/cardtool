@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.5.3
+// @version      1.5.4
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -35,8 +35,8 @@
             all: initial !important;
             display: block !important;
             position: fixed !important;
-            top: 20px !important;
-            right: 20px !important;
+            top: 20px;
+            right: 20px;
             width: 380px !important;
             background: #18181b !important;
             border: 1px solid #3f3f46 !important;
