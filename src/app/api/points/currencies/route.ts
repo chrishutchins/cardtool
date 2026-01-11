@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 
+// Public endpoint - currencies list is not sensitive
 export async function GET() {
-  const user = await currentUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const supabase = createClient();
 
   const { data: currencies, error } = await supabase
@@ -28,7 +22,7 @@ export async function GET() {
     { currencies },
     {
       headers: {
-        "Cache-Control": "private, max-age=300", // 5 minutes
+        "Cache-Control": "public, max-age=300", // 5 minutes
       },
     }
   );
