@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.4.3
+// @version      1.5.0
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -144,18 +144,18 @@
     // ============================================
 
     const styles = `
-        /* Reset inherited styles - be specific, not global */
-        #cardtool-badge, #cardtool-badge *, #cardtool-toast, #cardtool-toast * {
+        #cardtool-badge, #cardtool-toast {
+            all: initial !important;
+            display: block !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            font-size: 13px !important;
+            color: #e4e4e7 !important;
+            line-height: 1.4 !important;
+        }
+        #cardtool-badge *, #cardtool-toast * {
             box-sizing: border-box !important;
-            font-style: normal !important;
-            font-variant: normal !important;
-            text-decoration: none !important;
-            text-transform: none !important;
-            letter-spacing: normal !important;
-            word-spacing: normal !important;
-            text-shadow: none !important;
-            float: none !important;
-            clear: none !important;
+            font-family: inherit !important;
+            line-height: inherit !important;
         }
         #cardtool-badge {
             position: fixed !important;
@@ -382,11 +382,11 @@
             // Create badge
             createBadge();
 
-            // Try to find balance on page
-            setTimeout(tryExtractBalance, 1000);
+            // Try to find balance on page (wait longer for SPAs to load)
+            setTimeout(tryExtractBalance, 2000);
 
-            // Re-check periodically (for SPAs)
-            setInterval(tryExtractBalance, 5000);
+            // Re-check periodically (for SPAs that load content dynamically)
+            setInterval(tryExtractBalance, 3000);
         });
     }
 
