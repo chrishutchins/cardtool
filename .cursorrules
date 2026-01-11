@@ -1,0 +1,24 @@
+# CardTool Project Rules
+
+## Database Schema Changes
+When creating Supabase migrations that add or modify tables/columns:
+1. Create the migration in `supabase/migrations/`
+2. **ALWAYS update `src/lib/database.types.ts`** in the same commit to include the new types
+3. The types file must stay in sync with the database schema or builds will fail
+
+## Tech Stack
+- Next.js 16 with App Router
+- Supabase for database (accessed via service role key, not RLS)
+- Clerk for authentication
+- Tailwind CSS for styling
+- TypeScript throughout
+
+## Code Style
+- Use server components by default, client components only when needed
+- Server actions for mutations (in page.tsx files with "use server")
+- Dark theme UI (zinc-900/950 backgrounds, zinc-300/400 text)
+- Consistent tooltip style using fixed positioning (see existing Tooltip components)
+
+## Testing
+- Build must pass (`npm run build`) before pushing
+- Test UI changes in browser before considering complete
