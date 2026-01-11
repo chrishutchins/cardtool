@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.2.0
+// @version      1.2.1
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*.united.com/*
@@ -557,10 +557,9 @@
                 }
             }
 
-            // No balance found
-            if (extractedBalance === null) {
-                showNoBalance();
-            }
+            // No balance found on this page - reset any stale balance
+            extractedBalance = null;
+            showNoBalance();
         } catch (e) {
             console.error('CardTool: Error extracting balance', e);
         }
