@@ -11,11 +11,13 @@ import { PaypalCategories } from "@/app/wallet/paypal-categories";
 import { LargePurchaseCategories } from "./large-purchase-categories";
 import { LinkedAccounts } from "@/app/wallet/linked-accounts";
 import { PlayerSettings } from "./player-settings";
+import { SyncTokenSettings } from "./sync-token-settings";
 import { isAdminEmail } from "@/lib/admin";
 import { AccountManagement } from "./account-management";
 import { EarningCategoriesReference } from "./earning-categories-reference";
 import { Metadata } from "next";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
+import crypto from "crypto";
 
 export const metadata: Metadata = {
   title: "Settings | CardTool",
@@ -54,6 +56,7 @@ export default async function SettingsPage() {
     linkedAccountsResult,
     playersResult,
     allCategoriesForReferenceResult,
+    syncTokenResult,
   ] = await Promise.all([
     supabase
       .from("user_wallets")
@@ -144,6 +147,12 @@ export default async function SettingsPage() {
       .from("earning_categories")
       .select("id, name, slug, parent_category_id, excluded_by_default")
       .order("name"),
+    // Sync token status
+    supabase
+      .from("user_sync_tokens")
+      .select("created_at, last_used_at")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle(),
   ]);
 
   const walletCards = walletCardsResult.data;
@@ -160,6 +169,7 @@ export default async function SettingsPage() {
   const linkedAccounts = linkedAccountsResult.data;
   const players = (playersResult.data ?? []) as { player_number: number; description: string | null }[];
   const allCategoriesForReference = (allCategoriesForReferenceResult.data ?? []) as { id: number; name: string; slug: string; parent_category_id: number | null; excluded_by_default: boolean }[];
+  const syncToken = syncTokenResult.data;
 
   // Process wallet cards
   const userCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
@@ -515,6 +525,58 @@ export default async function SettingsPage() {
     revalidatePath("/compare");
   }
 
+  async function generateSyncToken(): Promise<{ token?: string; error?: string }> {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return { error: "Not logged in" };
+
+    const supabase = createAdminClient();
+
+    // Generate a secure random token
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    // Upsert - replace existing token if one exists
+    const { error } = await supabase
+      .from("user_sync_tokens")
+      .upsert(
+        {
+          user_id: userId,
+          token_hash: tokenHash,
+          created_at: new Date().toISOString(),
+          last_used_at: null,
+        },
+        { onConflict: "user_id" }
+      );
+
+    if (error) {
+      return { error: "Failed to create token" };
+    }
+
+    revalidatePath("/settings");
+    return { token };
+  }
+
+  async function revokeSyncToken(): Promise<{ success?: boolean; error?: string }> {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return { error: "Not logged in" };
+
+    const supabase = createAdminClient();
+
+    const { error } = await supabase
+      .from("user_sync_tokens")
+      .delete()
+      .eq("user_id", userId);
+
+    if (error) {
+      return { error: "Failed to revoke token" };
+    }
+
+    revalidatePath("/settings");
+    return { success: true };
+  }
+
   async function savePlayers(playerCount: number, descriptions: Record<number, string>) {
     "use server";
     const userId = await getEffectiveUserId();
@@ -641,6 +703,17 @@ export default async function SettingsPage() {
           players={players}
           onSavePlayers={savePlayers}
         />
+
+        {/* Sync Token Settings - Always show */}
+        <div className="mt-8">
+          <SyncTokenSettings
+            hasToken={!!syncToken}
+            createdAt={syncToken?.created_at ?? null}
+            lastUsedAt={syncToken?.last_used_at ?? null}
+            onGenerateToken={generateSyncToken}
+            onRevokeToken={revokeSyncToken}
+          />
+        </div>
 
         {hasAnySettings ? (
           <div className="space-y-8 mt-8">

@@ -1068,6 +1068,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_sync_tokens: {
+        Row: {
+          id: string
+          user_id: string
+          token_hash: string
+          created_at: string | null
+          last_used_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          token_hash: string
+          created_at?: string | null
+          last_used_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          token_hash?: string
+          created_at?: string | null
+          last_used_at?: string | null
+        }
+        Relationships: []
+      }
       spending_defaults: {
         Row: {
           annual_spend_cents: number

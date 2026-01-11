@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.1.0
+// @version      1.2.0
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*.united.com/*
@@ -17,6 +17,8 @@
 // @match        *://*.alaskaair.com/*
 // @grant        GM_notification
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @connect      cardtool.chrishutchins.com
 // @connect      localhost
 // ==/UserScript==
@@ -564,15 +566,42 @@
         }
     }
 
+    function getSyncToken() {
+        let token = GM_getValue('syncToken', '');
+        if (!token) {
+            token = prompt(
+                'Enter your CardTool Sync Token:\n\n' +
+                'Get your token from CardTool Settings:\n' +
+                CARDTOOL_URL + '/settings'
+            );
+            if (token) {
+                GM_setValue('syncToken', token);
+            }
+        }
+        return token;
+    }
+
+    function clearSyncToken() {
+        GM_setValue('syncToken', '');
+    }
+
     function loadPlayers() {
-        // Use GM_xmlhttpRequest to bypass CORS and send cookies cross-origin
+        const syncToken = getSyncToken();
+        if (!syncToken) {
+            showNotLoggedIn();
+            return;
+        }
+
         GM_xmlhttpRequest({
             method: 'GET',
             url: `${CARDTOOL_URL}/api/points/players`,
-            withCredentials: true,
+            headers: {
+                'x-sync-token': syncToken
+            },
             onload: function(response) {
                 try {
                     if (response.status === 401) {
+                        clearSyncToken();
                         showNotLoggedIn();
                         return;
                     }
@@ -616,19 +645,24 @@
             return;
         }
 
+        const syncToken = getSyncToken();
+        if (!syncToken) {
+            showNotLoggedIn();
+            return;
+        }
+
         showSyncing();
 
         // Get selected player
         const playerSelect = document.getElementById('cardtool-player-select');
         const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
 
-        // Use GM_xmlhttpRequest to bypass CORS and send cookies cross-origin
         GM_xmlhttpRequest({
             method: 'POST',
             url: `${CARDTOOL_URL}/api/points/import`,
-            withCredentials: true,
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'x-sync-token': syncToken
             },
             data: JSON.stringify({
                 currencyCode: currentConfig.currencyCode,
@@ -638,6 +672,7 @@
             onload: function(response) {
                 try {
                     if (response.status === 401) {
+                        clearSyncToken();
                         showNotLoggedIn();
                         return;
                     }

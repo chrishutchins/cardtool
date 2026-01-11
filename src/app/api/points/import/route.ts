@@ -3,18 +3,61 @@ import { currentUser } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, pointsImportRateLimit } from "@/lib/rate-limit";
 import logger from "@/lib/logger";
+import crypto from "crypto";
+
+// Authenticate via Clerk session OR sync token
+async function authenticateUser(request: Request): Promise<{ userId: string | null; error?: string }> {
+  // First try sync token (for Tampermonkey scripts on external sites)
+  const syncToken = request.headers.get("x-sync-token");
+  
+  if (syncToken) {
+    const tokenHash = crypto.createHash("sha256").update(syncToken).digest("hex");
+    const supabase = createClient();
+    
+    const { data: tokenData, error } = await supabase
+      .from("user_sync_tokens")
+      .select("user_id")
+      .eq("token_hash", tokenHash)
+      .maybeSingle();
+    
+    if (error) {
+      logger.error({ err: error }, "Error validating sync token");
+      return { userId: null, error: "Token validation failed" };
+    }
+    
+    if (tokenData) {
+      // Update last_used_at
+      await supabase
+        .from("user_sync_tokens")
+        .update({ last_used_at: new Date().toISOString() })
+        .eq("token_hash", tokenHash);
+      
+      return { userId: tokenData.user_id };
+    }
+    
+    return { userId: null, error: "Invalid sync token" };
+  }
+  
+  // Fall back to Clerk session (for requests from CardTool itself)
+  const user = await currentUser();
+  if (user) {
+    return { userId: user.id };
+  }
+  
+  return { userId: null, error: "Unauthorized" };
+}
 
 export async function POST(request: Request) {
-  const user = await currentUser();
+  const { userId, error: authError } = await authenticateUser(request);
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ error: authError || "Unauthorized" }, { status: 401 });
   }
 
   // Rate limit: 60 requests per minute per user
-  const { success } = await checkRateLimit(pointsImportRateLimit, user.id);
+  const { success } = await checkRateLimit(pointsImportRateLimit, userId);
   if (!success) {
-    logger.warn({ userId: user.id }, "Points import rate limited");
+    logger.warn({ userId }, "Points import rate limited");
     return NextResponse.json({ error: "Rate limited. Please wait before syncing again." }, { status: 429 });
   }
 
@@ -73,7 +116,7 @@ export async function POST(request: Request) {
       .from("user_point_balances")
       .upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           currency_id: currency.id,
           player_number: playerNumber,
           balance: Math.round(balance), // Ensure integer
@@ -85,7 +128,7 @@ export async function POST(request: Request) {
       );
 
     if (upsertError) {
-      logger.error({ err: upsertError, userId: user.id, currencyCode }, "Failed to upsert balance");
+      logger.error({ err: upsertError, userId, currencyCode }, "Failed to upsert balance");
       return NextResponse.json(
         { error: "Failed to save balance" },
         { status: 500 }
@@ -94,7 +137,7 @@ export async function POST(request: Request) {
 
     // Log to history
     await supabase.from("user_point_balance_history").insert({
-      user_id: user.id,
+      user_id: userId,
       currency_id: currency.id,
       player_number: playerNumber,
       balance: Math.round(balance),
@@ -102,7 +145,7 @@ export async function POST(request: Request) {
     });
 
     logger.info(
-      { userId: user.id, currencyCode, balance, playerNumber },
+      { userId, currencyCode, balance, playerNumber },
       "Points balance imported"
     );
 

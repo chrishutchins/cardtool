@@ -1,11 +1,38 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
+import crypto from "crypto";
 
-export async function GET() {
+// Authenticate via Clerk session OR sync token
+async function authenticateUser(request: Request): Promise<string | null> {
+  // First try sync token (for Tampermonkey scripts on external sites)
+  const syncToken = request.headers.get("x-sync-token");
+  
+  if (syncToken) {
+    const tokenHash = crypto.createHash("sha256").update(syncToken).digest("hex");
+    const supabase = createClient();
+    
+    const { data: tokenData } = await supabase
+      .from("user_sync_tokens")
+      .select("user_id")
+      .eq("token_hash", tokenHash)
+      .maybeSingle();
+    
+    if (tokenData) {
+      return tokenData.user_id;
+    }
+    return null;
+  }
+  
+  // Fall back to Clerk session (for requests from CardTool itself)
   const user = await currentUser();
+  return user?.id || null;
+}
 
-  if (!user) {
+export async function GET(request: Request) {
+  const userId = await authenticateUser(request);
+
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -15,7 +42,7 @@ export async function GET() {
   const { data: players, error } = await supabase
     .from("user_players")
     .select("player_number, description")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .order("player_number");
 
   if (error) {
