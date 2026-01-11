@@ -339,31 +339,53 @@ export function BalanceTable({
                             isPending={isPending}
                           />
                         ) : (
-                          <button
-                            onClick={() => setEditingCell({ currencyId: currency.id, playerNumber: player.player_number })}
-                            className={`text-center w-full ${
-                              balance && balance.balance > 0
-                                ? STYLES.editable
-                                : STYLES.editableEmpty
-                            }`}
-                          >
-                            <span>
-                              {balance && balance.balance > 0
-                                ? formatNumber(Number(balance.balance))
-                                : "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0"}
-                            </span>
-                            {hasExpiration && (
-                              <Tooltip text={`Expires: ${new Date(balance.expiration_date!).toLocaleDateString()}`}>
-                                <span
-                                  className={`ml-1 ${
-                                    expired ? "text-red-400" : expiringSoon ? "text-amber-400" : "text-zinc-500"
-                                  }`}
-                                >
-                                  †
+                          (() => {
+                            // Build tooltip text
+                            const tooltipLines: string[] = [];
+                            if (hasExpiration) {
+                              tooltipLines.push(`Expires: ${new Date(balance.expiration_date!).toLocaleDateString()}`);
+                            }
+                            if (balance?.notes) {
+                              tooltipLines.push(`Note: ${balance.notes}`);
+                            }
+                            if (balance?.updated_at) {
+                              tooltipLines.push(`Updated: ${new Date(balance.updated_at).toLocaleDateString()}`);
+                            }
+                            const tooltipText = tooltipLines.join("\n");
+                            const hasTooltip = tooltipLines.length > 0;
+
+                            const buttonContent = (
+                              <button
+                                onClick={() => setEditingCell({ currencyId: currency.id, playerNumber: player.player_number })}
+                                className={`text-center w-full ${
+                                  balance && balance.balance > 0
+                                    ? STYLES.editable
+                                    : STYLES.editableEmpty
+                                }`}
+                              >
+                                <span>
+                                  {balance && balance.balance > 0
+                                    ? formatNumber(Number(balance.balance))
+                                    : "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0"}
                                 </span>
+                                {hasExpiration && (
+                                  <span
+                                    className={`ml-1 ${
+                                      expired ? "text-red-400" : expiringSoon ? "text-amber-400" : "text-zinc-500"
+                                    }`}
+                                  >
+                                    †
+                                  </span>
+                                )}
+                              </button>
+                            );
+
+                            return hasTooltip ? (
+                              <Tooltip text={tooltipText} multiline>
+                                {buttonContent}
                               </Tooltip>
-                            )}
-                          </button>
+                            ) : buttonContent;
+                          })()
                         )}
                       </td>
                     );

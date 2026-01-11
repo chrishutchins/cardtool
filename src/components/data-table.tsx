@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 // Tooltip Components (reusable)
 // ============================================================================
 
-export function Tooltip({ children, text, wide }: { children: React.ReactNode; text: string; wide?: boolean }) {
+export function Tooltip({ children, text, wide, multiline }: { children: React.ReactNode; text: string; wide?: boolean; multiline?: boolean }) {
   const [position, setPosition] = useState<"above" | "below">("above");
   const ref = useRef<HTMLSpanElement>(null);
 
@@ -15,7 +15,11 @@ export function Tooltip({ children, text, wide }: { children: React.ReactNode; t
     : "top-full mt-1";
 
   // Use fixed positioning to escape overflow containers
-  const widthClass = wide ? "min-w-[200px] max-w-sm" : "whitespace-nowrap";
+  const widthClass = wide 
+    ? "min-w-[200px] max-w-sm" 
+    : multiline 
+      ? "whitespace-pre-line text-left" 
+      : "whitespace-nowrap";
 
   return (
     <span 
