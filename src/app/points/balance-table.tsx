@@ -27,6 +27,7 @@ type PointBalance = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  last_update_source: string | null;
 };
 
 type Player = {
@@ -55,6 +56,7 @@ const allianceLabels: Record<string, { label: string; color: string; bg: string 
 const STYLES = {
   editable: "text-zinc-400 underline decoration-dashed underline-offset-4 decoration-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer",
   editableEmpty: "text-zinc-500 underline decoration-dashed underline-offset-4 decoration-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer",
+  synced: "text-zinc-400 italic hover:text-zinc-300 transition-colors cursor-pointer", // No underline for tampermonkey/synced entries
   readOnly: "text-zinc-400",
   empty: "text-zinc-600",
 } as const;
@@ -340,6 +342,9 @@ export function BalanceTable({
                           />
                         ) : (
                           (() => {
+                            // Determine if synced via tampermonkey
+                            const isSynced = balance?.last_update_source === "tampermonkey";
+                            
                             // Build tooltip text
                             const tooltipLines: string[] = [];
                             if (hasExpiration) {
@@ -349,19 +354,22 @@ export function BalanceTable({
                               tooltipLines.push(`Note: ${balance.notes}`);
                             }
                             if (balance?.updated_at) {
-                              tooltipLines.push(`Updated: ${new Date(balance.updated_at).toLocaleDateString()}`);
+                              const sourceLabel = isSynced ? "(synced)" : "(manual)";
+                              tooltipLines.push(`Last Updated: ${new Date(balance.updated_at).toLocaleDateString()} ${sourceLabel}`);
                             }
                             const tooltipText = tooltipLines.join("\n");
                             const hasTooltip = tooltipLines.length > 0;
 
+                            // Choose style based on sync source
+                            const getStyle = () => {
+                              if (!balance || balance.balance <= 0) return STYLES.editableEmpty;
+                              return isSynced ? STYLES.synced : STYLES.editable;
+                            };
+
                             const buttonContent = (
                               <button
                                 onClick={() => setEditingCell({ currencyId: currency.id, playerNumber: player.player_number })}
-                                className={`text-center w-full ${
-                                  balance && balance.balance > 0
-                                    ? STYLES.editable
-                                    : STYLES.editableEmpty
-                                }`}
+                                className={`text-center w-full ${getStyle()}`}
                               >
                                 <span>
                                   {balance && balance.balance > 0

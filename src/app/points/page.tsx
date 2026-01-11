@@ -38,6 +38,7 @@ type PointBalance = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  last_update_source: string | null;
 };
 
 export default async function PointsPage() {
@@ -160,6 +161,7 @@ export default async function PointsPage() {
         expiration_date: expirationDate,
         notes,
         updated_at: new Date().toISOString(),
+        last_update_source: "manual",
       }, {
         onConflict: "user_id,currency_id,player_number"
       });

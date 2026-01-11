@@ -27,6 +27,7 @@ type PointBalance = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  last_update_source: string | null;
 };
 
 type Player = {
