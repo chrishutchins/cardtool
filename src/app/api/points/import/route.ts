@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { currencyCode, balance, playerNumber = 1 } = body;
+    const { currencyCode, balance, playerNumber = 1, expirationDate, additive = false } = body;
 
     // Validate required fields
     if (!currencyCode) {
@@ -116,22 +116,46 @@ export async function POST(request: Request) {
       );
     }
 
+    // Calculate final balance (additive mode adds to existing)
+    let finalBalance = Math.round(balance);
+    
+    
+    if (additive) {
+      // Fetch current balance to add to
+      const { data: existing, error: fetchError } = await supabase
+        .from("user_point_balances")
+        .select("balance")
+        .eq("user_id", userId)
+        .eq("currency_id", currency.id)
+        .eq("player_number", playerNumber)
+        .maybeSingle();
+      
+      if (existing) {
+        finalBalance = existing.balance + Math.round(balance);
+      }
+    }
+
+    // Build upsert data
+    const upsertData: Record<string, unknown> = {
+      user_id: userId,
+      currency_id: currency.id,
+      player_number: playerNumber,
+      balance: finalBalance,
+      updated_at: new Date().toISOString(),
+      last_update_source: source,
+    };
+    
+    // Only include expiration_date if provided
+    if (expirationDate) {
+      upsertData.expiration_date = expirationDate;
+    }
+
     // Upsert the balance
     const { error: upsertError } = await supabase
       .from("user_point_balances")
-      .upsert(
-        {
-          user_id: userId,
-          currency_id: currency.id,
-          player_number: playerNumber,
-          balance: Math.round(balance), // Ensure integer
-          updated_at: new Date().toISOString(),
-          last_update_source: source,
-        },
-        {
-          onConflict: "user_id,currency_id,player_number",
-        }
-      );
+      .upsert(upsertData, {
+        onConflict: "user_id,currency_id,player_number",
+      });
 
     if (upsertError) {
       logger.error({ err: upsertError, userId, currencyCode }, "Failed to upsert balance");
@@ -146,13 +170,13 @@ export async function POST(request: Request) {
       user_id: userId,
       currency_id: currency.id,
       player_number: playerNumber,
-      balance: Math.round(balance),
+      balance: finalBalance,
       recorded_at: new Date().toISOString(),
       source,
     });
 
     logger.info(
-      { userId, currencyCode, balance, playerNumber, source },
+      { userId, currencyCode, balance: finalBalance, playerNumber, source, additive },
       "Points balance imported"
     );
 
@@ -160,7 +184,8 @@ export async function POST(request: Request) {
       success: true,
       currencyName: currency.name,
       currencyCode: currency.code,
-      balance: Math.round(balance),
+      balance: finalBalance,
+      added: additive ? Math.round(balance) : undefined,
       playerNumber,
     });
   } catch (error) {

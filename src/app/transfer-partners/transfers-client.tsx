@@ -90,6 +90,14 @@ const allianceLabels: Record<string, { label: string; color: string }> = {
 // Default column order
 const DEFAULT_COLUMN_ORDER = ["MR", "UR", "C1", "TYP", "BILT", "WF", "USB", "ROVE", "MB", "BREX", "RAMP"];
 
+// LocalStorage key for persisting column preferences
+const COLUMN_PREFS_KEY = "cardtool-transfer-partners-columns";
+
+type ColumnPrefs = {
+  order: string[];  // Array of currency codes in order
+  hidden: string[]; // Array of hidden currency codes
+};
+
 type SortConfig = {
   key: string;
   direction: "asc" | "desc";
@@ -114,18 +122,88 @@ export function TransfersClient({
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
-  // Initialize column order based on default order and available currencies
+  // Track if we've loaded from localStorage to avoid overwriting on first render
+  const [hasLoadedPrefs, setHasLoadedPrefs] = useState(false);
+
+  // Initialize column order - check localStorage first, then use defaults
   useEffect(() => {
-    const sortedCurrencies = [...transferableCurrencies].sort((a, b) => {
-      const aIndex = DEFAULT_COLUMN_ORDER.indexOf(a.code);
-      const bIndex = DEFAULT_COLUMN_ORDER.indexOf(b.code);
-      if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name);
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    });
-    setColumnOrder(sortedCurrencies.map(c => c.id));
+    // Build a map of code -> id for current currencies
+    const codeToId = new Map(transferableCurrencies.map(c => [c.code, c.id]));
+    const idToCode = new Map(transferableCurrencies.map(c => [c.id, c.code]));
+    
+    // Try to load saved preferences
+    let savedPrefs: ColumnPrefs | null = null;
+    try {
+      const saved = localStorage.getItem(COLUMN_PREFS_KEY);
+      if (saved) {
+        savedPrefs = JSON.parse(saved);
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+
+    if (savedPrefs?.order?.length) {
+      // Use saved order, but filter to only include currencies that still exist
+      // and add any new currencies at the end
+      const validOrderIds = savedPrefs.order
+        .map(code => codeToId.get(code))
+        .filter((id): id is string => id !== undefined);
+      
+      // Add any currencies not in saved order
+      const savedCodes = new Set(savedPrefs.order);
+      const newCurrencies = transferableCurrencies
+        .filter(c => !savedCodes.has(c.code))
+        .sort((a, b) => {
+          const aIndex = DEFAULT_COLUMN_ORDER.indexOf(a.code);
+          const bIndex = DEFAULT_COLUMN_ORDER.indexOf(b.code);
+          if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name);
+          if (aIndex === -1) return 1;
+          if (bIndex === -1) return -1;
+          return aIndex - bIndex;
+        });
+      
+      setColumnOrder([...validOrderIds, ...newCurrencies.map(c => c.id)]);
+      
+      // Restore hidden columns
+      if (savedPrefs.hidden?.length) {
+        const validHiddenIds = savedPrefs.hidden
+          .map(code => codeToId.get(code))
+          .filter((id): id is string => id !== undefined);
+        setHiddenColumns(new Set(validHiddenIds));
+      }
+    } else {
+      // No saved prefs, use default order
+      const sortedCurrencies = [...transferableCurrencies].sort((a, b) => {
+        const aIndex = DEFAULT_COLUMN_ORDER.indexOf(a.code);
+        const bIndex = DEFAULT_COLUMN_ORDER.indexOf(b.code);
+        if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name);
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      });
+      setColumnOrder(sortedCurrencies.map(c => c.id));
+    }
+    
+    setHasLoadedPrefs(true);
   }, [transferableCurrencies]);
+
+  // Save column preferences to localStorage when they change
+  useEffect(() => {
+    if (!hasLoadedPrefs || columnOrder.length === 0) return;
+    
+    // Convert IDs to codes for storage (codes are more stable than UUIDs)
+    const idToCode = new Map(transferableCurrencies.map(c => [c.id, c.code]));
+    const prefs: ColumnPrefs = {
+      order: columnOrder.map(id => idToCode.get(id)).filter((code): code is string => code !== undefined),
+      hidden: Array.from(hiddenColumns).map(id => idToCode.get(id)).filter((code): code is string => code !== undefined),
+    };
+    
+    try {
+      localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // Ignore localStorage errors (e.g., quota exceeded)
+    }
+  }, [columnOrder, hiddenColumns, hasLoadedPrefs, transferableCurrencies]);
 
   // Get visible columns in order
   const visibleColumns = useMemo(() => {
@@ -304,7 +382,14 @@ export function TransfersClient({
       );
     }
 
-    const ratio = `${partner.source_units}:${partner.destination_units}`;
+    // Format ratio as X:1 (normalize destination to 1)
+    // e.g., 3:2 becomes 1.5:1, 1:1 stays 1:1, 2:3 becomes 0.67:1
+    const sourcePerDest = partner.source_units / partner.destination_units;
+    // Format: show integer if whole, otherwise up to 2 decimal places (trim trailing zeros)
+    const formattedSource = Number.isInteger(sourcePerDest) 
+      ? sourcePerDest.toString() 
+      : parseFloat(sourcePerDest.toFixed(2)).toString();
+    const ratio = `${formattedSource}:1`;
     const hasFee = !!partner.notes;
     
     // Build tooltip content (only notes, not timing)

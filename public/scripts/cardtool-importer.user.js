@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.7.4
+// @version      1.8.4
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -320,6 +320,64 @@
             letter-spacing: 0.5px !important;
             display: block !important;
         }
+        
+        /* Options container */
+        #cardtool-badge .cardtool-options {
+            margin: 10px 0 !important;
+            padding: 10px !important;
+            background: #27272a !important;
+            border-radius: 6px !important;
+            font-size: 12px !important;
+        }
+        #cardtool-badge .cardtool-option-row {
+            display: flex !important;
+            align-items: center !important;
+            margin-bottom: 8px !important;
+        }
+        #cardtool-badge .cardtool-option-row:last-child {
+            margin-bottom: 0 !important;
+        }
+        #cardtool-badge .cardtool-checkbox {
+            width: 16px !important;
+            height: 16px !important;
+            margin: 0 8px 0 0 !important;
+            accent-color: #10b981 !important;
+            cursor: pointer !important;
+        }
+        #cardtool-badge .cardtool-option-label {
+            color: #a1a1aa !important;
+            font-size: 12px !important;
+            cursor: pointer !important;
+            flex: 1 !important;
+            -webkit-text-fill-color: #a1a1aa !important;
+        }
+        #cardtool-badge .cardtool-date-input {
+            width: 120px !important;
+            padding: 4px 6px !important;
+            background: #18181b !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 4px !important;
+            color: #e4e4e7 !important;
+            font-size: 11px !important;
+            margin: 0 !important;
+            -webkit-text-fill-color: #e4e4e7 !important;
+        }
+        #cardtool-badge .cardtool-date-input::-webkit-calendar-picker-indicator {
+            filter: invert(1) !important;
+            cursor: pointer !important;
+        }
+        #cardtool-badge .cardtool-options-toggle {
+            font-size: 11px !important;
+            color: #71717a !important;
+            cursor: pointer !important;
+            text-align: center !important;
+            margin: 8px 0 !important;
+            -webkit-text-fill-color: #71717a !important;
+        }
+        #cardtool-badge .cardtool-options-toggle:hover {
+            color: #a1a1aa !important;
+            -webkit-text-fill-color: #a1a1aa !important;
+        }
 
         /* Toast notification */
         #cardtool-toast {
@@ -525,10 +583,34 @@
             <div class="cardtool-badge-balance">${formattedBalance}</div>
             <div class="cardtool-badge-currency">${currentConfig.name}</div>
             <div id="cardtool-player-container"></div>
+            <div class="cardtool-options-toggle" id="cardtool-options-toggle">▼ Options</div>
+            <div class="cardtool-options" id="cardtool-options" style="display: none;">
+                <div class="cardtool-option-row">
+                    <input type="checkbox" class="cardtool-checkbox" id="cardtool-additive">
+                    <label class="cardtool-option-label" for="cardtool-additive">Add to existing balance</label>
+                </div>
+                <div class="cardtool-option-row">
+                    <label class="cardtool-option-label" for="cardtool-expiration">Expires</label>
+                    <input type="date" class="cardtool-date-input" id="cardtool-expiration">
+                </div>
+            </div>
             <button class="cardtool-badge-btn" id="cardtool-sync-btn">
                 Sync to CardTool
             </button>
         `);
+
+        // Options toggle
+        document.getElementById('cardtool-options-toggle').addEventListener('click', () => {
+            const options = document.getElementById('cardtool-options');
+            const toggle = document.getElementById('cardtool-options-toggle');
+            if (options.style.display === 'none') {
+                options.style.display = 'block';
+                toggle.textContent = '▲ Options';
+            } else {
+                options.style.display = 'none';
+                toggle.textContent = '▼ Options';
+            }
+        });
 
         document.getElementById('cardtool-sync-btn').addEventListener('click', handleSync);
 
@@ -571,7 +653,13 @@
     }
 
     function showSyncSuccess(data) {
-        showToast(`Synced ${data.balance.toLocaleString()} ${data.currencyName}`, false);
+        let message;
+        if (data.added) {
+            message = `Added ${data.added.toLocaleString()} → Total: ${data.balance.toLocaleString()} ${data.currencyName}`;
+        } else {
+            message = `Synced ${data.balance.toLocaleString()} ${data.currencyName}`;
+        }
+        showToast(message, false);
 
         const btn = document.getElementById('cardtool-sync-btn');
         if (btn) {
@@ -761,6 +849,13 @@
         const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
         GM_setValue('lastPlayerNumber', playerNumber);
 
+        // Get options
+        const additiveCheckbox = document.getElementById('cardtool-additive');
+        const additive = additiveCheckbox ? additiveCheckbox.checked : false;
+        
+        const expirationInput = document.getElementById('cardtool-expiration');
+        const expirationDate = expirationInput && expirationInput.value ? expirationInput.value : null;
+
         GM_xmlhttpRequest({
             method: 'POST',
             url: `${CARDTOOL_URL}/api/points/import`,
@@ -771,7 +866,9 @@
             data: JSON.stringify({
                 currencyCode: currentConfig.currencyCode,
                 balance: extractedBalance,
-                playerNumber: playerNumber
+                playerNumber: playerNumber,
+                additive: additive,
+                expirationDate: expirationDate
             }),
             onload: function(response) {
                 try {
