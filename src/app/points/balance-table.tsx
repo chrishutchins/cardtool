@@ -1,8 +1,58 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef, useCallback } from "react";
 import { BalanceEditPopover } from "./balance-edit-popover";
-import { Tooltip } from "@/components/data-table";
+
+// Fixed-position tooltip that escapes overflow containers (like compare table)
+function Tooltip({ children, text, multiline }: { children: React.ReactNode; text: string; multiline?: boolean }) {
+  const [isVisible, setIsVisible] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, showBelow: false });
+  const ref = useRef<HTMLSpanElement>(null);
+
+  const updatePosition = useCallback(() => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      const showBelow = rect.top < 80;
+      setCoords({
+        top: showBelow ? rect.bottom + 4 : rect.top - 4,
+        left: rect.left + rect.width / 2,
+        showBelow,
+      });
+    }
+  }, []);
+
+  const handleMouseEnter = useCallback(() => {
+    updatePosition();
+    setIsVisible(true);
+  }, [updatePosition]);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsVisible(false);
+  }, []);
+
+  return (
+    <span 
+      ref={ref}
+      className="inline-flex"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {children}
+      {isVisible && (
+        <span 
+          className={`fixed px-2 py-1.5 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg z-[9999] pointer-events-none -translate-x-1/2 ${multiline ? "whitespace-pre-line text-left min-w-[180px]" : "whitespace-nowrap"}`}
+          style={{
+            top: coords.showBelow ? coords.top : 'auto',
+            bottom: coords.showBelow ? 'auto' : `calc(100vh - ${coords.top}px)`,
+            left: coords.left,
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
 
 type Currency = {
   id: string;
