@@ -116,17 +116,18 @@ export function PointsClient({
           byPlayer[player.player_number].points += points;
           byPlayer[player.player_number].value += value;
 
-          // By type - group transferable, cash_back, crypto into "banks"
+          // By type - banks = everything that's not airlines or hotels
           const type = currency.currency_type;
-          if (type === "transferable_points" || type === "cash_back" || type === "crypto" || currency.is_transferable) {
-            byType.banks.points += points;
-            byType.banks.value += value;
+          if (type === "airline_miles") {
+            byType.airline_miles.points += points;
+            byType.airline_miles.value += value;
           } else if (type === "hotel_points") {
             byType.hotel_points.points += points;
             byType.hotel_points.value += value;
-          } else if (type === "airline_miles") {
-            byType.airline_miles.points += points;
-            byType.airline_miles.value += value;
+          } else {
+            // Everything else goes to banks (transferable, non-transferable, cash_back, crypto)
+            byType.banks.points += points;
+            byType.banks.value += value;
           }
 
           // By alliance (for airline miles)
@@ -148,12 +149,13 @@ export function PointsClient({
   }, [currencies, balanceMap, currencyValues, effectivePlayers]);
 
   // Group currencies by type - only include those with balances
+  // Banks = everything that's not airlines or hotels (includes transferable, non-transferable, cash back, crypto)
   const bankCurrencies = currencies
-    .filter(c => c.currency_type === "transferable_points" || c.currency_type === "cash_back" || c.currency_type === "crypto" || c.is_transferable)
+    .filter(c => c.currency_type !== "airline_miles" && c.currency_type !== "hotel_points")
     .filter(currencyHasBalance);
   
   const hotelPoints = currencies
-    .filter(c => c.currency_type === "hotel_points" && !c.is_transferable)
+    .filter(c => c.currency_type === "hotel_points")
     .filter(currencyHasBalance);
   
   const airlineMiles = currencies
