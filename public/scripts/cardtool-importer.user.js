@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.4.1
+// @version      1.4.2
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -144,10 +144,18 @@
     // ============================================
 
     const styles = `
-        /* Reset inherited styles */
+        /* Reset inherited styles - be specific, not global */
         #cardtool-badge, #cardtool-badge *, #cardtool-toast, #cardtool-toast * {
-            all: revert !important;
             box-sizing: border-box !important;
+            font-style: normal !important;
+            font-variant: normal !important;
+            text-decoration: none !important;
+            text-transform: none !important;
+            letter-spacing: normal !important;
+            word-spacing: normal !important;
+            text-shadow: none !important;
+            float: none !important;
+            clear: none !important;
         }
         #cardtool-badge {
             position: fixed !important;

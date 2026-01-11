@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.4.0
+// @version      1.4.1
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -26,10 +26,21 @@
 
     // Styles - using !important to prevent host site CSS from bleeding in
     const styles = `
-        /* Reset inherited styles */
+        /* Reset inherited styles - be specific, not global */
         #cardtool-admin-panel, #cardtool-admin-panel * {
-            all: revert !important;
             box-sizing: border-box !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            font-style: normal !important;
+            font-variant: normal !important;
+            text-decoration: none !important;
+            text-transform: none !important;
+            letter-spacing: normal !important;
+            word-spacing: normal !important;
+            text-shadow: none !important;
+            float: none !important;
+            clear: none !important;
         }
         #cardtool-admin-panel {
             position: fixed !important;
