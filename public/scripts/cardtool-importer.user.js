@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.5.0
+// @version      1.5.1
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -383,10 +383,12 @@
             createBadge();
 
             // Try to find balance on page (wait longer for SPAs to load)
+            console.log('CardTool: Config matched:', currentConfig.name, '- starting balance checks');
             setTimeout(tryExtractBalance, 2000);
 
             // Re-check periodically (for SPAs that load content dynamically)
-            setInterval(tryExtractBalance, 3000);
+            const intervalId = setInterval(tryExtractBalance, 3000);
+            console.log('CardTool: Interval started, ID:', intervalId);
         });
     }
 
@@ -579,16 +581,24 @@
     // ============================================
 
     function tryExtractBalance() {
-        if (!currentConfig) return;
+        if (!currentConfig) {
+            console.log('CardTool: No config matched');
+            return;
+        }
 
         try {
             const selectors = currentConfig.selector.split(',').map(s => s.trim());
+            console.log('CardTool: Checking selectors:', selectors);
 
             for (const selector of selectors) {
                 const element = document.querySelector(selector);
+                console.log('CardTool: Selector', selector, '-> element:', element ? 'FOUND' : 'not found');
+                
                 if (element) {
                     const text = element.textContent.trim();
+                    console.log('CardTool: Element text:', text);
                     const balance = currentConfig.parseBalance(text);
+                    console.log('CardTool: Parsed balance:', balance);
 
                     if (balance > 0) {
                         extractedBalance = balance;
