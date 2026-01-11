@@ -1,10 +1,15 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.5.1
+// @version      1.5.2
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
+// @exclude      *://localhost*/*
+// @exclude      *://cardtool.chrishutchins.com/*
+// @exclude      *://www.google.com/*
+// @exclude      *://www.google.com.*/*
+// @exclude      *://*.github.com/*
 // @grant        GM_setClipboard
 // @grant        GM_notification
 // @grant        GM_xmlhttpRequest
