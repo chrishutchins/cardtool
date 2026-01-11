@@ -136,19 +136,15 @@ export async function POST(request: Request) {
     }
 
     // Build upsert data
-    const upsertData: Record<string, unknown> = {
+    const upsertData = {
       user_id: userId,
       currency_id: currency.id,
       player_number: playerNumber,
       balance: finalBalance,
       updated_at: new Date().toISOString(),
       last_update_source: source,
+      expiration_date: expirationDate || null,
     };
-    
-    // Only include expiration_date if provided
-    if (expirationDate) {
-      upsertData.expiration_date = expirationDate;
-    }
 
     // Upsert the balance
     const { error: upsertError } = await supabase

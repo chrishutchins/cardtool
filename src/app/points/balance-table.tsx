@@ -458,12 +458,20 @@ export function BalanceTable({
                               return isSynced ? STYLES.synced : STYLES.editable;
                             };
 
+                            // Determine text color based on expiration
+                            const getBalanceColor = () => {
+                              if (!balance || balance.balance <= 0) return "";
+                              if (expired) return "text-red-400";
+                              if (expiringSoon) return "text-red-400";
+                              return "";
+                            };
+
                             const buttonContent = (
                               <button
                                 onClick={() => setEditingCell({ currencyId: currency.id, playerNumber: player.player_number })}
                                 className={`text-center w-full ${getStyle()}`}
                               >
-                                <span>
+                                <span className={getBalanceColor()}>
                                   {balance && balance.balance > 0
                                     ? formatNumber(Number(balance.balance))
                                     : "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0"}
