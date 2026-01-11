@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.1.1
+// @version      1.2.0
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_notification
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @connect      cardtool.chrishutchins.com
 // @connect      localhost
 // ==/UserScript==
@@ -572,6 +574,17 @@
         }, 2000);
     }
 
+    function getAdminKey() {
+        let key = GM_getValue('adminApiKey', '');
+        if (!key) {
+            key = prompt('Enter your CardTool Admin API Key:\n(Get this from your CardTool environment settings)');
+            if (key) {
+                GM_setValue('adminApiKey', key);
+            }
+        }
+        return key;
+    }
+
     function saveConfig() {
         const name = document.getElementById('cardtool-name').value;
         const currencyCode = document.getElementById('cardtool-currency').value;
@@ -585,6 +598,13 @@
             return;
         }
 
+        // Get admin API key
+        const adminKey = getAdminKey();
+        if (!adminKey) {
+            alert('Admin API key is required to save configs');
+            return;
+        }
+
         const btn = document.getElementById('cardtool-save');
         const originalText = btn.textContent;
         btn.textContent = 'Saving...';
@@ -593,9 +613,9 @@
         GM_xmlhttpRequest({
             method: 'POST',
             url: `${CARDTOOL_URL}/api/points/site-configs`,
-            withCredentials: true,
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'x-admin-key': adminKey
             },
             data: JSON.stringify({
                 name,
@@ -609,17 +629,9 @@
                 btn.disabled = false;
                 
                 if (response.status === 401) {
-                    btn.textContent = 'Not logged in!';
-                    btn.style.background = '#dc2626';
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.style.background = '';
-                    }, 3000);
-                    return;
-                }
-
-                if (response.status === 403) {
-                    btn.textContent = 'Admin only!';
+                    // Clear invalid key
+                    GM_setValue('adminApiKey', '');
+                    btn.textContent = 'Invalid API key!';
                     btn.style.background = '#dc2626';
                     setTimeout(() => {
                         btn.textContent = originalText;

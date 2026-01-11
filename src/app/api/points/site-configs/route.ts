@@ -33,16 +33,31 @@ export async function GET() {
 
 // POST - Create a new site config (admin only)
 export async function POST(request: Request) {
-  const user = await currentUser();
+  // Check for admin API key (for Tampermonkey scripts on external sites)
+  const adminKey = request.headers.get("x-admin-key");
+  const validAdminKey = process.env.ADMIN_API_KEY;
+  
+  let isAuthorized = false;
+  let createdBy: string | null = null;
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (adminKey && validAdminKey && adminKey === validAdminKey) {
+    // Authorized via API key
+    isAuthorized = true;
+    createdBy = "admin-api-key";
+  } else {
+    // Try Clerk auth (for requests from CardTool itself)
+    const user = await currentUser();
+    if (user) {
+      const email = user.emailAddresses?.[0]?.emailAddress;
+      if (isAdminEmail(email)) {
+        isAuthorized = true;
+        createdBy = user.id;
+      }
+    }
   }
 
-  // Check if admin
-  const email = user.emailAddresses?.[0]?.emailAddress;
-  if (!isAdminEmail(email)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!isAuthorized) {
+    return NextResponse.json({ error: "Admin access required" }, { status: 401 });
   }
 
   try {
@@ -72,7 +87,7 @@ export async function POST(request: Request) {
           parse_regex: parseRegex || "[\\d,]+",
           is_active: true,
           updated_at: new Date().toISOString(),
-          created_by: user.id,
+          created_by: createdBy,
         },
         {
           onConflict: "currency_code,url_pattern",
