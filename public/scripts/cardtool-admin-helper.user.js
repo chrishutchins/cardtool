@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.2.0
+// @version      1.2.1
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -255,6 +255,9 @@
                 <button class="cardtool-btn cardtool-btn-secondary" id="cardtool-copy" style="margin-top: 8px;">
                     Copy Config to Clipboard
                 </button>
+                <button class="cardtool-btn cardtool-btn-secondary" id="cardtool-reset-key" style="margin-top: 8px; font-size: 11px; padding: 6px 12px;">
+                    Reset API Key
+                </button>
             </div>
         `;
         document.body.appendChild(panel);
@@ -311,6 +314,12 @@
 
         // Copy button
         document.getElementById('cardtool-copy').addEventListener('click', copyConfig);
+
+        // Reset API key button
+        document.getElementById('cardtool-reset-key').addEventListener('click', () => {
+            GM_setValue('adminApiKey', '');
+            alert('API key cleared. You will be prompted for a new key on next save.');
+        });
 
         // Input changes
         ['cardtool-selector', 'cardtool-currency', 'cardtool-name', 'cardtool-balance-url', 'cardtool-site-pattern']
