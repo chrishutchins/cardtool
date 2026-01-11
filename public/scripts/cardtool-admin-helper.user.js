@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.5.5
+// @version      1.5.6
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -259,15 +259,19 @@
 
     // Create the UI
     function createUI() {
-        // Add styles
-        const styleEl = document.createElement('style');
-        styleEl.textContent = styles;
-        document.head.appendChild(styleEl);
+        console.log('CardTool Admin: Creating UI...');
+        
+        try {
+            // Add styles
+            const styleEl = document.createElement('style');
+            styleEl.textContent = styles;
+            document.head.appendChild(styleEl);
+            console.log('CardTool Admin: Styles added');
 
-        // Create panel
-        const panel = document.createElement('div');
-        panel.id = 'cardtool-admin-panel';
-        panel.innerHTML = `
+            // Create panel
+            const panel = document.createElement('div');
+            panel.id = 'cardtool-admin-panel';
+            panel.innerHTML = `
             <div class="cardtool-header">
                 <h3>CardTool Admin Helper</h3>
                 <button class="cardtool-close" id="cardtool-close">&times;</button>
@@ -333,12 +337,31 @@
             </div>
         `;
         document.body.appendChild(panel);
+        console.log('CardTool Admin: Panel appended to body');
+
+        // Watch for panel removal (debug)
+        const removalObserver = new MutationObserver((mutations) => {
+            if (!document.getElementById('cardtool-admin-panel')) {
+                console.error('CardTool Admin: Panel was REMOVED from DOM!');
+                // Log what mutation caused it
+                mutations.forEach(m => {
+                    m.removedNodes.forEach(node => {
+                        if (node.id === 'cardtool-admin-panel' || (node.querySelector && node.querySelector('#cardtool-admin-panel'))) {
+                            console.error('CardTool Admin: Removed by mutation:', m);
+                        }
+                    });
+                });
+            }
+        });
+        removalObserver.observe(document.body, { childList: true, subtree: true });
 
         // Make draggable
         makeDraggable(panel);
+        console.log('CardTool Admin: Draggable setup complete');
 
         // Set up event listeners
         setupEventListeners();
+        console.log('CardTool Admin: Event listeners setup complete');
 
         // Load currencies
         loadCurrencies();
@@ -346,6 +369,7 @@
         // Auto-fill domain and balance URL
         document.getElementById('cardtool-domain').value = extractBaseDomain(window.location.hostname);
         document.getElementById('cardtool-balance-url').value = window.location.href;
+        console.log('CardTool Admin: UI setup complete');
         
         // Track URL changes for SPAs
         let lastUrl = window.location.href;
@@ -370,6 +394,10 @@
             document.getElementById('cardtool-balance-url').value = window.location.href;
             updateOutput();
         });
+        
+        } catch (e) {
+            console.error('CardTool Admin: Error during UI creation:', e);
+        }
     }
 
     function makeDraggable(panel) {
