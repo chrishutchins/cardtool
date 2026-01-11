@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.4.0
+// @version      1.4.1
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -144,164 +144,192 @@
     // ============================================
 
     const styles = `
+        /* Reset inherited styles */
+        #cardtool-badge, #cardtool-badge *, #cardtool-toast, #cardtool-toast * {
+            all: revert !important;
+            box-sizing: border-box !important;
+        }
         #cardtool-badge {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #18181b;
-            border: 1px solid #3f3f46;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 13px;
-            color: #e4e4e7;
-            z-index: 999998;
-            overflow: hidden;
-            min-width: 200px;
-            transition: all 0.2s ease;
+            position: fixed !important;
+            bottom: 20px !important;
+            right: 20px !important;
+            background: #18181b !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            font-size: 13px !important;
+            color: #e4e4e7 !important;
+            z-index: 999998 !important;
+            overflow: hidden !important;
+            min-width: 200px !important;
+            max-width: 280px !important;
+            transition: all 0.2s ease !important;
+            line-height: 1.4 !important;
+            text-align: left !important;
         }
         #cardtool-badge:hover {
-            border-color: #10b981;
-        }
-        #cardtool-badge * {
-            box-sizing: border-box;
+            border-color: #10b981 !important;
         }
         .cardtool-badge-header {
-            background: #27272a;
-            padding: 10px 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            border-bottom: 1px solid #3f3f46;
+            background: #27272a !important;
+            padding: 10px 14px !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            border-bottom: 1px solid #3f3f46 !important;
+            margin: 0 !important;
         }
         .cardtool-badge-logo {
-            width: 18px;
-            height: 18px;
-            background: #10b981;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 11px;
-            color: white;
+            width: 18px !important;
+            height: 18px !important;
+            background: #10b981 !important;
+            border-radius: 4px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-weight: bold !important;
+            font-size: 11px !important;
+            color: white !important;
+            line-height: 1 !important;
         }
         .cardtool-badge-title {
-            font-weight: 600;
-            font-size: 12px;
-            color: #10b981;
+            font-weight: 600 !important;
+            font-size: 12px !important;
+            color: #10b981 !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         .cardtool-badge-close {
-            margin-left: auto;
-            background: none;
-            border: none;
-            color: #71717a;
-            cursor: pointer;
-            font-size: 16px;
-            line-height: 1;
-            padding: 2px;
+            margin-left: auto !important;
+            background: none !important;
+            border: none !important;
+            color: #71717a !important;
+            cursor: pointer !important;
+            font-size: 16px !important;
+            line-height: 1 !important;
+            padding: 2px !important;
         }
         .cardtool-badge-close:hover {
-            color: #e4e4e7;
+            color: #e4e4e7 !important;
         }
         .cardtool-badge-body {
-            padding: 12px 14px;
+            padding: 12px 14px !important;
+            background: #18181b !important;
         }
         .cardtool-badge-balance {
-            font-size: 20px;
-            font-weight: 700;
-            color: #fbbf24;
-            margin-bottom: 4px;
+            font-size: 20px !important;
+            font-weight: 700 !important;
+            color: #fbbf24 !important;
+            margin: 0 0 4px 0 !important;
+            padding: 0 !important;
+            line-height: 1.2 !important;
         }
         .cardtool-badge-currency {
-            font-size: 12px;
-            color: #a1a1aa;
-            margin-bottom: 12px;
+            font-size: 12px !important;
+            color: #a1a1aa !important;
+            margin: 0 0 12px 0 !important;
+            padding: 0 !important;
         }
         .cardtool-badge-btn {
-            width: 100%;
-            padding: 10px 14px;
-            background: #10b981;
-            border: none;
-            border-radius: 6px;
-            color: white;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.15s ease;
+            width: 100% !important;
+            padding: 10px 14px !important;
+            background: #10b981 !important;
+            border: none !important;
+            border-radius: 6px !important;
+            color: white !important;
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+            transition: background 0.15s ease !important;
+            text-align: center !important;
+            display: block !important;
+            text-decoration: none !important;
         }
         .cardtool-badge-btn:hover {
-            background: #059669;
+            background: #059669 !important;
         }
         .cardtool-badge-btn:disabled {
-            background: #3f3f46;
-            color: #71717a;
-            cursor: not-allowed;
+            background: #3f3f46 !important;
+            color: #71717a !important;
+            cursor: not-allowed !important;
         }
         .cardtool-badge-link {
-            display: block;
-            text-align: center;
-            padding: 10px 14px;
-            color: #10b981;
-            text-decoration: none;
-            font-size: 13px;
+            display: block !important;
+            text-align: center !important;
+            padding: 10px 14px !important;
+            color: #10b981 !important;
+            text-decoration: none !important;
+            font-size: 13px !important;
+            background: transparent !important;
         }
         .cardtool-badge-link:hover {
-            text-decoration: underline;
+            text-decoration: underline !important;
         }
         .cardtool-badge-status {
-            text-align: center;
-            font-size: 12px;
-            color: #71717a;
+            text-align: center !important;
+            font-size: 12px !important;
+            color: #71717a !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         .cardtool-badge-error {
-            color: #f87171;
+            color: #f87171 !important;
         }
         .cardtool-badge-success {
-            color: #10b981;
+            color: #10b981 !important;
         }
         .cardtool-player-select {
-            width: 100%;
-            padding: 8px 10px;
-            background: #27272a;
-            border: 1px solid #3f3f46;
-            border-radius: 6px;
-            color: #e4e4e7;
-            font-size: 13px;
-            margin-bottom: 10px;
+            width: 100% !important;
+            padding: 8px 10px !important;
+            background: #27272a !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 6px !important;
+            color: #e4e4e7 !important;
+            font-size: 13px !important;
+            margin: 0 0 10px 0 !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
+        }
+        .cardtool-player-select option {
+            background: #27272a !important;
+            color: #e4e4e7 !important;
         }
         .cardtool-player-label {
-            font-size: 11px;
-            color: #a1a1aa;
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            font-size: 11px !important;
+            color: #a1a1aa !important;
+            margin: 0 0 6px 0 !important;
+            padding: 0 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            display: block !important;
         }
 
         /* Toast notification */
         #cardtool-toast {
-            position: fixed;
-            bottom: 100px;
-            right: 20px;
-            background: #18181b;
-            border: 1px solid #10b981;
-            border-radius: 8px;
-            padding: 12px 16px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 13px;
-            color: #e4e4e7;
-            z-index: 999999;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            animation: cardtool-slide-in 0.3s ease;
+            position: fixed !important;
+            bottom: 100px !important;
+            right: 20px !important;
+            background: #18181b !important;
+            border: 1px solid #10b981 !important;
+            border-radius: 8px !important;
+            padding: 12px 16px !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            font-size: 13px !important;
+            color: #e4e4e7 !important;
+            z-index: 999999 !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            animation: cardtool-slide-in 0.3s ease !important;
+            line-height: 1.4 !important;
         }
         #cardtool-toast.error {
-            border-color: #f87171;
+            border-color: #f87171 !important;
         }
         #cardtool-toast .icon {
-            font-size: 18px;
+            font-size: 18px !important;
         }
         @keyframes cardtool-slide-in {
             from {

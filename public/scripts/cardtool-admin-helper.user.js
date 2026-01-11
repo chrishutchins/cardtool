@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.3.2
+// @version      1.4.0
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -24,139 +24,168 @@
     let hoveredElement = null;
     let currencies = [];
 
-    // Styles
+    // Styles - using !important to prevent host site CSS from bleeding in
     const styles = `
-        #cardtool-admin-panel {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 380px;
-            background: #18181b;
-            border: 1px solid #3f3f46;
-            border-radius: 12px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 14px;
-            color: #e4e4e7;
-            z-index: 999999;
-            overflow: hidden;
+        /* Reset inherited styles */
+        #cardtool-admin-panel, #cardtool-admin-panel * {
+            all: revert !important;
+            box-sizing: border-box !important;
         }
-        #cardtool-admin-panel * {
-            box-sizing: border-box;
+        #cardtool-admin-panel {
+            position: fixed !important;
+            top: 20px !important;
+            right: 20px !important;
+            width: 380px !important;
+            background: #18181b !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            font-size: 14px !important;
+            color: #e4e4e7 !important;
+            z-index: 999999 !important;
+            overflow: hidden !important;
+            line-height: 1.4 !important;
+            text-align: left !important;
         }
         .cardtool-header {
-            background: #27272a;
-            padding: 12px 16px;
-            border-bottom: 1px solid #3f3f46;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: move;
+            background: #27272a !important;
+            padding: 12px 16px !important;
+            border-bottom: 1px solid #3f3f46 !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            cursor: move !important;
+            margin: 0 !important;
         }
         .cardtool-header h3 {
-            margin: 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #10b981;
+            margin: 0 !important;
+            padding: 0 !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            color: #10b981 !important;
+            line-height: 1.2 !important;
         }
         .cardtool-close {
-            background: none;
-            border: none;
-            color: #71717a;
-            cursor: pointer;
-            font-size: 18px;
-            line-height: 1;
-            padding: 4px;
+            background: none !important;
+            border: none !important;
+            color: #71717a !important;
+            cursor: pointer !important;
+            font-size: 18px !important;
+            line-height: 1 !important;
+            padding: 4px !important;
         }
         .cardtool-close:hover {
-            color: #e4e4e7;
+            color: #e4e4e7 !important;
         }
         .cardtool-body {
-            padding: 16px;
+            padding: 16px !important;
+            background: #18181b !important;
         }
         .cardtool-section {
-            margin-bottom: 16px;
+            margin: 0 0 16px 0 !important;
+            padding: 0 !important;
         }
         .cardtool-label {
-            display: block;
-            font-size: 12px;
-            color: #a1a1aa;
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            display: block !important;
+            font-size: 12px !important;
+            color: #a1a1aa !important;
+            margin: 0 0 6px 0 !important;
+            padding: 0 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            font-weight: normal !important;
         }
         .cardtool-input {
-            width: 100%;
-            padding: 8px 12px;
-            background: #27272a;
-            border: 1px solid #3f3f46;
-            border-radius: 6px;
-            color: #e4e4e7;
-            font-size: 13px;
-            font-family: monospace;
+            width: 100% !important;
+            padding: 8px 12px !important;
+            background: #27272a !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 6px !important;
+            color: #e4e4e7 !important;
+            font-size: 13px !important;
+            font-family: monospace !important;
+            margin: 0 !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
+        }
+        .cardtool-input::placeholder {
+            color: #71717a !important;
         }
         .cardtool-input:focus {
-            outline: none;
-            border-color: #10b981;
+            outline: none !important;
+            border-color: #10b981 !important;
         }
         .cardtool-select {
-            width: 100%;
-            padding: 8px 12px;
-            background: #27272a;
-            border: 1px solid #3f3f46;
-            border-radius: 6px;
-            color: #e4e4e7;
-            font-size: 13px;
+            width: 100% !important;
+            padding: 8px 12px !important;
+            background: #27272a !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 6px !important;
+            color: #e4e4e7 !important;
+            font-size: 13px !important;
+            margin: 0 !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
+        }
+        .cardtool-select option, .cardtool-select optgroup {
+            background: #27272a !important;
+            color: #e4e4e7 !important;
         }
         .cardtool-btn {
-            width: 100%;
-            padding: 10px 16px;
-            border: none;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.15s ease;
+            width: 100% !important;
+            padding: 10px 16px !important;
+            border: none !important;
+            border-radius: 6px !important;
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+            transition: all 0.15s ease !important;
+            text-align: center !important;
+            text-decoration: none !important;
+            display: block !important;
         }
         .cardtool-btn-primary {
-            background: #10b981;
-            color: white;
+            background: #10b981 !important;
+            color: white !important;
         }
         .cardtool-btn-primary:hover {
-            background: #059669;
+            background: #059669 !important;
         }
         .cardtool-btn-primary:disabled {
-            background: #3f3f46;
-            color: #71717a;
-            cursor: not-allowed;
+            background: #3f3f46 !important;
+            color: #71717a !important;
+            cursor: not-allowed !important;
         }
         .cardtool-btn-secondary {
-            background: #3f3f46;
-            color: #e4e4e7;
+            background: #3f3f46 !important;
+            color: #e4e4e7 !important;
         }
         .cardtool-btn-secondary:hover {
-            background: #52525b;
+            background: #52525b !important;
         }
         .cardtool-btn-secondary.active {
-            background: #f59e0b;
-            color: #18181b;
+            background: #f59e0b !important;
+            color: #18181b !important;
         }
         .cardtool-value {
-            padding: 8px 12px;
-            background: #27272a;
-            border-radius: 6px;
-            font-family: monospace;
-            font-size: 13px;
-            color: #fbbf24;
-            word-break: break-all;
+            padding: 8px 12px !important;
+            background: #27272a !important;
+            border-radius: 6px !important;
+            font-family: monospace !important;
+            font-size: 13px !important;
+            color: #fbbf24 !important;
+            word-break: break-all !important;
+            margin: 0 !important;
         }
         .cardtool-row {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 8px;
+            display: flex !important;
+            gap: 8px !important;
+            margin: 0 0 8px 0 !important;
+            padding: 0 !important;
         }
         .cardtool-row > * {
-            flex: 1;
+            flex: 1 !important;
         }
         .cardtool-highlight {
             outline: 3px solid #f59e0b !important;
@@ -164,31 +193,33 @@
             background-color: rgba(245, 158, 11, 0.1) !important;
         }
         .cardtool-code {
-            background: #27272a;
-            border: 1px solid #3f3f46;
-            border-radius: 6px;
-            padding: 12px;
-            font-family: monospace;
-            font-size: 11px;
-            color: #a1a1aa;
-            white-space: pre-wrap;
-            word-break: break-all;
-            max-height: 200px;
-            overflow-y: auto;
+            background: #27272a !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 6px !important;
+            padding: 12px !important;
+            font-family: monospace !important;
+            font-size: 11px !important;
+            color: #a1a1aa !important;
+            white-space: pre-wrap !important;
+            word-break: break-all !important;
+            max-height: 200px !important;
+            overflow-y: auto !important;
+            margin: 0 !important;
         }
         .cardtool-notice {
-            background: #422006;
-            border: 1px solid #92400e;
-            border-radius: 6px;
-            padding: 10px 12px;
-            font-size: 12px;
-            color: #fcd34d;
-            margin-bottom: 16px;
+            background: #422006 !important;
+            border: 1px solid #92400e !important;
+            border-radius: 6px !important;
+            padding: 10px 12px !important;
+            font-size: 12px !important;
+            color: #fcd34d !important;
+            margin: 0 0 16px 0 !important;
         }
         .cardtool-hint {
-            font-size: 11px;
-            color: #71717a;
-            margin-top: 4px;
+            font-size: 11px !important;
+            color: #71717a !important;
+            margin: 4px 0 0 0 !important;
+            padding: 0 !important;
         }
     `;
 
