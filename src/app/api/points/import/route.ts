@@ -5,8 +5,11 @@ import { checkRateLimit, pointsImportRateLimit } from "@/lib/rate-limit";
 import logger from "@/lib/logger";
 import crypto from "crypto";
 
+// Source types for balance updates
+type BalanceSource = "manual" | "tampermonkey" | "api";
+
 // Authenticate via Clerk session OR sync token
-async function authenticateUser(request: Request): Promise<{ userId: string | null; error?: string }> {
+async function authenticateUser(request: Request): Promise<{ userId: string | null; source: BalanceSource; error?: string }> {
   // First try sync token (for Tampermonkey scripts on external sites)
   const syncToken = request.headers.get("x-sync-token");
   
@@ -22,7 +25,7 @@ async function authenticateUser(request: Request): Promise<{ userId: string | nu
     
     if (error) {
       logger.error({ err: error }, "Error validating sync token");
-      return { userId: null, error: "Token validation failed" };
+      return { userId: null, source: "api", error: "Token validation failed" };
     }
     
     if (tokenData) {
@@ -32,23 +35,25 @@ async function authenticateUser(request: Request): Promise<{ userId: string | nu
         .update({ last_used_at: new Date().toISOString() })
         .eq("token_hash", tokenHash);
       
-      return { userId: tokenData.user_id };
+      // Sync token = Tampermonkey script
+      return { userId: tokenData.user_id, source: "tampermonkey" };
     }
     
-    return { userId: null, error: "Invalid sync token" };
+    return { userId: null, source: "api", error: "Invalid sync token" };
   }
   
   // Fall back to Clerk session (for requests from CardTool itself)
   const user = await currentUser();
   if (user) {
-    return { userId: user.id };
+    // Clerk session from CardTool = manual entry (or could be API if we add that later)
+    return { userId: user.id, source: "manual" };
   }
   
-  return { userId: null, error: "Unauthorized" };
+  return { userId: null, source: "api", error: "Unauthorized" };
 }
 
 export async function POST(request: Request) {
-  const { userId, error: authError } = await authenticateUser(request);
+  const { userId, source, error: authError } = await authenticateUser(request);
 
   if (!userId) {
     return NextResponse.json({ error: authError || "Unauthorized" }, { status: 401 });
@@ -121,6 +126,7 @@ export async function POST(request: Request) {
           player_number: playerNumber,
           balance: Math.round(balance), // Ensure integer
           updated_at: new Date().toISOString(),
+          last_update_source: source,
         },
         {
           onConflict: "user_id,currency_id,player_number",
@@ -142,10 +148,11 @@ export async function POST(request: Request) {
       player_number: playerNumber,
       balance: Math.round(balance),
       recorded_at: new Date().toISOString(),
+      source,
     });
 
     logger.info(
-      { userId, currencyCode, balance, playerNumber },
+      { userId, currencyCode, balance, playerNumber, source },
       "Points balance imported"
     );
 

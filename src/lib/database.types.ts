@@ -2266,6 +2266,7 @@ export type Database = {
           id: string
           player_number: number
           recorded_at: string | null
+          source: string | null
           user_id: string
         }
         Insert: {
@@ -2274,6 +2275,7 @@ export type Database = {
           id?: string
           player_number: number
           recorded_at?: string | null
+          source?: string | null
           user_id: string
         }
         Update: {
@@ -2282,6 +2284,7 @@ export type Database = {
           id?: string
           player_number?: number
           recorded_at?: string | null
+          source?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2301,6 +2304,7 @@ export type Database = {
           currency_id: string
           expiration_date: string | null
           id: string
+          last_update_source: string | null
           notes: string | null
           player_number: number
           updated_at: string | null
@@ -2312,6 +2316,7 @@ export type Database = {
           currency_id: string
           expiration_date?: string | null
           id?: string
+          last_update_source?: string | null
           notes?: string | null
           player_number?: number
           updated_at?: string | null
@@ -2323,6 +2328,7 @@ export type Database = {
           currency_id?: string
           expiration_date?: string | null
           id?: string
+          last_update_source?: string | null
           notes?: string | null
           player_number?: number
           updated_at?: string | null
