@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 
 interface Currency {
   id: string;
@@ -9,13 +9,65 @@ interface Currency {
   currency_type: string;
   base_value_cents: number | null;
   effective_value_cents: number | null;
-  template_value_cents?: number; // Value from the selected template
+  template_value_cents?: number; // Value from the selected template (undefined if not in template)
   is_custom: boolean;
 }
 
 interface PointValuesEditorProps {
   currencies: Currency[];
+  templateName: string;
   onUpdate: (currencyId: string, valueCents: number | null) => Promise<void>;
+}
+
+// Tooltip component (matches the style used in compare table)
+function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
+  const [isVisible, setIsVisible] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, showBelow: false });
+  const ref = useRef<HTMLSpanElement>(null);
+
+  const updatePosition = useCallback(() => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      const showBelow = rect.top < 60;
+      setCoords({
+        top: showBelow ? rect.bottom + 4 : rect.top - 4,
+        left: rect.left,
+        showBelow,
+      });
+    }
+  }, []);
+
+  const handleMouseEnter = useCallback(() => {
+    updatePosition();
+    setIsVisible(true);
+  }, [updatePosition]);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsVisible(false);
+  }, []);
+
+  return (
+    <span 
+      ref={ref}
+      className="inline-flex"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {children}
+      {isVisible && (
+        <span 
+          className="fixed px-2 py-1 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg max-w-xs z-[9999] pointer-events-none text-left"
+          style={{
+            top: coords.showBelow ? coords.top : 'auto',
+            bottom: coords.showBelow ? 'auto' : `calc(100vh - ${coords.top}px)`,
+            left: coords.left,
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
 }
 
 const typeLabels: Record<string, string> = {
@@ -40,6 +92,7 @@ const typeOrder = [
 
 export function PointValuesEditor({
   currencies,
+  templateName,
   onUpdate,
 }: PointValuesEditorProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -102,7 +155,7 @@ export function PointValuesEditor({
                       Currency
                     </th>
                     <th className="w-1/6 px-4 py-2 text-right text-xs font-medium text-zinc-500">
-                      Template
+                      Value
                     </th>
                     <th className="w-1/6 px-4 py-2 text-right text-xs font-medium text-zinc-500">
                       Your Value
@@ -113,13 +166,24 @@ export function PointValuesEditor({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                  {typeCurrencies.map((currency) => (
+                  {typeCurrencies.map((currency) => {
+                    const isFromBase = currency.template_value_cents == null && currency.base_value_cents != null;
+                    const displayValue = currency.template_value_cents ?? currency.base_value_cents;
+                    
+                    return (
                     <tr key={currency.id} className="hover:bg-zinc-800/30">
                       <td className="px-4 py-2 text-sm text-white truncate">
                         {currency.name}
                       </td>
-                      <td className="px-4 py-2 text-right text-zinc-500 font-mono text-sm">
-                        {formatValue(currency.template_value_cents ?? currency.base_value_cents)}
+                      <td className="px-4 py-2 text-right font-mono text-sm">
+                        <span className={isFromBase ? "text-zinc-600" : "text-zinc-500"}>
+                          {formatValue(displayValue)}
+                        </span>
+                        {isFromBase && (
+                          <Tooltip text={`${templateName} does not have a valuation for ${currency.name}, so CardTool default values will be used`}>
+                            <span className="text-amber-500 ml-1 cursor-help">†</span>
+                          </Tooltip>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-right">
                         {editingId === currency.id ? (
@@ -184,7 +248,8 @@ export function PointValuesEditor({
                         )}
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>

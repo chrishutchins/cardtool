@@ -192,10 +192,12 @@ export function InventoryClient({
       groups.get(key)!.items.push(item);
     }
 
-    // Sort items within each group by expiration
+    // Sort items within each group by expiration, then alphabetically for no-expiration items
     for (const group of groups.values()) {
       group.items.sort((a, b) => {
-        if (!a.expiration_date && !b.expiration_date) return 0;
+        if (!a.expiration_date && !b.expiration_date) {
+          return a.name.localeCompare(b.name);
+        }
         if (!a.expiration_date) return 1;
         if (!b.expiration_date) return -1;
         return new Date(a.expiration_date).getTime() - new Date(b.expiration_date).getTime();

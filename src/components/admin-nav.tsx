@@ -34,6 +34,7 @@ const navGroups: (NavItem | NavGroup)[] = [
     label: "Currencies",
     items: [
       { href: "/admin/currencies", label: "Currencies" },
+      { href: "/admin/transfer-partners", label: "Transfer Partners" },
       { href: "/admin/point-values", label: "Point Values" },
     ],
   },
@@ -124,11 +125,6 @@ export function AdminNav() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Flatten all items for mobile menu
-  const allItems: NavItem[] = navGroups.flatMap((item) =>
-    isNavGroup(item) ? item.items : [item]
-  );
-
   return (
     <nav className="border-b border-zinc-800 bg-zinc-900">
       <div className="mx-auto max-w-7xl px-4">
@@ -140,7 +136,7 @@ export function AdminNav() {
 
             {/* Desktop nav with dropdowns */}
             <div className="hidden md:flex items-center gap-1">
-              {navGroups.map((item, index) => {
+              {navGroups.map((item) => {
                 if (isNavGroup(item)) {
                   return <NavDropdown key={item.label} group={item} pathname={pathname} />;
                 }
@@ -177,24 +173,58 @@ export function AdminNav() {
               </button>
 
               {mobileMenuOpen && (
-                <div className="absolute top-full left-0 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70]">
-                  {allItems.map((item) => {
-                    const isActive = item.exact
-                      ? pathname === item.href
-                      : pathname.startsWith(item.href);
+                <div className="absolute top-full left-0 mt-1 w-56 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70] py-1">
+                  {navGroups.map((entry, index) => {
+                    if (isNavGroup(entry)) {
+                      // Render group with section header
+                      return (
+                        <div key={entry.label}>
+                          {index > 0 && <div className="border-t border-zinc-700 my-1" />}
+                          <div className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                            {entry.label}
+                          </div>
+                          {entry.items.map((item) => {
+                            const isActive = item.exact
+                              ? pathname === item.href
+                              : pathname.startsWith(item.href);
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => setMobileMenuOpen(false)}
+                                className={`block pl-6 pr-4 py-2 text-sm transition-colors ${
+                                  isActive
+                                    ? "bg-zinc-700 text-white"
+                                    : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                                }`}
+                              >
+                                {item.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+
+                    // Render standalone item
+                    const isActive = entry.exact
+                      ? pathname === entry.href
+                      : pathname.startsWith(entry.href);
                     return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`block px-4 py-2 text-sm transition-colors ${
-                          isActive
-                            ? "bg-zinc-700 text-white"
-                            : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
+                      <div key={entry.href}>
+                        {index > 0 && <div className="border-t border-zinc-700 my-1" />}
+                        <Link
+                          href={entry.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`block px-4 py-2 text-sm transition-colors ${
+                            isActive
+                              ? "bg-zinc-700 text-white"
+                              : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                          }`}
+                        >
+                          {entry.label}
+                        </Link>
+                      </div>
                     );
                   })}
                 </div>

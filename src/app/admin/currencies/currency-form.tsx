@@ -12,6 +12,11 @@ interface CurrencyFormProps {
     base_value_cents: number | null;
     cash_out_value_cents: number | null;
     notes: string | null;
+    program_name: string | null;
+    alliance: string | null;
+    expiration_policy: string | null;
+    is_transferable: boolean | null;
+    transfer_increment: number | null;
   };
   onCancel?: () => void;
 }
@@ -26,6 +31,13 @@ const currencyTypes: { value: Enums<"reward_currency_type">; label: string }[] =
   { value: "other", label: "Other" },
 ];
 
+const allianceOptions: { value: string; label: string }[] = [
+  { value: "", label: "None" },
+  { value: "star_alliance", label: "Star Alliance" },
+  { value: "oneworld", label: "Oneworld" },
+  { value: "skyteam", label: "SkyTeam" },
+];
+
 export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormProps) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(defaultValues?.name ?? "");
@@ -34,6 +46,11 @@ export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormPr
   const [baseValueCents, setBaseValueCents] = useState<string>(defaultValues?.base_value_cents?.toString() ?? "");
   const [cashOutValueCents, setCashOutValueCents] = useState<string>(defaultValues?.cash_out_value_cents?.toString() ?? "");
   const [notes, setNotes] = useState(defaultValues?.notes ?? "");
+  const [programName, setProgramName] = useState(defaultValues?.program_name ?? "");
+  const [alliance, setAlliance] = useState(defaultValues?.alliance ?? "");
+  const [expirationPolicy, setExpirationPolicy] = useState(defaultValues?.expiration_policy ?? "");
+  const [isTransferable, setIsTransferable] = useState(defaultValues?.is_transferable ?? false);
+  const [transferIncrement, setTransferIncrement] = useState<string>(defaultValues?.transfer_increment?.toString() ?? "1000");
 
   const resetForm = () => {
     setName("");
@@ -42,6 +59,11 @@ export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormPr
     setBaseValueCents("");
     setCashOutValueCents("");
     setNotes("");
+    setProgramName("");
+    setAlliance("");
+    setExpirationPolicy("");
+    setIsTransferable(false);
+    setTransferIncrement("1000");
   };
 
   const handleSubmit = async (formData: FormData) => {
@@ -64,6 +86,11 @@ export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormPr
       setBaseValueCents(defaultValues.base_value_cents?.toString() ?? "");
       setCashOutValueCents(defaultValues.cash_out_value_cents?.toString() ?? "");
       setNotes(defaultValues.notes ?? "");
+      setProgramName(defaultValues.program_name ?? "");
+      setAlliance(defaultValues.alliance ?? "");
+      setExpirationPolicy(defaultValues.expiration_policy ?? "");
+      setIsTransferable(defaultValues.is_transferable ?? false);
+      setTransferIncrement(defaultValues.transfer_increment?.toString() ?? "1000");
     }
   }, [defaultValues]);
 
@@ -169,6 +196,80 @@ export function CurrencyForm({ action, defaultValues, onCancel }: CurrencyFormPr
           className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
+      
+      {/* New fields */}
+      <div>
+        <label className="block text-sm font-medium text-zinc-400 mb-1">Program Name</label>
+        <input
+          type="text"
+          name="program_name"
+          value={programName}
+          onChange={(e) => setProgramName(e.target.value)}
+          placeholder="e.g., Mileage Plan, Bonvoy"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+      
+      {currencyType === "airline_miles" && (
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Alliance</label>
+          <select
+            name="alliance"
+            value={alliance}
+            onChange={(e) => setAlliance(e.target.value)}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {allianceOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      
+      <div>
+        <label className="block text-sm font-medium text-zinc-400 mb-1">Expiration Policy</label>
+        <input
+          type="text"
+          name="expiration_policy"
+          value={expirationPolicy}
+          onChange={(e) => setExpirationPolicy(e.target.value)}
+          placeholder="e.g., Miles expire after 18 months of inactivity"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+      
+      <div className="flex items-end">
+        <div className="flex items-center gap-2 pb-2">
+          <input
+            type="checkbox"
+            name="is_transferable"
+            id="is_transferable"
+            checked={isTransferable}
+            onChange={(e) => setIsTransferable(e.target.checked)}
+            className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-blue-600 focus:ring-blue-500"
+          />
+          <label htmlFor="is_transferable" className="text-sm font-medium text-zinc-400">
+            Is Transferable
+          </label>
+        </div>
+      </div>
+      
+      {isTransferable && (
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Transfer Increment</label>
+          <input
+            type="number"
+            name="transfer_increment"
+            value={transferIncrement}
+            onChange={(e) => setTransferIncrement(e.target.value)}
+            placeholder="e.g., 1000"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+      )}
+      
       <div className="flex items-end gap-2">
         <button
           type="submit"

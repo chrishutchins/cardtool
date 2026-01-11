@@ -24,8 +24,23 @@ const typeConfig: Record<string, { label: string; variant: "default" | "success"
   miles: { label: "Miles", variant: "info" },
 };
 
+const allianceLabels: Record<string, string> = {
+  star_alliance: "⭐ Star Alliance",
+  oneworld: "🌐 Oneworld",
+  skyteam: "✈️ SkyTeam",
+};
+
+// Cast type for currencies with new fields
+type CurrencyRow = Tables<"reward_currencies"> & {
+  program_name?: string | null;
+  alliance?: string | null;
+  expiration_policy?: string | null;
+  is_transferable?: boolean | null;
+  transfer_increment?: number | null;
+};
+
 export function CurrenciesTable({ currencies, onDelete, onUpdate }: CurrenciesTableProps) {
-  const [editingCurrency, setEditingCurrency] = useState<Tables<"reward_currencies"> | null>(null);
+  const [editingCurrency, setEditingCurrency] = useState<CurrencyRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -36,7 +51,7 @@ export function CurrenciesTable({ currencies, onDelete, onUpdate }: CurrenciesTa
     });
   };
 
-  const columns: DataTableColumn<Tables<"reward_currencies">>[] = [
+  const columns: DataTableColumn<CurrencyRow>[] = [
     {
       id: "name",
       label: "Name",
@@ -51,12 +66,30 @@ export function CurrenciesTable({ currencies, onDelete, onUpdate }: CurrenciesTa
       render: (row) => <span className="text-zinc-400 font-mono text-sm">{row.code}</span>,
     },
     {
+      id: "program_name",
+      label: "Program",
+      accessor: "program_name" as keyof CurrencyRow,
+      render: (row) => (
+        <span className="text-zinc-400 text-sm">{(row as CurrencyRow).program_name || "—"}</span>
+      ),
+    },
+    {
       id: "type",
       label: "Type",
       accessor: "currency_type",
       render: (row) => {
         const config = typeConfig[row.currency_type] ?? typeConfig.other;
         return <Badge variant={config.variant}>{config.label}</Badge>;
+      },
+    },
+    {
+      id: "alliance",
+      label: "Alliance",
+      accessor: "alliance" as keyof CurrencyRow,
+      render: (row) => {
+        const alliance = (row as CurrencyRow).alliance;
+        if (!alliance) return <span className="text-zinc-600">—</span>;
+        return <span className="text-zinc-300 text-sm">{allianceLabels[alliance] || alliance}</span>;
       },
     },
     {
@@ -85,6 +118,21 @@ export function CurrenciesTable({ currencies, onDelete, onUpdate }: CurrenciesTa
           }
         </span>
       ),
+    },
+    {
+      id: "transferable",
+      label: "Transferable",
+      accessor: "is_transferable" as keyof CurrencyRow,
+      render: (row) => {
+        const isTransferable = (row as CurrencyRow).is_transferable;
+        const increment = (row as CurrencyRow).transfer_increment;
+        if (!isTransferable) return <span className="text-zinc-600">—</span>;
+        return (
+          <span className="text-emerald-400 text-sm">
+            ✓ {increment ? `(${increment.toLocaleString()})` : ""}
+          </span>
+        );
+      },
     },
     {
       id: "actions",
@@ -138,7 +186,7 @@ export function CurrenciesTable({ currencies, onDelete, onUpdate }: CurrenciesTa
   return (
     <>
       <DataTable
-        data={currencies}
+        data={currencies as CurrencyRow[]}
         columns={columns}
         keyAccessor={(row) => row.id}
         searchPlaceholder="Search currencies..."
@@ -147,7 +195,8 @@ export function CurrenciesTable({ currencies, onDelete, onUpdate }: CurrenciesTa
           return (
             row.name.toLowerCase().includes(q) ||
             row.code.toLowerCase().includes(q) ||
-            row.currency_type.toLowerCase().includes(q)
+            row.currency_type.toLowerCase().includes(q) ||
+            (row.program_name?.toLowerCase().includes(q) ?? false)
           );
         }}
         showColumnSelector={false}
@@ -176,6 +225,11 @@ export function CurrenciesTable({ currencies, onDelete, onUpdate }: CurrenciesTa
                 base_value_cents: editingCurrency.base_value_cents,
                 cash_out_value_cents: editingCurrency.cash_out_value_cents,
                 notes: editingCurrency.notes,
+                program_name: (editingCurrency as CurrencyRow).program_name ?? null,
+                alliance: (editingCurrency as CurrencyRow).alliance ?? null,
+                expiration_policy: (editingCurrency as CurrencyRow).expiration_policy ?? null,
+                is_transferable: (editingCurrency as CurrencyRow).is_transferable ?? null,
+                transfer_increment: (editingCurrency as CurrencyRow).transfer_increment ?? null,
               }}
               onCancel={() => setEditingCurrency(null)}
             />

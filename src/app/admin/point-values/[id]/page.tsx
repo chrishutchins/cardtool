@@ -61,16 +61,26 @@ export default async function TemplateDetailPage({ params }: Props) {
     "use server";
     const supabase = createClient();
     
-    // Manual edits are marked as is_manual = true
-    await supabase.from("template_currency_values").upsert(
-      {
-        template_id: id,
-        currency_id: currencyId,
-        value_cents: valueCents,
-        is_manual: true,
-      },
-      { onConflict: "template_id,currency_id" }
-    );
+    // Setting value to 0 clears the manual override (deletes the row)
+    // This allows the next sync to repopulate the value
+    if (valueCents === 0) {
+      await supabase
+        .from("template_currency_values")
+        .delete()
+        .eq("template_id", id)
+        .eq("currency_id", currencyId);
+    } else {
+      // Manual edits are marked as is_manual = true
+      await supabase.from("template_currency_values").upsert(
+        {
+          template_id: id,
+          currency_id: currencyId,
+          value_cents: valueCents,
+          is_manual: true,
+        },
+        { onConflict: "template_id,currency_id" }
+      );
+    }
     
     revalidatePath(`/admin/point-values/${id}`);
   }

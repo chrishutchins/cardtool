@@ -28,6 +28,13 @@ export default async function CurrenciesPage() {
       ? parseFloat(formData.get("cash_out_value_cents") as string)
       : null;
     const notes = (formData.get("notes") as string | null) || null;
+    const program_name = (formData.get("program_name") as string | null) || null;
+    const alliance = (formData.get("alliance") as string | null) || null;
+    const expiration_policy = (formData.get("expiration_policy") as string | null) || null;
+    const is_transferable = formData.get("is_transferable") === "on";
+    const transfer_increment = formData.get("transfer_increment")
+      ? parseInt(formData.get("transfer_increment") as string)
+      : 1000;
 
     await supabase.from("reward_currencies").insert({
       name,
@@ -36,6 +43,11 @@ export default async function CurrenciesPage() {
       base_value_cents,
       cash_out_value_cents,
       notes,
+      program_name,
+      alliance,
+      expiration_policy,
+      is_transferable,
+      transfer_increment,
     });
     revalidatePath("/admin/currencies");
   }
@@ -60,6 +72,13 @@ export default async function CurrenciesPage() {
       ? parseFloat(formData.get("cash_out_value_cents") as string)
       : null;
     const notes = (formData.get("notes") as string | null) || null;
+    const program_name = (formData.get("program_name") as string | null) || null;
+    const alliance = (formData.get("alliance") as string | null) || null;
+    const expiration_policy = (formData.get("expiration_policy") as string | null) || null;
+    const is_transferable = formData.get("is_transferable") === "on";
+    const transfer_increment = formData.get("transfer_increment")
+      ? parseInt(formData.get("transfer_increment") as string)
+      : 1000;
 
     await supabase.from("reward_currencies").update({
       name,
@@ -68,6 +87,11 @@ export default async function CurrenciesPage() {
       base_value_cents,
       cash_out_value_cents,
       notes,
+      program_name,
+      alliance,
+      expiration_policy,
+      is_transferable,
+      transfer_increment,
     }).eq("id", id);
     revalidatePath("/admin/currencies");
   }

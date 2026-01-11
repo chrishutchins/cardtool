@@ -69,6 +69,8 @@ export default async function PointValuesPage() {
   
   // User's selected template (or default if not set)
   const selectedTemplateId = userSettingsResult.data?.selected_template_id ?? defaultTemplate?.id ?? null;
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? defaultTemplate;
+  const selectedTemplateName = selectedTemplate?.name ?? "Template";
   
   // Fetch template values for the selected template
   const { data: templateValues } = selectedTemplateId
@@ -88,12 +90,12 @@ export default async function PointValuesPage() {
   const currencyData = currencies.map((currency) => {
     const userValue = userOverrideMap.get(currency.id);
     const templateValue = templateValueMap.get(currency.id);
-    const baseValue = parseFloat(String(currency.base_value_cents)) || 100;
+    const baseValue = parseFloat(String(currency.base_value_cents)) || 1;
     
     return {
       ...currency,
       effective_value_cents: userValue ?? templateValue ?? baseValue,
-      template_value_cents: templateValue ?? baseValue,
+      template_value_cents: templateValue, // Keep undefined if not in template
       is_custom: userValue !== undefined,
     };
   });
@@ -237,6 +239,7 @@ export default async function PointValuesPage() {
           <PointValuesEditor
             key={selectedTemplateId}
             currencies={currencyData}
+            templateName={selectedTemplateName}
             onUpdate={updateCurrencyValue}
           />
         </div>

@@ -191,7 +191,7 @@ export function findBestCardForCategory(
       travelPreferences
     );
 
-    const currencyValue = currencyValues.get(card.primary_currency_id) ?? 100; // Default to 1 cent
+    const currencyValue = currencyValues.get(card.primary_currency_id) ?? 1; // Default to 1 cent
     const effectiveValue = rate * currencyValue;
 
     if (effectiveValue > bestValue) {

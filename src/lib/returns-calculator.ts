@@ -270,7 +270,7 @@ function getCurrencyValueCents(
   userCurrencyValues: Map<string, number>,
   defaultValues: Map<string, number>
 ): number {
-  return userCurrencyValues.get(currencyId) ?? defaultValues.get(currencyId) ?? 100;
+  return userCurrencyValues.get(currencyId) ?? defaultValues.get(currencyId) ?? 1;
 }
 
 /**
@@ -1242,7 +1242,7 @@ function calculateTopCategories(
     const useSecondary = enabledSecondaryCards.has(card.id) && card.secondary_currency;
     const currency = useSecondary ? card.secondary_currency : card.primary_currency;
     const currencyId = useSecondary ? card.secondary_currency_id : card.primary_currency_id;
-    return currencyValues.get(currencyId!) ?? currency?.base_value_cents ?? 100;
+    return currencyValues.get(currencyId!) ?? currency?.base_value_cents ?? 1;
   };
 
   // Helper to check if a currency is cash back

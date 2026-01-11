@@ -35,6 +35,7 @@ export function TemplateValuesEditor({ currencies, onUpdate }: Props) {
     startTransition(async () => {
       await onUpdate(currencyId, valueCents);
       setEditingId(null);
+      setEditValue("");
     });
   };
 
@@ -122,19 +123,24 @@ export function TemplateValuesEditor({ currencies, onUpdate }: Props) {
                         </td>
                         <td className="px-4 py-2 text-right">
                           {editingId === currency.id ? (
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-sm text-white focus:border-amber-500 focus:outline-none"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleSave(currency.id);
-                                if (e.key === "Escape") handleCancel();
-                              }}
-                            />
+                            <div className="inline-flex flex-col items-end gap-0.5">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="w-24 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-right text-sm text-white focus:border-amber-500 focus:outline-none"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleSave(currency.id);
+                                  if (e.key === "Escape") handleCancel();
+                                }}
+                              />
+                              {currency.is_manual && (
+                                <span className="text-[10px] text-zinc-500">0 = revert to sync</span>
+                              )}
+                            </div>
                           ) : (
                             <span className={`text-sm ${isZero ? "text-red-400" : "text-white"}`}>
                               {currency.template_value_cents.toFixed(2)}

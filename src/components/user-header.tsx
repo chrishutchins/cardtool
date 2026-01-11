@@ -3,18 +3,57 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { EmulationBanner } from "./emulation-banner";
 import { stopEmulation } from "@/lib/emulation";
+import { ChevronDown } from "lucide-react";
 
-const baseNavItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  onboardingId?: string;
+  exact?: boolean;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isNavGroup(item: NavEntry): item is NavGroup {
+  return "items" in item;
+}
+
+// Base navigation structure (Credits group added dynamically based on feature flag)
+const baseNavGroups: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", onboardingId: "dashboard" },
-  { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
+  {
+    label: "Credit Cards",
+    items: [
+      { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
+      { href: "/compare", label: "Compare", onboardingId: "compare" },
+      { href: "/rules", label: "Application Rules", onboardingId: "rules" },
+    ],
+  },
   { href: "/returns", label: "Earnings", onboardingId: "earnings" },
-  { href: "/compare", label: "Compare", onboardingId: "compare" },
-  { href: "/spending", label: "Spending", onboardingId: "spending" },
-  { href: "/point-values", label: "Point Values", onboardingId: "point-values" },
-  { href: "/settings", label: "Settings", onboardingId: "settings" },
+  // Credits group inserted here dynamically
+  {
+    label: "Points",
+    items: [
+      { href: "/points", label: "Points Balances", onboardingId: "points" },
+      { href: "/transfers", label: "Transfer Partners", onboardingId: "transfers" },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { href: "/spending", label: "Spending", onboardingId: "spending" },
+      { href: "/point-values", label: "Point Values", onboardingId: "point-values" },
+      { href: "/settings", label: "Other Settings", onboardingId: "settings" },
+    ],
+  },
 ];
 
 interface EmulationInfo {
@@ -30,41 +69,92 @@ interface UserHeaderProps {
   emulationInfo?: EmulationInfo | null;
 }
 
+function NavDropdown({ group, pathname }: { group: NavGroup; pathname: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Check if any item in the group is active
+  const isGroupActive = group.items.some((item) =>
+    item.exact ? pathname === item.href : pathname.startsWith(item.href)
+  );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          isGroupActive
+            ? "bg-zinc-800 text-white"
+            : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+        }`}
+      >
+        {group.label}
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-44 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[80] py-1">
+          {group.items.map((item) => {
+            const isActive = item.exact
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                data-onboarding={item.onboardingId}
+                onClick={() => setIsOpen(false)}
+                className={`block px-4 py-2 text-sm transition-colors ${
+                  isActive
+                    ? "bg-zinc-700 text-white"
+                    : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emulationInfo }: UserHeaderProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 
   // Build nav items dynamically based on feature flags
-  const navItems = useMemo(() => {
-    const items = [...baseNavItems];
+  const navGroups = useMemo(() => {
+    const groups = [...baseNavGroups];
     
-    // Add Credits link if enabled for user or if admin (after Compare, 4th position)
+    // Add Credits group if enabled for user or if admin (after Earnings)
     if (creditTrackingEnabled || isAdmin) {
-      const compareIndex = items.findIndex(item => item.href === "/compare");
-      items.splice(compareIndex + 1, 0, { 
-        href: "/credits", 
-        label: "Credits", 
-        onboardingId: "credits" 
-      });
-      
-      // Add Inventory link after Credits
-      const creditsIndex = items.findIndex(item => item.href === "/credits");
-      items.splice(creditsIndex + 1, 0, { 
-        href: "/inventory", 
-        label: "Inventory", 
-        onboardingId: "inventory" 
-      });
+      const earningsIndex = groups.findIndex(
+        (item) => !isNavGroup(item) && item.href === "/returns"
+      );
+      const creditsGroup: NavGroup = {
+        label: "Credits",
+        items: [
+          { href: "/credits", label: "Credit Tracker", onboardingId: "credits" },
+          { href: "/inventory", label: "Inventory", onboardingId: "inventory" },
+        ],
+      };
+      groups.splice(earningsIndex + 1, 0, creditsGroup);
     }
     
-    // Add Rules link after Spending
-    const spendingIndex = items.findIndex(item => item.href === "/spending");
-    items.splice(spendingIndex + 1, 0, { 
-      href: "/rules", 
-      label: "Rules", 
-      onboardingId: "rules" 
-    });
-    
-    return items;
+    return groups;
   }, [creditTrackingEnabled, isAdmin]);
 
   return (
@@ -85,10 +175,16 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
               <span>Tool</span>
             </Link>
             
-            {/* Desktop nav - show at 1100px+ to fit all nav items */}
-            <div className="hidden min-[1100px]:flex items-center gap-1">
-              {navItems.map((item) => {
-                const isActive = pathname.startsWith(item.href);
+            {/* Desktop nav with dropdowns - show at 900px+ (fewer top-level items now) */}
+            <div className="hidden min-[900px]:flex items-center gap-1">
+              {navGroups.map((item, index) => {
+                if (isNavGroup(item)) {
+                  return <NavDropdown key={item.label} group={item} pathname={pathname} />;
+                }
+
+                const isActive = item.exact
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}
@@ -106,8 +202,8 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
               })}
             </div>
 
-            {/* Mobile dropdown button - show below 1100px */}
-            <div className="min-[1100px]:hidden relative">
+            {/* Mobile dropdown button - show below 900px */}
+            <div className="min-[900px]:hidden relative">
               <button
                 onClick={() => setIsOpen(!isOpen)}
                 data-mobile-menu-button
@@ -125,23 +221,60 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
               </button>
               
               {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70]">
-                  {navItems.map((item) => {
-                    const isActive = pathname.startsWith(item.href);
+                <div className="absolute top-full left-0 mt-1 w-56 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70] py-1">
+                  {navGroups.map((entry, index) => {
+                    if (isNavGroup(entry)) {
+                      // Render group with section header
+                      return (
+                        <div key={entry.label}>
+                          {index > 0 && <div className="border-t border-zinc-700 my-1" />}
+                          <div className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                            {entry.label}
+                          </div>
+                          {entry.items.map((item) => {
+                            const isActive = item.exact
+                              ? pathname === item.href
+                              : pathname.startsWith(item.href);
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                data-onboarding={item.onboardingId}
+                                onClick={() => setIsOpen(false)}
+                                className={`block pl-6 pr-4 py-2 text-sm transition-colors ${
+                                  isActive
+                                    ? "bg-zinc-700 text-white"
+                                    : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                                }`}
+                              >
+                                {item.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+
+                    // Render standalone item
+                    const isActive = entry.exact
+                      ? pathname === entry.href
+                      : pathname.startsWith(entry.href);
                     return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        data-onboarding={item.onboardingId}
-                        onClick={() => setIsOpen(false)}
-                        className={`block px-4 py-2 text-sm transition-colors ${
-                          isActive
-                            ? "bg-zinc-700 text-white"
-                            : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
+                      <div key={entry.href}>
+                        {index > 0 && <div className="border-t border-zinc-700 my-1" />}
+                        <Link
+                          href={entry.href}
+                          data-onboarding={entry.onboardingId}
+                          onClick={() => setIsOpen(false)}
+                          className={`block px-4 py-2 text-sm transition-colors ${
+                            isActive
+                              ? "bg-zinc-700 text-white"
+                              : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                          }`}
+                        >
+                          {entry.label}
+                        </Link>
+                      </div>
                     );
                   })}
                 </div>

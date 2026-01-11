@@ -1,25 +1,133 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { ChevronDown } from "lucide-react";
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  onboardingId?: string;
+  exact?: boolean;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isNavGroup(item: NavEntry): item is NavGroup {
+  return "items" in item;
+}
+
+// Grouped navigation structure for signed-in users
+const navGroups: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", onboardingId: "dashboard" },
-  { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
+  {
+    label: "Credit Cards",
+    items: [
+      { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
+      { href: "/compare", label: "Compare", onboardingId: "compare" },
+      { href: "/rules", label: "Application Rules", onboardingId: "rules" },
+    ],
+  },
   { href: "/returns", label: "Earnings", onboardingId: "earnings" },
-  { href: "/compare", label: "Compare", onboardingId: "compare" },
-  { href: "/credits", label: "Credits", onboardingId: "credits" },
-  { href: "/spending", label: "Spending", onboardingId: "spending" },
-  { href: "/point-values", label: "Point Values", onboardingId: "point-values" },
-  { href: "/settings", label: "Settings", onboardingId: "settings" },
+  {
+    label: "Credits",
+    items: [
+      { href: "/credits", label: "Credit Tracker", onboardingId: "credits" },
+      { href: "/inventory", label: "Inventory", onboardingId: "inventory" },
+    ],
+  },
+  {
+    label: "Points",
+    items: [
+      { href: "/points", label: "Balances", onboardingId: "points" },
+      { href: "/transfer-partners", label: "Transfer Partners", onboardingId: "transfer-partners" },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { href: "/spending", label: "Spending", onboardingId: "spending" },
+      { href: "/point-values", label: "Point Values", onboardingId: "point-values" },
+      { href: "/settings", label: "Other Settings", onboardingId: "settings" },
+    ],
+  },
 ];
 
 interface HomeNavProps {
   isAdmin?: boolean;
 }
 
+function NavDropdown({ group, pathname }: { group: NavGroup; pathname: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Check if any item in the group is active
+  const isGroupActive = group.items.some((item) =>
+    item.exact ? pathname === item.href : pathname.startsWith(item.href)
+  );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1 text-sm transition-colors ${
+          isGroupActive
+            ? "text-white"
+            : "text-zinc-400 hover:text-white"
+        }`}
+      >
+        {group.label}
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-44 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[80] py-1">
+          {group.items.map((item) => {
+            const isActive = item.exact
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                data-onboarding={item.onboardingId}
+                onClick={() => setIsOpen(false)}
+                className={`block px-4 py-2 text-sm transition-colors ${
+                  isActive
+                    ? "bg-zinc-700 text-white"
+                    : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HomeNav({ isAdmin = false }: HomeNavProps) {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -32,8 +140,8 @@ export function HomeNav({ isAdmin = false }: HomeNavProps) {
               <span>Tool</span>
             </Link>
 
-            {/* Desktop nav */}
-            <div className="hidden min-[1100px]:flex items-center gap-4">
+            {/* Desktop nav with dropdowns */}
+            <div className="hidden min-[900px]:flex items-center gap-4">
               {isAdmin && (
                 <Link
                   href="/admin"
@@ -43,22 +151,33 @@ export function HomeNav({ isAdmin = false }: HomeNavProps) {
                 </Link>
               )}
               <SignedIn>
-                {navItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    data-onboarding={item.onboardingId}
-                    className="text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
+                {navGroups.map((item) => {
+                  if (isNavGroup(item)) {
+                    return <NavDropdown key={item.label} group={item} pathname={pathname} />;
+                  }
+
+                  const isActive = item.exact
+                    ? pathname === item.href
+                    : pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      data-onboarding={item.onboardingId}
+                      className={`text-sm transition-colors ${
+                        isActive ? "text-white" : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
               </SignedIn>
             </div>
 
             {/* Mobile dropdown button */}
             <SignedIn>
-              <div className="min-[1100px]:hidden relative">
+              <div className="min-[900px]:hidden relative">
                 <button
                   onClick={() => setIsOpen(!isOpen)}
                   data-mobile-menu-button
@@ -76,27 +195,74 @@ export function HomeNav({ isAdmin = false }: HomeNavProps) {
                 </button>
                 
                 {isOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70]">
+                  <div className="absolute top-full left-0 mt-1 w-56 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70] py-1">
                     {isAdmin && (
-                      <Link
-                        href="/admin"
-                        onClick={() => setIsOpen(false)}
-                        className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
-                      >
-                        Admin
-                      </Link>
+                      <>
+                        <Link
+                          href="/admin"
+                          onClick={() => setIsOpen(false)}
+                          className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
+                        >
+                          Admin
+                        </Link>
+                        <div className="border-t border-zinc-700 my-1" />
+                      </>
                     )}
-                    {navItems.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        data-onboarding={item.onboardingId}
-                        onClick={() => setIsOpen(false)}
-                        className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
+                    {navGroups.map((entry, index) => {
+                      if (isNavGroup(entry)) {
+                        // Render group with section header
+                        return (
+                          <div key={entry.label}>
+                            {index > 0 && <div className="border-t border-zinc-700 my-1" />}
+                            <div className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                              {entry.label}
+                            </div>
+                            {entry.items.map((item) => {
+                              const isActive = item.exact
+                                ? pathname === item.href
+                                : pathname.startsWith(item.href);
+                              return (
+                                <Link
+                                  key={item.href}
+                                  href={item.href}
+                                  data-onboarding={item.onboardingId}
+                                  onClick={() => setIsOpen(false)}
+                                  className={`block pl-6 pr-4 py-2 text-sm transition-colors ${
+                                    isActive
+                                      ? "bg-zinc-700 text-white"
+                                      : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                                  }`}
+                                >
+                                  {item.label}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
+                      // Render standalone item
+                      const isActive = entry.exact
+                        ? pathname === entry.href
+                        : pathname.startsWith(entry.href);
+                      return (
+                        <div key={entry.href}>
+                          {index > 0 && <div className="border-t border-zinc-700 my-1" />}
+                          <Link
+                            href={entry.href}
+                            data-onboarding={entry.onboardingId}
+                            onClick={() => setIsOpen(false)}
+                            className={`block px-4 py-2 text-sm transition-colors ${
+                              isActive
+                                ? "bg-zinc-700 text-white"
+                                : "text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                            }`}
+                          >
+                            {entry.label}
+                          </Link>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

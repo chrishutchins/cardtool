@@ -30,6 +30,9 @@ const extraAliases: Record<string, string[]> = {
   "hilton": ["hilton honors", "hilton (honors)"],
   "ihg": ["ihg rewards", "ihg one rewards", "ihg hotels & resorts (one rewards)"],
   "wyndham rewards": ["wyndham", "wyndham (wyndham rewards)"],
+  
+  // Additional Airline Programs
+  "korean air": ["korean skypass", "skypass", "korean air skypass", "korean airlines skypass", "korean airlines (skypass)"],
 };
 
 interface ScrapedValue {
