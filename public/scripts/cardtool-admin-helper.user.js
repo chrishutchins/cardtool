@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.3.1
+// @version      1.3.2
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -422,6 +422,7 @@
                         'transferable_points': 'Transferable Points',
                         'airline_miles': 'Airlines',
                         'hotel_points': 'Hotels',
+                        'non_transferable_points': 'Bank Points',
                         'cash_back': 'Cash Back'
                     };
 
