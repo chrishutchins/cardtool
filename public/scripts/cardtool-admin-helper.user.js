@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.3.0
+// @version      1.3.1
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -304,6 +304,30 @@
         // Auto-fill domain and balance URL
         document.getElementById('cardtool-domain').value = extractBaseDomain(window.location.hostname);
         document.getElementById('cardtool-balance-url').value = window.location.href;
+        
+        // Track URL changes for SPAs
+        let lastUrl = window.location.href;
+        const urlObserver = new MutationObserver(() => {
+            if (window.location.href !== lastUrl) {
+                lastUrl = window.location.href;
+                document.getElementById('cardtool-balance-url').value = window.location.href;
+                updateOutput();
+            }
+        });
+        urlObserver.observe(document.body, { childList: true, subtree: true });
+        
+        // Also listen for history changes
+        const originalPushState = history.pushState;
+        history.pushState = function(...args) {
+            originalPushState.apply(this, args);
+            document.getElementById('cardtool-balance-url').value = window.location.href;
+            updateOutput();
+        };
+        
+        window.addEventListener('popstate', () => {
+            document.getElementById('cardtool-balance-url').value = window.location.href;
+            updateOutput();
+        });
     }
 
     function makeDraggable(panel) {
