@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.5.2
+// @version      1.5.3
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -54,9 +54,8 @@
             box-sizing: border-box !important;
             font-family: inherit !important;
             line-height: inherit !important;
-            color: inherit !important;
         }
-        .cardtool-header {
+        #cardtool-admin-panel .cardtool-header {
             background: #27272a !important;
             padding: 12px 16px !important;
             border-bottom: 1px solid #3f3f46 !important;
@@ -68,7 +67,7 @@
             user-select: none !important;
             -webkit-user-select: none !important;
         }
-        .cardtool-header h3 {
+        #cardtool-admin-panel .cardtool-header h3 {
             margin: 0 !important;
             padding: 0 !important;
             font-size: 14px !important;
@@ -76,7 +75,7 @@
             color: #10b981 !important;
             line-height: 1.2 !important;
         }
-        .cardtool-close {
+        #cardtool-admin-panel .cardtool-close {
             background: none !important;
             border: none !important;
             color: #71717a !important;
@@ -85,18 +84,18 @@
             line-height: 1 !important;
             padding: 4px !important;
         }
-        .cardtool-close:hover {
+        #cardtool-admin-panel .cardtool-close:hover {
             color: #e4e4e7 !important;
         }
-        .cardtool-body {
+        #cardtool-admin-panel .cardtool-body {
             padding: 16px !important;
             background: #18181b !important;
         }
-        .cardtool-section {
+        #cardtool-admin-panel .cardtool-section {
             margin: 0 0 16px 0 !important;
             padding: 0 !important;
         }
-        .cardtool-label {
+        #cardtool-admin-panel .cardtool-label {
             display: block !important;
             font-size: 12px !important;
             color: #a1a1aa !important;
@@ -106,7 +105,7 @@
             letter-spacing: 0.5px !important;
             font-weight: normal !important;
         }
-        .cardtool-input {
+        #cardtool-admin-panel .cardtool-input {
             width: 100% !important;
             padding: 8px 12px !important;
             background: #27272a !important;
@@ -119,14 +118,14 @@
             -webkit-appearance: none !important;
             appearance: none !important;
         }
-        .cardtool-input::placeholder {
+        #cardtool-admin-panel .cardtool-input::placeholder {
             color: #71717a !important;
         }
-        .cardtool-input:focus {
+        #cardtool-admin-panel .cardtool-input:focus {
             outline: none !important;
             border-color: #10b981 !important;
         }
-        .cardtool-select {
+        #cardtool-admin-panel .cardtool-select {
             width: 100% !important;
             padding: 8px 12px !important;
             background: #27272a !important;
@@ -138,11 +137,12 @@
             -webkit-appearance: none !important;
             appearance: none !important;
         }
-        .cardtool-select option, .cardtool-select optgroup {
+        #cardtool-admin-panel .cardtool-select option,
+        #cardtool-admin-panel .cardtool-select optgroup {
             background: #27272a !important;
             color: #e4e4e7 !important;
         }
-        .cardtool-btn {
+        #cardtool-admin-panel .cardtool-btn {
             width: 100% !important;
             padding: 10px 16px !important;
             border: none !important;
@@ -155,30 +155,30 @@
             text-decoration: none !important;
             display: block !important;
         }
-        .cardtool-btn-primary {
+        #cardtool-admin-panel .cardtool-btn-primary {
             background: #10b981 !important;
             color: white !important;
         }
-        .cardtool-btn-primary:hover {
+        #cardtool-admin-panel .cardtool-btn-primary:hover {
             background: #059669 !important;
         }
-        .cardtool-btn-primary:disabled {
+        #cardtool-admin-panel .cardtool-btn-primary:disabled {
             background: #3f3f46 !important;
             color: #71717a !important;
             cursor: not-allowed !important;
         }
-        .cardtool-btn-secondary {
+        #cardtool-admin-panel .cardtool-btn-secondary {
             background: #3f3f46 !important;
             color: #e4e4e7 !important;
         }
-        .cardtool-btn-secondary:hover {
+        #cardtool-admin-panel .cardtool-btn-secondary:hover {
             background: #52525b !important;
         }
-        .cardtool-btn-secondary.active {
+        #cardtool-admin-panel .cardtool-btn-secondary.active {
             background: #f59e0b !important;
             color: #18181b !important;
         }
-        .cardtool-value {
+        #cardtool-admin-panel .cardtool-value {
             padding: 8px 12px !important;
             background: #27272a !important;
             border-radius: 6px !important;
@@ -188,13 +188,13 @@
             word-break: break-all !important;
             margin: 0 !important;
         }
-        .cardtool-row {
+        #cardtool-admin-panel .cardtool-row {
             display: flex !important;
             gap: 8px !important;
             margin: 0 0 8px 0 !important;
             padding: 0 !important;
         }
-        .cardtool-row > * {
+        #cardtool-admin-panel .cardtool-row > * {
             flex: 1 !important;
         }
         .cardtool-highlight {
@@ -202,7 +202,7 @@
             outline-offset: 2px !important;
             background-color: rgba(245, 158, 11, 0.1) !important;
         }
-        .cardtool-code {
+        #cardtool-admin-panel .cardtool-code {
             background: #27272a !important;
             border: 1px solid #3f3f46 !important;
             border-radius: 6px !important;
@@ -216,7 +216,7 @@
             overflow-y: auto !important;
             margin: 0 !important;
         }
-        .cardtool-notice {
+        #cardtool-admin-panel .cardtool-notice {
             background: #422006 !important;
             border: 1px solid #92400e !important;
             border-radius: 6px !important;
@@ -225,7 +225,7 @@
             color: #fcd34d !important;
             margin: 0 0 16px 0 !important;
         }
-        .cardtool-hint {
+        #cardtool-admin-panel .cardtool-hint {
             font-size: 11px !important;
             color: #71717a !important;
             margin: 4px 0 0 0 !important;
