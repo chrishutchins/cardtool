@@ -19,7 +19,7 @@ const DROPDOWN_PARENTS: Record<string, string> = {
   "credits": "credits-menu",
   "inventory": "credits-menu",
   "points": "points-menu",
-  "transfers": "points-menu",
+  "transfer-partners": "points-menu",
   "spending": "settings-menu",
   "point-values": "settings-menu",
   "settings": "settings-menu",
@@ -68,6 +68,20 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     parentDropdown: "credits-menu",
   },
   {
+    target: "points",
+    title: "Points Balances",
+    message: "Track your points and miles balances across all your loyalty programs in one place.",
+    position: "bottom",
+    parentDropdown: "points-menu",
+  },
+  {
+    target: "transfer-partners",
+    title: "Transfer Partners",
+    message: "Explore transfer partners for your points programs and find the best redemption values for your miles.",
+    position: "bottom",
+    parentDropdown: "points-menu",
+  },
+  {
     target: "spending",
     title: "Edit Spending",
     message: "Edit the default spending assumptions that drive the Earnings tab calculations.",
@@ -78,6 +92,13 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     target: "point-values",
     title: "Point Valuations",
     message: "Change the assumptions for how much points are worth to customize your earnings calculations.",
+    position: "bottom",
+    parentDropdown: "settings-menu",
+  },
+  {
+    target: "settings",
+    title: "Other Settings",
+    message: "Configure card-specific settings and preferences to customize your CardTool experience.",
     position: "bottom",
     parentDropdown: "settings-menu",
   },
@@ -255,7 +276,7 @@ interface OnboardingTourProps {
 }
 
 // Nav items that live in the mobile menu (includes dropdown button IDs)
-const NAV_TARGETS = ["dashboard", "credit-cards-menu", "wallet", "earnings", "credits-menu", "credits", "inventory", "points-menu", "points", "transfers", "settings-menu", "spending", "compare", "rules", "point-values", "settings"];
+const NAV_TARGETS = ["dashboard", "credit-cards-menu", "wallet", "earnings", "credits-menu", "credits", "inventory", "points-menu", "points", "transfer-partners", "settings-menu", "spending", "compare", "rules", "point-values", "settings"];
 
 export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -421,7 +442,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   return createPortal(
     <>
       {/* Backdrop overlay */}
-      <div className="fixed inset-0 z-50 bg-black/60 transition-opacity" />
+      <div className="fixed inset-0 z-50 bg-black/40 transition-opacity" />
 
       {/* Spotlight on target element */}
       <div
@@ -431,7 +452,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
           left: targetRect.left - 4,
           width: targetRect.width + 8,
           height: targetRect.height + 8,
-          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.6)",
+          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.4)",
         }}
       />
 

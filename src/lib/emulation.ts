@@ -25,8 +25,10 @@ export interface EmulationInfo {
 
 /**
  * Get the effective user ID for data reads.
- * Returns emulated user ID if admin is emulating, otherwise real user ID.
- * In development, can be overridden via DEV_USER_ID_OVERRIDE env var.
+ * Priority order:
+ * 1. Emulated user ID (if admin is emulating)
+ * 2. Dev user mapping (if current dev user matches DEV_USER_ID_SOURCE, map to DEV_USER_ID_TARGET)
+ * 3. Current user's ID
  * 
  * @returns The user ID to use for database queries
  */
@@ -34,26 +36,28 @@ export async function getEffectiveUserId(): Promise<string | null> {
   const user = await currentUser();
   if (!user) return null;
 
-  // In development, allow overriding the user ID to use production data
-  // This lets developers use Clerk Development instance while accessing production user data
-  if (process.env.NODE_ENV === "development" && process.env.DEV_USER_ID_OVERRIDE) {
-    return process.env.DEV_USER_ID_OVERRIDE;
-  }
-
   const email = user.emailAddresses?.[0]?.emailAddress;
   
-  // Only admins can emulate
-  if (!isAdminEmail(email)) {
-    return user.id;
+  // 1. Check emulation first (highest priority) - only admins can emulate
+  if (isAdminEmail(email)) {
+    const cookieStore = await cookies();
+    const emulatedUserId = cookieStore.get(EMULATION_COOKIE_NAME)?.value;
+    if (emulatedUserId) {
+      return emulatedUserId;
+    }
   }
 
-  const cookieStore = await cookies();
-  const emulatedUserId = cookieStore.get(EMULATION_COOKIE_NAME)?.value;
-
-  if (emulatedUserId) {
-    return emulatedUserId;
+  // 2. In development, map a specific dev user to a production user ID
+  // This lets you use Clerk Dev instance while accessing your production user data
+  // Set DEV_USER_ID_SOURCE (your dev Clerk user ID) and DEV_USER_ID_TARGET (your prod Clerk user ID)
+  if (process.env.NODE_ENV === "development" && 
+      process.env.DEV_USER_ID_SOURCE && 
+      process.env.DEV_USER_ID_TARGET &&
+      user.id === process.env.DEV_USER_ID_SOURCE) {
+    return process.env.DEV_USER_ID_TARGET;
   }
 
+  // 3. Default: use current user's ID
   return user.id;
 }
 

@@ -52,7 +52,7 @@ const baseNavGroups: NavEntry[] = [
     onboardingId: "points-menu",
     items: [
       { href: "/points", label: "Points Balances", onboardingId: "points" },
-      { href: "/transfer-partners", label: "Transfer Partners", onboardingId: "transfers" },
+      { href: "/transfer-partners", label: "Transfer Partners", onboardingId: "transfer-partners" },
     ],
   },
   {

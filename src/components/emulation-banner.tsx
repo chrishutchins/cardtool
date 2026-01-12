@@ -16,8 +16,8 @@ export function EmulationBanner({
   const [isPending, startTransition] = useTransition();
 
   const handleStop = () => {
-    startTransition(() => {
-      onStopEmulation();
+    startTransition(async () => {
+      await onStopEmulation();
     });
   };
 

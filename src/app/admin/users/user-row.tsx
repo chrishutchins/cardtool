@@ -40,20 +40,20 @@ export function UserRow({
     if (!confirm(`Delete all data for ${user.email || user.userId}? This cannot be undone.`)) {
       return;
     }
-    startTransition(() => {
-      onDelete(user.userId);
+    startTransition(async () => {
+      await onDelete(user.userId);
     });
   };
 
   const handleToggleAccountLinking = () => {
-    startTransition(() => {
-      onToggleAccountLinking(user.userId, !user.accountLinkingEnabled);
+    startTransition(async () => {
+      await onToggleAccountLinking(user.userId, !user.accountLinkingEnabled);
     });
   };
 
   const handleEmulate = () => {
-    startEmulateTransition(() => {
-      onEmulate(user.userId, user.email);
+    startEmulateTransition(async () => {
+      await onEmulate(user.userId, user.email);
     });
   };
 
