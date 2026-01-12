@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.8.7
+// @version      1.8.8
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -208,27 +208,18 @@
             margin: 0 !important;
             padding: 0 !important;
         }
-        #cardtool-badge .cardtool-badge-close,
-        #cardtool-badge button.cardtool-badge-close {
-            margin-left: auto !important;
-            background: none !important;
-            border: none !important;
-            color: #71717a !important;
-            cursor: pointer !important;
-            font-size: 18px !important;
-            line-height: 1 !important;
-            padding: 4px 8px !important;
-            pointer-events: auto !important;
-            position: relative !important;
-            z-index: 10 !important;
-            -webkit-appearance: none !important;
-            appearance: none !important;
+        .cardtool-badge-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: #71717a;
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 4px;
         }
-        #cardtool-badge .cardtool-badge-close:hover,
-        #cardtool-badge button.cardtool-badge-close:hover {
-            color: #e4e4e7 !important;
-            background: rgba(255,255,255,0.1) !important;
-            border-radius: 4px !important;
+        .cardtool-badge-close:hover {
+            color: #e4e4e7;
         }
         .cardtool-badge-body {
             padding: 12px 14px !important;
@@ -580,49 +571,22 @@
         
         badgeElement = document.createElement('div');
         badgeElement.id = 'cardtool-badge';
-        
-        // Create header
-        const header = document.createElement('div');
-        header.className = 'cardtool-badge-header';
-        
-        const logo = document.createElement('div');
-        logo.className = 'cardtool-badge-logo';
-        logo.textContent = 'C';
-        
-        const title = document.createElement('span');
-        title.className = 'cardtool-badge-title';
-        title.textContent = 'CardTool';
-        
-        // Create close button with direct event binding
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'cardtool-badge-close';
-        closeBtn.id = 'cardtool-badge-close';
-        closeBtn.innerHTML = '&times;';
-        closeBtn.type = 'button';
-        closeBtn.onclick = function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            badgeElement.style.display = 'none';
-            return false;
-        };
-        // Also add mousedown as backup
-        closeBtn.onmousedown = function(e) {
-            e.stopPropagation();
-        };
-        
-        header.appendChild(logo);
-        header.appendChild(title);
-        header.appendChild(closeBtn);
-        
-        // Create body
-        const body = document.createElement('div');
-        body.className = 'cardtool-badge-body';
-        body.id = 'cardtool-badge-content';
-        body.innerHTML = '<div class="cardtool-badge-status">Looking for balance...</div>';
-        
-        badgeElement.appendChild(header);
-        badgeElement.appendChild(body);
+        badgeElement.innerHTML = `
+            <div class="cardtool-badge-header">
+                <div class="cardtool-badge-logo">C</div>
+                <span class="cardtool-badge-title">CardTool</span>
+                <button class="cardtool-badge-close">&times;</button>
+            </div>
+            <div class="cardtool-badge-body" id="cardtool-badge-content">
+                <div class="cardtool-badge-status">Looking for balance...</div>
+            </div>
+        `;
         document.body.appendChild(badgeElement);
+
+        // Close button - match admin tool pattern
+        badgeElement.querySelector('.cardtool-badge-close').addEventListener('click', () => {
+            badgeElement.remove();
+        });
     }
 
     function updateBadgeContent(html) {
