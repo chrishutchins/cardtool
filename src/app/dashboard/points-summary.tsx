@@ -63,7 +63,7 @@ export function PointsSummary({ totalPoints, totalValue, pointsByType }: PointsS
       </div>
 
       {hasPoints ? (
-        <div className="flex gap-4 text-sm">
+        <div className="flex flex-col gap-1.5 text-sm">
           {/* Bank Points */}
           {pointsByType.bank > 0 && (
             <div className="flex items-center gap-2">
