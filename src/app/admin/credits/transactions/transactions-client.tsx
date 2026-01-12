@@ -483,7 +483,7 @@ export function TransactionsClient({
             className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${actionPending === "refresh" ? "animate-spin" : ""}`} />
-            Sync All Users
+            Sync Current User
           </Button>
         </div>
       </div>

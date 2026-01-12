@@ -30,12 +30,13 @@ import {
   getCachedSpecialCategoryIds,
 } from "@/lib/cached-data";
 import { EarningsSummary } from "./earnings-summary";
-import { StatsCard } from "./stats-card";
+import { WalletSummaryCard } from "./stats-card";
 import { CardRecommendationsSection } from "./card-recommendations-section";
 import { DashboardClient } from "./dashboard-client";
 import { PointsSummary } from "./points-summary";
 import { CreditSummary } from "./credit-summary";
 import { UpcomingSection } from "./upcoming-section";
+import { UpcomingUnified } from "./upcoming-unified";
 
 export const metadata: Metadata = {
   title: "Dashboard | CardTool",
@@ -906,33 +907,13 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {/* Stats Cards Row */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-          <StatsCard
-            title="Cards in Wallet"
-            value={walletRows.length.toString()}
-            href="/wallet"
-            icon="cards"
+        {/* Summary Row: 3 Equal-Width Widgets */}
+        <div className="grid gap-4 md:grid-cols-3 mb-6">
+          <WalletSummaryCard
+            cardCount={walletRows.length}
+            totalFees={totalAnnualFees}
+            netFees={netFees}
           />
-          <StatsCard
-            title="Annual Fees"
-            value={`$${totalAnnualFees.toLocaleString()}`}
-            subtitle={netFees < 0 ? `Net -$${Math.abs(netFees).toLocaleString()}` : netFees > 0 ? `Net $${netFees.toLocaleString()}` : undefined}
-            subtitleColor={netFees < 0 ? "text-emerald-400" : undefined}
-            href="/wallet"
-            icon="fees"
-          />
-          <StatsCard
-            title="Total Credit"
-            value={totalCreditLine > 0 ? `$${totalCreditLine.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
-            subtitle={hasPlaidAccounts && totalBalance > 0 ? `${Math.round((totalBalance / totalCreditLine) * 100)}% used` : undefined}
-            href="/wallet"
-            icon="creditline"
-          />
-        </div>
-
-        {/* Points & Credit Summary Row */}
-        <div className="grid gap-4 md:grid-cols-2 mb-6">
           <PointsSummary
             totalPoints={totalPoints}
             totalValue={totalPointsValue}
@@ -946,13 +927,26 @@ export default async function DashboardPage() {
           />
         </div>
 
-        {/* Upcoming Section (expiring points, credits, annual fees) */}
-        <div className="mb-6">
-          <UpcomingSection
-            expiringPoints={expiringPoints}
-            expiringCredits={expiringCredits}
-            upcomingFees={upcomingFees}
-          />
+        {/* Upcoming Sections - Side by Side for Comparison */}
+        <div className="grid gap-4 md:grid-cols-2 mb-6">
+          {/* NEW: Unified list (by type: fees, points, credits summary) */}
+          <div>
+            <p className="text-xs text-emerald-400 mb-2 font-medium">NEW VERSION</p>
+            <UpcomingUnified
+              expiringPoints={expiringPoints}
+              expiringCredits={expiringCredits}
+              upcomingFees={upcomingFees}
+            />
+          </div>
+          {/* OLD: Separate sections */}
+          <div>
+            <p className="text-xs text-zinc-500 mb-2 font-medium">OLD VERSION</p>
+            <UpcomingSection
+              expiringPoints={expiringPoints}
+              expiringCredits={expiringCredits}
+              upcomingFees={upcomingFees}
+            />
+          </div>
         </div>
 
         {/* Earnings Summary Banner */}

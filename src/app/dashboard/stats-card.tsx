@@ -70,3 +70,38 @@ export function StatsCard({ title, value, subtitle, subtitleColor, href, icon, h
     </Link>
   );
 }
+
+// Combined Cards + Fees Widget
+interface WalletSummaryCardProps {
+  cardCount: number;
+  totalFees: number;
+  netFees: number;
+}
+
+export function WalletSummaryCard({ cardCount, totalFees, netFees }: WalletSummaryCardProps) {
+  return (
+    <Link
+      href="/wallet"
+      className="block p-5 rounded-xl border transition-all duration-200 bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50"
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-zinc-400 mb-1">Cards in Wallet</p>
+          <p className="text-3xl font-bold text-white">{cardCount}</p>
+          <div className="mt-3 pt-3 border-t border-zinc-800">
+            <p className="text-sm text-zinc-400 mb-0.5">Annual Fees</p>
+            <p className="text-xl font-semibold text-white">${totalFees.toLocaleString()}</p>
+            {netFees !== totalFees && (
+              <p className={`text-sm mt-0.5 ${netFees < 0 ? "text-emerald-400" : "text-zinc-500"}`}>
+                {netFees < 0 ? `Net -$${Math.abs(netFees).toLocaleString()}` : `Net $${netFees.toLocaleString()}`}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="p-2 rounded-lg bg-zinc-800 text-zinc-400">
+          {icons.cards}
+        </div>
+      </div>
+    </Link>
+  );
+}
