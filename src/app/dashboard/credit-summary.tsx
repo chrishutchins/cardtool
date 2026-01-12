@@ -78,6 +78,11 @@ export function CreditSummary({
     >
       <div className="flex items-start justify-between mb-3">
         <p className="text-sm text-zinc-400">Total Credit</p>
+        <div className="p-2 rounded-lg bg-zinc-800 text-zinc-400">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+          </svg>
+        </div>
       </div>
       
       <p className="text-3xl font-bold text-white mb-3">
