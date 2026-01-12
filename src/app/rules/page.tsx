@@ -69,7 +69,7 @@ export default async function RulesPage() {
 
   const supabase = createClient();
 
-  const [walletResult, rulesResult, featureFlagsResult, playersResult] = await Promise.all([
+  const [walletResult, rulesResult, playersResult] = await Promise.all([
     // Only fetch active cards for application rule tracking
     supabase
       .from("user_wallets")
@@ -100,11 +100,6 @@ export default async function RulesPage() {
       .order("display_order")
       .order("name"),
     supabase
-      .from("user_feature_flags")
-      .select("credit_tracking_enabled")
-      .eq("user_id", effectiveUserId)
-      .maybeSingle(),
-    supabase
       .from("user_players")
       .select("player_number, description")
       .eq("user_id", effectiveUserId)
@@ -113,7 +108,6 @@ export default async function RulesPage() {
 
   const walletCards = (walletResult.data ?? []) as unknown as WalletCard[];
   const rules = (rulesResult.data ?? []) as Rule[];
-  const creditTrackingEnabled = featureFlagsResult.data?.credit_tracking_enabled ?? true;
   const players = (playersResult.data ?? []) as Player[];
   const playerCount = players.length > 0 ? Math.max(...players.map(p => p.player_number)) : 1;
 
@@ -128,7 +122,6 @@ export default async function RulesPage() {
     <div className="min-h-screen bg-zinc-950">
       <UserHeader
         isAdmin={isAdmin}
-        creditTrackingEnabled={creditTrackingEnabled}
         emulationInfo={emulationInfo}
       />
       <div className="mx-auto max-w-4xl px-4 py-12">

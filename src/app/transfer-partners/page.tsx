@@ -34,7 +34,6 @@ export default async function TransfersPage() {
   const [
     currenciesResult,
     transferPartnersResult,
-    featureFlagsResult,
   ] = await Promise.all([
     // All currencies
     supabase
@@ -56,19 +55,10 @@ export default async function TransfersPage() {
         is_active
       `)
       .eq("is_active", true),
-    
-    // Feature flags
-    supabase
-      .from("user_feature_flags")
-      .select("credit_tracking_enabled")
-      .eq("user_id", effectiveUserId)
-      .maybeSingle(),
   ]);
 
   const currencies = currenciesResult.data ?? [];
   const transferPartners = transferPartnersResult.data ?? [];
-  // Credit tracking is enabled for all users
-  const creditTrackingEnabled = true;
 
   // Get transferable currencies (sources) - sorted by name
   const transferableCurrencies = currencies
@@ -85,7 +75,6 @@ export default async function TransfersPage() {
     <div className="min-h-screen bg-zinc-950">
       <UserHeader 
         isAdmin={isAdmin} 
-        creditTrackingEnabled={creditTrackingEnabled}
         emulationInfo={emulationInfo}
       />
       

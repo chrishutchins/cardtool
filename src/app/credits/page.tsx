@@ -647,7 +647,7 @@ export default async function CreditsPage() {
   return (
     <div className="min-h-screen bg-zinc-950">
       {accountLinkingEnabled && <PlaidSyncTrigger />}
-      <UserHeader isAdmin={isAdmin} creditTrackingEnabled={true} emulationInfo={emulationInfo} />
+      <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-6xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Credit Tracker</h1>

@@ -26,7 +26,6 @@ function isNavGroup(item: NavEntry): item is NavGroup {
   return "items" in item;
 }
 
-// Base navigation structure (Credits group added dynamically based on feature flag)
 const baseNavGroups: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", onboardingId: "dashboard" },
   {
@@ -38,7 +37,13 @@ const baseNavGroups: NavEntry[] = [
     ],
   },
   { href: "/returns", label: "Earnings", onboardingId: "earnings" },
-  // Credits group inserted here dynamically
+  {
+    label: "Credits",
+    items: [
+      { href: "/credits", label: "Credit Tracker", onboardingId: "credits" },
+      { href: "/inventory", label: "Inventory", onboardingId: "inventory" },
+    ],
+  },
   {
     label: "Points",
     items: [
@@ -65,7 +70,6 @@ interface EmulationInfo {
 
 interface UserHeaderProps {
   isAdmin?: boolean;
-  creditTrackingEnabled?: boolean;
   emulationInfo?: EmulationInfo | null;
 }
 
@@ -131,31 +135,9 @@ function NavDropdown({ group, pathname }: { group: NavGroup; pathname: string })
   );
 }
 
-export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emulationInfo }: UserHeaderProps) {
+export function UserHeader({ isAdmin = false, emulationInfo }: UserHeaderProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-
-  // Build nav items dynamically based on feature flags
-  const navGroups = useMemo(() => {
-    const groups = [...baseNavGroups];
-    
-    // Add Credits group if enabled for user or if admin (after Earnings)
-    if (creditTrackingEnabled || isAdmin) {
-      const earningsIndex = groups.findIndex(
-        (item) => !isNavGroup(item) && item.href === "/returns"
-      );
-      const creditsGroup: NavGroup = {
-        label: "Credits",
-        items: [
-          { href: "/credits", label: "Credit Tracker", onboardingId: "credits" },
-          { href: "/inventory", label: "Inventory", onboardingId: "inventory" },
-        ],
-      };
-      groups.splice(earningsIndex + 1, 0, creditsGroup);
-    }
-    
-    return groups;
-  }, [creditTrackingEnabled, isAdmin]);
 
   return (
     <>
@@ -177,7 +159,7 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
             
             {/* Desktop nav with dropdowns - show at 900px+ (fewer top-level items now) */}
             <div className="hidden min-[900px]:flex items-center gap-1">
-              {navGroups.map((item, index) => {
+              {baseNavGroups.map((item, index) => {
                 if (isNavGroup(item)) {
                   return <NavDropdown key={item.label} group={item} pathname={pathname} />;
                 }
@@ -222,7 +204,7 @@ export function UserHeader({ isAdmin = false, creditTrackingEnabled = true, emul
               
               {isOpen && (
                 <div className="absolute top-full left-0 mt-1 w-56 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70] py-1">
-                  {navGroups.map((entry, index) => {
+                  {baseNavGroups.map((entry, index) => {
                     if (isNavGroup(entry)) {
                       // Render group with section header
                       return (

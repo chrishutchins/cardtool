@@ -69,7 +69,6 @@ export default async function PointsPage() {
     userCurrencyValuesResult,
     userPointValueSettingsResult,
     pointValueTemplatesResult,
-    featureFlagsResult,
     walletCardsResult,
     trackedCurrenciesResult,
     siteConfigsResult,
@@ -110,13 +109,6 @@ export default async function PointsPage() {
     supabase
       .from("point_value_templates")
       .select("id, name, slug, description, source_url, is_default"),
-    
-    // Feature flags
-    supabase
-      .from("user_feature_flags")
-      .select("credit_tracking_enabled")
-      .eq("user_id", effectiveUserId)
-      .maybeSingle(),
     
     // User's wallet cards (to get currencies earned by cards)
     supabase
@@ -262,8 +254,6 @@ export default async function PointsPage() {
   const currencies = (currenciesResult.data ?? []) as Currency[];
   const balances = (balancesResult.data ?? []) as PointBalance[];
   const players = playersResult.data ?? [];
-  // Credit tracking is enabled for all users
-  const creditTrackingEnabled = true;
 
   // Build set of currencies earned by wallet cards
   const walletCurrencyIds = new Set<string>();
@@ -302,7 +292,6 @@ export default async function PointsPage() {
     <div className="min-h-screen bg-zinc-950">
       <UserHeader 
         isAdmin={isAdmin} 
-        creditTrackingEnabled={creditTrackingEnabled}
         emulationInfo={emulationInfo}
       />
       

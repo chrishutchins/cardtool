@@ -450,9 +450,6 @@ export default async function WalletPage() {
   // Check if onboarding has been completed
   const onboardingCompleted = featureFlagsResult.data?.onboarding_completed ?? false;
   
-  // Credit tracking is enabled for all users
-  const creditTrackingEnabled = true;
-  
   // Build TWO debit pay maps:
   // 1. debitPayMapByWalletId - for display in WalletCardList (keyed by wallet_card_id)
   // 2. debitPayMapByCardId - for the calculator (keyed by card_id, max value across instances)
@@ -1656,7 +1653,6 @@ export default async function WalletPage() {
       <div className="min-h-screen bg-zinc-950">
         <UserHeader 
           isAdmin={isAdmin} 
-          creditTrackingEnabled={creditTrackingEnabled}
           emulationInfo={emulationInfo}
         />
         <div className="mx-auto max-w-[1600px] px-4 py-12">

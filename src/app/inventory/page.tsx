@@ -357,7 +357,7 @@ export default async function InventoryPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <UserHeader isAdmin={isAdmin} creditTrackingEnabled={true} emulationInfo={emulationInfo} />
+      <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-6xl px-4 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Inventory</h1>
