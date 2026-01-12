@@ -30,10 +30,12 @@ import {
   getCachedSpecialCategoryIds,
 } from "@/lib/cached-data";
 import { EarningsSummary } from "./earnings-summary";
-// import { ExpiringCredits } from "./expiring-credits"; // Hidden for now
 import { StatsCard } from "./stats-card";
 import { CardRecommendationsSection } from "./card-recommendations-section";
 import { DashboardClient } from "./dashboard-client";
+import { PointsSummary } from "./points-summary";
+import { CreditSummary } from "./credit-summary";
+import { UpcomingSection } from "./upcoming-section";
 
 export const metadata: Metadata = {
   title: "Dashboard | CardTool",
@@ -84,6 +86,9 @@ export default async function DashboardPage() {
     userSpendBonusesResult,
     userBonusDisplaySettingsResult,
     featureFlagsResult,
+    pointBalancesResult,
+    linkedAccountsResult,
+    allCurrenciesResult,
   ] = await Promise.all([
     // Cached data (hits cache, not DB on subsequent requests)
     getCachedCards(),
@@ -104,6 +109,7 @@ export default async function DashboardPage() {
         custom_name,
         approval_date,
         closed_date,
+        manual_credit_limit_cents,
         cards:card_id (
           id, name, slug, annual_fee, default_earn_rate, primary_currency_id, secondary_currency_id, issuer_id,
           primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
@@ -139,6 +145,17 @@ export default async function DashboardPage() {
       .select("onboarding_completed")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
+    // Points balances for dashboard summary
+    supabase.from("user_point_balances")
+      .select("currency_id, player_number, balance, expiration_date")
+      .eq("user_id", effectiveUserId),
+    // Linked accounts for credit summary
+    supabase.from("user_linked_accounts")
+      .select("wallet_card_id, current_balance, credit_limit, available_balance")
+      .eq("user_id", effectiveUserId),
+    // All currencies for points breakdown by type
+    supabase.from("reward_currencies")
+      .select("id, name, code, currency_type, base_value_cents"),
   ]);
 
   // Process wallet cards
@@ -146,7 +163,7 @@ export default async function DashboardPage() {
   const cardInstanceCounts = new Map<string, number>();
   const walletCardIdToCardId = new Map<string, string>();
   
-  type WalletRow = { id: string; card_id: string; custom_name: string | null; approval_date: string | null; cards: CardInput | null };
+  type WalletRow = { id: string; card_id: string; custom_name: string | null; approval_date: string | null; manual_credit_limit_cents: number | null; cards: CardInput | null };
   const walletRows = (walletResult.data as unknown as WalletRow[]) ?? [];
   
   walletRows.forEach((w) => {
@@ -676,6 +693,179 @@ export default async function DashboardPage() {
   const totalPerksValue = Array.from(perksValues.values()).reduce((sum, v) => sum + v, 0);
   const netFees = totalAnnualFees - totalPerksValue;
 
+  // ============================================================================
+  // Points Balances Summary
+  // ============================================================================
+  
+  // Build currency lookup for points breakdown by type
+  type CurrencyInfo = { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null };
+  const currencyInfoMap = new Map<string, CurrencyInfo>();
+  (allCurrenciesResult.data ?? []).forEach((c: CurrencyInfo) => {
+    currencyInfoMap.set(c.id, c);
+  });
+
+  // Get currency values (user override > template > base)
+  const getCurrencyValueCents = (currencyId: string): number => {
+    // User override
+    const userValue = userCurrencyValues.get(currencyId);
+    if (userValue !== undefined) return userValue;
+    // Template value
+    const templateValue = templateValueMap.get(currencyId);
+    if (templateValue !== undefined) return templateValue;
+    // Default base value
+    const currency = currencyInfoMap.get(currencyId);
+    return currency?.base_value_cents ?? 1;
+  };
+
+  // Calculate points totals
+  type PointBalance = { currency_id: string; player_number: number; balance: number; expiration_date: string | null };
+  const pointBalances = (pointBalancesResult.data ?? []) as PointBalance[];
+  
+  let totalPoints = 0;
+  let totalPointsValue = 0;
+  const pointsByType = { bank: 0, airline: 0, hotel: 0 };
+  
+  // Expiring points in next 30 days
+  interface ExpiringPoint {
+    currencyName: string;
+    balance: number;
+    expirationDate: Date;
+    playerNumber?: number;
+  }
+  const expiringPoints: ExpiringPoint[] = [];
+  
+  pointBalances.forEach((pb) => {
+    if (pb.balance <= 0) return;
+    
+    const currency = currencyInfoMap.get(pb.currency_id);
+    if (!currency) return;
+    
+    totalPoints += pb.balance;
+    
+    // Calculate value
+    const valueCents = getCurrencyValueCents(pb.currency_id);
+    totalPointsValue += (pb.balance * valueCents) / 100; // Convert to dollars
+    
+    // Categorize by type (same as points page)
+    const currencyType = currency.currency_type;
+    if (currencyType === "airline_miles") {
+      pointsByType.airline += pb.balance;
+    } else if (currencyType === "hotel_points") {
+      pointsByType.hotel += pb.balance;
+    } else if (
+      currencyType === "transferable_points" || 
+      currencyType === "non_transferable_points" || 
+      currencyType === "cash_back" || 
+      currencyType === "crypto"
+    ) {
+      pointsByType.bank += pb.balance;
+    }
+    
+    // Check for expiring points
+    if (pb.expiration_date) {
+      const expDate = parseLocalDate(pb.expiration_date);
+      if (expDate >= now && expDate <= thirtyDaysFromNow) {
+        expiringPoints.push({
+          currencyName: currency.name,
+          balance: pb.balance,
+          expirationDate: expDate,
+          playerNumber: pb.player_number,
+        });
+      }
+    }
+  });
+  
+  // Sort expiring points by date
+  expiringPoints.sort((a, b) => a.expirationDate.getTime() - b.expirationDate.getTime());
+
+  // ============================================================================
+  // Credit Summary (from linked accounts + manual credit limits)
+  // ============================================================================
+  
+  type LinkedAccountData = { wallet_card_id: string | null; current_balance: number | null; credit_limit: number | null; available_balance: number | null };
+  const linkedAccounts = (linkedAccountsResult.data ?? []) as LinkedAccountData[];
+  const hasPlaidAccounts = linkedAccounts.length > 0;
+  
+  // Build a map of wallet_card_id -> linked account for looking up limits
+  const linkedAccountByWalletId = new Map<string, LinkedAccountData>();
+  linkedAccounts.forEach((la) => {
+    if (la.wallet_card_id) {
+      linkedAccountByWalletId.set(la.wallet_card_id, la);
+    }
+  });
+  
+  let totalBalance = 0;
+  let totalAvailable = 0;
+  let totalCreditLine = 0;
+  
+  // Sum balances from Plaid linked accounts
+  linkedAccounts.forEach((la) => {
+    if (la.current_balance != null) {
+      totalBalance += la.current_balance;
+    }
+    if (la.available_balance != null) {
+      totalAvailable += la.available_balance;
+    }
+    if (la.credit_limit != null && la.credit_limit > 0) {
+      totalCreditLine += la.credit_limit;
+    }
+  });
+  
+  // Add manual credit limits from wallet cards (only if not already counted via Plaid)
+  walletRows.forEach((wc) => {
+    const linkedAccount = linkedAccountByWalletId.get(wc.id);
+    // If no Plaid account or Plaid has no limit, use manual limit
+    if (!linkedAccount || linkedAccount.credit_limit == null || linkedAccount.credit_limit === 0) {
+      if (wc.manual_credit_limit_cents != null && wc.manual_credit_limit_cents > 0) {
+        totalCreditLine += wc.manual_credit_limit_cents / 100; // Convert cents to dollars
+      }
+    }
+  });
+
+  // ============================================================================
+  // Upcoming Annual Fees (cards with anniversary in next 30 days)
+  // ============================================================================
+  
+  interface UpcomingFee {
+    cardName: string;
+    annualFee: number;
+    anniversaryDate: Date;
+    walletId: string;
+  }
+  const upcomingFees: UpcomingFee[] = [];
+  
+  walletRows.forEach((wc) => {
+    if (!wc.approval_date || !wc.cards) return;
+    if (wc.cards.annual_fee <= 0) return; // Skip cards with no annual fee
+    
+    const approvalDate = parseLocalDate(wc.approval_date);
+    const approvalMonth = approvalDate.getMonth();
+    const approvalDay = approvalDate.getDate();
+    
+    // Find next anniversary
+    let anniversaryYear = now.getFullYear();
+    let nextAnniversary = new Date(anniversaryYear, approvalMonth, approvalDay);
+    
+    // If anniversary already passed this year, check next year
+    if (nextAnniversary < now) {
+      anniversaryYear++;
+      nextAnniversary = new Date(anniversaryYear, approvalMonth, approvalDay);
+    }
+    
+    // Check if within 30 days
+    if (nextAnniversary >= now && nextAnniversary <= thirtyDaysFromNow) {
+      upcomingFees.push({
+        cardName: wc.custom_name ?? wc.cards.name,
+        annualFee: wc.cards.annual_fee,
+        anniversaryDate: nextAnniversary,
+        walletId: wc.id,
+      });
+    }
+  });
+  
+  // Sort by date
+  upcomingFees.sort((a, b) => a.anniversaryDate.getTime() - b.anniversaryDate.getTime());
+
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
   // Check if onboarding has been completed
@@ -716,8 +906,8 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
+        {/* Stats Cards Row */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
           <StatsCard
             title="Cards in Wallet"
             value={walletRows.length.toString()}
@@ -733,19 +923,44 @@ export default async function DashboardPage() {
             icon="fees"
           />
           <StatsCard
-            title="Expiring Credits"
-            value={expiringCredits.length.toString()}
-            subtitle="Next 30 days"
-            href="/credits"
-            icon="credits"
+            title="Total Credit"
+            value={totalCreditLine > 0 ? `$${totalCreditLine.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
+            subtitle={hasPlaidAccounts && totalBalance > 0 ? `${Math.round((totalBalance / totalCreditLine) * 100)}% used` : undefined}
+            href="/wallet"
+            icon="creditline"
+          />
+        </div>
+
+        {/* Points & Credit Summary Row */}
+        <div className="grid gap-4 md:grid-cols-2 mb-6">
+          <PointsSummary
+            totalPoints={totalPoints}
+            totalValue={totalPointsValue}
+            pointsByType={pointsByType}
+          />
+          <CreditSummary
+            totalBalance={totalBalance}
+            totalAvailable={totalAvailable}
+            totalCreditLine={totalCreditLine}
+            hasPlaidAccounts={hasPlaidAccounts}
+          />
+        </div>
+
+        {/* Upcoming Section (expiring points, credits, annual fees) */}
+        <div className="mb-6">
+          <UpcomingSection
+            expiringPoints={expiringPoints}
+            expiringCredits={expiringCredits}
+            upcomingFees={upcomingFees}
           />
         </div>
 
         {/* Earnings Summary Banner */}
-        <div className="mb-8">
+        <div className="mb-6">
           <EarningsSummary returns={returns} cardCount={cards.length} />
         </div>
 
+        {/* Card Recommendations */}
         {recommendations.length > 0 && (
           <CardRecommendationsSection 
             recommendations={recommendations}
