@@ -4,6 +4,80 @@ import { useState, useMemo, useTransition } from "react";
 import { SummaryCards } from "./summary-cards";
 import { BalanceTable } from "./balance-table";
 
+// Program/currency abbreviations for search
+// Maps common abbreviations to currency names or program names
+const PROGRAM_ABBREVIATIONS: Record<string, string[]> = {
+  // Airlines (IATA codes and common names)
+  "aa": ["american", "aadvantage"],
+  "aadvantage": ["american"],
+  "dl": ["delta", "skymiles"],
+  "skymiles": ["delta"],
+  "ua": ["united", "mileageplus"],
+  "mileageplus": ["united"],
+  "mpx": ["united", "mileageplus"],
+  "wn": ["southwest", "rapid rewards"],
+  "sw": ["southwest", "rapid rewards"],
+  "rr": ["rapid rewards", "southwest"],
+  "as": ["alaska", "mileage plan"],
+  "b6": ["jetblue", "trueblue"],
+  "jb": ["jetblue", "trueblue"],
+  "ba": ["british airways", "avios"],
+  "avios": ["british airways", "iberia"],
+  "af": ["air france", "flying blue"],
+  "kl": ["klm", "flying blue"],
+  "lh": ["lufthansa", "miles & more"],
+  "m&m": ["miles & more", "lufthansa"],
+  "sq": ["singapore", "krisflyer"],
+  "cx": ["cathay", "asia miles"],
+  "ek": ["emirates", "skywards"],
+  "qr": ["qatar", "privilege club"],
+  "tk": ["turkish", "miles&smiles"],
+  "qf": ["qantas"],
+  "qff": ["qantas"],
+  "vs": ["virgin atlantic", "flying club"],
+  "ac": ["air canada", "aeroplan"],
+  "aeroplan": ["air canada"],
+  "nh": ["ana", "all nippon"],
+  "jl": ["jal", "japan airlines"],
+  "ke": ["korean", "skypass"],
+  "ey": ["etihad"],
+  "av": ["avianca", "lifemiles"],
+  "lifemiles": ["avianca"],
+  "ib": ["iberia", "avios"],
+  "ha": ["hawaiian"],
+  // Hotels
+  "hh": ["hilton", "honors"],
+  "honors": ["hilton"],
+  "woh": ["hyatt", "world of hyatt"],
+  "world of hyatt": ["hyatt"],
+  "mb": ["marriott", "bonvoy"],
+  "bonvoy": ["marriott"],
+  "spg": ["marriott", "bonvoy"],
+  "ihg": ["intercontinental", "one rewards"],
+  "one rewards": ["ihg", "intercontinental"],
+  // Bank Programs
+  "ur": ["ultimate rewards", "chase"],
+  "ultimate rewards": ["chase"],
+  "mr": ["membership rewards", "amex"],
+  "membership rewards": ["amex"],
+  "typ": ["thankyou", "citi"],
+  "ty": ["thankyou", "citi"],
+  "thankyou": ["citi"],
+  "c1": ["capital one"],
+  "bilt": ["bilt rewards"],
+};
+
+// Build lookup map from abbreviations
+function buildProgramLookup(): Map<string, string[]> {
+  const lookup = new Map<string, string[]>();
+  for (const [abbrev, names] of Object.entries(PROGRAM_ABBREVIATIONS)) {
+    lookup.set(abbrev.toLowerCase(), names.map(n => n.toLowerCase()));
+  }
+  return lookup;
+}
+
+const programLookup = buildProgramLookup();
+
 type Currency = {
   id: string;
   name: string;
@@ -209,15 +283,35 @@ export function PointsClient({
     return currencies.filter(c => !shouldShowCurrency(c) && !archivedCurrencySet.has(c.id));
   }, [currencies, shouldShowCurrency, archivedCurrencySet]);
 
-  // Filter addable currencies by search
+  // Filter addable currencies by search (including abbreviations)
   const filteredAddable = useMemo(() => {
     if (!addSearch.trim()) return addableCurrencies;
-    const search = addSearch.toLowerCase();
-    return addableCurrencies.filter(c => 
-      c.name.toLowerCase().includes(search) || 
-      c.code.toLowerCase().includes(search) ||
-      (c.program_name?.toLowerCase().includes(search))
-    );
+    const search = addSearch.toLowerCase().trim();
+    
+    return addableCurrencies.filter(c => {
+      const name = c.name.toLowerCase();
+      const code = c.code.toLowerCase();
+      const programName = c.program_name?.toLowerCase() ?? "";
+      
+      // Direct matches
+      if (name.includes(search)) return true;
+      if (code.includes(search)) return true;
+      if (programName.includes(search)) return true;
+      
+      // Check if search is an abbreviation that maps to this currency
+      const matchedNames = programLookup.get(search) ?? [];
+      if (matchedNames.some(n => name.includes(n) || programName.includes(n))) return true;
+      
+      // Check if any mapped name matches (e.g., "delta" search should match "Delta SkyMiles")
+      for (const [, names] of programLookup.entries()) {
+        if (names.includes(search)) {
+          // The search term itself is a known program name, check if this currency matches any related terms
+          if (names.some(n => name.includes(n) || programName.includes(n))) return true;
+        }
+      }
+      
+      return false;
+    });
   }, [addableCurrencies, addSearch]);
 
   const handleTrackCurrency = (currencyId: string) => {

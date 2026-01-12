@@ -24,30 +24,148 @@ const SECRET_CODE = "secretdebitpay";
 // Keyword mappings for search aliases
 // Maps search terms to issuer names or currency names they should match
 const ISSUER_KEYWORDS: Record<string, string[]> = {
-  "american express": ["amex", "americanexpress"],
+  "american express": ["amex", "americanexpress", "ae"],
   "bank of america": ["bofa", "boa", "bankofamerica"],
-  "capital one": ["capitalone", "cap1", "c1"],
-  "us bank": ["usbank"],
+  "capital one": ["capitalone", "cap1", "c1", "capone"],
+  "us bank": ["usbank", "usb"],
   "wells fargo": ["wellsfargo", "wf"],
   "barclays": ["barclaycard"],
+  "discover": ["disc"],
+};
+
+// Card-specific abbreviations that map to card names
+// These are common abbreviations used in the points/miles community
+const CARD_ABBREVIATIONS: Record<string, string[]> = {
+  // Amex Charge Cards
+  "platinum": ["abp", "app", "plat"],
+  "business platinum": ["abp", "biz plat", "bizplat"],
+  "gold": ["abg", "apg"],
+  "business gold": ["abg", "biz gold", "bizgold"],
+  "green": ["ag", "agr", "amex green"],
+  "business green": ["abgr", "biz green", "bizgreen"],
+  // Amex Cash Back
+  "blue business plus": ["bbp"],
+  "blue cash preferred": ["bcp"],
+  "blue cash everyday": ["bce"],
+  "everyday preferred": ["edp", "ed pref"],
+  "everyday": ["ed"],
+  // Amex Delta
+  "delta gold": ["adg", "delta gold"],
+  "delta platinum": ["adp", "delta plat"],
+  "delta reserve": ["adr"],
+  // Amex Hilton
+  "hilton aspire": ["aspire", "hh aspire"],
+  "hilton surpass": ["surpass", "hh surpass"],
+  "hilton business": ["hh biz"],
+  // Amex Marriott
+  "bonvoy brilliant": ["brilliant", "mb brilliant"],
+  "bonvoy business": ["mb biz", "bonvoy biz"],
+  "bonvoy bevy": ["bevy"],
+  // Chase Sapphire
+  "sapphire reserve": ["csr", "reserve"],
+  "sapphire preferred": ["csp"],
+  "sapphire reserve business": ["csrb", "biz reserve"],
+  // Chase Ink
+  "ink business preferred": ["cip", "ink preferred", "ink pref"],
+  "ink business cash": ["cic", "ink cash"],
+  "ink business unlimited": ["ciu", "ink unlimited"],
+  "ink cash": ["cic"],
+  "ink unlimited": ["ciu"],
+  "ink premier": ["cip2", "ink prem"],
+  // Chase Freedom
+  "freedom": ["cf", "chase freedom"],
+  "freedom unlimited": ["cfu", "fu"],
+  "freedom flex": ["cff", "ff"],
+  // Chase United
+  "united explorer": ["ue", "mpx explorer"],
+  "united quest": ["uq", "mpx quest"],
+  "united club": ["uc", "mpx club"],
+  "united business": ["ub", "mpx biz"],
+  "united gateway": ["ug", "mpx gateway"],
+  // Chase Southwest
+  "sw priority": ["swp", "sw pri"],
+  "sw premier": ["sw prem"],
+  "sw plus": ["sw+"],
+  "sw performance business": ["sw perf", "sw biz"],
+  // Chase Hotel
+  "hyatt personal": ["woh card", "hyatt"],
+  "hyatt business": ["woh biz"],
+  "ihg premier": ["ihg"],
+  "ritz carlton": ["ritz", "rc"],
+  "bonvoy boundless": ["boundless"],
+  "bonvoy bountiful": ["bountiful"],
+  "bonvoy bold": ["bold"],
+  // Citi
+  "double cash": ["dc", "citi dc"],
+  "strata premier": ["cp", "citi premier", "premier"],
+  "strata elite": ["cse", "citi elite"],
+  "custom cash": ["ccc"],
+  "aa platinum": ["citi aa", "aa plat"],
+  "aa executive": ["aa exec", "citi exec"],
+  "aa business": ["aa biz"],
+  // Capital One
+  "venture x": ["vx", "c1vx", "cap1 vx"],
+  "venture x business": ["vxb", "c1vxb"],
+  "venture": ["c1v", "cap1 venture"],
+  "ventureone": ["v1", "c1v1"],
+  "quicksilver": ["qs", "c1qs"],
+  "savor": ["c1s", "cap1 savor"],
+  "spark cash plus": ["spark", "spark cash"],
+  "spark miles": ["spark miles"],
+  // US Bank
+  "altitude reserve": ["ar", "usb ar", "altitude"],
+  "altitude connect": ["ac", "usb ac"],
+  // Bilt
+  "bilt card": ["bilt"],
+  // Other
+  "amazon prime": ["amazon", "prime visa"],
+  "costco visa": ["costco"],
+  "apple card": ["apple"],
 };
 
 const CURRENCY_KEYWORDS: Record<string, string[]> = {
+  // Airlines (IATA codes)
   "american": ["aa", "aadvantage", "american airlines"],
-  "united": ["mileageplus", "ua"],
+  "united": ["mileageplus", "ua", "mpx"],
   "delta": ["skymiles", "dl"],
-  "southwest": ["rapid rewards", "wn"],
+  "southwest": ["rapid rewards", "wn", "sw", "rr"],
   "alaska": ["mileage plan", "as"],
-  "marriott": ["bonvoy"],
-  "hilton": ["honors"],
+  "jetblue": ["trueblue", "b6", "jb"],
+  "british airways": ["avios", "ba", "exec club"],
+  "air france": ["flying blue", "af"],
+  "klm": ["flying blue", "kl"],
+  "lufthansa": ["miles & more", "lh", "m&m"],
+  "singapore": ["krisflyer", "sq"],
+  "cathay pacific": ["asia miles", "cx"],
+  "emirates": ["skywards", "ek"],
+  "qatar": ["privilege club", "qr"],
+  "turkish": ["miles&smiles", "tk"],
+  "qantas": ["qf", "qff"],
+  "virgin atlantic": ["flying club", "vs"],
+  "air canada": ["aeroplan", "ac"],
+  "ana": ["nh", "all nippon"],
+  "jal": ["jl", "japan airlines"],
+  "korean air": ["skypass", "ke"],
+  "etihad": ["guest", "ey"],
+  "avianca": ["lifemiles", "av"],
+  "iberia": ["avios", "ib"],
+  "hawaiian": ["hawaiianmiles", "ha"],
+  // Hotels
+  "marriott": ["bonvoy", "mb", "spg"],
+  "hilton": ["honors", "hh"],
   "hyatt": ["world of hyatt", "woh"],
-  "ihg": ["one rewards"],
+  "ihg": ["one rewards", "ihg rewards"],
+  "choice": ["choice privileges"],
+  "wyndham": ["wyndham rewards"],
+  "radisson": ["radisson rewards"],
+  // Bank Programs
   "chase": ["ultimate rewards", "ur"],
   "amex": ["membership rewards", "mr"],
-  "citi": ["thankyou", "thank you", "typ"],
-  "capital one": ["venture miles"],
-  "wells fargo": ["rewards"],
-  "bilt": ["bilt rewards"],
+  "citi": ["thankyou", "thank you", "typ", "ty"],
+  "capital one": ["venture miles", "c1 miles"],
+  "wells fargo": ["rewards", "wf rewards"],
+  "bilt": ["bilt rewards", "bilt points"],
+  "us bank": ["flexperks", "us bank points"],
 };
 
 // Build bidirectional lookup: maps keywords to values AND values to keywords
@@ -81,6 +199,7 @@ function buildBidirectionalLookup(mapping: Record<string, string[]>): Map<string
 
 const issuerKeywordLookup = buildBidirectionalLookup(ISSUER_KEYWORDS);
 const currencyKeywordLookup = buildBidirectionalLookup(CURRENCY_KEYWORDS);
+const cardAbbreviationLookup = buildBidirectionalLookup(CARD_ABBREVIATIONS);
 
 export function AddCardModal({ 
   availableCards, 
@@ -113,6 +232,10 @@ export function AddCardModal({
     if (issuerName.includes(query)) return true;
     if (currencyName.includes(query)) return true;
     
+    // Check if search term is a card abbreviation (e.g., "csr" -> "sapphire reserve")
+    const matchedCardNames = cardAbbreviationLookup.get(query) ?? [];
+    if (matchedCardNames.some(name => cardName.includes(name))) return true;
+    
     // Check if search term is a keyword that maps to this card's issuer
     const matchedIssuers = issuerKeywordLookup.get(query) ?? [];
     if (matchedIssuers.some(issuer => issuerName.includes(issuer))) return true;
@@ -130,6 +253,12 @@ export function AddCardModal({
     for (const [keyword, currencies] of currencyKeywordLookup.entries()) {
       if (keyword.includes(query) || query.includes(keyword)) {
         if (currencies.some(currency => currencyName.includes(currency))) return true;
+      }
+    }
+    // Check card abbreviations with partial matching
+    for (const [keyword, cardNames] of cardAbbreviationLookup.entries()) {
+      if (keyword === query) {
+        if (cardNames.some(name => cardName.includes(name))) return true;
       }
     }
     

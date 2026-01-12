@@ -614,6 +614,27 @@ export default async function SettingsPage() {
     revalidatePath("/rules");
   }
 
+  async function resetOnboarding() {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createAdminClient();
+    await supabase
+      .from("user_feature_flags")
+      .upsert(
+        {
+          user_id: userId,
+          onboarding_completed: false,
+        },
+        { onConflict: "user_id" }
+      );
+
+    revalidatePath("/settings");
+    revalidatePath("/dashboard");
+    redirect("/dashboard");
+  }
+
   // Cards that require category selection
   const cardsNeedingSelection = typedWalletCards.filter(
     (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
@@ -841,6 +862,28 @@ export default async function SettingsPage() {
                 />
               </div>
             )}
+
+            {/* Reset Onboarding */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-white mb-1">
+                    Onboarding Tour
+                  </h2>
+                  <p className="text-sm text-zinc-400">
+                    Restart the guided tour to learn about CardTool&apos;s features.
+                  </p>
+                </div>
+                <form action={resetOnboarding}>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg border border-zinc-600 text-zinc-300 hover:bg-zinc-800 transition-colors text-sm font-medium"
+                  >
+                    Restart Tour
+                  </button>
+                </form>
+              </div>
+            </div>
 
             {/* Earning Categories Reference */}
             {allCategoriesForReference.length > 0 && (
