@@ -292,12 +292,12 @@ export function BalanceTable({
       </button>
       
       {!isCollapsed && (
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[calc(100vh-300px)]">
         <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
               <th 
-                className="px-4 py-3 font-medium sticky left-0 z-10 bg-zinc-900 w-[240px] min-w-[240px] cursor-pointer hover:text-white transition-colors border-r border-zinc-700"
+                className="px-4 py-3 font-medium sticky left-0 top-0 z-30 bg-zinc-900 w-[240px] min-w-[240px] cursor-pointer hover:text-white transition-colors border-r border-zinc-700"
                 onClick={() => handleSort("currency")}
                 style={{ boxShadow: '2px 0 8px -2px rgba(0,0,0,0.4)' }}
               >
@@ -309,7 +309,7 @@ export function BalanceTable({
               {players.map(player => (
                 <th 
                   key={player.player_number} 
-                  className="px-3 py-3 font-medium text-center cursor-pointer hover:text-white transition-colors min-w-[90px]"
+                  className="sticky top-0 z-20 bg-zinc-900 px-3 py-3 font-medium text-center cursor-pointer hover:text-white transition-colors min-w-[90px]"
                   title={player.description || `Player ${player.player_number}`}
                   onClick={() => handleSort(player.player_number)}
                 >
@@ -320,7 +320,7 @@ export function BalanceTable({
                 </th>
               ))}
               <th 
-                className="px-3 py-3 font-medium text-right min-w-[100px] cursor-pointer hover:text-white transition-colors"
+                className="sticky top-0 z-20 bg-zinc-900 px-3 py-3 font-medium text-right min-w-[100px] cursor-pointer hover:text-white transition-colors"
                 onClick={() => handleSort("total")}
               >
                 <span className="inline-flex items-center justify-end">
@@ -329,7 +329,7 @@ export function BalanceTable({
                 </span>
               </th>
               <th 
-                className="px-3 py-3 font-medium text-right min-w-[80px] cursor-pointer hover:text-white transition-colors"
+                className="sticky top-0 z-20 bg-zinc-900 px-3 py-3 font-medium text-right min-w-[80px] cursor-pointer hover:text-white transition-colors"
                 onClick={() => handleSort("value")}
               >
                 <span className="inline-flex items-center justify-end">
@@ -338,7 +338,7 @@ export function BalanceTable({
                 </span>
               </th>
               <th 
-                className="px-3 py-3 font-medium text-right min-w-[100px] cursor-pointer hover:text-white transition-colors"
+                className="sticky top-0 z-20 bg-zinc-900 px-3 py-3 font-medium text-right min-w-[100px] cursor-pointer hover:text-white transition-colors"
                 onClick={() => handleSort("totalValue")}
               >
                 <span className="inline-flex items-center justify-end">

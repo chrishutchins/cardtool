@@ -262,7 +262,8 @@ export default async function PointsPage() {
   const currencies = (currenciesResult.data ?? []) as Currency[];
   const balances = (balancesResult.data ?? []) as PointBalance[];
   const players = playersResult.data ?? [];
-  const creditTrackingEnabled = featureFlagsResult.data?.credit_tracking_enabled ?? false;
+  // Credit tracking is enabled for all users
+  const creditTrackingEnabled = true;
 
   // Build set of currencies earned by wallet cards
   const walletCurrencyIds = new Set<string>();

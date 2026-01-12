@@ -455,12 +455,12 @@ export function TransfersClient({
         </button>
 
         {!isCollapsed && (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-x-auto">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-auto max-h-[calc(100vh-300px)]">
             <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
                   <th 
-                    className="sticky left-0 z-10 bg-zinc-900 px-4 py-3 font-medium cursor-pointer hover:text-white transition-colors w-[240px] min-w-[240px] border-r border-zinc-700"
+                    className="sticky left-0 top-0 z-30 bg-zinc-900 px-4 py-3 font-medium cursor-pointer hover:text-white transition-colors w-[240px] min-w-[240px] border-r border-zinc-700"
                     onClick={() => handleSort("name")}
                     style={{ boxShadow: '2px 0 8px -2px rgba(0,0,0,0.4)' }}
                   >
@@ -472,7 +472,7 @@ export function TransfersClient({
                   {visibleColumns.map(source => (
                     <th 
                       key={source.id}
-                      className="px-3 py-3 font-medium text-center cursor-pointer hover:text-white transition-colors min-w-[70px]"
+                      className="sticky top-0 z-20 bg-zinc-900 px-3 py-3 font-medium text-center cursor-pointer hover:text-white transition-colors min-w-[70px]"
                       onClick={() => handleSort(`source_${source.id}`)}
                     >
                       <Tooltip text={source.name}>

@@ -67,7 +67,8 @@ export default async function TransfersPage() {
 
   const currencies = currenciesResult.data ?? [];
   const transferPartners = transferPartnersResult.data ?? [];
-  const creditTrackingEnabled = featureFlagsResult.data?.credit_tracking_enabled ?? false;
+  // Credit tracking is enabled for all users
+  const creditTrackingEnabled = true;
 
   // Get transferable currencies (sources) - sorted by name
   const transferableCurrencies = currencies
