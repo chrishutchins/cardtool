@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 
 interface ExpiringPoint {
@@ -30,10 +31,14 @@ interface UpcomingUnifiedProps {
   expiringPoints: ExpiringPoint[];
   expiringCredits: ExpiringCredit[];
   upcomingFees: UpcomingFee[];
+  // 90 day versions
+  expiringPoints90?: ExpiringPoint[];
+  expiringCredits90?: ExpiringCredit[];
+  upcomingFees90?: UpcomingFee[];
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+function formatShortDate(date: Date): string {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 function formatCurrency(value: number): string {
@@ -70,7 +75,6 @@ const GiftIcon = () => (
   </svg>
 );
 
-// Combined item for sorting by date
 type UpcomingItem = 
   | { type: "fee"; date: Date; data: UpcomingFee }
   | { type: "points"; date: Date; data: ExpiringPoint };
@@ -78,130 +82,162 @@ type UpcomingItem =
 export function UpcomingUnified({ 
   expiringPoints, 
   expiringCredits, 
-  upcomingFees 
+  upcomingFees,
+  expiringPoints90,
+  expiringCredits90,
+  upcomingFees90,
 }: UpcomingUnifiedProps) {
+  const [period, setPeriod] = useState<"30" | "90">("30");
+  
+  // Use 90-day data if available and selected
+  const activePoints = period === "90" && expiringPoints90 ? expiringPoints90 : expiringPoints;
+  const activeCredits = period === "90" && expiringCredits90 ? expiringCredits90 : expiringCredits;
+  const activeFees = period === "90" && upcomingFees90 ? upcomingFees90 : upcomingFees;
+  
+  // Calculate cutoff date for display
+  const now = new Date();
+  const cutoffDate = new Date(now);
+  cutoffDate.setDate(cutoffDate.getDate() + (period === "30" ? 30 : 90));
+  
   // Build list of fees and points, sorted by date
   const items: UpcomingItem[] = [];
   
-  upcomingFees.forEach((fee) => {
+  activeFees.forEach((fee) => {
     items.push({ type: "fee", date: fee.anniversaryDate, data: fee });
   });
   
-  expiringPoints.forEach((point) => {
+  activePoints.forEach((point) => {
     items.push({ type: "points", date: point.expirationDate, data: point });
   });
   
   // Sort by date (soonest first)
   items.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const hasAnyItems = expiringCredits.length > 0 || items.length > 0;
+  const hasAnyItems = activeCredits.length > 0 || items.length > 0;
+  const has90DayData = expiringPoints90 || expiringCredits90 || upcomingFees90;
   
   // Calculate total value of expiring credits
-  const totalCreditValue = expiringCredits.reduce((sum, c) => sum + (c.isValueBased ? c.value : 0), 0);
+  const totalCreditValue = activeCredits.reduce((sum, c) => sum + (c.isValueBased ? c.value : 0), 0);
 
-  if (!hasAnyItems) {
-    return (
-      <div className="p-5 rounded-xl border bg-zinc-900/50 border-zinc-800 h-full">
-        <div className="flex items-start justify-between mb-4">
+  return (
+    <div className="p-5 rounded-xl border bg-zinc-900/50 border-zinc-800">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
           <div>
-            <p className="text-sm text-zinc-400 mb-1">Upcoming</p>
-            <p className="text-xl font-bold text-white">Nothing Soon</p>
+            <p className="text-sm text-zinc-400">Upcoming</p>
+            <p className="text-xl font-bold text-white">Next {period} Days</p>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {has90DayData && (
+            <div className="flex rounded-lg bg-zinc-800 p-0.5">
+              <button
+                onClick={() => setPeriod("30")}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  period === "30" 
+                    ? "bg-zinc-700 text-white" 
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                30d
+              </button>
+              <button
+                onClick={() => setPeriod("90")}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  period === "90" 
+                    ? "bg-zinc-700 text-white" 
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                90d
+              </button>
+            </div>
+          )}
           <div className="p-2 rounded-lg bg-zinc-800 text-zinc-400">
             <CalendarIcon />
           </div>
         </div>
-        <p className="text-sm text-zinc-500">No items expiring in the next 30 days</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-5 rounded-xl border bg-zinc-900/50 border-zinc-800 h-full">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <p className="text-sm text-zinc-400 mb-1">Upcoming</p>
-          <p className="text-xl font-bold text-white">Next 30 Days</p>
-        </div>
-        <div className="p-2 rounded-lg bg-zinc-800 text-zinc-400">
-          <CalendarIcon />
-        </div>
       </div>
       
-      <div className="space-y-2">
-        {/* Expiring Credits Summary (always first) */}
-        {expiringCredits.length > 0 && (
-          <Link
-            href="/credits"
-            className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-1.5 rounded bg-blue-500/20 text-blue-400">
-                <GiftIcon />
+      {!hasAnyItems ? (
+        <p className="text-sm text-zinc-500">No items expiring in the next {period} days</p>
+      ) : (
+        <div className="space-y-2">
+          {/* Expiring Credits Summary */}
+          {activeCredits.length > 0 && (
+            <Link
+              href="/credits"
+              className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-1.5 rounded bg-blue-500/20 text-blue-400">
+                  <GiftIcon />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-medium">{activeCredits.length} Expiring Credits</span>
+                  <span className="text-zinc-500 text-sm">Through {formatShortDate(cutoffDate)}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-white font-medium">{expiringCredits.length} Expiring Credits</span>
-              </div>
-            </div>
-            {totalCreditValue > 0 && (
-              <span className="text-rose-400 font-semibold">{formatCurrency(totalCreditValue)}</span>
-            )}
-          </Link>
-        )}
+              {totalCreditValue > 0 && (
+                <span className="text-white font-medium">{formatCurrency(totalCreditValue)}</span>
+              )}
+            </Link>
+          )}
 
-        {/* Annual Fees and Expiring Points sorted by date */}
-        {items.map((item, idx) => {
-          if (item.type === "fee") {
-            return (
-              <Link
-                key={`fee-${idx}`}
-                href="/wallet"
-                className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded bg-amber-500/20 text-amber-400">
-                    <CreditCardIcon />
+          {/* Annual Fees and Expiring Points sorted by date */}
+          {items.map((item, idx) => {
+            if (item.type === "fee") {
+              return (
+                <Link
+                  key={`fee-${idx}`}
+                  href="/wallet"
+                  className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 rounded bg-amber-500/20 text-amber-400">
+                      <CreditCardIcon />
+                    </div>
+                    <div>
+                      <span className="text-white font-medium">Annual Fee</span>
+                      <span className="text-zinc-500 ml-2">{item.data.cardName}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-white font-medium">Annual Fee</span>
-                    <span className="text-zinc-500 ml-2">{item.data.cardName}</span>
+                  <div className="flex items-center gap-3 text-right">
+                    <span className="text-zinc-500 text-sm">{formatShortDate(item.date)}</span>
+                    <span className="text-white font-medium min-w-[70px] text-right">{formatCurrency(item.data.annualFee)}</span>
                   </div>
-                </div>
-                <div className="flex items-center gap-4 text-right">
-                  <span className="text-rose-400 font-semibold">{formatCurrency(item.data.annualFee)}</span>
-                  <span className="text-zinc-500 text-sm min-w-[60px]">{formatDate(item.date)}</span>
-                </div>
-              </Link>
-            );
-          }
-          
-          if (item.type === "points") {
-            return (
-              <Link
-                key={`points-${idx}`}
-                href="/points"
-                className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded bg-purple-500/20 text-purple-400">
-                    <StarIcon />
+                </Link>
+              );
+            }
+            
+            if (item.type === "points") {
+              return (
+                <Link
+                  key={`points-${idx}`}
+                  href="/points"
+                  className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 rounded bg-purple-500/20 text-purple-400">
+                      <StarIcon />
+                    </div>
+                    <div>
+                      <span className="text-white font-medium">Expiring Points</span>
+                      <span className="text-zinc-500 ml-2">{item.data.currencyName}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-white font-medium">Expiring Points</span>
-                    <span className="text-zinc-500 ml-2">{item.data.currencyName}</span>
+                  <div className="flex items-center gap-3 text-right">
+                    <span className="text-zinc-500 text-sm">{formatShortDate(item.date)}</span>
+                    <span className="text-white font-medium min-w-[70px] text-right">{item.data.balance.toLocaleString()}</span>
                   </div>
-                </div>
-                <div className="flex items-center gap-4 text-right">
-                  <span className="text-rose-400 font-semibold">{item.data.balance.toLocaleString()}</span>
-                  <span className="text-zinc-500 text-sm min-w-[60px]">{formatDate(item.date)}</span>
-                </div>
-              </Link>
-            );
-          }
-          
-          return null;
-        })}
-      </div>
+                </Link>
+              );
+            }
+            
+            return null;
+          })}
+        </div>
+      )}
     </div>
   );
 }

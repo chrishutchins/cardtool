@@ -42,20 +42,17 @@ function DonutChart({ bank, airline, hotel }: PointsByType) {
   const airlinePercent = (airline / total) * 100;
   const hotelPercent = (hotel / total) * 100;
   
-  // Calculate stroke-dasharray for each segment
-  const circumference = 2 * Math.PI * 40; // radius = 40
+  const circumference = 2 * Math.PI * 40;
   const bankDash = (bankPercent / 100) * circumference;
   const airlineDash = (airlinePercent / 100) * circumference;
   const hotelDash = (hotelPercent / 100) * circumference;
   
-  // Calculate rotation offsets
   const bankOffset = 0;
   const airlineOffset = bankDash;
   const hotelOffset = bankDash + airlineDash;
   
   return (
-    <svg width="80" height="80" viewBox="0 0 100 100" className="transform -rotate-90">
-      {/* Bank - Blue */}
+    <svg width="64" height="64" viewBox="0 0 100 100" className="transform -rotate-90 flex-shrink-0">
       {bank > 0 && (
         <circle
           cx="50"
@@ -68,7 +65,6 @@ function DonutChart({ bank, airline, hotel }: PointsByType) {
           strokeDashoffset={-bankOffset}
         />
       )}
-      {/* Airline - Amber */}
       {airline > 0 && (
         <circle
           cx="50"
@@ -81,7 +77,6 @@ function DonutChart({ bank, airline, hotel }: PointsByType) {
           strokeDashoffset={-airlineOffset}
         />
       )}
-      {/* Hotel - Purple */}
       {hotel > 0 && (
         <circle
           cx="50"
@@ -106,51 +101,49 @@ export function PointsSummary({ totalPoints, totalValue, pointsByType }: PointsS
       href="/points"
       className="block p-5 rounded-xl border transition-all duration-200 bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50"
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm text-zinc-400 mb-1">Points & Miles</p>
-          <p className="text-3xl font-bold text-white">
-            {hasPoints ? formatNumber(totalPoints) : "—"}
-          </p>
-          {hasPoints && totalValue > 0 && (
-            <p className="text-lg text-emerald-400 mt-1">
-              ≈ {formatCurrency(totalValue)}
-            </p>
-          )}
-          
-          {hasPoints && (
-            <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-zinc-800 text-sm">
-              {pointsByType.bank > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-400" />
-                  <span className="text-zinc-400">Bank</span>
-                  <span className="text-white font-medium">{formatNumber(pointsByType.bank)}</span>
-                </div>
-              )}
-              {pointsByType.airline > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span className="text-zinc-400">Airline</span>
-                  <span className="text-white font-medium">{formatNumber(pointsByType.airline)}</span>
-                </div>
-              )}
-              {pointsByType.hotel > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-purple-400" />
-                  <span className="text-zinc-400">Hotel</span>
-                  <span className="text-white font-medium">{formatNumber(pointsByType.hotel)}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        
-        {hasPoints && (
-          <div className="ml-4">
-            <DonutChart {...pointsByType} />
-          </div>
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-sm text-zinc-400">Points & Miles</p>
+      </div>
+      
+      <div className="flex items-baseline gap-3 mb-3">
+        <span className="text-3xl font-bold text-white">
+          {hasPoints ? formatNumber(totalPoints) : "—"}
+        </span>
+        {hasPoints && totalValue > 0 && (
+          <span className="text-lg text-emerald-400">
+            ≈ {formatCurrency(totalValue)}
+          </span>
         )}
       </div>
+      
+      {hasPoints && (
+        <div className="flex items-center gap-4 pt-3 border-t border-zinc-800">
+          <div className="flex flex-col gap-1 text-sm flex-1">
+            {pointsByType.bank > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-400" />
+                <span className="text-zinc-400">Bank</span>
+                <span className="text-white font-medium">{formatNumber(pointsByType.bank)}</span>
+              </div>
+            )}
+            {pointsByType.airline > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-amber-400" />
+                <span className="text-zinc-400">Airline</span>
+                <span className="text-white font-medium">{formatNumber(pointsByType.airline)}</span>
+              </div>
+            )}
+            {pointsByType.hotel > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-purple-400" />
+                <span className="text-zinc-400">Hotel</span>
+                <span className="text-white font-medium">{formatNumber(pointsByType.hotel)}</span>
+              </div>
+            )}
+          </div>
+          <DonutChart {...pointsByType} />
+        </div>
+      )}
     </Link>
   );
 }

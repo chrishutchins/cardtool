@@ -927,13 +927,17 @@ export default async function DashboardPage() {
           />
         </div>
 
-        {/* Upcoming + Earnings Row */}
-        <div className="grid gap-4 md:grid-cols-2 mb-6">
+        {/* Upcoming Section - Full Width */}
+        <div className="mb-6">
           <UpcomingUnified
             expiringPoints={expiringPoints}
             expiringCredits={expiringCredits}
             upcomingFees={upcomingFees}
           />
+        </div>
+
+        {/* Earnings Summary - Full Width */}
+        <div className="mb-6">
           <EarningsSummary returns={returns} cardCount={cards.length} />
         </div>
 
