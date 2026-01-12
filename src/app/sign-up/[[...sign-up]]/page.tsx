@@ -261,7 +261,7 @@ export default function SignUpPage() {
               </div>
             </div>
             <SignUp
-              forceRedirectUrl="/wallet"
+              forceRedirectUrl="/dashboard"
               initialValues={{ emailAddress: email }}
               appearance={{
                 elements: {

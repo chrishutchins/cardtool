@@ -8,7 +8,22 @@ interface OnboardingStep {
   title: string;
   message: string;
   position: "bottom" | "top" | "left" | "right";
+  parentDropdown?: string; // The dropdown that contains this target (for desktop)
 }
+
+// Map of targets to their parent dropdowns (for desktop navigation)
+const DROPDOWN_PARENTS: Record<string, string> = {
+  "wallet": "credit-cards-menu",
+  "compare": "credit-cards-menu",
+  "rules": "credit-cards-menu",
+  "credits": "credits-menu",
+  "inventory": "credits-menu",
+  "points": "points-menu",
+  "transfers": "points-menu",
+  "spending": "settings-menu",
+  "point-values": "settings-menu",
+  "settings": "settings-menu",
+};
 
 const ONBOARDING_STEPS: OnboardingStep[] = [
   {
@@ -16,6 +31,21 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     title: "Your Wallet",
     message: "Start by adding the credit cards you have to your wallet. This is where you'll manage all your cards and track their rewards.",
     position: "bottom",
+    parentDropdown: "credit-cards-menu",
+  },
+  {
+    target: "compare",
+    title: "Compare Cards",
+    message: "Browse different spending categories to see which cards offer the best return on your spending.",
+    position: "bottom",
+    parentDropdown: "credit-cards-menu",
+  },
+  {
+    target: "rules",
+    title: "Application Rules",
+    message: "Track which cards you're eligible to apply for based on issuer-specific rules like Chase 5/24 and Amex 2/90.",
+    position: "bottom",
+    parentDropdown: "credit-cards-menu",
   },
   {
     target: "earnings",
@@ -24,46 +54,32 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     position: "bottom",
   },
   {
-    target: "compare",
-    title: "Compare Cards",
-    message: "Browse different spending categories to see which cards offer the best return on your spending.",
-    position: "bottom",
-  },
-  {
     target: "credits",
     title: "Track Your Credits",
     message: "Never let a card credit go to waste. Track monthly Uber credits, airline fee credits, and more to maximize the value you get from your cards.",
     position: "bottom",
+    parentDropdown: "credits-menu",
   },
   {
     target: "inventory",
     title: "Inventory Tracking",
     message: "Keep track of perks you've earned but haven't used yet—like free nights, companion passes, or lounge passes. Never let them expire!",
     position: "bottom",
+    parentDropdown: "credits-menu",
   },
   {
     target: "spending",
     title: "Edit Spending",
     message: "Edit the default spending assumptions that drive the Earnings tab calculations.",
     position: "bottom",
-  },
-  {
-    target: "rules",
-    title: "Application Rules",
-    message: "Track which cards you're eligible to apply for based on issuer-specific rules like Chase 5/24 and Amex 2/90.",
-    position: "bottom",
+    parentDropdown: "settings-menu",
   },
   {
     target: "point-values",
     title: "Point Valuations",
     message: "Change the assumptions for how much points are worth to customize your earnings calculations.",
     position: "bottom",
-  },
-  {
-    target: "settings",
-    title: "Card Settings",
-    message: "After adding cards to your wallet, you can edit card and bank-specific settings here.",
-    position: "bottom",
+    parentDropdown: "settings-menu",
   },
 ];
 
@@ -238,8 +254,8 @@ interface OnboardingTourProps {
   onComplete: () => Promise<void>;
 }
 
-// Nav items that live in the mobile menu
-const NAV_TARGETS = ["dashboard", "wallet", "earnings", "compare", "credits", "inventory", "spending", "rules", "point-values", "settings"];
+// Nav items that live in the mobile menu (includes dropdown button IDs)
+const NAV_TARGETS = ["dashboard", "credit-cards-menu", "wallet", "earnings", "credits-menu", "credits", "inventory", "points-menu", "points", "transfers", "settings-menu", "spending", "compare", "rules", "point-values", "settings"];
 
 export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -300,6 +316,22 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
     return false;
   }, [isMenuOpen]);
 
+  // Open a specific dropdown on desktop by clicking its button
+  const openDropdown = useCallback((dropdownId: string) => {
+    const dropdownButton = document.querySelector(`[data-onboarding="${dropdownId}"]`) as HTMLButtonElement;
+    if (dropdownButton) {
+      // Check if dropdown is already open by looking for the dropdown content nearby
+      const parent = dropdownButton.closest('.relative');
+      const dropdownContent = parent?.querySelector('.absolute');
+      if (!dropdownContent) {
+        // Dropdown is closed, click to open
+        dropdownButton.click();
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -314,7 +346,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
     const timeouts: NodeJS.Timeout[] = [];
 
     const tryFindTarget = () => {
-      if (cancelled) return;
+      if (cancelled) return false;
       
       const rect = findTargetRect(step.target);
       if (rect) {
@@ -337,6 +369,15 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
       timeouts.push(setTimeout(() => tryFindTarget(), 350));
       timeouts.push(setTimeout(() => tryFindTarget(), 500));
       timeouts.push(setTimeout(() => tryFindTarget(), 750));
+    } else if (step.parentDropdown && !isMobile()) {
+      // On desktop, if the target is inside a dropdown, open it first
+      openDropdown(step.parentDropdown);
+      
+      // After opening dropdown, wait a bit then retry
+      timeouts.push(setTimeout(() => tryFindTarget(), 50));
+      timeouts.push(setTimeout(() => tryFindTarget(), 100));
+      timeouts.push(setTimeout(() => tryFindTarget(), 200));
+      timeouts.push(setTimeout(() => tryFindTarget(), 350));
     } else {
       // Just retry in case of timing issues
       timeouts.push(setTimeout(() => tryFindTarget(), 50));
@@ -358,7 +399,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
       window.removeEventListener("scroll", handleUpdate, true);
       window.removeEventListener("resize", handleUpdate);
     };
-  }, [step, currentStep, isMobile, openMenuIfNeeded, findTargetRect]);
+  }, [step, currentStep, isMobile, openMenuIfNeeded, openDropdown, findTargetRect]);
 
   const handleNext = () => {
     const nextStep = currentStep + 1;

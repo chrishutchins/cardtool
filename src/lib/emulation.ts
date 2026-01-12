@@ -94,12 +94,15 @@ export async function startEmulation(userId: string, userEmail: string | null): 
     throw new Error("Not authorized");
   }
 
-  // Verify target user exists
-  const clerk = await clerkClient();
-  try {
-    await clerk.users.getUser(userId);
-  } catch {
-    throw new Error("Target user not found");
+  // Verify target user exists in Clerk (skip in dev mode since Clerk instances differ)
+  // In dev mode, we trust the user ID from the database
+  if (process.env.NODE_ENV !== "development") {
+    const clerk = await clerkClient();
+    try {
+      await clerk.users.getUser(userId);
+    } catch {
+      throw new Error("Target user not found");
+    }
   }
 
   const cookieStore = await cookies();

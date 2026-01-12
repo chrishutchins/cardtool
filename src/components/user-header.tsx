@@ -18,6 +18,7 @@ interface NavItem {
 interface NavGroup {
   label: string;
   items: NavItem[];
+  onboardingId?: string;
 }
 
 type NavEntry = NavItem | NavGroup;
@@ -30,6 +31,7 @@ const baseNavGroups: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", onboardingId: "dashboard" },
   {
     label: "Credit Cards",
+    onboardingId: "credit-cards-menu",
     items: [
       { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
       { href: "/compare", label: "Compare", onboardingId: "compare" },
@@ -39,6 +41,7 @@ const baseNavGroups: NavEntry[] = [
   { href: "/returns", label: "Earnings", onboardingId: "earnings" },
   {
     label: "Credits",
+    onboardingId: "credits-menu",
     items: [
       { href: "/credits", label: "Credit Tracker", onboardingId: "credits" },
       { href: "/inventory", label: "Inventory", onboardingId: "inventory" },
@@ -46,6 +49,7 @@ const baseNavGroups: NavEntry[] = [
   },
   {
     label: "Points",
+    onboardingId: "points-menu",
     items: [
       { href: "/points", label: "Points Balances", onboardingId: "points" },
       { href: "/transfer-partners", label: "Transfer Partners", onboardingId: "transfers" },
@@ -53,6 +57,7 @@ const baseNavGroups: NavEntry[] = [
   },
   {
     label: "Settings",
+    onboardingId: "settings-menu",
     items: [
       { href: "/spending", label: "Spending", onboardingId: "spending" },
       { href: "/point-values", label: "Point Values", onboardingId: "point-values" },
@@ -97,6 +102,7 @@ function NavDropdown({ group, pathname }: { group: NavGroup; pathname: string })
     <div ref={dropdownRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
+        data-onboarding={group.onboardingId}
         className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
           isGroupActive
             ? "bg-zinc-800 text-white"
@@ -210,7 +216,10 @@ export function UserHeader({ isAdmin = false, emulationInfo }: UserHeaderProps) 
                       return (
                         <div key={entry.label}>
                           {index > 0 && <div className="border-t border-zinc-700 my-1" />}
-                          <div className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                          <div 
+                            data-onboarding={entry.onboardingId}
+                            className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider"
+                          >
                             {entry.label}
                           </div>
                           {entry.items.map((item) => {

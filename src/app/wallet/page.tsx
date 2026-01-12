@@ -447,9 +447,6 @@ export default async function WalletPage() {
   // Check if account linking (Plaid) is enabled
   const accountLinkingEnabled = featureFlagsResult.data?.account_linking_enabled ?? false;
   
-  // Check if onboarding has been completed
-  const onboardingCompleted = featureFlagsResult.data?.onboarding_completed ?? false;
-  
   // Build TWO debit pay maps:
   // 1. debitPayMapByWalletId - for display in WalletCardList (keyed by wallet_card_id)
   // 2. debitPayMapByCardId - for the calculator (keyed by card_id, max value across instances)
@@ -1422,23 +1419,6 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
-  async function completeOnboarding() {
-    "use server";
-    // Use effectiveUserId to handle emulation properly
-    const userId = await getEffectiveUserId();
-    if (!userId) return;
-
-    const supabase = createClient();
-    await supabase.from("user_feature_flags").upsert(
-      {
-        user_id: userId,
-        onboarding_completed: true,
-      },
-      { onConflict: "user_id" }
-    );
-    revalidatePath("/wallet");
-  }
-
   async function productChangeCard(data: {
     currentWalletId: string;
     newCardId: string;
@@ -1646,10 +1626,7 @@ export default async function WalletPage() {
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
   return (
-    <WalletClient
-      showOnboarding={!onboardingCompleted}
-      onCompleteOnboarding={completeOnboarding}
-    >
+    <WalletClient>
       <div className="min-h-screen bg-zinc-950">
         <UserHeader 
           isAdmin={isAdmin} 
