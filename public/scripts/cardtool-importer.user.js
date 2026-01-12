@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.9.0
+// @version      1.9.1
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -514,6 +514,7 @@
                                 domain: config.domain,
                                 balancePageUrl: config.balance_page_url,
                                 selector: config.selector,
+                                attribute: config.attribute || null,  // Read from attribute instead of textContent
                                 aggregate: config.aggregate || false,
                                 parseBalance: (text) => {
                                     // Normalize: replace nbsp and other whitespace between digits
@@ -764,15 +765,23 @@
                 console.log('CardTool: Trying config:', config.name, 'selectors:', selectors, 'aggregate:', config.aggregate);
 
                 for (const selector of selectors) {
+                    // Helper to get text from element (supports attribute or textContent)
+                    const getElementText = (el) => {
+                        if (config.attribute) {
+                            return el.getAttribute(config.attribute) || '';
+                        }
+                        return el.textContent.trim();
+                    };
+
                     // Aggregate mode: find ALL matching elements and sum their values
                     if (config.aggregate) {
                         const elements = document.querySelectorAll(selector);
-                        console.log('CardTool: Selector', selector, '-> found', elements.length, 'elements (aggregate mode)');
+                        console.log('CardTool: Selector', selector, '-> found', elements.length, 'elements (aggregate mode)', config.attribute ? `(attr: ${config.attribute})` : '');
                         
                         if (elements.length > 0) {
                             let totalBalance = 0;
                             elements.forEach((el, idx) => {
-                                const text = el.textContent.trim();
+                                const text = getElementText(el);
                                 const balance = config.parseBalance(text);
                                 console.log('CardTool: Element', idx, 'text:', text, '-> balance:', balance);
                                 totalBalance += balance;
@@ -793,10 +802,10 @@
                     } else {
                         // Normal mode: find first matching element
                         const element = document.querySelector(selector);
-                        console.log('CardTool: Selector', selector, '-> element:', element ? 'FOUND' : 'not found');
+                        console.log('CardTool: Selector', selector, '-> element:', element ? 'FOUND' : 'not found', config.attribute ? `(attr: ${config.attribute})` : '');
                         
                         if (element) {
-                            const text = element.textContent.trim();
+                            const text = getElementText(element);
                             console.log('CardTool: Element text:', text);
                             const balance = config.parseBalance(text);
                             console.log('CardTool: Parsed balance:', balance);

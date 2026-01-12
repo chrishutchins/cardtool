@@ -1037,6 +1037,7 @@ export type Database = {
           parse_regex: string | null
           is_active: boolean | null
           aggregate: boolean
+          attribute: string | null
           created_at: string | null
           updated_at: string | null
           created_by: string | null
@@ -1051,6 +1052,7 @@ export type Database = {
           parse_regex?: string | null
           is_active?: boolean | null
           aggregate?: boolean
+          attribute?: string | null
           created_at?: string | null
           updated_at?: string | null
           created_by?: string | null
@@ -1065,6 +1067,7 @@ export type Database = {
           parse_regex?: string | null
           is_active?: boolean | null
           aggregate?: boolean
+          attribute?: string | null
           created_at?: string | null
           updated_at?: string | null
           created_by?: string | null
