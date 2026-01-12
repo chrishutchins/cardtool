@@ -587,6 +587,10 @@ export default async function DashboardPage() {
   const now = new Date();
   const thirtyDaysFromNow = new Date();
   thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+  const sixtyDaysFromNow = new Date();
+  sixtyDaysFromNow.setDate(sixtyDaysFromNow.getDate() + 60);
+  const ninetyDaysFromNow = new Date();
+  ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
 
   interface ExpiringCredit {
     creditId: string;
@@ -651,7 +655,7 @@ export default async function DashboardPage() {
         periodEnd.setDate(periodEnd.getDate() - 1);
       }
 
-      if (!periodEnd || periodEnd < now || periodEnd > thirtyDaysFromNow) continue;
+      if (!periodEnd || periodEnd < now || periodEnd > ninetyDaysFromNow) continue;
 
       // Check if credit is already used this period
       const periodStartStr = getPeriodStart(credit.reset_cycle, now);
@@ -761,10 +765,10 @@ export default async function DashboardPage() {
       pointsByType.bank += pb.balance;
     }
     
-    // Check for expiring points
+    // Check for expiring points (within 90 days)
     if (pb.expiration_date) {
       const expDate = parseLocalDate(pb.expiration_date);
-      if (expDate >= now && expDate <= thirtyDaysFromNow) {
+      if (expDate >= now && expDate <= ninetyDaysFromNow) {
         expiringPoints.push({
           currencyName: currency.name,
           balance: pb.balance,
@@ -852,8 +856,8 @@ export default async function DashboardPage() {
       nextAnniversary = new Date(anniversaryYear, approvalMonth, approvalDay);
     }
     
-    // Check if within 30 days
-    if (nextAnniversary >= now && nextAnniversary <= thirtyDaysFromNow) {
+    // Check if within 90 days
+    if (nextAnniversary >= now && nextAnniversary <= ninetyDaysFromNow) {
       upcomingFees.push({
         cardName: wc.custom_name ?? wc.cards.name,
         annualFee: wc.cards.annual_fee,

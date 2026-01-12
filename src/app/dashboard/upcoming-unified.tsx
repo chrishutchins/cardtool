@@ -31,10 +31,6 @@ interface UpcomingUnifiedProps {
   expiringPoints: ExpiringPoint[];
   expiringCredits: ExpiringCredit[];
   upcomingFees: UpcomingFee[];
-  // 90 day versions
-  expiringPoints90?: ExpiringPoint[];
-  expiringCredits90?: ExpiringCredit[];
-  upcomingFees90?: UpcomingFee[];
 }
 
 function formatDate(date: Date): string {
@@ -83,22 +79,19 @@ export function UpcomingUnified({
   expiringPoints, 
   expiringCredits, 
   upcomingFees,
-  expiringPoints90,
-  expiringCredits90,
-  upcomingFees90,
 }: UpcomingUnifiedProps) {
   const [period, setPeriod] = useState<"30" | "60" | "90">("30");
   
-  // Use appropriate data based on period
-  const activePoints = (period === "60" || period === "90") && expiringPoints90 ? expiringPoints90 : expiringPoints;
-  const activeCredits = (period === "60" || period === "90") && expiringCredits90 ? expiringCredits90 : expiringCredits;
-  const activeFees = (period === "60" || period === "90") && upcomingFees90 ? upcomingFees90 : upcomingFees;
-  
-  // Calculate cutoff date for display
+  // Calculate cutoff date based on period
   const now = new Date();
   const cutoffDate = new Date(now);
   const days = period === "30" ? 30 : period === "60" ? 60 : 90;
   cutoffDate.setDate(cutoffDate.getDate() + days);
+  
+  // Filter data based on period (all props contain up to 90 days of data)
+  const activeCredits = expiringCredits.filter(c => c.expiresAt <= cutoffDate);
+  const activePoints = expiringPoints.filter(p => p.expirationDate <= cutoffDate);
+  const activeFees = upcomingFees.filter(f => f.anniversaryDate <= cutoffDate);
   
   // Build list of fees and points, sorted by date
   const items: UpcomingItem[] = [];
@@ -115,7 +108,6 @@ export function UpcomingUnified({
   items.sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const hasAnyItems = activeCredits.length > 0 || items.length > 0;
-  const has90DayData = expiringPoints90 || expiringCredits90 || upcomingFees90;
   
   // Calculate total value of expiring credits
   const totalCreditValue = activeCredits.reduce((sum, c) => sum + (c.isValueBased ? c.value : 0), 0);
