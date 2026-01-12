@@ -115,7 +115,7 @@ export default async function PointsPage() {
       .from("user_wallets")
       .select("cards:card_id(primary_currency_id, secondary_currency_id)")
       .eq("user_id", effectiveUserId)
-      .is("closed_at", null),
+      .is("closed_date", null),
     
     // User's tracked/archived currencies
     supabase
