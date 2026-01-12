@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.8.4
+// @version      1.8.5
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -433,6 +433,18 @@
     // ============================================
 
     function init() {
+        // Prevent duplicate initialization (can happen with iframes or script re-runs)
+        if (document.getElementById('cardtool-badge')) {
+            console.log('CardTool: Badge already exists, skipping initialization');
+            return;
+        }
+        
+        // Only run in top frame, not iframes
+        if (window.self !== window.top) {
+            console.log('CardTool: Skipping iframe');
+            return;
+        }
+        
         // Load server configs first, then initialize
         loadServerConfigs(() => {
             // Find ALL matching site configs by domain
@@ -550,6 +562,13 @@
     // ============================================
 
     function createBadge() {
+        // Check if badge already exists (defensive check)
+        const existing = document.getElementById('cardtool-badge');
+        if (existing) {
+            badgeElement = existing;
+            return;
+        }
+        
         badgeElement = document.createElement('div');
         badgeElement.id = 'cardtool-badge';
         badgeElement.innerHTML = `
