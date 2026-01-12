@@ -35,7 +35,6 @@ import { CardRecommendationsSection } from "./card-recommendations-section";
 import { DashboardClient } from "./dashboard-client";
 import { PointsSummary } from "./points-summary";
 import { CreditSummary } from "./credit-summary";
-import { UpcomingSection } from "./upcoming-section";
 import { UpcomingUnified } from "./upcoming-unified";
 
 export const metadata: Metadata = {
@@ -927,30 +926,13 @@ export default async function DashboardPage() {
           />
         </div>
 
-        {/* Upcoming Sections - Side by Side for Comparison */}
+        {/* Upcoming + Earnings Row */}
         <div className="grid gap-4 md:grid-cols-2 mb-6">
-          {/* NEW: Unified list (by type: fees, points, credits summary) */}
-          <div>
-            <p className="text-xs text-emerald-400 mb-2 font-medium">NEW VERSION</p>
-            <UpcomingUnified
-              expiringPoints={expiringPoints}
-              expiringCredits={expiringCredits}
-              upcomingFees={upcomingFees}
-            />
-          </div>
-          {/* OLD: Separate sections */}
-          <div>
-            <p className="text-xs text-zinc-500 mb-2 font-medium">OLD VERSION</p>
-            <UpcomingSection
-              expiringPoints={expiringPoints}
-              expiringCredits={expiringCredits}
-              upcomingFees={upcomingFees}
-            />
-          </div>
-        </div>
-
-        {/* Earnings Summary Banner */}
-        <div className="mb-6">
+          <UpcomingUnified
+            expiringPoints={expiringPoints}
+            expiringCredits={expiringCredits}
+            upcomingFees={upcomingFees}
+          />
           <EarningsSummary returns={returns} cardCount={cards.length} />
         </div>
 

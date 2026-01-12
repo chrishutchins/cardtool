@@ -24,19 +24,19 @@ function formatPercent(value: number): string {
 export function EarningsSummary({ returns, cardCount }: EarningsSummaryProps) {
   if (!returns || cardCount === 0) {
     return (
-      <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex-1">
+      <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6 h-full">
+        <div className="flex items-start justify-between mb-4">
+          <div>
             <h2 className="text-lg font-semibold text-white mb-1">Total Earnings</h2>
             <p className="text-sm text-zinc-400">Based on your spending allocation</p>
           </div>
-          <Link
-            href={cardCount === 0 ? "/wallet" : "/spending"}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors whitespace-nowrap"
-          >
-            {cardCount === 0 ? "Add Cards" : "Set Up Spending"}
-          </Link>
         </div>
+        <Link
+          href={cardCount === 0 ? "/wallet" : "/spending"}
+          className="block px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors text-center"
+        >
+          {cardCount === 0 ? "Add Cards" : "Set Up Spending"}
+        </Link>
       </div>
     );
   }
@@ -47,36 +47,36 @@ export function EarningsSummary({ returns, cardCount }: EarningsSummaryProps) {
   const returnRate = returns.netReturnRate ?? 0;
 
   return (
-    <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex-1">
+    <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6 h-full">
+      <div className="flex items-start justify-between mb-4">
+        <div>
           <h2 className="text-lg font-semibold text-white mb-1">Total Earnings</h2>
           <p className="text-sm text-zinc-400">Based on your spending allocation</p>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-6 md:gap-8">
-          <div className="text-center">
-            <div className="text-xs text-zinc-500 uppercase mb-0.5">Total Spend</div>
-            <div className="text-lg font-semibold text-white">{formatCurrency(totalSpend)}</div>
-          </div>
-          
-          <div className="text-center">
-            <div className="text-xs text-zinc-500 uppercase mb-0.5">Net Earnings</div>
-            <div className="text-lg font-semibold text-emerald-400">{formatCurrency(netEarnings)}</div>
-          </div>
-          
-          <div className="text-center">
-            <div className="text-xs text-zinc-500 uppercase mb-0.5">Return Rate</div>
-            <div className="text-lg font-bold text-emerald-400">{formatPercent(returnRate)}</div>
-          </div>
-          
-          <Link
-            href="/returns"
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors whitespace-nowrap"
-          >
-            View Details →
-          </Link>
+      </div>
+      
+      <div className="space-y-3">
+        <div className="flex items-center justify-between py-1">
+          <span className="text-sm text-zinc-500">Total Spend</span>
+          <span className="text-sm font-medium text-white">{formatCurrency(totalSpend)}</span>
         </div>
+        
+        <div className="flex items-center justify-between py-1">
+          <span className="text-sm text-zinc-500">Net Earnings</span>
+          <span className="text-sm font-medium text-emerald-400">{formatCurrency(netEarnings)}</span>
+        </div>
+        
+        <div className="flex items-center justify-between py-1">
+          <span className="text-sm text-zinc-500">Return Rate</span>
+          <span className="text-sm font-bold text-emerald-400">{formatPercent(returnRate)}</span>
+        </div>
+        
+        <Link
+          href="/returns"
+          className="block mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors text-center"
+        >
+          View Details →
+        </Link>
       </div>
     </div>
   );

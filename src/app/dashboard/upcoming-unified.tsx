@@ -33,13 +33,6 @@ interface UpcomingUnifiedProps {
 }
 
 function formatDate(date: Date): string {
-  const now = new Date();
-  const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  
-  if (diffDays <= 0) return "Today";
-  if (diffDays === 1) return "Tomorrow";
-  if (diffDays <= 7) return `${diffDays} days`;
-  
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
@@ -62,62 +55,89 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-// Unified item type for the combined list
-type UnifiedItem = 
-  | { type: "fee"; data: UpcomingFee }
-  | { type: "points"; data: ExpiringPoint }
-  | { type: "credits_summary"; count: number; totalValue: number };
+// Combined item for sorting by date
+type UpcomingItem = 
+  | { type: "fee"; date: Date; data: UpcomingFee }
+  | { type: "points"; date: Date; data: ExpiringPoint };
 
 export function UpcomingUnified({ 
   expiringPoints, 
   expiringCredits, 
   upcomingFees 
 }: UpcomingUnifiedProps) {
-  // Build unified list sorted by type: fees first, then points, then credits summary
-  const items: UnifiedItem[] = [];
+  // Build list of fees and points, sorted by date
+  const items: UpcomingItem[] = [];
   
-  // Add annual fees (each as its own entry)
   upcomingFees.forEach((fee) => {
-    items.push({ type: "fee", data: fee });
+    items.push({ type: "fee", date: fee.anniversaryDate, data: fee });
   });
   
-  // Add expiring points (each as its own entry)
   expiringPoints.forEach((point) => {
-    items.push({ type: "points", data: point });
+    items.push({ type: "points", date: point.expirationDate, data: point });
   });
   
-  // Add credits summary (single entry if any credits exist)
-  if (expiringCredits.length > 0) {
-    const totalValue = expiringCredits.reduce((sum, c) => sum + (c.isValueBased ? c.value : 0), 0);
-    items.push({ type: "credits_summary", count: expiringCredits.length, totalValue });
+  // Sort by date (soonest first)
+  items.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const hasAnyItems = expiringCredits.length > 0 || items.length > 0;
+
+  if (!hasAnyItems) {
+    return (
+      <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6 h-full">
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-white mb-1">Upcoming</h2>
+          <p className="text-sm text-zinc-400">Next 30 days</p>
+        </div>
+        <p className="text-sm text-zinc-500 mt-4">Nothing expiring soon</p>
+      </div>
+    );
   }
 
-  if (items.length === 0) {
-    return null;
-  }
+  // Calculate total value of expiring credits
+  const totalCreditValue = expiringCredits.reduce((sum, c) => sum + (c.isValueBased ? c.value : 0), 0);
 
   return (
-    <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/50 p-5">
-      <h3 className="text-sm font-medium text-zinc-300 mb-4">Upcoming (Next 30 Days)</h3>
+    <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6 h-full">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white mb-1">Upcoming</h2>
+          <p className="text-sm text-zinc-400">Next 30 days</p>
+        </div>
+      </div>
       
-      <div className="space-y-2">
+      <div className="space-y-3">
+        {/* Expiring Credits Summary (always first) */}
+        {expiringCredits.length > 0 && (
+          <Link
+            href="/credits"
+            className="block py-2 hover:bg-zinc-800/30 -mx-2 px-2 rounded transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-zinc-300">
+                <span className="font-medium text-white">{expiringCredits.length}</span> Expiring Credits
+              </span>
+              {totalCreditValue > 0 && (
+                <span className="text-sm text-zinc-400">{formatCurrency(totalCreditValue)}</span>
+              )}
+            </div>
+          </Link>
+        )}
+
+        {/* Annual Fees and Expiring Points sorted by date */}
         {items.map((item, idx) => {
           if (item.type === "fee") {
             return (
               <div 
                 key={`fee-${idx}`} 
-                className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0"
+                className="flex items-center justify-between py-1"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-rose-400 flex-shrink-0" />
-                  <div>
-                    <span className="text-sm text-zinc-300">{item.data.cardName}</span>
-                    <span className="text-xs text-zinc-500 ml-2">Annual Fee</span>
-                  </div>
+                <div className="text-sm">
+                  <span className="text-zinc-500">Annual Fee: </span>
+                  <span className="text-zinc-300">{item.data.cardName}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-white">{formatCurrency(item.data.annualFee)}</span>
-                  <span className="text-xs text-rose-400/80 min-w-[60px] text-right">{formatDate(item.data.anniversaryDate)}</span>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-zinc-400">{formatCurrency(item.data.annualFee)}</span>
+                  <span className="text-zinc-500 min-w-[50px] text-right">{formatDate(item.date)}</span>
                 </div>
               </div>
             );
@@ -127,43 +147,17 @@ export function UpcomingUnified({
             return (
               <div 
                 key={`points-${idx}`} 
-                className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0"
+                className="flex items-center justify-between py-1"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                  <div>
-                    <span className="text-sm text-zinc-300">{item.data.currencyName}</span>
-                    <span className="text-xs text-zinc-500 ml-2">Expiring Points</span>
-                  </div>
+                <div className="text-sm">
+                  <span className="text-zinc-500">Expiring Points: </span>
+                  <span className="text-zinc-300">{item.data.currencyName}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-white">{formatNumber(item.data.balance)}</span>
-                  <span className="text-xs text-amber-400/80 min-w-[60px] text-right">{formatDate(item.data.expirationDate)}</span>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-zinc-400">{formatNumber(item.data.balance)}</span>
+                  <span className="text-zinc-500 min-w-[50px] text-right">{formatDate(item.date)}</span>
                 </div>
               </div>
-            );
-          }
-          
-          if (item.type === "credits_summary") {
-            return (
-              <Link
-                key="credits-summary"
-                href="/credits"
-                className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 -mx-2 px-2 rounded transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-                  <div>
-                    <span className="text-sm text-zinc-300">{item.count} expiring credit{item.count !== 1 ? "s" : ""}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  {item.totalValue > 0 && (
-                    <span className="text-sm text-zinc-400">{formatCurrency(item.totalValue)}</span>
-                  )}
-                  <span className="text-xs text-blue-400/80">View all →</span>
-                </div>
-              </Link>
             );
           }
           
