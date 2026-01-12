@@ -592,6 +592,16 @@ export default async function DashboardPage() {
   const ninetyDaysFromNow = new Date();
   ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
 
+  // Helper to create anniversary date, handling edge cases like Feb 29 in non-leap years
+  function createAnniversaryDate(year: number, month: number, day: number): Date {
+    const date = new Date(year, month, day);
+    // If the month rolled over (e.g., Feb 29 in non-leap year → Mar 1), use last day of intended month
+    if (date.getMonth() !== month) {
+      return new Date(year, month + 1, 0); // Day 0 of next month = last day of intended month
+    }
+    return date;
+  }
+
   interface ExpiringCredit {
     creditId: string;
     creditName: string;
@@ -646,12 +656,12 @@ export default async function DashboardPage() {
         
         // Find next cardmember year end (day before next anniversary)
         let anniversaryYear = year;
-        const thisYearAnniversary = new Date(year, approvalMonth, approvalDay);
+        const thisYearAnniversary = createAnniversaryDate(year, approvalMonth, approvalDay);
         if (now >= thisYearAnniversary) {
           anniversaryYear = year + 1;
         }
         // Period ends the day before the anniversary
-        periodEnd = new Date(anniversaryYear, approvalMonth, approvalDay);
+        periodEnd = createAnniversaryDate(anniversaryYear, approvalMonth, approvalDay);
         periodEnd.setDate(periodEnd.getDate() - 1);
       }
 
@@ -848,12 +858,12 @@ export default async function DashboardPage() {
     
     // Find next anniversary
     let anniversaryYear = now.getFullYear();
-    let nextAnniversary = new Date(anniversaryYear, approvalMonth, approvalDay);
+    let nextAnniversary = createAnniversaryDate(anniversaryYear, approvalMonth, approvalDay);
     
     // If anniversary already passed this year, check next year
     if (nextAnniversary < now) {
       anniversaryYear++;
-      nextAnniversary = new Date(anniversaryYear, approvalMonth, approvalDay);
+      nextAnniversary = createAnniversaryDate(anniversaryYear, approvalMonth, approvalDay);
     }
     
     // Check if within 90 days
