@@ -9,7 +9,7 @@ export async function GET() {
 
   const { data: configs, error } = await supabase
     .from("site_configs")
-    .select("id, name, currency_code, domain, balance_page_url, selector, parse_regex, is_active")
+    .select("id, name, currency_code, domain, balance_page_url, selector, parse_regex, is_active, aggregate")
     .order("name");
 
   if (error) {
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, currencyCode, domain, balancePageUrl, selector, parseRegex } = body;
+    const { name, currencyCode, domain, balancePageUrl, selector, parseRegex, aggregate } = body;
 
     // Validate required fields
     if (!name || !currencyCode || !domain || !selector) {
@@ -88,6 +88,7 @@ export async function POST(request: Request) {
           selector,
           parse_regex: parseRegex || "[\\d,]+",
           is_active: true,
+          aggregate: aggregate || false,
           updated_at: new Date().toISOString(),
           created_by: createdBy,
         },
@@ -126,7 +127,7 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, name, currencyCode, domain, balancePageUrl, selector, parseRegex, isActive } = body;
+    const { id, name, currencyCode, domain, balancePageUrl, selector, parseRegex, isActive, aggregate } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing required field: id" }, { status: 400 });
@@ -145,6 +146,7 @@ export async function PUT(request: Request) {
     if (selector !== undefined) updateData.selector = selector;
     if (parseRegex !== undefined) updateData.parse_regex = parseRegex;
     if (isActive !== undefined) updateData.is_active = isActive;
+    if (aggregate !== undefined) updateData.aggregate = aggregate;
 
     const { data, error } = await supabase
       .from("site_configs")

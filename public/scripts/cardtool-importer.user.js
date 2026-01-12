@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.8.9
+// @version      1.9.0
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -514,6 +514,7 @@
                                 domain: config.domain,
                                 balancePageUrl: config.balance_page_url,
                                 selector: config.selector,
+                                aggregate: config.aggregate || false,
                                 parseBalance: (text) => {
                                     // Normalize: replace nbsp and other whitespace between digits
                                     const normalized = text.replace(/[\u00A0\s]+/g, ' ');
@@ -760,27 +761,56 @@
             // Try each matching config's selectors until one finds a balance
             for (const config of matchingConfigs) {
                 const selectors = config.selector.split(',').map(s => s.trim());
-                console.log('CardTool: Trying config:', config.name, 'selectors:', selectors);
+                console.log('CardTool: Trying config:', config.name, 'selectors:', selectors, 'aggregate:', config.aggregate);
 
                 for (const selector of selectors) {
-                    const element = document.querySelector(selector);
-                    console.log('CardTool: Selector', selector, '-> element:', element ? 'FOUND' : 'not found');
-                    
-                    if (element) {
-                        const text = element.textContent.trim();
-                        console.log('CardTool: Element text:', text);
-                        const balance = config.parseBalance(text);
-                        console.log('CardTool: Parsed balance:', balance);
-
-                        if (balance > 0) {
-                            // Found a balance - only update UI if balance changed
-                            currentConfig = config;
-                            extractedBalance = balance;
-                            if (lastDisplayedBalance !== balance) {
-                                lastDisplayedBalance = balance;
-                                showBalanceFound(balance);
+                    // Aggregate mode: find ALL matching elements and sum their values
+                    if (config.aggregate) {
+                        const elements = document.querySelectorAll(selector);
+                        console.log('CardTool: Selector', selector, '-> found', elements.length, 'elements (aggregate mode)');
+                        
+                        if (elements.length > 0) {
+                            let totalBalance = 0;
+                            elements.forEach((el, idx) => {
+                                const text = el.textContent.trim();
+                                const balance = config.parseBalance(text);
+                                console.log('CardTool: Element', idx, 'text:', text, '-> balance:', balance);
+                                totalBalance += balance;
+                            });
+                            
+                            console.log('CardTool: Total aggregated balance:', totalBalance);
+                            
+                            if (totalBalance > 0) {
+                                currentConfig = config;
+                                extractedBalance = totalBalance;
+                                if (lastDisplayedBalance !== totalBalance) {
+                                    lastDisplayedBalance = totalBalance;
+                                    showBalanceFound(totalBalance);
+                                }
+                                return;
                             }
-                            return;
+                        }
+                    } else {
+                        // Normal mode: find first matching element
+                        const element = document.querySelector(selector);
+                        console.log('CardTool: Selector', selector, '-> element:', element ? 'FOUND' : 'not found');
+                        
+                        if (element) {
+                            const text = element.textContent.trim();
+                            console.log('CardTool: Element text:', text);
+                            const balance = config.parseBalance(text);
+                            console.log('CardTool: Parsed balance:', balance);
+
+                            if (balance > 0) {
+                                // Found a balance - only update UI if balance changed
+                                currentConfig = config;
+                                extractedBalance = balance;
+                                if (lastDisplayedBalance !== balance) {
+                                    lastDisplayedBalance = balance;
+                                    showBalanceFound(balance);
+                                }
+                                return;
+                            }
                         }
                     }
                 }
