@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.8.6
+// @version      1.8.7
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -580,27 +580,49 @@
         
         badgeElement = document.createElement('div');
         badgeElement.id = 'cardtool-badge';
-        badgeElement.innerHTML = `
-            <div class="cardtool-badge-header">
-                <div class="cardtool-badge-logo">C</div>
-                <span class="cardtool-badge-title">CardTool</span>
-                <button class="cardtool-badge-close" id="cardtool-badge-close">&times;</button>
-            </div>
-            <div class="cardtool-badge-body" id="cardtool-badge-content">
-                <div class="cardtool-badge-status">Looking for balance...</div>
-            </div>
-        `;
+        
+        // Create header
+        const header = document.createElement('div');
+        header.className = 'cardtool-badge-header';
+        
+        const logo = document.createElement('div');
+        logo.className = 'cardtool-badge-logo';
+        logo.textContent = 'C';
+        
+        const title = document.createElement('span');
+        title.className = 'cardtool-badge-title';
+        title.textContent = 'CardTool';
+        
+        // Create close button with direct event binding
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'cardtool-badge-close';
+        closeBtn.id = 'cardtool-badge-close';
+        closeBtn.innerHTML = '&times;';
+        closeBtn.type = 'button';
+        closeBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            badgeElement.style.display = 'none';
+            return false;
+        };
+        // Also add mousedown as backup
+        closeBtn.onmousedown = function(e) {
+            e.stopPropagation();
+        };
+        
+        header.appendChild(logo);
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+        
+        // Create body
+        const body = document.createElement('div');
+        body.className = 'cardtool-badge-body';
+        body.id = 'cardtool-badge-content';
+        body.innerHTML = '<div class="cardtool-badge-status">Looking for balance...</div>';
+        
+        badgeElement.appendChild(header);
+        badgeElement.appendChild(body);
         document.body.appendChild(badgeElement);
-
-        // Close button - use event delegation for reliability
-        const closeBtn = document.getElementById('cardtool-badge-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                badgeElement.style.display = 'none';
-            });
-        }
     }
 
     function updateBadgeContent(html) {
