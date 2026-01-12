@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 interface BalanceEditPopoverProps {
   initialBalance: number;
@@ -12,6 +12,7 @@ interface BalanceEditPopoverProps {
   onDelete?: () => void;
   onClose: () => void;
   isPending: boolean;
+  anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function BalanceEditPopover({
@@ -24,6 +25,7 @@ export function BalanceEditPopover({
   onDelete,
   onClose,
   isPending,
+  anchorRef,
 }: BalanceEditPopoverProps) {
   // Format initial balance with commas
   const formatWithCommas = (num: number) => num.toLocaleString();
@@ -31,14 +33,47 @@ export function BalanceEditPopover({
   const [expiration, setExpiration] = useState(initialExpiration || "");
   const [notes, setNotes] = useState(initialNotes || "");
   const [showDelete, setShowDelete] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
   const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input on mount
+  // Calculate position based on anchor element
+  const updatePosition = useCallback(() => {
+    if (anchorRef?.current && popoverRef.current) {
+      const anchorRect = anchorRef.current.getBoundingClientRect();
+      const popoverRect = popoverRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      
+      // Position below the anchor by default
+      let top = anchorRect.bottom + 4;
+      let left = anchorRect.left;
+      
+      // If popover would go off the bottom, position above
+      if (top + popoverRect.height > viewportHeight - 20) {
+        top = anchorRect.top - popoverRect.height - 4;
+      }
+      
+      // If popover would go off the right, align to right edge
+      if (left + popoverRect.width > viewportWidth - 20) {
+        left = viewportWidth - popoverRect.width - 20;
+      }
+      
+      // Ensure it doesn't go off the left
+      if (left < 20) {
+        left = 20;
+      }
+      
+      setPosition({ top, left });
+    }
+  }, [anchorRef]);
+
+  // Focus input on mount and calculate position
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, []);
+    updatePosition();
+  }, [updatePosition]);
 
   // Close on click outside
   useEffect(() => {
@@ -81,7 +116,8 @@ export function BalanceEditPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute right-0 top-0 z-50 w-72 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl text-left"
+      className="fixed z-[9999] w-72 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl text-left"
+      style={{ top: position.top, left: position.left }}
     >
       <form onSubmit={handleSubmit} className="p-3 space-y-3">
         <div className="text-sm font-medium text-white mb-2 text-left">

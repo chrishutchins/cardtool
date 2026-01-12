@@ -175,6 +175,7 @@ export function BalanceTable({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortField, setSortField] = useState<SortField>("currency");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const editingCellRef = useRef<HTMLTableCellElement | null>(null);
 
   const handleArchive = (currencyId: string) => {
     if (onArchiveCurrency) {
@@ -419,7 +420,11 @@ export function BalanceTable({
                     const expired = isExpired(balance?.expiration_date ?? null);
 
                     return (
-                      <td key={player.player_number} className="px-3 py-3 text-center relative">
+                      <td 
+                        key={player.player_number} 
+                        className="px-3 py-3 text-center relative"
+                        ref={isEditing ? editingCellRef : undefined}
+                      >
                         {isEditing ? (
                           <BalanceEditPopover
                             initialBalance={balance?.balance ?? 0}
@@ -431,6 +436,7 @@ export function BalanceTable({
                             onDelete={balance ? () => handleDelete(currency.id, player.player_number) : undefined}
                             onClose={() => setEditingCell(null)}
                             isPending={isPending}
+                            anchorRef={editingCellRef}
                           />
                         ) : (
                           (() => {

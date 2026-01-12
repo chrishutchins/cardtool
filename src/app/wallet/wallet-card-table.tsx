@@ -581,6 +581,7 @@ export function WalletCardTable({
         },
       },
       // Earns (currency name with upgrade indicator - read-only)
+      // Shows currency code in addition to name when currency name matches issuer name (e.g., "Chase" → "Chase (UR)")
       {
         id: "earns",
         label: "Earns",
@@ -589,16 +590,23 @@ export function WalletCardTable({
         sortAccessor: (row) => row.activeCurrency?.name?.toLowerCase() ?? "",
         render: (row) => {
           const currencyName = row.activeCurrency?.name ?? "Unknown";
+          const currencyCode = row.activeCurrency?.code;
+          const issuerName = row.card.issuers?.name;
+          
+          // Show code when currency name matches issuer name to distinguish them
+          const needsCode = currencyName === issuerName && currencyCode;
+          const displayName = needsCode ? `${currencyName} (${currencyCode})` : currencyName;
+          
           if (row.hasSecondaryEnabled && row.upgradedByCardName) {
             return (
-              <Tooltip wide text={`Having the ${row.upgradedByCardName} upgrades this card to earning ${currencyName}`}>
+              <Tooltip wide text={`Having the ${row.upgradedByCardName} upgrades this card to earning ${displayName}`}>
                 <span className="text-amber-400 cursor-help">
-                  ↑ {currencyName}
+                  ↑ {displayName}
                 </span>
               </Tooltip>
             );
           }
-          return <span className="text-zinc-400">{currencyName}</span>;
+          return <span className="text-zinc-400">{displayName}</span>;
         },
       },
       // Bonuses
