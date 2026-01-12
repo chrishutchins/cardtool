@@ -37,8 +37,8 @@ interface UpcomingUnifiedProps {
   upcomingFees90?: UpcomingFee[];
 }
 
-function formatShortDate(date: Date): string {
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+function formatDate(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function formatCurrency(value: number): string {
@@ -87,17 +87,18 @@ export function UpcomingUnified({
   expiringCredits90,
   upcomingFees90,
 }: UpcomingUnifiedProps) {
-  const [period, setPeriod] = useState<"30" | "90">("30");
+  const [period, setPeriod] = useState<"30" | "60" | "90">("30");
   
-  // Use 90-day data if available and selected
-  const activePoints = period === "90" && expiringPoints90 ? expiringPoints90 : expiringPoints;
-  const activeCredits = period === "90" && expiringCredits90 ? expiringCredits90 : expiringCredits;
-  const activeFees = period === "90" && upcomingFees90 ? upcomingFees90 : upcomingFees;
+  // Use appropriate data based on period
+  const activePoints = (period === "60" || period === "90") && expiringPoints90 ? expiringPoints90 : expiringPoints;
+  const activeCredits = (period === "60" || period === "90") && expiringCredits90 ? expiringCredits90 : expiringCredits;
+  const activeFees = (period === "60" || period === "90") && upcomingFees90 ? upcomingFees90 : upcomingFees;
   
   // Calculate cutoff date for display
   const now = new Date();
   const cutoffDate = new Date(now);
-  cutoffDate.setDate(cutoffDate.getDate() + (period === "30" ? 30 : 90));
+  const days = period === "30" ? 30 : period === "60" ? 60 : 90;
+  cutoffDate.setDate(cutoffDate.getDate() + days);
   
   // Build list of fees and points, sorted by date
   const items: UpcomingItem[] = [];
@@ -129,30 +130,38 @@ export function UpcomingUnified({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {has90DayData && (
-            <div className="flex rounded-lg bg-zinc-800 p-0.5">
-              <button
-                onClick={() => setPeriod("30")}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                  period === "30" 
-                    ? "bg-zinc-700 text-white" 
-                    : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                30d
-              </button>
-              <button
-                onClick={() => setPeriod("90")}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                  period === "90" 
-                    ? "bg-zinc-700 text-white" 
-                    : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                90d
-              </button>
-            </div>
-          )}
+          <div className="flex rounded-lg bg-zinc-800 p-0.5">
+            <button
+              onClick={() => setPeriod("30")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                period === "30" 
+                  ? "bg-zinc-700 text-white" 
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              30d
+            </button>
+            <button
+              onClick={() => setPeriod("60")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                period === "60" 
+                  ? "bg-zinc-700 text-white" 
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              60d
+            </button>
+            <button
+              onClick={() => setPeriod("90")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                period === "90" 
+                  ? "bg-zinc-700 text-white" 
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              90d
+            </button>
+          </div>
           <div className="p-2 rounded-lg bg-zinc-800 text-zinc-400">
             <CalendarIcon />
           </div>
@@ -173,14 +182,14 @@ export function UpcomingUnified({
                 <div className="p-1.5 rounded bg-blue-500/20 text-blue-400">
                   <GiftIcon />
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-white font-medium">{activeCredits.length} Expiring Credits</span>
-                  <span className="text-zinc-500 text-sm">Through {formatShortDate(cutoffDate)}</span>
-                </div>
+                <span className="text-white font-medium">{activeCredits.length} Expiring Credits</span>
               </div>
-              {totalCreditValue > 0 && (
-                <span className="text-white font-medium">{formatCurrency(totalCreditValue)}</span>
-              )}
+              <div className="flex items-center gap-3 text-right">
+                <span className="text-zinc-500 text-sm">By {formatDate(cutoffDate)}</span>
+                {totalCreditValue > 0 && (
+                  <span className="text-white font-medium min-w-[70px] text-right">{formatCurrency(totalCreditValue)}</span>
+                )}
+              </div>
             </Link>
           )}
 
@@ -203,7 +212,7 @@ export function UpcomingUnified({
                     </div>
                   </div>
                   <div className="flex items-center gap-3 text-right">
-                    <span className="text-zinc-500 text-sm">{formatShortDate(item.date)}</span>
+                    <span className="text-zinc-500 text-sm">{formatDate(item.date)}</span>
                     <span className="text-white font-medium min-w-[70px] text-right">{formatCurrency(item.data.annualFee)}</span>
                   </div>
                 </Link>
@@ -227,7 +236,7 @@ export function UpcomingUnified({
                     </div>
                   </div>
                   <div className="flex items-center gap-3 text-right">
-                    <span className="text-zinc-500 text-sm">{formatShortDate(item.date)}</span>
+                    <span className="text-zinc-500 text-sm">{formatDate(item.date)}</span>
                     <span className="text-white font-medium min-w-[70px] text-right">{item.data.balance.toLocaleString()}</span>
                   </div>
                 </Link>

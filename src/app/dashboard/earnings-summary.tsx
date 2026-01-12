@@ -24,7 +24,7 @@ function formatPercent(value: number): string {
 export function EarningsSummary({ returns, cardCount }: EarningsSummaryProps) {
   if (!returns || cardCount === 0) {
     return (
-      <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex-1">
             <h2 className="text-lg font-semibold text-white mb-1">Total Earnings</h2>
@@ -46,7 +46,7 @@ export function EarningsSummary({ returns, cardCount }: EarningsSummaryProps) {
   const returnRate = returns.netReturnRate ?? 0;
 
   return (
-    <div className="rounded-xl border border-zinc-700/30 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50 p-6">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex-1">
           <h2 className="text-lg font-semibold text-white mb-1">Total Earnings</h2>
