@@ -44,6 +44,7 @@ export interface CurrentWalletCard {
 interface ProductChangeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess: () => void; // Called after successful product change
   currentCard: CurrentWalletCard;
   allCards: CardForProductChange[];
   closedCards: ClosedWalletCard[];
@@ -63,6 +64,7 @@ interface ProductChangeModalProps {
 export function ProductChangeModal({
   isOpen,
   onClose,
+  onSuccess,
   currentCard,
   allCards,
   closedCards,
@@ -157,7 +159,7 @@ export function ProductChangeModal({
         customName: finalCustomName,
         reactivateWalletId: isReactivating ? reactivateOption : null,
       });
-      onClose();
+      onSuccess(); // Close everything after successful product change
     });
   };
 

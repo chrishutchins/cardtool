@@ -15,6 +15,7 @@ import {
 interface CloseCardModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess: () => void; // Called after successful close/delete
   cardName: string;
   customName: string | null;
   walletId: string;
@@ -31,6 +32,7 @@ interface CloseCardModalProps {
 export function CloseCardModal({
   isOpen,
   onClose,
+  onSuccess,
   cardName,
   customName,
   walletId,
@@ -60,7 +62,7 @@ export function CloseCardModal({
       } else {
         await onDeleteCard(walletId);
       }
-      onClose();
+      onSuccess(); // Close everything after successful action
     });
   };
 

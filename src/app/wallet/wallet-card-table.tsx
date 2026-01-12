@@ -499,9 +499,6 @@ export function WalletCardTable({
             >
               {row.displayName}
             </button>
-            {row.custom_name && (
-              <div className="text-xs text-zinc-500">{row.card.name}</div>
-            )}
           </div>
         ),
       },
@@ -1190,6 +1187,11 @@ export function WalletCardTable({
             setSettingsCard(productChangeCard);
             setProductChangeCard(null);
           }}
+          onSuccess={() => {
+            // Product change completed - close all modals
+            setProductChangeCard(null);
+            setSettingsCard(null);
+          }}
           currentCard={{
             id: productChangeCard.id,
             card_id: productChangeCard.card_id,
@@ -1213,6 +1215,11 @@ export function WalletCardTable({
             // Go back to settings on cancel
             setSettingsCard(closeCard);
             setCloseCard(null);
+          }}
+          onSuccess={() => {
+            // Card was closed/deleted - close all modals
+            setCloseCard(null);
+            setSettingsCard(null);
           }}
           cardName={closeCard.card.name}
           customName={closeCard.custom_name}
