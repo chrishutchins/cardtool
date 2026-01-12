@@ -87,12 +87,12 @@ export function CreditSummary({
       {hasPlaidAccounts && totalCreditLine > 0 && (
         <div className="flex items-center gap-4 pt-3 border-t border-zinc-800">
           <div className="flex flex-col gap-1 text-sm flex-1">
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-400">Balance</span>
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-400 w-16">Balance</span>
               <span className="text-white font-medium">{formatCurrency(totalBalance)}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-400">Available</span>
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-400 w-16">Available</span>
               <span className="text-emerald-400 font-medium">{formatCurrency(totalAvailable)}</span>
             </div>
           </div>

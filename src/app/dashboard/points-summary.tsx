@@ -118,25 +118,25 @@ export function PointsSummary({ totalPoints, totalValue, pointsByType }: PointsS
       
       {hasPoints && (
         <div className="flex items-center gap-4 pt-3 border-t border-zinc-800">
-          <div className="flex flex-col gap-1 text-sm flex-1">
+          <div className="flex flex-col gap-2 text-sm flex-1">
             {pointsByType.bank > 0 && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-400" />
-                <span className="text-zinc-400">Bank</span>
+                <span className="text-zinc-400 w-12">Bank</span>
                 <span className="text-white font-medium">{formatNumber(pointsByType.bank)}</span>
               </div>
             )}
             {pointsByType.airline > 0 && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-amber-400" />
-                <span className="text-zinc-400">Airline</span>
+                <span className="text-zinc-400 w-12">Airline</span>
                 <span className="text-white font-medium">{formatNumber(pointsByType.airline)}</span>
               </div>
             )}
             {pointsByType.hotel > 0 && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-purple-400" />
-                <span className="text-zinc-400">Hotel</span>
+                <span className="text-zinc-400 w-12">Hotel</span>
                 <span className="text-white font-medium">{formatNumber(pointsByType.hotel)}</span>
               </div>
             )}

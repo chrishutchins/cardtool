@@ -17,12 +17,27 @@ const REDACT_FIELDS = [
   "secret",
 ];
 
-function redactSensitiveData(obj: unknown): unknown {
+function redactSensitiveData(obj: unknown, seen = new WeakSet()): unknown {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj !== "object") return obj;
 
+  // Handle circular references
+  if (seen.has(obj as object)) {
+    return "[Circular]";
+  }
+  seen.add(obj as object);
+
+  // Handle Error objects specially - extract useful properties
+  if (obj instanceof Error) {
+    return {
+      name: obj.name,
+      message: obj.message,
+      stack: obj.stack?.split("\n").slice(0, 5).join("\n"), // First 5 lines of stack
+    };
+  }
+
   if (Array.isArray(obj)) {
-    return obj.map(redactSensitiveData);
+    return obj.map((item) => redactSensitiveData(item, seen));
   }
 
   const result: Record<string, unknown> = {};
@@ -31,7 +46,7 @@ function redactSensitiveData(obj: unknown): unknown {
     if (REDACT_FIELDS.some((field) => lowerKey.includes(field))) {
       result[key] = "[REDACTED]";
     } else if (typeof value === "object" && value !== null) {
-      result[key] = redactSensitiveData(value);
+      result[key] = redactSensitiveData(value, seen);
     } else {
       result[key] = value;
     }
