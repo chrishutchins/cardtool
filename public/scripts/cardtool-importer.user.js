@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.8.5
+// @version      1.8.6
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -208,18 +208,27 @@
             margin: 0 !important;
             padding: 0 !important;
         }
-        .cardtool-badge-close {
+        #cardtool-badge .cardtool-badge-close,
+        #cardtool-badge button.cardtool-badge-close {
             margin-left: auto !important;
             background: none !important;
             border: none !important;
             color: #71717a !important;
             cursor: pointer !important;
-            font-size: 16px !important;
+            font-size: 18px !important;
             line-height: 1 !important;
-            padding: 2px !important;
+            padding: 4px 8px !important;
+            pointer-events: auto !important;
+            position: relative !important;
+            z-index: 10 !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
         }
-        .cardtool-badge-close:hover {
+        #cardtool-badge .cardtool-badge-close:hover,
+        #cardtool-badge button.cardtool-badge-close:hover {
             color: #e4e4e7 !important;
+            background: rgba(255,255,255,0.1) !important;
+            border-radius: 4px !important;
         }
         .cardtool-badge-body {
             padding: 12px 14px !important;
@@ -583,10 +592,15 @@
         `;
         document.body.appendChild(badgeElement);
 
-        // Close button
-        document.getElementById('cardtool-badge-close').addEventListener('click', () => {
-            badgeElement.style.display = 'none';
-        });
+        // Close button - use event delegation for reliability
+        const closeBtn = document.getElementById('cardtool-badge-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                badgeElement.style.display = 'none';
+            });
+        }
     }
 
     function updateBadgeContent(html) {
