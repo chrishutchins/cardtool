@@ -71,7 +71,7 @@ export function EarningsSummary({ returns, cardCount }: EarningsSummaryProps) {
           
           <Link
             href="/returns"
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors whitespace-nowrap"
+            className="text-sm text-zinc-400 hover:text-white transition-colors whitespace-nowrap"
           >
             View Details →
           </Link>
