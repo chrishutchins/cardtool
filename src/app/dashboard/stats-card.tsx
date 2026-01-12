@@ -8,7 +8,7 @@ interface StatsCardProps {
   subtitle?: string;
   subtitleColor?: string;
   href: string;
-  icon: "cards" | "fees" | "credits" | "earnings" | "points" | "creditline";
+  icon: "cards" | "fees" | "credits" | "earnings" | "points" | "creditline" | "perks";
   highlight?: boolean;
 }
 
@@ -40,7 +40,12 @@ const icons = {
   ),
   creditline: (
     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  ),
+  perks: (
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
     </svg>
   ),
 };
@@ -71,35 +76,43 @@ export function StatsCard({ title, value, subtitle, subtitleColor, href, icon, h
   );
 }
 
-// Combined Cards + Fees Widget
+// Cards in Wallet - 3 stats across
 interface WalletSummaryCardProps {
   cardCount: number;
   totalFees: number;
+  perksValue: number;
   netFees: number;
 }
 
-export function WalletSummaryCard({ cardCount, totalFees, netFees }: WalletSummaryCardProps) {
+export function WalletSummaryCard({ cardCount, totalFees, perksValue, netFees }: WalletSummaryCardProps) {
   return (
     <Link
       href="/wallet"
       className="block p-5 rounded-xl border transition-all duration-200 bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50"
     >
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between mb-4">
         <div>
           <p className="text-sm text-zinc-400 mb-1">Cards in Wallet</p>
           <p className="text-3xl font-bold text-white">{cardCount}</p>
-          <div className="mt-3 pt-3 border-t border-zinc-800">
-            <p className="text-sm text-zinc-400 mb-0.5">Annual Fees</p>
-            <p className="text-xl font-semibold text-white">${totalFees.toLocaleString()}</p>
-            {netFees !== totalFees && (
-              <p className={`text-sm mt-0.5 ${netFees < 0 ? "text-emerald-400" : "text-zinc-500"}`}>
-                {netFees < 0 ? `Net -$${Math.abs(netFees).toLocaleString()}` : `Net $${netFees.toLocaleString()}`}
-              </p>
-            )}
-          </div>
         </div>
         <div className="p-2 rounded-lg bg-zinc-800 text-zinc-400">
           {icons.cards}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 pt-3 border-t border-zinc-800">
+        <div>
+          <p className="text-xs text-zinc-500 mb-0.5">Annual Fees</p>
+          <p className="text-lg font-semibold text-white">${totalFees.toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-xs text-zinc-500 mb-0.5">Perks Value</p>
+          <p className="text-lg font-semibold text-emerald-400">${perksValue.toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-xs text-zinc-500 mb-0.5">Net Fees</p>
+          <p className={`text-lg font-semibold ${netFees < 0 ? "text-emerald-400" : "text-white"}`}>
+            {netFees < 0 ? `-$${Math.abs(netFees).toLocaleString()}` : `$${netFees.toLocaleString()}`}
+          </p>
         </div>
       </div>
     </Link>

@@ -911,6 +911,7 @@ export default async function DashboardPage() {
           <WalletSummaryCard
             cardCount={walletRows.length}
             totalFees={totalAnnualFees}
+            perksValue={totalPerksValue}
             netFees={netFees}
           />
           <PointsSummary

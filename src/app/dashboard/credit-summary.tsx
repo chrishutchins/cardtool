@@ -18,103 +18,100 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+// Utilization donut chart
+function UtilizationDonut({ percent }: { percent: number }) {
+  const circumference = 2 * Math.PI * 40;
+  const usedDash = (percent / 100) * circumference;
+  const availableDash = circumference - usedDash;
+  
+  // Color based on utilization
+  const getColor = (p: number) => {
+    if (p <= 10) return "#34d399"; // emerald
+    if (p <= 30) return "#4ade80"; // green
+    if (p <= 50) return "#facc15"; // yellow
+    if (p <= 75) return "#fb923c"; // orange
+    return "#f87171"; // red
+  };
+  
+  return (
+    <div className="relative">
+      <svg width="80" height="80" viewBox="0 0 100 100" className="transform -rotate-90">
+        {/* Background track */}
+        <circle
+          cx="50"
+          cy="50"
+          r="40"
+          fill="none"
+          stroke="#27272a"
+          strokeWidth="12"
+        />
+        {/* Used portion */}
+        <circle
+          cx="50"
+          cy="50"
+          r="40"
+          fill="none"
+          stroke={getColor(percent)}
+          strokeWidth="12"
+          strokeDasharray={`${usedDash} ${availableDash}`}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-sm font-bold text-white">{percent}%</span>
+      </div>
+    </div>
+  );
+}
+
 export function CreditSummary({ 
   totalBalance, 
   totalAvailable, 
   totalCreditLine,
   hasPlaidAccounts 
 }: CreditSummaryProps) {
-  // Only show balance/available if user has Plaid accounts linked
-  // Credit line is always shown if any value exists (from manual entry or Plaid)
-  
   const utilizationPercent = totalCreditLine > 0 
     ? Math.round((totalBalance / totalCreditLine) * 100) 
     : 0;
-  
-  // Determine utilization color
-  const getUtilizationColor = (percent: number) => {
-    if (percent <= 10) return "text-emerald-400";
-    if (percent <= 30) return "text-green-400";
-    if (percent <= 50) return "text-yellow-400";
-    if (percent <= 75) return "text-orange-400";
-    return "text-red-400";
-  };
 
   return (
-    <div className="rounded-xl border border-zinc-700/30 bg-zinc-900/50 p-5">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-sm text-zinc-400 mb-1">Credit Summary</h3>
-          <div className="flex items-baseline gap-3">
-            <span className="text-3xl font-bold text-white">
-              {totalCreditLine > 0 ? formatCurrency(totalCreditLine) : "—"}
-            </span>
-            {totalCreditLine > 0 && (
-              <span className="text-sm text-zinc-500">total credit</span>
-            )}
-          </div>
-        </div>
-        <Link
-          href="/wallet"
-          className="p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-          </svg>
-        </Link>
-      </div>
-
-      {hasPlaidAccounts ? (
-        <div className="space-y-3">
-          {/* Balance Stats */}
-          <div className="flex gap-6 text-sm">
-            <div>
-              <span className="text-zinc-500">Balance: </span>
-              <span className="text-white font-medium">{formatCurrency(totalBalance)}</span>
-            </div>
-            <div>
-              <span className="text-zinc-500">Available: </span>
-              <span className="text-emerald-400 font-medium">{formatCurrency(totalAvailable)}</span>
-            </div>
-          </div>
-
-          {/* Utilization Bar */}
-          {totalCreditLine > 0 && (
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-zinc-500">Utilization</span>
-                <span className={getUtilizationColor(utilizationPercent)}>
-                  {utilizationPercent}%
-                </span>
+    <Link
+      href="/wallet"
+      className="block p-5 rounded-xl border transition-all duration-200 bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50"
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <p className="text-sm text-zinc-400 mb-1">Total Credit</p>
+          <p className="text-3xl font-bold text-white">
+            {totalCreditLine > 0 ? formatCurrency(totalCreditLine) : "—"}
+          </p>
+          
+          {hasPlaidAccounts && totalCreditLine > 0 && (
+            <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-zinc-800 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Balance</span>
+                <span className="text-white font-medium">{formatCurrency(totalBalance)}</span>
               </div>
-              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all ${
-                    utilizationPercent <= 10 ? "bg-emerald-400" :
-                    utilizationPercent <= 30 ? "bg-green-400" :
-                    utilizationPercent <= 50 ? "bg-yellow-400" :
-                    utilizationPercent <= 75 ? "bg-orange-400" :
-                    "bg-red-400"
-                  }`}
-                  style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
-                />
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Available</span>
+                <span className="text-emerald-400 font-medium">{formatCurrency(totalAvailable)}</span>
               </div>
             </div>
           )}
+          
+          {!hasPlaidAccounts && totalCreditLine > 0 && (
+            <p className="text-sm text-zinc-500 mt-2">
+              Connect Plaid for balances
+            </p>
+          )}
         </div>
-      ) : totalCreditLine > 0 ? (
-        <p className="text-sm text-zinc-500">
-          Connect accounts via{" "}
-          <Link href="/settings" className="text-blue-400 hover:text-blue-300">Settings</Link>{" "}
-          to track balances automatically.
-        </p>
-      ) : (
-        <p className="text-sm text-zinc-500">
-          Set credit limits in{" "}
-          <Link href="/wallet" className="text-blue-400 hover:text-blue-300">Wallet</Link>{" "}
-          to track your total credit.
-        </p>
-      )}
-    </div>
+        
+        {totalCreditLine > 0 && hasPlaidAccounts && (
+          <div className="ml-4">
+            <UtilizationDonut percent={utilizationPercent} />
+          </div>
+        )}
+      </div>
+    </Link>
   );
 }
