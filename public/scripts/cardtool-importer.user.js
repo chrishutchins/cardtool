@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.8.8
+// @version      1.8.9
 // @description  Automatically sync your loyalty program balances to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -208,8 +208,20 @@
             margin: 0 !important;
             padding: 0 !important;
         }
-        .cardtool-badge-close {
+        .cardtool-badge-refresh {
             margin-left: auto;
+            background: none;
+            border: none;
+            color: #71717a;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            padding: 4px;
+        }
+        .cardtool-badge-refresh:hover {
+            color: #10b981;
+        }
+        .cardtool-badge-close {
             background: none;
             border: none;
             color: #71717a;
@@ -575,7 +587,8 @@
             <div class="cardtool-badge-header">
                 <div class="cardtool-badge-logo">C</div>
                 <span class="cardtool-badge-title">CardTool</span>
-                <button class="cardtool-badge-close">&times;</button>
+                <button class="cardtool-badge-refresh" title="Refresh balance">&#8635;</button>
+                <button class="cardtool-badge-close" title="Close">&times;</button>
             </div>
             <div class="cardtool-badge-body" id="cardtool-badge-content">
                 <div class="cardtool-badge-status">Looking for balance...</div>
@@ -583,7 +596,16 @@
         `;
         document.body.appendChild(badgeElement);
 
-        // Close button - match admin tool pattern
+        // Refresh button - re-scan page for balance
+        badgeElement.querySelector('.cardtool-badge-refresh').addEventListener('click', () => {
+            extractedBalance = null;
+            lastDisplayedBalance = null;
+            currentConfig = null;
+            updateBadgeContent('<div class="cardtool-badge-status">Scanning...</div>');
+            setTimeout(tryExtractBalance, 500);
+        });
+
+        // Close button
         badgeElement.querySelector('.cardtool-badge-close').addEventListener('click', () => {
             badgeElement.remove();
         });
