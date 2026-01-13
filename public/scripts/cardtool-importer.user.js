@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.3.1
+// @version      2.3.2
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -1651,7 +1651,7 @@
                 });
             }
             
-            // Parse hard inquiries
+            // Parse hard inquiries only (skip promotional and account review inquiries)
             const hardInquiries = creditData.inquiry || [];
             console.log('CardTool Credit: Found', hardInquiries.length, 'hard inquiries');
             
@@ -1678,39 +1678,7 @@
                 }
             }
             
-            // Parse promotional inquiries (soft)
-            const promoInquiries = creditData.promotionalInquiry || [];
-            for (const inq of promoInquiries) {
-                if (!inq) continue;
-                const subscriber = inq.subscriber || {};
-                const dateStr = inq.inquiryDates || '';
-                const dates = dateStr.split(',').map(d => parseTransUnionDate(d.trim())).filter(Boolean);
-                
-                for (const date of dates) {
-                    result.inquiries.push({
-                        company: subscriber.name?.unparsed || 'Unknown',
-                        date: date,
-                        type: 'soft'
-                    });
-                }
-            }
-            
-            // Parse account review inquiries (soft)
-            const reviewInquiries = creditData.accountReviewInquiry || [];
-            for (const inq of reviewInquiries) {
-                if (!inq) continue;
-                const subscriber = inq.subscriber || {};
-                const dateStr = inq.requestedOnDates || '';
-                const dates = dateStr.split(',').map(d => parseTransUnionDate(d.trim())).filter(Boolean);
-                
-                for (const date of dates) {
-                    result.inquiries.push({
-                        company: subscriber.name?.unparsed || 'Unknown',
-                        date: date,
-                        type: 'soft'
-                    });
-                }
-            }
+            // Note: Skipping soft inquiries (promotionalInquiry, accountReviewInquiry)
             
             // Report timestamp
             const timestamp = ud?.TU_CONSUMER_DISCLOSURE?.reportData?.transactionControl?.tracking?.transactionTimeStamp;
