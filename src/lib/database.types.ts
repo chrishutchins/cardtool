@@ -2813,6 +2813,210 @@ export type Database = {
           },
         ]
       }
+      credit_report_snapshots: {
+        Row: {
+          id: string
+          user_id: string
+          player_number: number
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          report_date: string | null
+          fetched_at: string
+          raw_data: Record<string, unknown> | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          player_number?: number
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          report_date?: string | null
+          fetched_at?: string
+          raw_data?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          player_number?: number
+          bureau?: Database["public"]["Enums"]["credit_bureau"]
+          report_date?: string | null
+          fetched_at?: string
+          raw_data?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      credit_scores: {
+        Row: {
+          id: string
+          user_id: string
+          player_number: number
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id: string | null
+          score_type: Database["public"]["Enums"]["credit_score_type"]
+          score: number
+          score_date: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          player_number?: number
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id?: string | null
+          score_type: Database["public"]["Enums"]["credit_score_type"]
+          score: number
+          score_date?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          player_number?: number
+          bureau?: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id?: string | null
+          score_type?: Database["public"]["Enums"]["credit_score_type"]
+          score?: number
+          score_date?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_scores_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "credit_report_snapshots"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      credit_accounts: {
+        Row: {
+          id: string
+          user_id: string
+          player_number: number
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id: string | null
+          account_name: string
+          account_number_masked: string | null
+          creditor_name: string | null
+          status: Database["public"]["Enums"]["credit_account_status"]
+          date_opened: string | null
+          date_updated: string | null
+          date_closed: string | null
+          credit_limit_cents: number | null
+          high_balance_cents: number | null
+          balance_cents: number | null
+          monthly_payment_cents: number | null
+          account_type: Database["public"]["Enums"]["credit_account_type"]
+          loan_type: Database["public"]["Enums"]["credit_loan_type"]
+          responsibility: Database["public"]["Enums"]["credit_responsibility"]
+          terms: string | null
+          payment_status: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          player_number?: number
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id?: string | null
+          account_name: string
+          account_number_masked?: string | null
+          creditor_name?: string | null
+          status?: Database["public"]["Enums"]["credit_account_status"]
+          date_opened?: string | null
+          date_updated?: string | null
+          date_closed?: string | null
+          credit_limit_cents?: number | null
+          high_balance_cents?: number | null
+          balance_cents?: number | null
+          monthly_payment_cents?: number | null
+          account_type?: Database["public"]["Enums"]["credit_account_type"]
+          loan_type?: Database["public"]["Enums"]["credit_loan_type"]
+          responsibility?: Database["public"]["Enums"]["credit_responsibility"]
+          terms?: string | null
+          payment_status?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          player_number?: number
+          bureau?: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id?: string | null
+          account_name?: string
+          account_number_masked?: string | null
+          creditor_name?: string | null
+          status?: Database["public"]["Enums"]["credit_account_status"]
+          date_opened?: string | null
+          date_updated?: string | null
+          date_closed?: string | null
+          credit_limit_cents?: number | null
+          high_balance_cents?: number | null
+          balance_cents?: number | null
+          monthly_payment_cents?: number | null
+          account_type?: Database["public"]["Enums"]["credit_account_type"]
+          loan_type?: Database["public"]["Enums"]["credit_loan_type"]
+          responsibility?: Database["public"]["Enums"]["credit_responsibility"]
+          terms?: string | null
+          payment_status?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_accounts_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "credit_report_snapshots"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      credit_inquiries: {
+        Row: {
+          id: string
+          user_id: string
+          player_number: number
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id: string | null
+          company_name: string
+          inquiry_date: string
+          inquiry_type: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          player_number?: number
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id?: string | null
+          company_name: string
+          inquiry_date: string
+          inquiry_type?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          player_number?: number
+          bureau?: Database["public"]["Enums"]["credit_bureau"]
+          snapshot_id?: string | null
+          company_name?: string
+          inquiry_date?: string
+          inquiry_type?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_inquiries_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "credit_report_snapshots"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       card_with_currency: {
@@ -2954,6 +3158,22 @@ export type Database = {
         | "cash_back"
         | "crypto"
       travel_preference_type: "direct" | "brand" | "portal"
+      credit_bureau: "equifax" | "experian" | "transunion"
+      credit_score_type: "fico_8" | "fico_9" | "vantage_3" | "vantage_4" | "other"
+      credit_account_status: "open" | "closed" | "paid" | "unknown"
+      credit_account_type: "revolving" | "installment" | "mortgage" | "collection" | "other"
+      credit_loan_type:
+        | "credit_card"
+        | "flexible_credit_card"
+        | "charge_card"
+        | "auto_loan"
+        | "mortgage"
+        | "student_loan"
+        | "personal_loan"
+        | "home_equity"
+        | "retail"
+        | "other"
+      credit_responsibility: "individual" | "joint" | "authorized_user" | "cosigner" | "unknown"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3118,6 +3338,23 @@ export const Constants = {
         "crypto",
       ],
       travel_preference_type: ["direct", "brand", "portal"],
+      credit_bureau: ["equifax", "experian", "transunion"],
+      credit_score_type: ["fico_8", "fico_9", "vantage_3", "vantage_4", "other"],
+      credit_account_status: ["open", "closed", "paid", "unknown"],
+      credit_account_type: ["revolving", "installment", "mortgage", "collection", "other"],
+      credit_loan_type: [
+        "credit_card",
+        "flexible_credit_card",
+        "charge_card",
+        "auto_loan",
+        "mortgage",
+        "student_loan",
+        "personal_loan",
+        "home_equity",
+        "retail",
+        "other",
+      ],
+      credit_responsibility: ["individual", "joint", "authorized_user", "cosigner", "unknown"],
     },
   },
 } as const

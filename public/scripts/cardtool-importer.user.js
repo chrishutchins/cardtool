@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      1.9.1
-// @description  Automatically sync your loyalty program balances to CardTool
+// @version      2.0.0
+// @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
 // @exclude      *://localhost:*/*
@@ -978,13 +978,824 @@
     }
 
     // ============================================
+    // CREDIT REPORT TRACKING
+    // ============================================
+
+    // Credit bureau configurations
+    const CREDIT_BUREAU_CONFIGS = {
+        equifax: {
+            name: 'Equifax',
+            domain: 'my.equifax.com',
+            apiPatterns: [
+                /membercenter\/app\/data\/creditReport/,
+                /membercenter\/.*\/creditReport/
+            ],
+            parseResponse: parseEquifaxResponse
+        },
+        experian: {
+            name: 'Experian',
+            domain: 'www.experian.com',
+            apiPatterns: [
+                /api.*credit/i,
+                /member.*profile/i
+            ],
+            parseResponse: parseExperianResponse
+        },
+        transunion: {
+            name: 'TransUnion',
+            domain: 'service.transunion.com',
+            apiPatterns: [
+                /creditreport/i,
+                /dashboard/i
+            ],
+            parseResponse: parseTransUnionResponse,
+            useHtmlScraping: true
+        }
+    };
+
+    // Credit report state
+    let creditReportData = null;
+    let creditBadgeElement = null;
+    let currentBureau = null;
+
+    // ============================================
+    // XHR INTERCEPTOR FOR CREDIT BUREAUS
+    // ============================================
+
+    function setupCreditReportInterceptor() {
+        const hostname = window.location.hostname.toLowerCase();
+        
+        // Determine which bureau we're on
+        for (const [bureauKey, config] of Object.entries(CREDIT_BUREAU_CONFIGS)) {
+            if (hostname.includes(config.domain.replace('www.', ''))) {
+                currentBureau = bureauKey;
+                console.log('CardTool Credit: Detected bureau:', config.name);
+                
+                if (config.useHtmlScraping) {
+                    // For TransUnion, use HTML scraping instead of XHR interception
+                    setTimeout(() => tryScrapeCreditReport(bureauKey), 3000);
+                } else {
+                    // Set up XHR interception for Equifax and Experian
+                    interceptXHR(config);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function interceptXHR(config) {
+        const origOpen = XMLHttpRequest.prototype.open;
+        const origSend = XMLHttpRequest.prototype.send;
+
+        XMLHttpRequest.prototype.open = function(method, url, async, user, pass) {
+            this._cardtool_url = url;
+            return origOpen.apply(this, arguments);
+        };
+
+        XMLHttpRequest.prototype.send = function(body) {
+            const xhr = this;
+            const url = xhr._cardtool_url || '';
+
+            xhr.addEventListener('readystatechange', function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    // Check if this URL matches any of our API patterns
+                    const matchesPattern = config.apiPatterns.some(pattern => pattern.test(url));
+                    
+                    if (matchesPattern) {
+                        console.log('CardTool Credit: Intercepted API call:', url);
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            processInterceptedData(data, url, config);
+                        } catch (e) {
+                            console.warn('CardTool Credit: Failed to parse response', e);
+                        }
+                    }
+                }
+            });
+
+            return origSend.apply(this, arguments);
+        };
+
+        console.log('CardTool Credit: XHR interceptor installed for', config.name);
+    }
+
+    function processInterceptedData(data, url, config) {
+        try {
+            const parsed = config.parseResponse(data, url);
+            if (parsed && (parsed.accounts?.length > 0 || parsed.scores?.length > 0 || parsed.inquiries?.length > 0)) {
+                // Merge with existing data
+                if (!creditReportData) {
+                    creditReportData = { scores: [], accounts: [], inquiries: [], rawData: {} };
+                }
+                
+                if (parsed.scores) {
+                    creditReportData.scores = [...creditReportData.scores, ...parsed.scores];
+                }
+                if (parsed.accounts) {
+                    // Dedupe by account name + number
+                    const existingKeys = new Set(creditReportData.accounts.map(a => `${a.name}-${a.numberMasked}`));
+                    const newAccounts = parsed.accounts.filter(a => !existingKeys.has(`${a.name}-${a.numberMasked}`));
+                    creditReportData.accounts = [...creditReportData.accounts, ...newAccounts];
+                }
+                if (parsed.inquiries) {
+                    // Dedupe by company + date
+                    const existingKeys = new Set(creditReportData.inquiries.map(i => `${i.company}-${i.date}`));
+                    const newInquiries = parsed.inquiries.filter(i => !existingKeys.has(`${i.company}-${i.date}`));
+                    creditReportData.inquiries = [...creditReportData.inquiries, ...newInquiries];
+                }
+                if (parsed.reportDate) {
+                    creditReportData.reportDate = parsed.reportDate;
+                }
+                
+                // Store raw data for debugging
+                creditReportData.rawData[url] = data;
+                
+                console.log('CardTool Credit: Data collected -', 
+                    creditReportData.scores.length, 'scores,',
+                    creditReportData.accounts.length, 'accounts,',
+                    creditReportData.inquiries.length, 'inquiries');
+                
+                // Show or update credit badge
+                showCreditBadge();
+            }
+        } catch (e) {
+            console.error('CardTool Credit: Error processing data', e);
+        }
+    }
+
+    // ============================================
+    // EQUIFAX PARSER
+    // ============================================
+
+    function parseEquifaxResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null };
+
+        // Handle array of accounts (revolving, installment, etc.)
+        let accounts = [];
+        if (Array.isArray(data)) {
+            accounts = data;
+        } else if (Array.isArray(data.accounts)) {
+            accounts = data.accounts;
+        } else if (Array.isArray(data.revolvingAccounts)) {
+            accounts = data.revolvingAccounts;
+        } else if (data.accountDetails) {
+            accounts = [data];
+        } else {
+            // Try to find any array that looks like accounts
+            const arrayVal = Object.values(data).find(v => 
+                Array.isArray(v) && v.some(x => x && (x.accountName || x.displayDateOpen))
+            );
+            if (arrayVal) accounts = arrayVal;
+        }
+
+        // Parse accounts
+        for (const acct of accounts) {
+            if (!acct) continue;
+            
+            const details = acct.accountDetails || acct;
+            
+            result.accounts.push({
+                name: acct.accountName || acct.creditorName || 'Unknown',
+                numberMasked: acct.accountNumber || details.accountNumber || null,
+                creditorName: acct.creditorName || acct.accountName || null,
+                status: mapEquifaxStatus(acct.accountStatus),
+                dateOpened: parseEquifaxDate(acct.displayDateOpen || details.displayDateOpen),
+                dateUpdated: parseEquifaxDate(acct.displayDateReported || details.displayDateReported),
+                dateClosed: parseEquifaxDate(details.displayDateClosed),
+                creditLimitCents: parseDollarsToCents(details.creditLimit),
+                highBalanceCents: parseDollarsToCents(details.highBalance),
+                balanceCents: parseDollarsToCents(acct.balance || details.balance),
+                monthlyPaymentCents: parseDollarsToCents(details.monthlyPayment),
+                accountType: mapEquifaxAccountType(acct.accountType),
+                loanType: mapEquifaxLoanType(details.loanType),
+                responsibility: mapEquifaxOwnership(details.owner),
+                terms: details.terms || null,
+                paymentStatus: acct.paymentStatus || details.paymentStatus || null
+            });
+        }
+
+        // Parse score if present
+        if (data.score || data.creditScore) {
+            const score = data.score || data.creditScore;
+            result.scores.push({
+                type: 'vantage_3',
+                score: typeof score === 'object' ? score.value : score,
+                date: parseEquifaxDate(data.scoreDate || data.asOfDate)
+            });
+        }
+
+        // Parse inquiries if present
+        if (data.inquiries || data.hardInquiries) {
+            const inquiries = data.inquiries || data.hardInquiries || [];
+            for (const inq of inquiries) {
+                result.inquiries.push({
+                    company: inq.creditorName || inq.subscriberName || 'Unknown',
+                    date: parseEquifaxDate(inq.displayDate || inq.inquiryDate),
+                    type: inq.inquiryType || 'hard'
+                });
+            }
+        }
+
+        return result;
+    }
+
+    function parseEquifaxDate(str) {
+        if (!str) return null;
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+            return d.toISOString().split('T')[0];
+        }
+        return null;
+    }
+
+    function mapEquifaxStatus(status) {
+        if (!status) return 'unknown';
+        const s = status.toUpperCase();
+        if (s === 'OPEN' || s === 'ACTIVE') return 'open';
+        if (s === 'CLOSED') return 'closed';
+        if (s === 'PAID') return 'paid';
+        return 'unknown';
+    }
+
+    function mapEquifaxAccountType(type) {
+        if (!type) return 'other';
+        const t = type.toUpperCase();
+        if (t === 'REVOLVING') return 'revolving';
+        if (t === 'INSTALLMENT') return 'installment';
+        if (t === 'MORTGAGE') return 'mortgage';
+        if (t === 'COLLECTION') return 'collection';
+        return 'other';
+    }
+
+    function mapEquifaxLoanType(type) {
+        if (!type) return 'other';
+        const t = type.toUpperCase();
+        if (t === 'CREDIT_CARD') return 'credit_card';
+        if (t === 'FLEXIBLE_CREDIT_CARD') return 'flexible_credit_card';
+        if (t === 'CHARGE_CARD' || t === 'CHARGE') return 'charge_card';
+        if (t.includes('AUTO') || t.includes('CAR')) return 'auto_loan';
+        if (t.includes('MORTGAGE') || t.includes('HOME')) return 'mortgage';
+        if (t.includes('STUDENT')) return 'student_loan';
+        if (t.includes('PERSONAL')) return 'personal_loan';
+        if (t.includes('EQUITY')) return 'home_equity';
+        if (t.includes('RETAIL')) return 'retail';
+        return 'other';
+    }
+
+    function mapEquifaxOwnership(owner) {
+        if (!owner) return 'unknown';
+        const o = owner.toUpperCase();
+        if (o === 'INDIVIDUAL' || o === 'PRIMARY') return 'individual';
+        if (o === 'JOINT') return 'joint';
+        if (o === 'AUTHORIZED' || o.includes('AUTH')) return 'authorized_user';
+        if (o === 'COSIGNER' || o.includes('CO-SIGN')) return 'cosigner';
+        return 'unknown';
+    }
+
+    // ============================================
+    // EXPERIAN PARSER
+    // ============================================
+
+    function parseExperianResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null };
+
+        // Experian often has nested structures - try multiple paths
+        const tradeLines = data.tradeLines || data.accounts || data.creditAccounts || [];
+        const creditScore = data.ficoScore || data.creditScore || data.score;
+        const hardInquiries = data.inquiries || data.hardInquiries || [];
+
+        // Parse score
+        if (creditScore) {
+            const scoreValue = typeof creditScore === 'object' ? 
+                (creditScore.score || creditScore.value || creditScore.ficoScore) : creditScore;
+            if (scoreValue && scoreValue >= 300 && scoreValue <= 850) {
+                result.scores.push({
+                    type: 'fico_8',
+                    score: scoreValue,
+                    date: data.scoreDate || data.asOfDate || new Date().toISOString().split('T')[0]
+                });
+            }
+        }
+
+        // Parse accounts
+        for (const acct of tradeLines) {
+            if (!acct) continue;
+            
+            result.accounts.push({
+                name: acct.creditorName || acct.accountName || acct.subscriberName || 'Unknown',
+                numberMasked: acct.accountNumber || null,
+                creditorName: acct.creditorName || null,
+                status: mapExperianStatus(acct.accountStatus || acct.status),
+                dateOpened: acct.dateOpened || acct.openDate || null,
+                dateUpdated: acct.dateReported || acct.lastUpdated || null,
+                dateClosed: acct.dateClosed || null,
+                creditLimitCents: parseDollarsToCents(acct.creditLimit || acct.highCredit),
+                balanceCents: parseDollarsToCents(acct.balance || acct.currentBalance),
+                monthlyPaymentCents: parseDollarsToCents(acct.monthlyPayment || acct.scheduledPayment),
+                accountType: mapExperianAccountType(acct.accountType || acct.portfolioType),
+                loanType: mapExperianLoanType(acct.industryCode || acct.accountType),
+                responsibility: mapExperianResponsibility(acct.ecoaDesignator || acct.responsibility),
+                paymentStatus: acct.paymentStatus || null
+            });
+        }
+
+        // Parse inquiries
+        for (const inq of hardInquiries) {
+            if (!inq) continue;
+            result.inquiries.push({
+                company: inq.subscriberName || inq.creditorName || 'Unknown',
+                date: inq.inquiryDate || inq.date || null,
+                type: 'hard'
+            });
+        }
+
+        return result;
+    }
+
+    function mapExperianStatus(status) {
+        if (!status) return 'unknown';
+        const s = String(status).toUpperCase();
+        if (s.includes('OPEN') || s === 'O') return 'open';
+        if (s.includes('CLOSED') || s === 'C') return 'closed';
+        if (s.includes('PAID')) return 'paid';
+        return 'unknown';
+    }
+
+    function mapExperianAccountType(type) {
+        if (!type) return 'other';
+        const t = String(type).toUpperCase();
+        if (t.includes('REVOLV') || t === 'R') return 'revolving';
+        if (t.includes('INSTALL') || t === 'I') return 'installment';
+        if (t.includes('MORTG') || t === 'M') return 'mortgage';
+        return 'other';
+    }
+
+    function mapExperianLoanType(code) {
+        if (!code) return 'other';
+        const c = String(code).toUpperCase();
+        if (c.includes('BANK') || c.includes('CREDIT CARD') || c === 'BC') return 'credit_card';
+        if (c.includes('AUTO') || c === 'AU') return 'auto_loan';
+        if (c.includes('MORTGAGE') || c.includes('REAL ESTATE')) return 'mortgage';
+        if (c.includes('STUDENT') || c === 'SL') return 'student_loan';
+        if (c.includes('RETAIL')) return 'retail';
+        return 'other';
+    }
+
+    function mapExperianResponsibility(ecoa) {
+        if (!ecoa) return 'unknown';
+        const e = String(ecoa).toUpperCase();
+        if (e === 'I' || e === '1' || e.includes('INDIVIDUAL')) return 'individual';
+        if (e === 'J' || e === '2' || e.includes('JOINT')) return 'joint';
+        if (e === 'A' || e === '3' || e.includes('AUTH')) return 'authorized_user';
+        if (e === 'C' || e.includes('CO-SIGN') || e.includes('COSIGN')) return 'cosigner';
+        return 'unknown';
+    }
+
+    // ============================================
+    // TRANSUNION PARSER (HTML SCRAPING)
+    // ============================================
+
+    function parseTransUnionResponse(data, url) {
+        // TransUnion typically returns HTML or uses a different structure
+        // This is a placeholder - actual implementation depends on their API structure
+        return { scores: [], accounts: [], inquiries: [], reportDate: null };
+    }
+
+    function tryScrapeCreditReport(bureau) {
+        if (bureau !== 'transunion') return;
+        
+        console.log('CardTool Credit: Attempting to scrape TransUnion data');
+        
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null };
+        
+        // Try to find account sections
+        // TransUnion typically has expandable account sections
+        const accountSections = document.querySelectorAll('[class*="account"], [class*="tradeline"], [data-account]');
+        
+        for (const section of accountSections) {
+            const nameEl = section.querySelector('[class*="name"], [class*="creditor"], h3, h4');
+            const numberEl = section.querySelector('[class*="number"], [class*="account-number"]');
+            const statusEl = section.querySelector('[class*="status"]');
+            const balanceEl = section.querySelector('[class*="balance"]');
+            const limitEl = section.querySelector('[class*="limit"]');
+            const openedEl = section.querySelector('[class*="opened"], [class*="date-opened"]');
+            
+            if (nameEl) {
+                result.accounts.push({
+                    name: nameEl.textContent.trim(),
+                    numberMasked: numberEl?.textContent.trim() || null,
+                    status: mapTransUnionStatus(statusEl?.textContent),
+                    balanceCents: parseDollarsToCents(balanceEl?.textContent),
+                    creditLimitCents: parseDollarsToCents(limitEl?.textContent),
+                    dateOpened: parseTransUnionDate(openedEl?.textContent),
+                    accountType: 'other',
+                    loanType: 'other',
+                    responsibility: 'unknown'
+                });
+            }
+        }
+
+        // Try to find inquiries
+        const inquirySection = document.querySelector('[class*="inquir"]');
+        if (inquirySection) {
+            const inquiryRows = inquirySection.querySelectorAll('tr, [class*="row"]');
+            for (const row of inquiryRows) {
+                const nameEl = row.querySelector('[class*="name"], td:first-child');
+                const dateEl = row.querySelector('[class*="date"], td:nth-child(2)');
+                
+                if (nameEl && dateEl) {
+                    result.inquiries.push({
+                        company: nameEl.textContent.trim(),
+                        date: parseTransUnionDate(dateEl.textContent),
+                        type: 'hard'
+                    });
+                }
+            }
+        }
+
+        if (result.accounts.length > 0 || result.inquiries.length > 0) {
+            creditReportData = result;
+            showCreditBadge();
+        }
+    }
+
+    function mapTransUnionStatus(text) {
+        if (!text) return 'unknown';
+        const t = text.toLowerCase();
+        if (t.includes('open') || t.includes('current')) return 'open';
+        if (t.includes('closed')) return 'closed';
+        if (t.includes('paid')) return 'paid';
+        return 'unknown';
+    }
+
+    function parseTransUnionDate(text) {
+        if (!text) return null;
+        // Try to parse MM/DD/YYYY or similar formats
+        const match = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+        if (match) {
+            const [, month, day, year] = match;
+            const fullYear = year.length === 2 ? '20' + year : year;
+            return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+        return null;
+    }
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+
+    function parseDollarsToCents(value) {
+        if (!value) return null;
+        if (typeof value === 'number') return Math.round(value * 100);
+        
+        const str = String(value).replace(/[^0-9.-]/g, '');
+        const num = parseFloat(str);
+        if (isNaN(num)) return null;
+        return Math.round(num * 100);
+    }
+
+    // ============================================
+    // CREDIT REPORT BADGE UI
+    // ============================================
+
+    const creditBadgeStyles = `
+        #cardtool-credit-badge {
+            all: initial !important;
+            display: block !important;
+            position: fixed !important;
+            bottom: 20px !important;
+            left: 20px !important;
+            background: #18181b !important;
+            border: 1px solid #3f3f46 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            font-size: 13px !important;
+            color: #e4e4e7 !important;
+            z-index: 999998 !important;
+            overflow: hidden !important;
+            min-width: 240px !important;
+            max-width: 320px !important;
+            line-height: 1.4 !important;
+        }
+        #cardtool-credit-badge * {
+            box-sizing: border-box !important;
+            font-family: inherit !important;
+        }
+        .cardtool-credit-header {
+            background: #1e3a5f !important;
+            padding: 10px 14px !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            border-bottom: 1px solid #3f3f46 !important;
+        }
+        .cardtool-credit-logo {
+            width: 18px !important;
+            height: 18px !important;
+            background: #3b82f6 !important;
+            border-radius: 4px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-weight: bold !important;
+            font-size: 11px !important;
+            color: white !important;
+        }
+        .cardtool-credit-title {
+            font-weight: 600 !important;
+            font-size: 12px !important;
+            color: #60a5fa !important;
+        }
+        .cardtool-credit-close {
+            margin-left: auto !important;
+            background: none !important;
+            border: none !important;
+            color: #71717a !important;
+            cursor: pointer !important;
+            font-size: 18px !important;
+            padding: 4px !important;
+        }
+        .cardtool-credit-body {
+            padding: 12px 14px !important;
+            background: #18181b !important;
+        }
+        .cardtool-credit-stats {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 8px !important;
+            margin-bottom: 12px !important;
+        }
+        .cardtool-credit-stat {
+            text-align: center !important;
+            padding: 8px !important;
+            background: #27272a !important;
+            border-radius: 6px !important;
+        }
+        .cardtool-credit-stat-value {
+            font-size: 18px !important;
+            font-weight: 700 !important;
+            color: #60a5fa !important;
+        }
+        .cardtool-credit-stat-label {
+            font-size: 10px !important;
+            color: #71717a !important;
+            text-transform: uppercase !important;
+        }
+        .cardtool-credit-btn {
+            width: 100% !important;
+            padding: 10px 14px !important;
+            background: #3b82f6 !important;
+            border: none !important;
+            border-radius: 6px !important;
+            color: white !important;
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+        }
+        .cardtool-credit-btn:hover {
+            background: #2563eb !important;
+        }
+        .cardtool-credit-btn:disabled {
+            background: #3f3f46 !important;
+            color: #71717a !important;
+            cursor: not-allowed !important;
+        }
+        .cardtool-credit-status {
+            font-size: 11px !important;
+            color: #71717a !important;
+            text-align: center !important;
+            margin-top: 8px !important;
+        }
+    `;
+
+    function showCreditBadge() {
+        if (!creditReportData) return;
+        
+        // Inject styles if not already done
+        if (!document.getElementById('cardtool-credit-styles')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = 'cardtool-credit-styles';
+            styleEl.textContent = creditBadgeStyles;
+            document.head.appendChild(styleEl);
+        }
+
+        // Create or update badge
+        if (!creditBadgeElement) {
+            creditBadgeElement = document.createElement('div');
+            creditBadgeElement.id = 'cardtool-credit-badge';
+            document.body.appendChild(creditBadgeElement);
+        }
+
+        const bureauName = CREDIT_BUREAU_CONFIGS[currentBureau]?.name || 'Unknown';
+        const scoreDisplay = creditReportData.scores.length > 0 
+            ? creditReportData.scores[0].score 
+            : '—';
+
+        creditBadgeElement.innerHTML = `
+            <div class="cardtool-credit-header">
+                <div class="cardtool-credit-logo">C</div>
+                <span class="cardtool-credit-title">CardTool • ${bureauName}</span>
+                <button class="cardtool-credit-close" title="Close">&times;</button>
+            </div>
+            <div class="cardtool-credit-body">
+                <div class="cardtool-credit-stats">
+                    <div class="cardtool-credit-stat">
+                        <div class="cardtool-credit-stat-value">${scoreDisplay}</div>
+                        <div class="cardtool-credit-stat-label">Score</div>
+                    </div>
+                    <div class="cardtool-credit-stat">
+                        <div class="cardtool-credit-stat-value">${creditReportData.accounts.length}</div>
+                        <div class="cardtool-credit-stat-label">Accounts</div>
+                    </div>
+                    <div class="cardtool-credit-stat">
+                        <div class="cardtool-credit-stat-value">${creditReportData.inquiries.length}</div>
+                        <div class="cardtool-credit-stat-label">Inquiries</div>
+                    </div>
+                </div>
+                <div id="cardtool-credit-player-container"></div>
+                <button class="cardtool-credit-btn" id="cardtool-credit-sync-btn">
+                    Sync to CardTool
+                </button>
+                <div class="cardtool-credit-status" id="cardtool-credit-status">
+                    Data captured. Click to sync.
+                </div>
+            </div>
+        `;
+
+        // Event listeners
+        creditBadgeElement.querySelector('.cardtool-credit-close').addEventListener('click', () => {
+            creditBadgeElement.remove();
+            creditBadgeElement = null;
+        });
+
+        creditBadgeElement.querySelector('#cardtool-credit-sync-btn').addEventListener('click', handleCreditSync);
+
+        // Load players for selection
+        loadCreditPlayers();
+    }
+
+    function loadCreditPlayers() {
+        const syncToken = getSyncToken();
+        if (!syncToken) return;
+
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${CARDTOOL_URL}/api/points/players`,
+            headers: { 'x-sync-token': syncToken },
+            onload: function(response) {
+                try {
+                    if (response.status === 200) {
+                        const data = JSON.parse(response.responseText);
+                        const players = data.players || [{ player_number: 1, description: 'Me' }];
+                        
+                        if (players.length > 1) {
+                            const container = document.getElementById('cardtool-credit-player-container');
+                            if (container) {
+                                const lastPlayer = GM_getValue('lastPlayerNumber', 1);
+                                container.innerHTML = `
+                                    <select id="cardtool-credit-player" style="
+                                        width: 100%;
+                                        padding: 8px;
+                                        margin-bottom: 10px;
+                                        background: #27272a;
+                                        border: 1px solid #3f3f46;
+                                        border-radius: 6px;
+                                        color: #e4e4e7;
+                                        font-size: 13px;
+                                    ">
+                                        ${players.map(p => `
+                                            <option value="${p.player_number}" ${p.player_number === lastPlayer ? 'selected' : ''}>
+                                                ${p.description || `Player ${p.player_number}`}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                `;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('CardTool Credit: Error loading players', e);
+                }
+            }
+        });
+    }
+
+    function handleCreditSync() {
+        if (!creditReportData || !currentBureau) {
+            updateCreditStatus('No data to sync', true);
+            return;
+        }
+
+        const syncToken = getSyncToken();
+        if (!syncToken) {
+            updateCreditStatus('Not logged in - get token from CardTool settings', true);
+            return;
+        }
+
+        const btn = document.getElementById('cardtool-credit-sync-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Syncing...';
+        }
+        updateCreditStatus('Uploading credit report data...');
+
+        const playerSelect = document.getElementById('cardtool-credit-player');
+        const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
+        GM_setValue('lastPlayerNumber', playerNumber);
+
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: `${CARDTOOL_URL}/api/credit-report/import`,
+            headers: {
+                'Content-Type': 'application/json',
+                'x-sync-token': syncToken
+            },
+            data: JSON.stringify({
+                bureau: currentBureau,
+                playerNumber: playerNumber,
+                reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
+                scores: creditReportData.scores,
+                accounts: creditReportData.accounts,
+                inquiries: creditReportData.inquiries,
+                rawData: creditReportData.rawData
+            }),
+            onload: function(response) {
+                try {
+                    const data = JSON.parse(response.responseText);
+                    
+                    if (response.status === 200 && data.success) {
+                        const summary = data.summary;
+                        updateCreditStatus(`Synced: ${summary.scores} scores, ${summary.accounts} accounts, ${summary.inquiries} inquiries ✓`);
+                        if (btn) {
+                            btn.textContent = 'Synced!';
+                            btn.style.background = '#059669';
+                            setTimeout(() => {
+                                btn.disabled = false;
+                                btn.textContent = 'Sync to CardTool';
+                                btn.style.background = '';
+                            }, 3000);
+                        }
+                    } else {
+                        updateCreditStatus(data.error || 'Sync failed', true);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = 'Sync to CardTool';
+                        }
+                    }
+                } catch (e) {
+                    console.error('CardTool Credit: Sync error', e);
+                    updateCreditStatus('Failed to sync', true);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Sync to CardTool';
+                    }
+                }
+            },
+            onerror: function() {
+                updateCreditStatus('Network error', true);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Sync to CardTool';
+                }
+            }
+        });
+    }
+
+    function updateCreditStatus(message, isError = false) {
+        const statusEl = document.getElementById('cardtool-credit-status');
+        if (statusEl) {
+            statusEl.textContent = message;
+            statusEl.style.color = isError ? '#f87171' : '#71717a';
+        }
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+
+    function initCreditReportTracking() {
+        // Check if we're on a credit bureau site
+        const isCreditBureauSite = setupCreditReportInterceptor();
+        
+        if (isCreditBureauSite) {
+            console.log('CardTool Credit: Initialized on credit bureau site');
+        }
+    }
+
+    // ============================================
     // START
     // ============================================
 
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', () => {
+            init();
+            initCreditReportTracking();
+        });
     } else {
         init();
+        initCreditReportTracking();
     }
 })();

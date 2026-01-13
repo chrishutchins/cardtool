@@ -219,6 +219,46 @@ export function AddCardModal({
   // Check if user typed the secret code
   const isSecretCode = search.toLowerCase() === SECRET_CODE;
 
+  // Helper function to check if a single search term matches a card
+  const termMatchesCard = (term: string, cardName: string, issuerName: string, currencyName: string): boolean => {
+    // Direct matches on name, issuer, or currency
+    if (cardName.includes(term)) return true;
+    if (issuerName.includes(term)) return true;
+    if (currencyName.includes(term)) return true;
+    
+    // Check if search term is a card abbreviation (e.g., "csr" -> "sapphire reserve")
+    const matchedCardNames = cardAbbreviationLookup.get(term) ?? [];
+    if (matchedCardNames.some(name => cardName.includes(name))) return true;
+    
+    // Check if search term is a keyword that maps to this card's issuer
+    const matchedIssuers = issuerKeywordLookup.get(term) ?? [];
+    if (matchedIssuers.some(issuer => issuerName.includes(issuer))) return true;
+    
+    // Check if search term is a keyword that maps to this card's currency
+    const matchedCurrencies = currencyKeywordLookup.get(term) ?? [];
+    if (matchedCurrencies.some(currency => currencyName.includes(currency))) return true;
+    
+    // Also check partial keyword matches (e.g., "amex" typed as "ame")
+    for (const [keyword, issuers] of issuerKeywordLookup.entries()) {
+      if (keyword.includes(term) || term.includes(keyword)) {
+        if (issuers.some(issuer => issuerName.includes(issuer))) return true;
+      }
+    }
+    for (const [keyword, currencies] of currencyKeywordLookup.entries()) {
+      if (keyword.includes(term) || term.includes(keyword)) {
+        if (currencies.some(currency => currencyName.includes(currency))) return true;
+      }
+    }
+    // Check card abbreviations with partial matching
+    for (const [keyword, cardNames] of cardAbbreviationLookup.entries()) {
+      if (keyword === term) {
+        if (cardNames.some(name => cardName.includes(name))) return true;
+      }
+    }
+    
+    return false;
+  };
+
   const filteredCards = availableCards.filter((card) => {
     const query = search.toLowerCase().trim();
     if (!query) return true;
@@ -227,39 +267,23 @@ export function AddCardModal({
     const issuerName = card.issuer_name?.toLowerCase() ?? "";
     const currencyName = card.primary_currency_name?.toLowerCase() ?? "";
     
-    // Direct matches on name, issuer, or currency
-    if (cardName.includes(query)) return true;
-    if (issuerName.includes(query)) return true;
-    if (currencyName.includes(query)) return true;
+    // Combine all searchable text for the card
+    const allText = `${cardName} ${issuerName} ${currencyName}`;
     
-    // Check if search term is a card abbreviation (e.g., "csr" -> "sapphire reserve")
-    const matchedCardNames = cardAbbreviationLookup.get(query) ?? [];
-    if (matchedCardNames.some(name => cardName.includes(name))) return true;
+    // First try matching the full query as-is
+    if (termMatchesCard(query, cardName, issuerName, currencyName)) return true;
     
-    // Check if search term is a keyword that maps to this card's issuer
-    const matchedIssuers = issuerKeywordLookup.get(query) ?? [];
-    if (matchedIssuers.some(issuer => issuerName.includes(issuer))) return true;
-    
-    // Check if search term is a keyword that maps to this card's currency
-    const matchedCurrencies = currencyKeywordLookup.get(query) ?? [];
-    if (matchedCurrencies.some(currency => currencyName.includes(currency))) return true;
-    
-    // Also check partial keyword matches (e.g., "amex" typed as "ame")
-    for (const [keyword, issuers] of issuerKeywordLookup.entries()) {
-      if (keyword.includes(query) || query.includes(keyword)) {
-        if (issuers.some(issuer => issuerName.includes(issuer))) return true;
-      }
-    }
-    for (const [keyword, currencies] of currencyKeywordLookup.entries()) {
-      if (keyword.includes(query) || query.includes(keyword)) {
-        if (currencies.some(currency => currencyName.includes(currency))) return true;
-      }
-    }
-    // Check card abbreviations with partial matching
-    for (const [keyword, cardNames] of cardAbbreviationLookup.entries()) {
-      if (keyword === query) {
-        if (cardNames.some(name => cardName.includes(name))) return true;
-      }
+    // If query has multiple words, check if ALL words match something about the card
+    // This allows "chase preferred" to match Chase Sapphire Preferred
+    const words = query.split(/\s+/).filter(w => w.length > 0);
+    if (words.length > 1) {
+      const allWordsMatch = words.every(word => {
+        // Check if this word matches directly in the combined text
+        if (allText.includes(word)) return true;
+        // Or if it matches via abbreviation/keyword lookup
+        return termMatchesCard(word, cardName, issuerName, currencyName);
+      });
+      if (allWordsMatch) return true;
     }
     
     return false;

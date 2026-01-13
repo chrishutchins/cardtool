@@ -5,66 +5,138 @@ import { SummaryCards } from "./summary-cards";
 import { BalanceTable } from "./balance-table";
 
 // Program/currency abbreviations for search
-// Maps common abbreviations to currency names or program names
+// Maps common abbreviations AND program names bidirectionally
 const PROGRAM_ABBREVIATIONS: Record<string, string[]> = {
-  // Airlines (IATA codes and common names)
+  // Airlines (IATA codes and common names) - bidirectional mappings
   "aa": ["american", "aadvantage"],
-  "aadvantage": ["american"],
+  "aadvantage": ["american", "aadvantage"],
+  "american": ["aadvantage", "american"],
+  "american airlines": ["aadvantage", "american"],
+  
   "dl": ["delta", "skymiles"],
-  "skymiles": ["delta"],
+  "skymiles": ["delta", "skymiles"],
+  "delta": ["skymiles", "delta"],
+  
   "ua": ["united", "mileageplus"],
-  "mileageplus": ["united"],
+  "mileageplus": ["united", "mileageplus"],
   "mpx": ["united", "mileageplus"],
+  "united": ["mileageplus", "united"],
+  
   "wn": ["southwest", "rapid rewards"],
   "sw": ["southwest", "rapid rewards"],
   "rr": ["rapid rewards", "southwest"],
+  "southwest": ["rapid rewards", "southwest"],
+  "rapid rewards": ["southwest", "rapid rewards"],
+  
   "as": ["alaska", "mileage plan"],
+  "alaska": ["mileage plan", "alaska"],
+  "mileage plan": ["alaska", "mileage plan"],
+  
   "b6": ["jetblue", "trueblue"],
   "jb": ["jetblue", "trueblue"],
+  "jetblue": ["trueblue", "jetblue"],
+  "trueblue": ["jetblue", "trueblue"],
+  
   "ba": ["british airways", "avios"],
-  "avios": ["british airways", "iberia"],
+  "avios": ["british airways", "iberia", "avios"],
+  "british airways": ["avios", "british airways"],
+  
   "af": ["air france", "flying blue"],
   "kl": ["klm", "flying blue"],
+  "flying blue": ["air france", "klm", "flying blue"],
+  
   "lh": ["lufthansa", "miles & more"],
   "m&m": ["miles & more", "lufthansa"],
+  "lufthansa": ["miles & more", "lufthansa"],
+  "miles & more": ["lufthansa", "miles & more"],
+  
   "sq": ["singapore", "krisflyer"],
+  "singapore": ["krisflyer", "singapore"],
+  "krisflyer": ["singapore", "krisflyer"],
+  
   "cx": ["cathay", "asia miles"],
+  "cathay": ["asia miles", "cathay"],
+  "asia miles": ["cathay", "asia miles"],
+  
   "ek": ["emirates", "skywards"],
+  "emirates": ["skywards", "emirates"],
+  "skywards": ["emirates", "skywards"],
+  
   "qr": ["qatar", "privilege club"],
+  "qatar": ["privilege club", "qatar"],
+  
   "tk": ["turkish", "miles&smiles"],
+  "turkish": ["miles&smiles", "turkish"],
+  
   "qf": ["qantas"],
   "qff": ["qantas"],
+  
   "vs": ["virgin atlantic", "flying club"],
+  "virgin atlantic": ["flying club", "virgin atlantic"],
+  "flying club": ["virgin atlantic", "flying club"],
+  
   "ac": ["air canada", "aeroplan"],
-  "aeroplan": ["air canada"],
+  "aeroplan": ["air canada", "aeroplan"],
+  "air canada": ["aeroplan", "air canada"],
+  
   "nh": ["ana", "all nippon"],
+  "ana": ["all nippon", "ana"],
+  
   "jl": ["jal", "japan airlines"],
+  "jal": ["japan airlines", "jal"],
+  
   "ke": ["korean", "skypass"],
+  "korean": ["skypass", "korean"],
+  
   "ey": ["etihad"],
+  
   "av": ["avianca", "lifemiles"],
-  "lifemiles": ["avianca"],
+  "lifemiles": ["avianca", "lifemiles"],
+  "avianca": ["lifemiles", "avianca"],
+  
   "ib": ["iberia", "avios"],
+  "iberia": ["avios", "iberia"],
+  
   "ha": ["hawaiian"],
-  // Hotels
+  
+  // Hotels - bidirectional mappings
   "hh": ["hilton", "honors"],
-  "honors": ["hilton"],
+  "honors": ["hilton", "honors"],
+  "hilton": ["honors", "hilton"],
+  "hilton honors": ["hilton", "honors"],
+  
   "woh": ["hyatt", "world of hyatt"],
-  "world of hyatt": ["hyatt"],
+  "world of hyatt": ["hyatt", "world of hyatt"],
+  "hyatt": ["world of hyatt", "hyatt"],
+  
   "mb": ["marriott", "bonvoy"],
-  "bonvoy": ["marriott"],
+  "bonvoy": ["marriott", "bonvoy"],
   "spg": ["marriott", "bonvoy"],
+  "marriott": ["bonvoy", "marriott"],
+  "marriott bonvoy": ["marriott", "bonvoy"],
+  
   "ihg": ["intercontinental", "one rewards"],
-  "one rewards": ["ihg", "intercontinental"],
-  // Bank Programs
+  "one rewards": ["ihg", "intercontinental", "one rewards"],
+  
+  // Bank Programs - bidirectional mappings
   "ur": ["ultimate rewards", "chase"],
-  "ultimate rewards": ["chase"],
+  "ultimate rewards": ["chase", "ultimate rewards"],
+  "chase": ["ultimate rewards", "chase"],
+  
   "mr": ["membership rewards", "amex"],
-  "membership rewards": ["amex"],
+  "membership rewards": ["amex", "membership rewards"],
+  "amex": ["membership rewards", "amex"],
+  
   "typ": ["thankyou", "citi"],
   "ty": ["thankyou", "citi"],
-  "thankyou": ["citi"],
+  "thankyou": ["citi", "thankyou"],
+  "citi": ["thankyou", "citi"],
+  
   "c1": ["capital one"],
-  "bilt": ["bilt rewards"],
+  "capital one": ["capital one"],
+  
+  "bilt": ["bilt rewards", "bilt"],
+  "bilt rewards": ["bilt", "bilt rewards"],
 };
 
 // Build lookup map from abbreviations
@@ -283,6 +355,27 @@ export function PointsClient({
     return currencies.filter(c => !shouldShowCurrency(c) && !archivedCurrencySet.has(c.id));
   }, [currencies, shouldShowCurrency, archivedCurrencySet]);
 
+  // Helper function to check if a single search term matches a currency
+  const termMatchesCurrency = (term: string, name: string, code: string, programName: string): boolean => {
+    // Direct matches
+    if (name.includes(term)) return true;
+    if (code.includes(term)) return true;
+    if (programName.includes(term)) return true;
+    
+    // Check if search is an abbreviation that maps to this currency
+    const matchedNames = programLookup.get(term) ?? [];
+    if (matchedNames.some(n => name.includes(n) || programName.includes(n))) return true;
+    
+    // Check if any mapped name matches (e.g., "delta" search should match "Delta SkyMiles")
+    for (const [, names] of programLookup.entries()) {
+      if (names.includes(term)) {
+        if (names.some(n => name.includes(n) || programName.includes(n))) return true;
+      }
+    }
+    
+    return false;
+  };
+
   // Filter addable currencies by search (including abbreviations)
   const filteredAddable = useMemo(() => {
     if (!addSearch.trim()) return addableCurrencies;
@@ -292,22 +385,20 @@ export function PointsClient({
       const name = c.name.toLowerCase();
       const code = c.code.toLowerCase();
       const programName = c.program_name?.toLowerCase() ?? "";
+      const allText = `${name} ${code} ${programName}`;
       
-      // Direct matches
-      if (name.includes(search)) return true;
-      if (code.includes(search)) return true;
-      if (programName.includes(search)) return true;
+      // First try matching the full query as-is
+      if (termMatchesCurrency(search, name, code, programName)) return true;
       
-      // Check if search is an abbreviation that maps to this currency
-      const matchedNames = programLookup.get(search) ?? [];
-      if (matchedNames.some(n => name.includes(n) || programName.includes(n))) return true;
-      
-      // Check if any mapped name matches (e.g., "delta" search should match "Delta SkyMiles")
-      for (const [, names] of programLookup.entries()) {
-        if (names.includes(search)) {
-          // The search term itself is a known program name, check if this currency matches any related terms
-          if (names.some(n => name.includes(n) || programName.includes(n))) return true;
-        }
+      // If query has multiple words, check if ALL words match something
+      // This allows "delta miles" to match "Delta SkyMiles"
+      const words = search.split(/\s+/).filter(w => w.length > 0);
+      if (words.length > 1) {
+        const allWordsMatch = words.every(word => {
+          if (allText.includes(word)) return true;
+          return termMatchesCurrency(word, name, code, programName);
+        });
+        if (allWordsMatch) return true;
       }
       
       return false;
