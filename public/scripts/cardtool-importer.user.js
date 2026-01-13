@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.0.2
+// @version      2.1.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -995,10 +995,15 @@
         },
         experian: {
             name: 'Experian',
-            domain: 'www.experian.com',
+            domain: 'experian.com',
             apiPatterns: [
                 /api.*credit/i,
-                /member.*profile/i
+                /api.*score/i,
+                /member.*profile/i,
+                /dashboard/i,
+                /scores\?/i,
+                /creditReport/i,
+                /scoreHistory/i
             ],
             parseResponse: parseExperianResponse
         },
@@ -1308,23 +1313,115 @@
     function parseExperianResponse(data, url) {
         const result = { scores: [], accounts: [], inquiries: [], reportDate: null };
 
-        // Experian often has nested structures - try multiple paths
-        const tradeLines = data.tradeLines || data.accounts || data.creditAccounts || [];
-        const creditScore = data.ficoScore || data.creditScore || data.score;
-        const hardInquiries = data.inquiries || data.hardInquiries || [];
-
-        // Parse score
-        if (creditScore) {
-            const scoreValue = typeof creditScore === 'object' ? 
-                (creditScore.score || creditScore.value || creditScore.ficoScore) : creditScore;
-            if (scoreValue && scoreValue >= 300 && scoreValue <= 850) {
+        // Format 1: Score history with bureau arrays { experian: [], transunion: [], equifax: [] }
+        if (data.experian && Array.isArray(data.experian)) {
+            console.log('CardTool Credit: Parsing Experian score history format');
+            for (const scoreEntry of data.experian) {
+                if (!scoreEntry || !scoreEntry.score) continue;
+                
+                const scoreValue = parseInt(scoreEntry.score, 10);
+                if (scoreValue < 300 || scoreValue > 850) continue;
+                
+                // Map brand + version to score type
+                let scoreType = 'fico_8';  // Default for Experian
+                const brand = (scoreEntry.brand || '').toUpperCase();
+                const version = scoreEntry.version || scoreEntry.scoreVersion || '';
+                if (brand === 'FICO') {
+                    scoreType = version === '8' ? 'fico_8' : 'fico_9';
+                } else if (brand.includes('VANTAGE')) {
+                    scoreType = 'vantage_3';
+                }
+                
+                // Parse date (ISO string format)
+                let scoreDate = null;
+                if (scoreEntry.date || scoreEntry.scoreDate) {
+                    const dateStr = scoreEntry.date || scoreEntry.scoreDate;
+                    const d = new Date(dateStr);
+                    if (!isNaN(d.getTime())) {
+                        scoreDate = d.toISOString().split('T')[0];
+                    }
+                }
+                
                 result.scores.push({
-                    type: 'fico_8',
+                    type: scoreType,
                     score: scoreValue,
-                    date: data.scoreDate || data.asOfDate || new Date().toISOString().split('T')[0]
+                    date: scoreDate,
+                    rating: scoreEntry.scoreRating || null
+                });
+            }
+            
+            // Also check for TransUnion and Equifax scores in the same response
+            if (data.transunion && Array.isArray(data.transunion)) {
+                for (const scoreEntry of data.transunion) {
+                    if (!scoreEntry || !scoreEntry.score) continue;
+                    const scoreValue = parseInt(scoreEntry.score, 10);
+                    if (scoreValue < 300 || scoreValue > 850) continue;
+                    
+                    let scoreDate = null;
+                    if (scoreEntry.date) {
+                        const d = new Date(scoreEntry.date);
+                        if (!isNaN(d.getTime())) {
+                            scoreDate = d.toISOString().split('T')[0];
+                        }
+                    }
+                    
+                    // Note: These are scores from other bureaus in Experian's response
+                    // We store them but mark them appropriately
+                    result.scores.push({
+                        type: scoreEntry.brand === 'FICO' ? 'fico_8' : 'vantage_3',
+                        score: scoreValue,
+                        date: scoreDate,
+                        rating: scoreEntry.scoreRating || null,
+                        bureau: 'transunion'
+                    });
+                }
+            }
+            
+            return result;
+        }
+        
+        // Format 2: Detailed credit report with single score entry
+        // This format has score, scoreDate, brand, scoreVersion, scoreIngredients
+        if (data.score || (Array.isArray(data) && data[0]?.score)) {
+            console.log('CardTool Credit: Parsing Experian detailed report format');
+            
+            const scoreEntries = Array.isArray(data) ? data : [data];
+            
+            for (const entry of scoreEntries) {
+                if (!entry || !entry.score) continue;
+                
+                const scoreValue = parseInt(entry.score, 10);
+                if (scoreValue < 300 || scoreValue > 850) continue;
+                
+                let scoreType = 'fico_8';
+                const brand = (entry.brand || '').toUpperCase();
+                const version = entry.scoreVersion || entry.version || '';
+                if (brand === 'FICO') {
+                    scoreType = version === '8' ? 'fico_8' : 'fico_9';
+                } else if (brand.includes('VANTAGE')) {
+                    scoreType = 'vantage_3';
+                }
+                
+                let scoreDate = null;
+                if (entry.scoreDate || entry.date) {
+                    const d = new Date(entry.scoreDate || entry.date);
+                    if (!isNaN(d.getTime())) {
+                        scoreDate = d.toISOString().split('T')[0];
+                    }
+                }
+                
+                result.scores.push({
+                    type: scoreType,
+                    score: scoreValue,
+                    date: scoreDate,
+                    rating: entry.scoreRating || null
                 });
             }
         }
+
+        // Legacy format: tradeLines, accounts, etc.
+        const tradeLines = data.tradeLines || data.accounts || data.creditAccounts || [];
+        const hardInquiries = data.inquiries || data.hardInquiries || [];
 
         // Parse accounts
         for (const acct of tradeLines) {
