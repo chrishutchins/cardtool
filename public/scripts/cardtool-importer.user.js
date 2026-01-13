@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.0.0
+// @version      2.0.1
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -1155,6 +1155,15 @@
             
             const details = acct.accountDetails || acct;
             
+            // Helper to extract dollar amount from nested objects like { amount: 30000, displayAmount: "$30,000" }
+            const extractAmount = (obj) => {
+                if (!obj) return null;
+                if (typeof obj === 'number') return obj;
+                if (typeof obj === 'object' && obj.amount !== undefined) return obj.amount;
+                if (typeof obj === 'string') return parseFloat(obj.replace(/[^0-9.-]/g, '')) || null;
+                return null;
+            };
+            
             result.accounts.push({
                 name: acct.accountName || acct.creditorName || 'Unknown',
                 numberMasked: acct.accountNumber || details.accountNumber || null,
@@ -1162,16 +1171,16 @@
                 status: mapEquifaxStatus(acct.accountStatus),
                 dateOpened: parseEquifaxDate(acct.displayDateOpen || details.displayDateOpen),
                 dateUpdated: parseEquifaxDate(acct.displayDateReported || details.displayDateReported),
-                dateClosed: parseEquifaxDate(details.displayDateClosed),
-                creditLimitCents: parseDollarsToCents(details.creditLimit),
-                highBalanceCents: parseDollarsToCents(details.highBalance),
-                balanceCents: parseDollarsToCents(acct.balance || details.balance),
-                monthlyPaymentCents: parseDollarsToCents(details.monthlyPayment),
+                dateClosed: parseEquifaxDate(details.displayDateClose || details.displayDateClosed),
+                creditLimitCents: dollarsToCents(extractAmount(details.creditLimit)),
+                highBalanceCents: dollarsToCents(extractAmount(details.highCredit || details.highBalance)),
+                balanceCents: dollarsToCents(extractAmount(details.balance) || extractAmount(acct.reportedBalance)),
+                monthlyPaymentCents: dollarsToCents(extractAmount(details.schedulePayment || details.monthlyPayment)),
                 accountType: mapEquifaxAccountType(acct.accountType),
                 loanType: mapEquifaxLoanType(details.loanType),
                 responsibility: mapEquifaxOwnership(details.owner),
                 terms: details.terms || null,
-                paymentStatus: acct.paymentStatus || details.paymentStatus || null
+                paymentStatus: acct.paymentStatus || details.paymentStatus || details.rateStatus || null
             });
         }
 
@@ -1185,15 +1194,24 @@
             });
         }
 
-        // Parse inquiries if present
-        if (data.inquiries || data.hardInquiries) {
-            const inquiries = data.inquiries || data.hardInquiries || [];
+        // Parse inquiries if present (hardInquiries from Equifax API)
+        if (data.hardInquiries || data.inquiries) {
+            const inquiries = data.hardInquiries || data.inquiries || [];
             for (const inq of inquiries) {
-                result.inquiries.push({
-                    company: inq.creditorName || inq.subscriberName || 'Unknown',
-                    date: parseEquifaxDate(inq.displayDate || inq.inquiryDate),
-                    type: inq.inquiryType || 'hard'
-                });
+                // Equifax uses companyName and displayDateReported
+                const company = inq.companyName || inq.creditorName || inq.subscriberName || 'Unknown';
+                const date = parseEquifaxDate(inq.displayDateReported || inq.displayDate || inq.inquiryDate);
+                
+                // Only add if we have a valid date (required field)
+                if (date) {
+                    result.inquiries.push({
+                        company: company,
+                        date: date,
+                        type: inq.type?.toLowerCase() || 'hard'
+                    });
+                } else {
+                    console.warn('CardTool Credit: Skipping inquiry without date:', company);
+                }
             }
         }
 
@@ -1444,6 +1462,13 @@
     // ============================================
     // UTILITY FUNCTIONS
     // ============================================
+
+    // Convert dollar amount to cents (Equifax sends amounts in dollars)
+    function dollarsToCents(value) {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'number') return Math.round(value * 100);
+        return null;
+    }
 
     function parseDollarsToCents(value) {
         if (!value) return null;
