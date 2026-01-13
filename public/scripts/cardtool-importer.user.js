@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.2.0
+// @version      2.3.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -1567,79 +1567,217 @@
     function tryScrapeCreditReport(bureau) {
         if (bureau !== 'transunion') return;
         
-        console.log('CardTool Credit: Attempting to scrape TransUnion data');
+        console.log('CardTool Credit: Attempting to parse TransUnion UserData');
         
         const result = { scores: [], accounts: [], inquiries: [], reportDate: null };
+        let rawData = null;
         
-        // Try to find account sections
-        // TransUnion typically has expandable account sections
-        const accountSections = document.querySelectorAll('[class*="account"], [class*="tradeline"], [data-account]');
+        // Look for the UserData script tag that contains the JSON data
+        const userDataScript = document.getElementById('UserData');
+        if (!userDataScript || !userDataScript.textContent) {
+            console.log('CardTool Credit: No UserData script found');
+            return;
+        }
         
-        for (const section of accountSections) {
-            const nameEl = section.querySelector('[class*="name"], [class*="creditor"], h3, h4');
-            const numberEl = section.querySelector('[class*="number"], [class*="account-number"]');
-            const statusEl = section.querySelector('[class*="status"]');
-            const balanceEl = section.querySelector('[class*="balance"]');
-            const limitEl = section.querySelector('[class*="limit"]');
-            const openedEl = section.querySelector('[class*="opened"], [class*="date-opened"]');
+        try {
+            const scriptContent = userDataScript.textContent;
+            // Extract the JSON object from "var ud = {...};"
+            const udMatch = scriptContent.match(/var\s+ud\s*=\s*(\{[\s\S]*?\});/);
+            if (!udMatch || !udMatch[1]) {
+                console.log('CardTool Credit: Could not extract ud variable from UserData script');
+                return;
+            }
             
-            if (nameEl) {
+            const ud = JSON.parse(udMatch[1]);
+            rawData = ud;
+            console.log('CardTool Credit: Successfully parsed TransUnion UserData:', ud);
+            
+            // Navigate to the credit data
+            const creditData = ud?.TU_CONSUMER_DISCLOSURE?.reportData?.product?.[0]?.subject?.[0]?.subjectRecord?.[0]?.custom?.credit;
+            
+            if (!creditData) {
+                console.log('CardTool Credit: Could not find credit data in UserData');
+                return;
+            }
+            
+            // Parse trade accounts
+            const trades = creditData.trade || [];
+            console.log('CardTool Credit: Found', trades.length, 'trade accounts');
+            
+            for (const trade of trades) {
+                if (!trade) continue;
+                
+                const subscriber = trade.subscriber || {};
+                const account = trade.account || {};
+                const terms = trade.terms || {};
+                
                 result.accounts.push({
-                    name: nameEl.textContent.trim(),
-                    numberMasked: numberEl?.textContent.trim() || null,
-                    status: mapTransUnionStatus(statusEl?.textContent),
-                    balanceCents: parseDollarsToCents(balanceEl?.textContent),
-                    creditLimitCents: parseDollarsToCents(limitEl?.textContent),
-                    dateOpened: parseTransUnionDate(openedEl?.textContent),
-                    accountType: 'other',
-                    loanType: 'other',
-                    responsibility: 'unknown'
+                    name: subscriber.name?.unparsed || 'Unknown',
+                    numberMasked: trade.accountNumber || null,
+                    creditorName: subscriber.name?.unparsed || null,
+                    status: mapTransUnionStatus(trade.portfolioType, trade.accountRatingDescription),
+                    dateOpened: parseTransUnionDate(trade.dateOpened?.value),
+                    dateUpdated: parseTransUnionDate(trade.dateEffective?.value || trade.dateReported?.value),
+                    dateClosed: parseTransUnionDate(trade.dateClosed?.value),
+                    creditLimitCents: parseDollarsToCents(trade.creditLimit),
+                    highBalanceCents: parseDollarsToCents(trade.highCredit),
+                    balanceCents: parseDollarsToCents(trade.currentBalance),
+                    monthlyPaymentCents: parseDollarsToCents(terms.scheduledMonthlyPayment),
+                    accountType: mapTransUnionAccountType(trade.portfolioType),
+                    loanType: mapTransUnionLoanType(account.type),
+                    responsibility: mapTransUnionResponsibility(trade.ECOADesignator),
+                    terms: terms.description || null,
+                    paymentStatus: trade.accountRatingDescription || null
                 });
             }
-        }
-
-        // Try to find inquiries
-        const inquirySection = document.querySelector('[class*="inquir"]');
-        if (inquirySection) {
-            const inquiryRows = inquirySection.querySelectorAll('tr, [class*="row"]');
-            for (const row of inquiryRows) {
-                const nameEl = row.querySelector('[class*="name"], td:first-child');
-                const dateEl = row.querySelector('[class*="date"], td:nth-child(2)');
+            
+            // Parse hard inquiries
+            const hardInquiries = creditData.inquiry || [];
+            console.log('CardTool Credit: Found', hardInquiries.length, 'hard inquiries');
+            
+            for (const inq of hardInquiries) {
+                if (!inq) continue;
                 
-                if (nameEl && dateEl) {
+                const subscriber = inq.subscriber || {};
+                // combinedDates might be comma-separated dates
+                const dateStr = inq.combinedDates || '';
+                const dates = dateStr.split(',').map(d => parseTransUnionDate(d.trim())).filter(Boolean);
+                
+                // If no dates found from combinedDates, try other fields
+                if (dates.length === 0) {
+                    const singleDate = parseTransUnionDate(inq.date?.value || inq.dateOfInquiry);
+                    if (singleDate) dates.push(singleDate);
+                }
+                
+                for (const date of dates) {
                     result.inquiries.push({
-                        company: nameEl.textContent.trim(),
-                        date: parseTransUnionDate(dateEl.textContent),
+                        company: subscriber.name?.unparsed || 'Unknown',
+                        date: date,
                         type: 'hard'
                     });
                 }
             }
-        }
-
-        if (result.accounts.length > 0 || result.inquiries.length > 0) {
-            creditReportData = result;
-            showCreditBadge();
+            
+            // Parse promotional inquiries (soft)
+            const promoInquiries = creditData.promotionalInquiry || [];
+            for (const inq of promoInquiries) {
+                if (!inq) continue;
+                const subscriber = inq.subscriber || {};
+                const dateStr = inq.inquiryDates || '';
+                const dates = dateStr.split(',').map(d => parseTransUnionDate(d.trim())).filter(Boolean);
+                
+                for (const date of dates) {
+                    result.inquiries.push({
+                        company: subscriber.name?.unparsed || 'Unknown',
+                        date: date,
+                        type: 'soft'
+                    });
+                }
+            }
+            
+            // Parse account review inquiries (soft)
+            const reviewInquiries = creditData.accountReviewInquiry || [];
+            for (const inq of reviewInquiries) {
+                if (!inq) continue;
+                const subscriber = inq.subscriber || {};
+                const dateStr = inq.requestedOnDates || '';
+                const dates = dateStr.split(',').map(d => parseTransUnionDate(d.trim())).filter(Boolean);
+                
+                for (const date of dates) {
+                    result.inquiries.push({
+                        company: subscriber.name?.unparsed || 'Unknown',
+                        date: date,
+                        type: 'soft'
+                    });
+                }
+            }
+            
+            // Report timestamp
+            const timestamp = ud?.TU_CONSUMER_DISCLOSURE?.reportData?.transactionControl?.tracking?.transactionTimeStamp;
+            if (timestamp) {
+                result.reportDate = parseTransUnionDate(timestamp);
+            }
+            
+            console.log('CardTool Credit: Parsed TransUnion data -', 
+                result.accounts.length, 'accounts,',
+                result.inquiries.length, 'inquiries');
+            
+            if (result.accounts.length > 0 || result.inquiries.length > 0) {
+                creditReportData = {
+                    ...result,
+                    rawData: rawData
+                };
+                showCreditBadge();
+            }
+            
+        } catch (e) {
+            console.error('CardTool Credit: Error parsing TransUnion UserData:', e);
         }
     }
 
-    function mapTransUnionStatus(text) {
-        if (!text) return 'unknown';
-        const t = text.toLowerCase();
-        if (t.includes('open') || t.includes('current')) return 'open';
-        if (t.includes('closed')) return 'closed';
-        if (t.includes('paid')) return 'paid';
+    function mapTransUnionStatus(portfolioType, ratingDesc) {
+        if (!portfolioType && !ratingDesc) return 'unknown';
+        const combined = ((portfolioType || '') + ' ' + (ratingDesc || '')).toUpperCase();
+        if (combined.includes('CURRENT') || combined.includes('AS AGREED')) return 'open';
+        if (combined.includes('CLOSED') || combined.includes('TERMINATED')) return 'closed';
+        if (combined.includes('PAID')) return 'paid';
+        if (combined.includes('COLLECTION')) return 'collection';
+        if (combined.includes('REVOLVING') || combined.includes('INSTALLMENT') || combined.includes('OPEN')) return 'open';
+        return 'unknown';
+    }
+    
+    function mapTransUnionAccountType(portfolioType) {
+        if (!portfolioType) return 'other';
+        const t = portfolioType.toUpperCase();
+        if (t.includes('REVOLVING')) return 'revolving';
+        if (t.includes('INSTALLMENT')) return 'installment';
+        if (t.includes('MORTGAGE')) return 'mortgage';
+        if (t.includes('OPEN')) return 'open';
+        return 'other';
+    }
+    
+    function mapTransUnionLoanType(accountType) {
+        if (!accountType) return 'other';
+        const t = accountType.toUpperCase();
+        if (t === 'CC' || t.includes('CREDIT CARD')) return 'credit_card';
+        if (t === 'FX' || t.includes('FLEX')) return 'flexible_credit_card';
+        if (t === 'AU' || t.includes('AUTO')) return 'auto_loan';
+        if (t.includes('MORTGAGE') || t === 'CV') return 'mortgage';
+        if (t.includes('STUDENT')) return 'student_loan';
+        if (t.includes('PERSONAL')) return 'personal_loan';
+        return 'other';
+    }
+    
+    function mapTransUnionResponsibility(ecoa) {
+        if (!ecoa) return 'unknown';
+        const e = ecoa.toUpperCase();
+        if (e === 'I' || e.includes('INDIVIDUAL')) return 'individual';
+        if (e === 'J' || e.includes('JOINT')) return 'joint';
+        if (e === 'A' || e.includes('AUTHORIZED')) return 'authorized_user';
+        if (e === 'C' || e.includes('COSIGNER')) return 'cosigner';
+        if (e === 'T' || e.includes('TERMINATED')) return 'terminated';
         return 'unknown';
     }
 
-    function parseTransUnionDate(text) {
-        if (!text) return null;
-        // Try to parse MM/DD/YYYY or similar formats
-        const match = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    function parseTransUnionDate(value) {
+        if (!value) return null;
+        
+        // Handle ISO format (e.g., "2025-02-28T08:00:00.000+0000")
+        if (typeof value === 'string' && value.includes('T')) {
+            const d = new Date(value);
+            if (!isNaN(d.getTime())) {
+                return d.toISOString().split('T')[0];
+            }
+        }
+        
+        // Handle MM/DD/YYYY format
+        const match = String(value).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
         if (match) {
             const [, month, day, year] = match;
-            const fullYear = year.length === 2 ? '20' + year : year;
+            const fullYear = year.length === 2 ? (parseInt(year) > 50 ? '19' + year : '20' + year) : year;
             return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         }
+        
         return null;
     }
 
