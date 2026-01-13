@@ -15,8 +15,8 @@ export type BillingCycleFormula =
   | 'due_minus_25'              // Cap1: Close = 25 days before due
   | 'due_minus_25_skip_sat'     // Amex, Wells Fargo: Close = 25 days before (26 if Saturday)
   | 'bilt_formula'              // Bilt: Same as Amex/Wells Fargo
-  | 'due_plus_3'                // Chase Personal: Close = Due day + 3
-  | 'due_plus_6'                // Chase Business: Close = Due day + 6
+  | 'due_plus_3'                // Chase cobrand (airline/hotel): Close = Due day + 3
+  | 'due_plus_6'                // Chase regular (UR cards): Close = Due day + 6
   | 'close_plus_27_skip_weekend' // BoA: Due = 27 days after close (adjust for Fri/Sat)
   | 'citi_formula'              // Citi: Complex formula with month boundary handling
   | 'usbank_formula';           // US Bank: Close = (due - 3)th weekday of month
@@ -59,12 +59,12 @@ export const FORMULA_INFO: Record<BillingCycleFormula, FormulaInfo> = {
   },
   'due_plus_3': {
     primaryInput: 'due',
-    description: 'Statement closes on the day-of-month that is 3 days after the due day (Chase Personal)',
+    description: 'Statement closes on the day-of-month that is 3 days after the due day (Chase cobrand cards)',
     shortDescription: 'Close Day = Due Day + 3',
   },
   'due_plus_6': {
     primaryInput: 'due',
-    description: 'Statement closes on the day-of-month that is 6 days after the due day (Chase Business)',
+    description: 'Statement closes on the day-of-month that is 6 days after the due day (Chase UR cards)',
     shortDescription: 'Close Day = Due Day + 6',
   },
   'close_plus_27_skip_weekend': {
@@ -307,7 +307,7 @@ function calculateDueMinus25SkipSat(dueDay: number, referenceDate: Date): { clos
 }
 
 /**
- * Chase Personal: Close day of month = Due day of month + 3
+ * Chase cobrand cards (airline/hotel): Close day of month = Due day of month + 3
  * Note: This means if due is 15th, close is 18th (close happens AFTER due in day-of-month terms,
  * but close is for the PREVIOUS billing period)
  */
@@ -341,12 +341,12 @@ function calculateDuePlus3(dueDay: number, referenceDate: Date): { closeDay: num
 }
 
 /**
- * Chase Business: Close day of month = Due day of month + 6
+ * Chase regular cards (UR): Close day of month = Due day of month + 6
  * Note: This means if due is 15th, close is 21st (close happens AFTER due in day-of-month terms,
  * but close is for the PREVIOUS billing period)
  */
 function calculateDuePlus6(dueDay: number, referenceDate: Date): { closeDay: number; nextClose: Date; nextDue: Date; lastClose: Date } {
-  // For Chase Business, the close day is due day + 6
+  // For Chase UR cards, the close day is due day + 6
   // Due on 15th means close on 21st
   let closeDay = dueDay + 6;
   

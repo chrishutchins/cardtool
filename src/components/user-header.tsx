@@ -8,6 +8,22 @@ import { EmulationBanner } from "./emulation-banner";
 import { stopEmulation } from "@/lib/emulation";
 import { ChevronDown } from "lucide-react";
 
+// Wrapper to prevent hydration mismatch with Clerk's UserButton
+function ClientUserButton() {
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  if (!mounted) {
+    // Return a placeholder with the same approximate size
+    return <div className="w-8 h-8 rounded-full bg-zinc-700 animate-pulse" />;
+  }
+  
+  return <UserButton afterSignOutUrl="/" />;
+}
+
 interface NavItem {
   href: string;
   label: string;
@@ -282,7 +298,7 @@ export function UserHeader({ isAdmin = false, emulationInfo }: UserHeaderProps) 
                 Admin →
               </Link>
             )}
-            <UserButton afterSignOutUrl="/" />
+            <ClientUserButton />
           </div>
         </div>
       </div>

@@ -138,13 +138,24 @@ export async function POST(request: Request) {
     let inquiriesInserted = 0;
 
     // 2. Insert scores
+    // Valid score types in the database enum
+    const validScoreTypes = ['fico_8', 'fico_9', 'vantage_3', 'vantage_4', 'fico_bankcard_8', 'other'] as const;
+    type ValidScoreType = typeof validScoreTypes[number];
+    
+    const mapScoreType = (type: string): ValidScoreType => {
+      if (validScoreTypes.includes(type as ValidScoreType)) {
+        return type as ValidScoreType;
+      }
+      return 'other';
+    };
+    
     if (scores.length > 0) {
       const scoreRecords = scores.map((s) => ({
         user_id: userId,
         player_number: playerNumber,
         bureau,
         snapshot_id: snapshotId,
-        score_type: s.type,
+        score_type: mapScoreType(s.type),
         score: s.score,
         score_date: s.date || reportDate || null,
       }));
@@ -196,26 +207,33 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Insert inquiries
+    // 4. Upsert inquiries (deduplicate on user_id, bureau, company_name, inquiry_date)
     if (inquiries.length > 0) {
-      const inquiryRecords = inquiries.map((i) => ({
-        user_id: userId,
-        player_number: playerNumber,
-        bureau,
-        snapshot_id: snapshotId,
-        company_name: i.company,
-        inquiry_date: i.date,
-        inquiry_type: i.type || null,
-      }));
+      for (const inquiry of inquiries) {
+        const { error: inquiryError } = await supabase
+          .from("credit_inquiries")
+          .upsert(
+            {
+              user_id: userId,
+              player_number: playerNumber,
+              bureau,
+              snapshot_id: snapshotId,
+              last_seen_snapshot_id: snapshotId,
+              company_name: inquiry.company,
+              inquiry_date: inquiry.date,
+              inquiry_type: inquiry.type || null,
+            },
+            {
+              onConflict: "user_id,bureau,company_name,inquiry_date",
+              ignoreDuplicates: false,
+            }
+          );
 
-      const { error: inquiriesError } = await supabase
-        .from("credit_inquiries")
-        .insert(inquiryRecords);
-
-      if (inquiriesError) {
-        logger.error({ err: inquiriesError }, "Failed to insert credit inquiries");
-      } else {
-        inquiriesInserted = inquiries.length;
+        if (inquiryError) {
+          logger.error({ err: inquiryError, inquiry }, "Failed to upsert credit inquiry");
+        } else {
+          inquiriesInserted++;
+        }
       }
     }
 

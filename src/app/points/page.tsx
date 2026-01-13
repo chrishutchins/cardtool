@@ -131,9 +131,15 @@ export default async function PointsPage() {
       .not("balance_page_url", "is", null),
   ]);
 
-  // Fetch template values if user has selected a template
+  // Get the default template (fallback if user hasn't selected one)
+  const templates = pointValueTemplatesResult.data ?? [];
+  const defaultTemplate = templates.find((t) => t.is_default) ?? templates[0];
+  
+  // User's selected template (or default if not set)
+  const selectedTemplateId = userPointValueSettingsResult.data?.selected_template_id ?? defaultTemplate?.id ?? null;
+  
+  // Fetch template values for the effective template
   let templateValues: Record<string, number> = {};
-  const selectedTemplateId = userPointValueSettingsResult.data?.selected_template_id;
   if (selectedTemplateId) {
     const { data: templateValueData } = await supabase
       .from("template_currency_values")

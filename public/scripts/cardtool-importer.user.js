@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.3.3
+// @version      2.9.2
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -14,12 +14,16 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        unsafeWindow
 // @connect      cardtool.chrishutchins.com
 // @connect      localhost
+// @run-at       document-start
 // ==/UserScript==
 
 (function() {
     'use strict';
+    
+    console.log('CardTool: Script loaded on', window.location.hostname, window.location.pathname);
 
     // ============================================
     // CONFIGURATION
@@ -178,6 +182,58 @@
         }
         #cardtool-badge:hover {
             border-color: #10b981 !important;
+        }
+        /* Minimized state */
+        #cardtool-badge.cardtool-minimized {
+            min-width: auto !important;
+            max-width: none !important;
+            border-radius: 20px !important;
+            cursor: pointer !important;
+        }
+        #cardtool-badge.cardtool-minimized .cardtool-badge-header {
+            padding: 8px 12px !important;
+            border-bottom: none !important;
+        }
+        #cardtool-badge.cardtool-minimized .cardtool-badge-title,
+        #cardtool-badge.cardtool-minimized .cardtool-badge-refresh,
+        #cardtool-badge.cardtool-minimized .cardtool-badge-minimize {
+            display: none !important;
+        }
+        #cardtool-badge.cardtool-minimized .cardtool-badge-close {
+            font-size: 14px !important;
+            padding: 2px !important;
+            margin-left: 4px !important;
+        }
+        #cardtool-badge.cardtool-minimized .cardtool-badge-body {
+            display: none !important;
+        }
+        #cardtool-badge.cardtool-minimized .cardtool-badge-logo {
+            width: 22px !important;
+            height: 22px !important;
+            font-size: 12px !important;
+        }
+        #cardtool-badge.cardtool-minimized .cardtool-mini-balance {
+            display: flex !important;
+            align-items: center !important;
+            margin-left: 8px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            color: #fbbf24 !important;
+        }
+        .cardtool-mini-balance {
+            display: none !important;
+        }
+        .cardtool-badge-minimize {
+            background: none !important;
+            border: none !important;
+            color: #71717a !important;
+            cursor: pointer !important;
+            font-size: 14px !important;
+            line-height: 1 !important;
+            padding: 4px !important;
+        }
+        .cardtool-badge-minimize:hover {
+            color: #e4e4e7 !important;
         }
         .cardtool-badge-header {
             background: #27272a !important;
@@ -588,8 +644,10 @@
         badgeElement.innerHTML = `
             <div class="cardtool-badge-header">
                 <div class="cardtool-badge-logo">C</div>
+                <span class="cardtool-mini-balance" id="cardtool-mini-balance"></span>
                 <span class="cardtool-badge-title">CardTool</span>
                 <button class="cardtool-badge-refresh" title="Refresh balance">&#8635;</button>
+                <button class="cardtool-badge-minimize" title="Minimize">&#8722;</button>
                 <button class="cardtool-badge-close" title="Close">&times;</button>
             </div>
             <div class="cardtool-badge-body" id="cardtool-badge-content">
@@ -598,8 +656,33 @@
         `;
         document.body.appendChild(badgeElement);
 
+        // Check if user prefers minimized state (default to minimized)
+        const isMinimized = GM_getValue('cardtool_minimized', true);
+        if (isMinimized) {
+            badgeElement.classList.add('cardtool-minimized');
+        }
+
+        // Click on minimized badge to expand
+        badgeElement.addEventListener('click', (e) => {
+            if (badgeElement.classList.contains('cardtool-minimized')) {
+                // Only expand if clicking on the badge itself, not buttons
+                if (!e.target.closest('button')) {
+                    badgeElement.classList.remove('cardtool-minimized');
+                    GM_setValue('cardtool_minimized', false);
+                }
+            }
+        });
+
+        // Minimize button
+        badgeElement.querySelector('.cardtool-badge-minimize').addEventListener('click', (e) => {
+            e.stopPropagation();
+            badgeElement.classList.add('cardtool-minimized');
+            GM_setValue('cardtool_minimized', true);
+        });
+
         // Refresh button - re-scan page for balance
-        badgeElement.querySelector('.cardtool-badge-refresh').addEventListener('click', () => {
+        badgeElement.querySelector('.cardtool-badge-refresh').addEventListener('click', (e) => {
+            e.stopPropagation();
             extractedBalance = null;
             lastDisplayedBalance = null;
             currentConfig = null;
@@ -608,7 +691,8 @@
         });
 
         // Close button
-        badgeElement.querySelector('.cardtool-badge-close').addEventListener('click', () => {
+        badgeElement.querySelector('.cardtool-badge-close').addEventListener('click', (e) => {
+            e.stopPropagation();
             badgeElement.remove();
         });
     }
@@ -622,6 +706,13 @@
 
     function showBalanceFound(balance) {
         const formattedBalance = balance.toLocaleString();
+        
+        // Update mini-balance for minimized state
+        const miniBalance = document.getElementById('cardtool-mini-balance');
+        if (miniBalance) {
+            miniBalance.textContent = formattedBalance;
+        }
+        
         updateBadgeContent(`
             <div class="cardtool-badge-balance">${formattedBalance}</div>
             <div class="cardtool-badge-currency">${currentConfig.name}</div>
@@ -1021,6 +1112,121 @@
         }
     };
 
+    // Score-only source configurations (for sites that provide scores but not full reports)
+    const SCORE_SOURCE_CONFIGS = {
+        creditkarma: {
+            name: 'Credit Karma',
+            domain: 'creditkarma.com',
+            // Only activate on dashboard pages, NOT on login/auth pages
+            pathPattern: /^\/(today|dashboard|credit-scores|credit-health)/i,
+            excludePathPattern: /\/(login|auth|signin|signup)/i,
+            apiPatterns: [
+                /api\.creditkarma\.com/i,
+                /creditkarma\.com.*graphql/i,
+                /graphql/i  // Broad match - will filter by domain
+            ],
+            parseResponse: parseCreditKarmaResponse,
+            // Also parse page for /credit-health/bureau/main pages which have historical data embedded
+            parseFromPage: true,
+            parseFromPagePattern: /\/credit-health\/(equifax|transunion)\/main/i,
+            scoreOnly: true
+        },
+        myfico: {
+            name: 'myFICO',
+            domain: 'myfico.com',
+            apiPatterns: [
+                /\/v4\/users\/products/i,
+                /\/v4\/users\/reports/i,
+                /\/v2\/users\/reports/i
+            ],
+            parseResponse: parseMyFicoResponse,
+            scoreOnly: true
+        },
+        creditwise: {
+            name: 'Capital One CreditWise',
+            domain: 'creditwise.capitalone.com',
+            apiPatterns: [
+                /\/api\/pages/i,
+                /creditwise.*\/api/i
+            ],
+            parseResponse: parseCreditWiseResponse,
+            scoreOnly: true
+        },
+        creditjourney: {
+            name: 'Chase Credit Journey',
+            domain: 'chase.com',
+            hashPattern: /creditjourney/i, // Credit Journey is in hash route, not path
+            apiPatterns: [
+                /credit-journey\/servicing/i,
+                /credit-score-outlines/i,
+                /real-time-score-changes/i
+            ],
+            parseResponse: parseCreditJourneyResponse,
+            scoreOnly: true
+        },
+        bankofamerica: {
+            name: 'Bank of America',
+            domain: 'bankofamerica.com',
+            pathPattern: /credit-score/i, // Must be on credit score page
+            apiPatterns: [
+                /\/ogateway\/finwell\/creditscore/i,
+                /creditscore\/v1\/details/i,
+                /\/finwell\/creditscore/i
+            ],
+            parseResponse: parseBankOfAmericaResponse,
+            scoreOnly: true
+        },
+        citi: {
+            name: 'Citi',
+            domain: 'citi.com',
+            apiPatterns: [
+                /\/gcgapi\/.*\/ficoTilesData/i,
+                /ficoTilesData\/retrieve/i
+            ],
+            parseResponse: parseCitiResponse,
+            scoreOnly: true
+        },
+        usbank: {
+            name: 'US Bank',
+            domain: 'usbank.com',
+            // No path/hash restrictions - detect by API call pattern only
+            apiPatterns: [
+                /usbank\.com.*graphql/i,
+                /\/graphql/i,  // Broad match - will filter by domain
+                /getCreditScoreService/i
+            ],
+            parseResponse: parseUSBankResponse,
+            scoreOnly: true
+        },
+        amex: {
+            name: 'Amex MyCredit Guide',
+            domain: 'mycreditguide.americanexpress.com',
+            apiPatterns: [
+                /experiancs\.com.*scoreplan-score/i,
+                /mycreditguide.*\/api\/.*\/credit\/scores/i,
+                /\/credit\/scores/i
+            ],
+            parseResponse: parseAmexResponse,
+            scoreOnly: true
+        },
+        wellsfargo: {
+            name: 'Wells Fargo',
+            domain: 'wellsfargo.com',
+            // Match any page that might have credit score data
+            pathPattern: /\/(fico|credit|services)/i,
+            // Try both page parsing AND API interception
+            parseFromPage: true,
+            apiPatterns: [
+                /fico/i,
+                /creditscore/i,
+                /credit.*score/i,
+                /viewcreditscore/i
+            ],
+            parseResponse: parseWellsFargoResponse,
+            scoreOnly: true
+        },
+    };
+
     // Credit report state
     let creditReportData = null;
     let creditBadgeElement = null;
@@ -1032,6 +1238,7 @@
 
     function setupCreditReportInterceptor() {
         const hostname = window.location.hostname.toLowerCase();
+        const pathname = window.location.pathname.toLowerCase();
         
         // Determine which bureau we're on
         for (const [bureauKey, config] of Object.entries(CREDIT_BUREAU_CONFIGS)) {
@@ -1052,34 +1259,239 @@
                 return true;
             }
         }
+        
+        // Check score-only sources
+        const hash = window.location.hash.toLowerCase();
+        
+        console.log('CardTool Credit: Checking score sources. Hostname:', hostname, 'Path:', pathname, 'Hash:', hash);
+        
+        for (const [sourceKey, config] of Object.entries(SCORE_SOURCE_CONFIGS)) {
+            const domainMatch = hostname.includes(config.domain.replace('www.', ''));
+            const pathMatch = !config.pathPattern || config.pathPattern.test(pathname);
+            const hashMatch = !config.hashPattern || config.hashPattern.test(hash);
+            const notExcluded = !config.excludePathPattern || !config.excludePathPattern.test(pathname);
+            
+            if (domainMatch) {
+                console.log('CardTool Credit: Domain match for', config.name, '- pathMatch:', pathMatch, 'hashMatch:', hashMatch, 'notExcluded:', notExcluded);
+            }
+            
+            if (domainMatch && pathMatch && hashMatch && notExcluded) {
+                currentBureau = sourceKey; // Use source key as identifier
+                console.log('CardTool Credit: Detected score source:', config.name);
+                
+                // Always install interceptors if apiPatterns exist
+                if (config.apiPatterns) {
+                    interceptXHR(config, true); // true = scoreOnly mode (includes Fetch interception)
+                }
+                
+                // Also try page parsing if configured
+                if (config.parseFromPage) {
+                    setTimeout(() => parseScoreFromPage(sourceKey, config), 2000);
+                }
+                return true;
+            }
+        }
+        console.log('CardTool Credit: No score source matched');
         return false;
+    }
+    
+    // Parse score data embedded in page HTML
+    function parseScoreFromPage(sourceKey, config, retryCount = 0) {
+        console.log('CardTool Credit: Parsing score from page for', config.name, '(attempt', retryCount + 1, ')');
+        
+        // Check if this page matches the parseFromPagePattern (if specified)
+        if (config.parseFromPagePattern && !config.parseFromPagePattern.test(window.location.pathname)) {
+            console.log('CardTool Credit: Page does not match parseFromPagePattern, skipping');
+            return;
+        }
+        
+        // Use unsafeWindow to access the real page's window object
+        const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        
+        try {
+            let payload = null;
+            let parsed = null;
+            
+            // Credit Karma embeds historical data in page HTML as KPLLineGraphDataPoint
+            if (sourceKey === 'creditkarma') {
+                console.log('CardTool Credit: Looking for CK embedded data on /credit-health page');
+                const html = document.documentElement.innerHTML;
+                
+                // Determine bureau from URL
+                const bureauMatch = window.location.pathname.match(/credit-health\/(equifax|transunion)/i);
+                const bureau = bureauMatch ? bureauMatch[1].toLowerCase() : null;
+                
+                if (!bureau) {
+                    console.log('CardTool Credit: Could not determine bureau from URL');
+                    return;
+                }
+                
+                // Find all KPLLineGraphDataPoint entries with scores (yValue 300-850)
+                const dataPointRegex = /"xValueLabel"\s*:\s*"([^"]+)"\s*,\s*"yValueLabel"\s*:\s*"(\d{3})"/g;
+                const scores = [];
+                const seenDates = new Set();
+                let match;
+                
+                while ((match = dataPointRegex.exec(html)) !== null) {
+                    const dateStr = match[1]; // e.g., "Jan 2, 2026"
+                    const score = parseInt(match[2], 10);
+                    
+                    if (score >= 300 && score <= 850) {
+                        // Parse date like "Jan 2, 2026" to ISO format
+                        const dateMatch = dateStr.match(/([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/);
+                        if (dateMatch) {
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const month = monthNames.indexOf(dateMatch[1].substring(0, 3));
+                            if (month !== -1) {
+                                const isoDate = `${dateMatch[3]}-${String(month + 1).padStart(2, '0')}-${dateMatch[2].padStart(2, '0')}`;
+                                const key = `${isoDate}-${score}`;
+                                if (!seenDates.has(key)) {
+                                    seenDates.add(key);
+                                    scores.push({
+                                        type: 'vantage_3',
+                                        score: score,
+                                        date: isoDate,
+                                        bureau: bureau
+                                    });
+                                    console.log('CardTool Credit: Found CK historical score:', score, 'on', isoDate, 'for', bureau);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (scores.length > 0) {
+                    parsed = {
+                        scores: scores,
+                        accounts: [],
+                        inquiries: [],
+                        reportDate: null,
+                        scoreOnly: true
+                    };
+                } else {
+                    console.log('CardTool Credit: No historical scores found in CK page');
+                }
+            }
+            
+            // Wells Fargo stores data in window._wfPayload
+            else if (sourceKey === 'wellsfargo') {
+                console.log('CardTool Credit: Looking for _wfPayload on', typeof unsafeWindow !== 'undefined' ? 'unsafeWindow' : 'window');
+                if (targetWindow._wfPayload) {
+                    payload = targetWindow._wfPayload;
+                    console.log('CardTool Credit: Found _wfPayload:', JSON.stringify(payload).substring(0, 200));
+                } else {
+                    // Also try to find it in the HTML source
+                    const scripts = document.querySelectorAll('script');
+                    for (const script of scripts) {
+                        const content = script.textContent || '';
+                        const match = content.match(/window\._wfPayload\s*=\s*({[\s\S]*?});/);
+                        if (match) {
+                            try {
+                                payload = JSON.parse(match[1]);
+                                console.log('CardTool Credit: Found _wfPayload in script tag');
+                                break;
+                            } catch (e) {
+                                console.log('CardTool Credit: Failed to parse _wfPayload from script');
+                            }
+                        }
+                    }
+                    if (!payload) {
+                        console.log('CardTool Credit: _wfPayload not found yet');
+                    }
+                }
+                
+                if (payload) {
+                    parsed = config.parseResponse(payload, window.location.href);
+                }
+            }
+            
+            if (parsed && parsed.scores && parsed.scores.length > 0) {
+                creditReportData = {
+                    ...parsed,
+                    status: 'ready'
+                };
+                showCreditBadge();
+                console.log('CardTool Credit: Parsed', parsed.scores.length, 'scores from page');
+            } else if (!parsed) {
+                // Retry up to 5 times with increasing delays
+                if (retryCount < 5) {
+                    const delay = (retryCount + 1) * 2000;
+                    console.log('CardTool Credit: Retrying in', delay, 'ms');
+                    setTimeout(() => parseScoreFromPage(sourceKey, config, retryCount + 1), delay);
+                } else {
+                    console.log('CardTool Credit: Could not find embedded payload after retries');
+                }
+            } else {
+                console.log('CardTool Credit: No scores found in page payload');
+            }
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing page data', e);
+        }
     }
 
     function interceptXHR(config) {
-        const origOpen = XMLHttpRequest.prototype.open;
-        const origSend = XMLHttpRequest.prototype.send;
+        // Use unsafeWindow to access the real window object (bypasses site sandboxing)
+        const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        console.log('CardTool Credit: Using', typeof unsafeWindow !== 'undefined' ? 'unsafeWindow' : 'window', 'for interceptors');
+        
+        // Store reference to our patched functions to detect if they get overwritten
+        const cardtoolMarker = '__cardtool_intercepted__';
+        
+        // Intercept XMLHttpRequest
+        const origOpen = targetWindow.XMLHttpRequest.prototype.open;
+        const origSend = targetWindow.XMLHttpRequest.prototype.send;
+        
+        // Skip if already intercepted
+        if (origOpen[cardtoolMarker]) {
+            console.log('CardTool Credit: XHR already intercepted, skipping');
+            return;
+        }
 
-        XMLHttpRequest.prototype.open = function(method, url, async, user, pass) {
+        const patchedOpen = function(method, url, async, user, pass) {
             this._cardtool_url = url;
             return origOpen.apply(this, arguments);
         };
+        patchedOpen[cardtoolMarker] = true;
+        
+        // Try to make the interceptor non-overwritable
+        try {
+            Object.defineProperty(targetWindow.XMLHttpRequest.prototype, 'open', {
+                value: patchedOpen,
+                writable: false,
+                configurable: true
+            });
+        } catch (e) {
+            // Fall back to simple assignment if defineProperty fails
+            targetWindow.XMLHttpRequest.prototype.open = patchedOpen;
+        }
 
-        XMLHttpRequest.prototype.send = function(body) {
+        targetWindow.XMLHttpRequest.prototype.send = function(body) {
             const xhr = this;
             const url = xhr._cardtool_url || '';
 
             xhr.addEventListener('readystatechange', function() {
                 if (xhr.readyState === 4 && xhr.status === 200) {
+                    // Log all XHR URLs for debugging (only first 100 chars)
+                    if (url && !url.includes('taboola') && !url.includes('doubleclick') && !url.includes('google')) {
+                        console.log('CardTool Credit: XHR completed:', url.substring(0, 100));
+                    }
+                    
                     // Check if this URL matches any of our API patterns
                     const matchesPattern = config.apiPatterns.some(pattern => pattern.test(url));
                     
                     if (matchesPattern) {
-                        console.log('CardTool Credit: Intercepted API call:', url);
+                        console.log('CardTool Credit: ✓ Intercepted XHR call:', url);
                         try {
-                            const data = JSON.parse(xhr.responseText);
-                            processInterceptedData(data, url, config);
+                            // Handle HTML responses if configured
+                            if (config.parseHtml) {
+                                // Pass raw HTML to parser
+                                processInterceptedData(xhr.responseText, url, config);
+                            } else {
+                                const data = JSON.parse(xhr.responseText);
+                                processInterceptedData(data, url, config);
+                            }
                         } catch (e) {
-                            console.warn('CardTool Credit: Failed to parse response', e);
+                            console.warn('CardTool Credit: Failed to parse XHR response', e);
                         }
                     }
                 }
@@ -1089,6 +1501,61 @@
         };
 
         console.log('CardTool Credit: XHR interceptor installed for', config.name);
+        
+        // Also intercept Fetch API (used by modern sites like Credit Karma)
+        const origFetch = targetWindow.fetch;
+        targetWindow.fetch = async function(input, init) {
+            const url = typeof input === 'string' ? input : input.url;
+            const response = await origFetch.apply(this, arguments);
+            
+            // Log all Fetch URLs for debugging (only first 100 chars)
+            if (url && !url.includes('taboola') && !url.includes('doubleclick') && !url.includes('google')) {
+                console.log('CardTool Credit: Fetch completed:', url.substring(0, 100));
+            }
+            
+            // Check if this URL matches any of our API patterns
+            const matchesPattern = config.apiPatterns.some(pattern => pattern.test(url));
+            
+            if (matchesPattern && response.ok) {
+                console.log('CardTool Credit: ✓ Intercepted Fetch call:', url);
+                try {
+                    // Clone the response so we can read it without consuming it
+                    const clonedResponse = response.clone();
+                    // Handle HTML responses if configured
+                    if (config.parseHtml) {
+                        const text = await clonedResponse.text();
+                        processInterceptedData(text, url, config);
+                    } else {
+                        const data = await clonedResponse.json();
+                        processInterceptedData(data, url, config);
+                    }
+                } catch (e) {
+                    console.warn('CardTool Credit: Failed to parse Fetch response', e);
+                }
+            }
+            
+            return response;
+        };
+        
+        console.log('CardTool Credit: Fetch interceptor installed for', config.name);
+        
+        // Set up periodic reinstallation check (some sites overwrite fetch/XHR after page load)
+        let reinstallCount = 0;
+        const maxReinstalls = 3;
+        const reinstallInterval = setInterval(() => {
+            if (reinstallCount >= maxReinstalls) {
+                clearInterval(reinstallInterval);
+                return;
+            }
+            
+            // Check if our XHR interceptor was overwritten
+            if (!targetWindow.XMLHttpRequest.prototype.open[cardtoolMarker]) {
+                console.log('CardTool Credit: XHR interceptor was overwritten, reinstalling...');
+                reinstallCount++;
+                interceptXHR(config);
+                clearInterval(reinstallInterval);
+            }
+        }, 1000);
     }
 
     function processInterceptedData(data, url, config) {
@@ -1117,6 +1584,10 @@
                 }
                 if (parsed.reportDate) {
                     creditReportData.reportDate = parsed.reportDate;
+                }
+                // Track if this is a score-only source (for multi-bureau score handling)
+                if (parsed.scoreOnly) {
+                    creditReportData.scoreOnly = true;
                 }
                 
                 // Store raw data for debugging
@@ -1493,6 +1964,7 @@
                 dateUpdated: parseExperianDate(acct.dateReported || acct.lastUpdated),
                 dateClosed: parseExperianDate(acct.dateClosed),
                 creditLimitCents: parseDollarsToCents(acct.creditLimit || acct.highCredit),
+                highBalanceCents: parseDollarsToCents(acct.highBalance || acct.highCredit),
                 balanceCents: parseDollarsToCents(acct.balance || acct.currentBalance),
                 monthlyPaymentCents: parseDollarsToCents(acct.monthlyPayment || acct.scheduledPayment),
                 accountType: mapExperianAccountType(acct.accountType || acct.portfolioType),
@@ -1567,6 +2039,722 @@
         return { scores: [], accounts: [], inquiries: [], reportDate: null };
     }
 
+    // ============================================
+    // SCORE-ONLY SOURCE PARSERS
+    // ============================================
+
+    // Credit Karma - VantageScore 3 for TransUnion and Equifax
+    function parseCreditKarmaResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing Credit Karma response', url);
+        
+        try {
+            // Helper to convert Unix timestamp to date string
+            const timestampToDate = (ts) => {
+                if (!ts) return new Date().toISOString().split('T')[0];
+                // Credit Karma uses seconds, not milliseconds
+                const date = new Date(ts * 1000);
+                return date.toISOString().split('T')[0];
+            };
+            
+            // Credit Karma GraphQL response - look for FabricScoreDialsEntry
+            // Structure: data.*.components[].entries[].creditScores.{transunion, equifax}
+            const findScores = (obj) => {
+                if (!obj || typeof obj !== 'object') return;
+                
+                // Check if this object has creditScores with transunion/equifax
+                if (obj.creditScores) {
+                    const scores = obj.creditScores;
+                    
+                    // TransUnion score
+                    if (scores.transunion && scores.transunion.value) {
+                        const scoreValue = scores.transunion.value;
+                        if (scoreValue >= 300 && scoreValue <= 850) {
+                            result.scores.push({
+                                type: 'vantage_3',
+                                score: scoreValue,
+                                date: timestampToDate(scores.transunion.timestamp),
+                                bureau: 'transunion'
+                            });
+                            console.log('CardTool Credit: Found TU score:', scoreValue);
+                        }
+                    }
+                    
+                    // Equifax score
+                    if (scores.equifax && scores.equifax.value) {
+                        const scoreValue = scores.equifax.value;
+                        if (scoreValue >= 300 && scoreValue <= 850) {
+                            result.scores.push({
+                                type: 'vantage_3',
+                                score: scoreValue,
+                                date: timestampToDate(scores.equifax.timestamp),
+                                bureau: 'equifax'
+                            });
+                            console.log('CardTool Credit: Found EQ score:', scoreValue);
+                        }
+                    }
+                    return; // Found creditScores, no need to recurse further in this branch
+                }
+                
+                // Recursively search arrays and objects
+                if (Array.isArray(obj)) {
+                    for (const item of obj) {
+                        findScores(item);
+                    }
+                } else {
+                    for (const key of Object.keys(obj)) {
+                        findScores(obj[key]);
+                    }
+                }
+            };
+            
+            findScores(data);
+            
+            // Deduplicate scores (same bureau + type)
+            const seen = new Set();
+            result.scores = result.scores.filter(s => {
+                const key = `${s.bureau}-${s.type}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'scores from Credit Karma');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing Credit Karma response', e);
+        }
+        
+        return result;
+    }
+
+    // myFICO - FICO 8 scores (Equifax is free)
+    function parseMyFicoResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing myFICO response', url);
+        
+        try {
+            // Helper to map datasource to bureau
+            const mapBureau = (ds) => {
+                if (!ds) return null;
+                const lower = ds.toLowerCase();
+                if (lower === 'efx' || lower.includes('equi')) return 'equifax';
+                if (lower === 'exp' || lower.includes('exper')) return 'experian';
+                if (lower === 'tu' || lower.includes('trans')) return 'transunion';
+                return null;
+            };
+            
+            // Helper to parse myFICO date format (2026-01-12T20:41:35.840)
+            const parseDate = (dateStr) => {
+                if (!dateStr) return new Date().toISOString().split('T')[0];
+                return dateStr.split('T')[0];
+            };
+            
+            // Format 1: /v4/users/products endpoint with "latest" array
+            // Structure: { products: [...], latest: [{ score, datasource, score_version, score_date }] }
+            if (data.latest && Array.isArray(data.latest)) {
+                for (const item of data.latest) {
+                    const score = item.score;
+                    const bureau = mapBureau(item.datasource);
+                    const scoreVersion = item.score_version;
+                    
+                    if (score >= 300 && score <= 850 && bureau) {
+                        // Determine score type from score_version
+                        const scoreType = scoreVersion === '8' ? 'fico_8' : 
+                                          scoreVersion === '9' ? 'fico_9' : 'fico_8';
+                        
+                        result.scores.push({
+                            type: scoreType,
+                            score: score,
+                            date: parseDate(item.score_date),
+                            bureau: bureau
+                        });
+                        console.log('CardTool Credit: Found myFICO score:', score, bureau, scoreType);
+                    }
+                }
+            }
+            
+            // Format 2: /v4/users/reports endpoint with "response.reports" array
+            // Structure: { response: { reports: [{ score, datasource, score_version, report_date }] } }
+            if (data.response?.reports && Array.isArray(data.response.reports)) {
+                for (const report of data.response.reports) {
+                    const score = report.score;
+                    const bureau = mapBureau(report.datasource);
+                    const scoreVersion = report.score_version;
+                    
+                    if (score >= 300 && score <= 850 && bureau) {
+                        const scoreType = scoreVersion === '8' ? 'fico_8' : 
+                                          scoreVersion === '9' ? 'fico_9' : 'fico_8';
+                        
+                        result.scores.push({
+                            type: scoreType,
+                            score: score,
+                            date: parseDate(report.report_date),
+                            bureau: bureau
+                        });
+                        console.log('CardTool Credit: Found myFICO historical score:', score, bureau);
+                    }
+                }
+            }
+            
+            // Deduplicate by bureau+type+date (keep all historical scores!)
+            const scoreMap = new Map();
+            for (const s of result.scores) {
+                const key = `${s.bureau}-${s.type}-${s.date}`;
+                if (!scoreMap.has(key)) {
+                    scoreMap.set(key, s);
+                }
+            }
+            result.scores = Array.from(scoreMap.values());
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'scores from myFICO');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing myFICO response', e);
+        }
+        
+        return result;
+    }
+
+    // Capital One CreditWise - FICO 8 for TransUnion (NOT VantageScore!)
+    function parseCreditWiseResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing CreditWise response', url);
+        
+        try {
+            // CreditWise /api/pages response structure:
+            // { summary: { components: [{ view: { creditScore: 751, dateUpdatedLabel: {...} } }] } }
+            
+            // Helper to parse date from "Updated on January 12, 2026" format
+            const parseDateLabel = (label) => {
+                if (!label) return new Date().toISOString().split('T')[0];
+                const match = label.match(/(\w+)\s+(\d+),\s+(\d+)/);
+                if (match) {
+                    const months = ['January','February','March','April','May','June',
+                                    'July','August','September','October','November','December'];
+                    const monthIdx = months.indexOf(match[1]);
+                    if (monthIdx >= 0) {
+                        const month = String(monthIdx + 1).padStart(2, '0');
+                        const day = String(match[2]).padStart(2, '0');
+                        return `${match[3]}-${month}-${day}`;
+                    }
+                }
+                return new Date().toISOString().split('T')[0];
+            };
+            
+            // Search for SCORE_BAR component in the nested structure
+            const findScoreBar = (obj) => {
+                if (!obj || typeof obj !== 'object') return null;
+                
+                // Check if this is a SCORE_BAR component
+                if (obj.componentType === 'SCORE_BAR' && obj.creditScore !== undefined) {
+                    return {
+                        score: obj.creditScore,
+                        dateLabel: obj.dateUpdatedLabel?.template,
+                        titleLabel: obj.titleLabel?.template
+                    };
+                }
+                
+                // Check view property
+                if (obj.view?.componentType === 'SCORE_BAR' && obj.view?.creditScore !== undefined) {
+                    return {
+                        score: obj.view.creditScore,
+                        dateLabel: obj.view.dateUpdatedLabel?.template,
+                        titleLabel: obj.view.titleLabel?.template
+                    };
+                }
+                
+                // Recursively search
+                if (Array.isArray(obj)) {
+                    for (const item of obj) {
+                        const found = findScoreBar(item);
+                        if (found) return found;
+                    }
+                } else {
+                    for (const key of Object.keys(obj)) {
+                        const found = findScoreBar(obj[key]);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+            
+            const scoreData = findScoreBar(data);
+            
+            if (scoreData && scoreData.score >= 300 && scoreData.score <= 850) {
+                // Verify it's FICO 8 from the title label
+                const isFico8 = scoreData.titleLabel?.includes('FICO') && 
+                                scoreData.titleLabel?.includes('8');
+                
+                result.scores.push({
+                    type: isFico8 ? 'fico_8' : 'fico_8', // CreditWise always provides FICO 8
+                    score: scoreData.score,
+                    date: parseDateLabel(scoreData.dateLabel),
+                    bureau: 'transunion' // CreditWise uses TransUnion data
+                });
+                console.log('CardTool Credit: Found CreditWise FICO 8 score:', scoreData.score);
+            }
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'scores from CreditWise');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing CreditWise response', e);
+        }
+        
+        return result;
+    }
+
+    // Chase Credit Journey - VantageScore 3 for Experian
+    function parseCreditJourneyResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing Credit Journey response', url);
+        
+        try {
+            // Helper to parse YYYYMMDD format to YYYY-MM-DD
+            const parseChaseDate = (dateStr) => {
+                if (!dateStr) return new Date().toISOString().split('T')[0];
+                if (dateStr.length === 8) {
+                    return `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`;
+                }
+                return dateStr;
+            };
+            
+            // Format 1: credit-score-outlines endpoint
+            // { creditBureauName, creditScore: { currentCreditScoreSummary: { creditRiskScore } }, 
+            //   creditScoreModelIdentifier: { riskModelName, riskModelVersionNumber }, updateDate }
+            if (data.creditScore?.currentCreditScoreSummary?.creditRiskScore) {
+                const score = data.creditScore.currentCreditScoreSummary.creditRiskScore;
+                const bureau = (data.creditBureauName || 'EXPERIAN').toLowerCase();
+                const modelName = data.creditScoreModelIdentifier?.riskModelName || '';
+                const modelVersion = data.creditScoreModelIdentifier?.riskModelVersionNumber || '';
+                
+                // Determine score type
+                let scoreType = 'vantage_3';
+                if (modelName.toLowerCase().includes('vantage')) {
+                    scoreType = modelVersion === '3.0' || modelVersion === '3' ? 'vantage_3' : 
+                                modelVersion === '4.0' || modelVersion === '4' ? 'vantage_4' : 'vantage_3';
+                }
+                
+                if (score >= 300 && score <= 850) {
+                    result.scores.push({
+                        type: scoreType,
+                        score: score,
+                        date: parseChaseDate(data.updateDate),
+                        bureau: bureau
+                    });
+                    console.log('CardTool Credit: Found Credit Journey score:', score, bureau);
+                }
+            }
+            
+            // Format 2: real-time-score-changes endpoint (has history)
+            // { vscrReportDetails: [{ alertGeneratedTimeStamp, creditScores: { currentValueNumber } }] }
+            if (data.vscrReportDetails && Array.isArray(data.vscrReportDetails)) {
+                for (const report of data.vscrReportDetails) {
+                    if (report.creditScores?.currentValueNumber) {
+                        const score = report.creditScores.currentValueNumber;
+                        const dateStr = report.alertGeneratedTimeStamp; // YYYYMMDD format
+                        
+                        if (score >= 300 && score <= 850) {
+                            result.scores.push({
+                                type: 'vantage_3',
+                                score: score,
+                                date: parseChaseDate(dateStr),
+                                bureau: 'experian' // Credit Journey uses Experian
+                            });
+                        }
+                    }
+                }
+                console.log('CardTool Credit: Found', result.scores.length, 'historical scores from Credit Journey');
+            }
+            
+            // Deduplicate - keep latest for each date
+            const scoreMap = new Map();
+            for (const s of result.scores) {
+                const key = `${s.bureau}-${s.type}-${s.date}`;
+                if (!scoreMap.has(key)) {
+                    scoreMap.set(key, s);
+                }
+            }
+            result.scores = Array.from(scoreMap.values());
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'scores from Credit Journey');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing Credit Journey response', e);
+        }
+        
+        return result;
+    }
+
+    // Bank of America - FICO 8 for TransUnion
+    function parseBankOfAmericaResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing Bank of America response', url);
+        
+        try {
+            // BOA /ogateway/finwell/creditscore/v1/details endpoint
+            // { payload: { currentCreditScore, currentCreditScoreDate, scores: [{rating, assessmentDate}] } }
+            
+            // Helper to parse BOA timestamp (milliseconds since epoch)
+            const parseBoaDate = (timestamp) => {
+                if (!timestamp) return new Date().toISOString().split('T')[0];
+                return new Date(timestamp).toISOString().split('T')[0];
+            };
+            
+            const payload = data.payload || data;
+            
+            // Current score
+            if (payload.currentCreditScore) {
+                const score = parseInt(payload.currentCreditScore, 10);
+                if (score >= 300 && score <= 850) {
+                    result.scores.push({
+                        type: 'fico_8',
+                        score: score,
+                        date: parseBoaDate(payload.currentCreditScoreDate),
+                        bureau: 'transunion' // BOA uses TransUnion
+                    });
+                    console.log('CardTool Credit: Found BOA current score:', score);
+                }
+            }
+            
+            // Historical scores
+            if (payload.scores && Array.isArray(payload.scores)) {
+                for (const item of payload.scores) {
+                    const score = item.rating;
+                    if (score >= 300 && score <= 850) {
+                        result.scores.push({
+                            type: 'fico_8',
+                            score: score,
+                            date: parseBoaDate(item.assessmentDate),
+                            bureau: 'transunion'
+                        });
+                    }
+                }
+                console.log('CardTool Credit: Found', payload.scores.length, 'historical scores from BOA');
+            }
+            
+            // Deduplicate by date
+            const scoreMap = new Map();
+            for (const s of result.scores) {
+                const key = `${s.bureau}-${s.type}-${s.date}`;
+                if (!scoreMap.has(key)) {
+                    scoreMap.set(key, s);
+                }
+            }
+            result.scores = Array.from(scoreMap.values());
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'scores from Bank of America');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing Bank of America response', e);
+        }
+        
+        return result;
+    }
+
+    // Citi - FICO Bankcard Score 8 for Equifax
+    function parseCitiResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing Citi response', url);
+        
+        try {
+            // Citi /gcgapi/prod/public/v1/ficoTilesData/retrieve endpoint
+            // Returns array with tile data, score is nested in successResponse
+            
+            // Helper to parse "as of MM/DD/YYYY" format
+            const parseCitiDate = (dateStr) => {
+                if (!dateStr) return new Date().toISOString().split('T')[0];
+                const match = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                if (match) {
+                    const month = String(match[1]).padStart(2, '0');
+                    const day = String(match[2]).padStart(2, '0');
+                    return `${match[3]}-${month}-${day}`;
+                }
+                return new Date().toISOString().split('T')[0];
+            };
+            
+            // Search for score in the nested structure
+            const findScore = (obj) => {
+                if (!obj || typeof obj !== 'object') return null;
+                
+                // Look for elements array with score label
+                if (obj.elements && Array.isArray(obj.elements)) {
+                    let score = null;
+                    let dateLabel = null;
+                    let scoreType = 'fico_bankcard_8'; // Default for Citi
+                    
+                    for (const elem of obj.elements) {
+                        // Score is in label1.text (e.g., "742")
+                        if (elem.id === 'label1' && elem.text && /^\d+$/.test(elem.text)) {
+                            score = parseInt(elem.text, 10);
+                        }
+                        // Date is in label3.text (e.g., "as of 12/23/2025")
+                        if (elem.id === 'label3' && elem.text) {
+                            dateLabel = elem.text;
+                        }
+                        // Score type info in label6 (e.g., "FICO® Bankcard Score 8 based on Equifax data.")
+                        if (elem.id === 'label6' && elem.text) {
+                            if (elem.text.toLowerCase().includes('bankcard')) {
+                                scoreType = 'fico_bankcard_8';
+                            }
+                        }
+                    }
+                    
+                    if (score && score >= 250 && score <= 900) {
+                        return {
+                            score: score,
+                            date: parseCitiDate(dateLabel),
+                            type: scoreType
+                        };
+                    }
+                }
+                
+                // Recursively search
+                if (Array.isArray(obj)) {
+                    for (const item of obj) {
+                        const found = findScore(item);
+                        if (found) return found;
+                    }
+                } else {
+                    for (const key of Object.keys(obj)) {
+                        // Check successResponse specifically
+                        if (key === 'successResponse') {
+                            const found = findScore(obj[key]);
+                            if (found) return found;
+                        }
+                    }
+                    // General recursion
+                    for (const key of Object.keys(obj)) {
+                        const found = findScore(obj[key]);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+            
+            const scoreData = findScore(data);
+            
+            if (scoreData) {
+                result.scores.push({
+                    type: scoreData.type,
+                    score: scoreData.score,
+                    date: scoreData.date,
+                    bureau: 'equifax' // Citi uses Equifax for their FICO Bankcard score
+                });
+                console.log('CardTool Credit: Found Citi FICO Bankcard score:', scoreData.score);
+            }
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'scores from Citi');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing Citi response', e);
+        }
+        
+        return result;
+    }
+
+    // Wells Fargo Credit Close-Up - FICO 8 for Experian (embedded in HTML)
+    function parseWellsFargoResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing Wells Fargo response');
+        
+        try {
+            // Data comes from window._wfPayload embedded in HTML
+            const payload = data;
+            
+            // Helper to parse WF date format "2026/01/09" to ISO
+            const parseWFDate = (dateStr) => {
+                if (!dateStr) return new Date().toISOString().split('T')[0];
+                return dateStr.replace(/\//g, '-');
+            };
+            
+            // Current score from scoreMeter
+            // Wells Fargo provides FICO Score 9 from Experian
+            if (payload.applicationData?.scoreMeter) {
+                const meter = payload.applicationData.scoreMeter;
+                const score = parseInt(meter.score, 10);
+                if (score >= 300 && score <= 850) {
+                    result.scores.push({
+                        type: 'fico_9',  // Wells Fargo uses FICO 9
+                        score: score,
+                        date: parseWFDate(meter.scoreDate),
+                        bureau: 'experian' // Wells Fargo uses Experian
+                    });
+                    console.log('CardTool Credit: Found WF current score:', score);
+                }
+            }
+            
+            // Historical scores from scoreHistory.historyChart
+            if (payload.applicationData?.scoreHistory?.historyChart) {
+                const history = payload.applicationData.scoreHistory.historyChart;
+                for (const entry of history) {
+                    const score = parseInt(entry.scoreValue, 10);
+                    if (score >= 300 && score <= 850) {
+                        result.scores.push({
+                            type: 'fico_9',  // Wells Fargo uses FICO 9
+                            score: score,
+                            date: parseWFDate(entry.scoreDate),
+                            bureau: 'experian'
+                        });
+                    }
+                }
+                console.log('CardTool Credit: Found', history.length, 'historical WF scores');
+            }
+            
+            // Deduplicate by date
+            const seen = new Set();
+            result.scores = result.scores.filter(s => {
+                const key = `${s.bureau}-${s.type}-${s.date}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'unique scores from Wells Fargo');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing Wells Fargo response', e);
+        }
+        
+        return result;
+    }
+    // Amex MyCredit Guide - FICO 8 for Experian
+    function parseAmexResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing Amex MyCredit Guide response', url);
+        
+        try {
+            // Helper to parse ISO date
+            const parseDate = (dateStr) => {
+                if (!dateStr) return new Date().toISOString().split('T')[0];
+                return dateStr.split('T')[0];
+            };
+            
+            // Format 1: scoreplan-score endpoint (simpler)
+            // { score_model: "Fico8", current_score: 751, current_score_date: "2026-01-12T00:00:00.000+00:00" }
+            if (data.current_score !== undefined) {
+                const score = parseInt(data.current_score, 10);
+                if (score >= 300 && score <= 850) {
+                    const scoreType = (data.score_model || '').toLowerCase().includes('fico8') ? 'fico_8' : 
+                                      (data.score_model || '').toLowerCase().includes('fico9') ? 'fico_9' : 'fico_8';
+                    result.scores.push({
+                        type: scoreType,
+                        score: score,
+                        date: parseDate(data.current_score_date),
+                        bureau: 'experian' // Amex uses Experian (via experiancs.com)
+                    });
+                    console.log('CardTool Credit: Found Amex current score:', score);
+                }
+            }
+            
+            // Format 2: /api/v1/credit/scores endpoint (detailed)
+            // { score_model: "Fico8", score: "751", score_date: "...", credit_score_content: { score: 751, ... } }
+            if (data.score !== undefined) {
+                const score = parseInt(data.score, 10);
+                if (score >= 300 && score <= 850) {
+                    const scoreType = (data.score_model || '').toLowerCase().includes('fico8') ? 'fico_8' : 
+                                      (data.score_model || '').toLowerCase().includes('fico9') ? 'fico_9' : 'fico_8';
+                    result.scores.push({
+                        type: scoreType,
+                        score: score,
+                        date: parseDate(data.score_date),
+                        bureau: 'experian'
+                    });
+                    console.log('CardTool Credit: Found Amex detailed score:', score);
+                }
+            }
+            
+            // Also check nested credit_score_content
+            if (data.credit_score_content?.score) {
+                const score = parseInt(data.credit_score_content.score, 10);
+                if (score >= 300 && score <= 850 && result.scores.length === 0) {
+                    result.scores.push({
+                        type: 'fico_8',
+                        score: score,
+                        date: parseDate(data.credit_score_content.score_date),
+                        bureau: 'experian'
+                    });
+                }
+            }
+            
+            // Deduplicate
+            const seen = new Set();
+            result.scores = result.scores.filter(s => {
+                const key = `${s.bureau}-${s.type}-${s.date}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'scores from Amex MyCredit Guide');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing Amex response', e);
+        }
+        
+        return result;
+    }
+
+    // US Bank - VantageScore 3 for TransUnion
+    function parseUSBankResponse(data, url) {
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        console.log('CardTool Credit: Parsing US Bank response', url);
+        
+        try {
+            // US Bank GraphQL endpoint
+            // { data: { getCreditScoreService: { valCurr, prdtMtrcRfrshdDt, scoreTrendPoints: [{score, scoreDate}] } } }
+            
+            const scoreService = data.data?.getCreditScoreService || data.getCreditScoreService;
+            
+            if (!scoreService) {
+                console.log('CardTool Credit: No getCreditScoreService found in US Bank response');
+                return result;
+            }
+            
+            // Current score
+            if (scoreService.valCurr) {
+                const score = parseInt(scoreService.valCurr, 10);
+                if (score >= 300 && score <= 850) {
+                    result.scores.push({
+                        type: 'vantage_3',
+                        score: score,
+                        date: scoreService.prdtMtrcRfrshdDt || new Date().toISOString().split('T')[0],
+                        bureau: 'transunion' // US Bank uses TransUnion
+                    });
+                    console.log('CardTool Credit: Found US Bank current score:', score);
+                }
+            }
+            
+            // Historical scores (weekly updates!)
+            if (scoreService.scoreTrendPoints && Array.isArray(scoreService.scoreTrendPoints)) {
+                for (const point of scoreService.scoreTrendPoints) {
+                    const score = parseInt(point.score, 10);
+                    if (score >= 300 && score <= 850) {
+                        result.scores.push({
+                            type: 'vantage_3',
+                            score: score,
+                            date: point.scoreDate,
+                            bureau: 'transunion'
+                        });
+                    }
+                }
+                console.log('CardTool Credit: Found', scoreService.scoreTrendPoints.length, 'historical scores from US Bank');
+            }
+            
+            // Deduplicate by date
+            const scoreMap = new Map();
+            for (const s of result.scores) {
+                const key = `${s.bureau}-${s.type}-${s.date}`;
+                if (!scoreMap.has(key)) {
+                    scoreMap.set(key, s);
+                }
+            }
+            result.scores = Array.from(scoreMap.values());
+            
+            console.log('CardTool Credit: Parsed', result.scores.length, 'scores from US Bank');
+        } catch (e) {
+            console.warn('CardTool Credit: Error parsing US Bank response', e);
+        }
+        
+        return result;
+    }
+
+    // ============================================
+    // TRANSUNION HTML SCRAPING
+    // ============================================
+
     function tryScrapeCreditReport(bureau) {
         if (bureau !== 'transunion') return;
         
@@ -1606,13 +2794,39 @@
             console.log('CardTool Credit: Successfully parsed TransUnion UserData');
             console.log('CardTool Credit: Keys in ud:', Object.keys(ud));
             
-            // Navigate to the credit data
-            const creditData = ud?.TU_CONSUMER_DISCLOSURE?.reportData?.product?.[0]?.subject?.[0]?.subjectRecord?.[0]?.custom?.credit;
+            // Navigate to the credit data - try multiple paths
+            let creditData = ud?.TU_CONSUMER_DISCLOSURE?.reportData?.product?.[0]?.subject?.[0]?.subjectRecord?.[0]?.custom?.credit;
+            
+            // Alternative path 1: Direct access
+            if (!creditData) {
+                creditData = ud?.creditData || ud?.credit;
+            }
+            
+            // Alternative path 2: Look for trade array directly
+            if (!creditData && ud?.TU_CONSUMER_DISCLOSURE?.reportData?.product?.[0]?.subject?.[0]?.subjectRecord?.[0]) {
+                const subjectRecord = ud.TU_CONSUMER_DISCLOSURE.reportData.product[0].subject[0].subjectRecord[0];
+                console.log('CardTool Credit: SubjectRecord keys:', Object.keys(subjectRecord));
+                console.log('CardTool Credit: SubjectRecord.custom keys:', subjectRecord.custom ? Object.keys(subjectRecord.custom) : 'no custom');
+                
+                // Check if trade data exists elsewhere
+                if (subjectRecord.custom) {
+                    creditData = subjectRecord.custom.credit || subjectRecord.custom;
+                }
+            }
+            
+            // Log structure for debugging
+            if (ud?.TU_CONSUMER_DISCLOSURE?.reportData?.product?.[0]?.subject?.[0]?.subjectRecord?.[0]?.custom?.credit?.trade?.[0]) {
+                const sampleTrade = ud.TU_CONSUMER_DISCLOSURE.reportData.product[0].subject[0].subjectRecord[0].custom.credit.trade[0];
+                console.log('CardTool Credit: Sample trade keys:', Object.keys(sampleTrade));
+                // Log the entire first trade for debugging
+                console.log('CardTool Credit: Full sample trade:', JSON.stringify(sampleTrade, null, 2));
+            }
             
             if (!creditData) {
                 console.log('CardTool Credit: Could not find credit data in UserData');
                 console.log('CardTool Credit: TU_CONSUMER_DISCLOSURE exists:', !!ud?.TU_CONSUMER_DISCLOSURE);
                 console.log('CardTool Credit: reportData exists:', !!ud?.TU_CONSUMER_DISCLOSURE?.reportData);
+                console.log('CardTool Credit: UserData top-level keys:', Object.keys(ud));
                 creditReportData = { ...result, status: 'no_credit_data', message: 'Credit data not found in report', rawData };
                 showCreditBadge();
                 return;
@@ -1631,21 +2845,131 @@
                 const account = trade.account || {};
                 const terms = trade.terms || {};
                 
+                // Debug: log first account structure
+                if (result.accounts.length === 0) {
+                    console.log('CardTool Credit: Sample trade keys:', Object.keys(trade));
+                }
+                
+                // ========== CREDIT LIMIT ==========
+                // TU stores credit limit in histCreditLimitStmt as text: "Credit limit of $2,000 from 07/2023 to 12/2025"
+                let creditLimit = null;
+                if (trade.creditLimit !== undefined && trade.creditLimit !== null) {
+                    creditLimit = trade.creditLimit;
+                } else if (trade.histCreditLimitStmt) {
+                    // Parse from statement like "Credit limit of $11,000 from 03/2025 to 12/2025"
+                    // Get the LAST dollar amount (most recent)
+                    const limitMatches = trade.histCreditLimitStmt.match(/\$[\d,]+/g);
+                    if (limitMatches && limitMatches.length > 0) {
+                        // Last match is most recent
+                        creditLimit = limitMatches[limitMatches.length - 1];
+                    }
+                }
+                
+                // ========== BALANCE ==========
+                // TU stores balance history in histBalanceList as semicolon-separated: "0;620;0;0;..."
+                // First value is most recent
+                let balance = null;
+                if (trade.currentBalance !== undefined && trade.currentBalance !== null) {
+                    balance = trade.currentBalance;
+                } else if (trade.histBalanceList) {
+                    const balances = trade.histBalanceList.split(';').filter(b => b !== '');
+                    if (balances.length > 0) {
+                        // First non-empty value is most recent
+                        balance = balances[0];
+                    }
+                }
+                
+                // ========== HIGH BALANCE ==========
+                // TU stores in histHighCreditStmt: "High balance of $0 from 07/2023...; $620 from 11/2025 to 12/2025"
+                let highBalance = null;
+                if (trade.highCredit !== undefined && trade.highCredit !== null) {
+                    highBalance = trade.highCredit;
+                } else if (trade.histHighCreditStmt) {
+                    // Get the LAST dollar amount (most recent high balance)
+                    const highMatches = trade.histHighCreditStmt.match(/\$[\d,]+/g);
+                    if (highMatches && highMatches.length > 0) {
+                        highBalance = highMatches[highMatches.length - 1];
+                    }
+                }
+                
+                // ========== MONTHLY PAYMENT ==========
+                // TU stores in histPaymentDueList as semicolon-separated: ";40;;;;;;;;;;;;35"
+                // Also check terms.scheduledMonthlyPayment and terms.description
+                let monthlyPayment = null;
+                if (terms.scheduledMonthlyPayment !== undefined && terms.scheduledMonthlyPayment !== null) {
+                    monthlyPayment = terms.scheduledMonthlyPayment;
+                } else if (trade.histPaymentDueList) {
+                    const payments = trade.histPaymentDueList.split(';').filter(p => p !== '' && p !== '0');
+                    if (payments.length > 0) {
+                        // First non-empty, non-zero value
+                        monthlyPayment = payments[0];
+                    }
+                } else if (terms.description) {
+                    // Parse from terms description like "$105 per month; paid Monthly"
+                    const termMatch = terms.description.match(/\$[\d,]+/);
+                    if (termMatch) {
+                        monthlyPayment = termMatch[0];
+                    }
+                }
+                
+                // ========== DATES ==========
+                const dateOpened = parseTransUnionDate(
+                    trade.dateOpened?.value || 
+                    trade.dateOpened || 
+                    trade.DateOpened?.value ||
+                    trade.DateOpened ||
+                    trade.openDate
+                );
+                
+                const dateUpdated = parseTransUnionDate(
+                    trade.dateEffective?.value || 
+                    trade.dateReported?.value ||
+                    trade.dateEffective ||
+                    trade.dateReported ||
+                    trade.lastUpdated ||
+                    trade.dateUpdated
+                );
+                
+                const dateClosed = parseTransUnionDate(
+                    trade.dateClosed?.value || 
+                    trade.dateClosed ||
+                    trade.DateClosed?.value ||
+                    trade.DateClosed ||
+                    trade.closeDate
+                );
+                
+                // ========== RESPONSIBILITY (ECOA) ==========
+                // TU uses ecoadesignator field (lowercase), not ECOADesignator
+                const responsibility = mapTransUnionResponsibility(
+                    trade.ecoadesignator || trade.ECOADesignator || trade.ecoaDesignator
+                );
+                
+                console.log('CardTool Credit: Trade -', 
+                    subscriber.name?.unparsed || 'Unknown',
+                    '| Limit:', creditLimit,
+                    '| Balance:', balance,
+                    '| High:', highBalance,
+                    '| Payment:', monthlyPayment,
+                    '| Opened:', dateOpened);
+                
+                // Get ecoa for status check
+                const ecoaValue = trade.ecoadesignator || trade.ECOADesignator || trade.ecoaDesignator;
+                
                 result.accounts.push({
                     name: subscriber.name?.unparsed || 'Unknown',
                     numberMasked: trade.accountNumber || null,
                     creditorName: subscriber.name?.unparsed || null,
-                    status: mapTransUnionStatus(trade.portfolioType, trade.accountRatingDescription),
-                    dateOpened: parseTransUnionDate(trade.dateOpened?.value),
-                    dateUpdated: parseTransUnionDate(trade.dateEffective?.value || trade.dateReported?.value),
-                    dateClosed: parseTransUnionDate(trade.dateClosed?.value),
-                    creditLimitCents: parseDollarsToCents(trade.creditLimit),
-                    highBalanceCents: parseDollarsToCents(trade.highCredit),
-                    balanceCents: parseDollarsToCents(trade.currentBalance),
-                    monthlyPaymentCents: parseDollarsToCents(terms.scheduledMonthlyPayment),
+                    status: mapTransUnionStatus(trade.portfolioType, trade.accountRatingDescription, ecoaValue),
+                    dateOpened: dateOpened,
+                    dateUpdated: dateUpdated,
+                    dateClosed: dateClosed,
+                    creditLimitCents: parseDollarsToCents(creditLimit),
+                    highBalanceCents: parseDollarsToCents(highBalance),
+                    balanceCents: parseDollarsToCents(balance),
+                    monthlyPaymentCents: parseDollarsToCents(monthlyPayment),
                     accountType: mapTransUnionAccountType(trade.portfolioType),
                     loanType: mapTransUnionLoanType(account.type),
-                    responsibility: mapTransUnionResponsibility(trade.ECOADesignator),
+                    responsibility: responsibility,
                     terms: terms.description || null,
                     paymentStatus: trade.accountRatingDescription || null
                 });
@@ -1690,6 +3014,43 @@
                 result.accounts.length, 'accounts,',
                 result.inquiries.length, 'inquiries');
             
+            // Check if we're missing key data (limit/balance) and try HTML scraping as fallback
+            const accountsMissingData = result.accounts.filter(a => 
+                !a.creditLimitCents && !a.balanceCents && a.accountType === 'revolving'
+            );
+            
+            if (accountsMissingData.length > 0) {
+                console.log('CardTool Credit: Some accounts missing limit/balance, trying HTML scrape');
+                const htmlData = scrapeTransUnionHtml();
+                if (htmlData.length > 0) {
+                    // Try to merge HTML data with parsed accounts
+                    for (const account of result.accounts) {
+                        const htmlMatch = htmlData.find(h => 
+                            h.accountNumber && account.numberMasked && 
+                            h.accountNumber.includes(account.numberMasked.replace(/\*/g, '').slice(-4))
+                        );
+                        if (htmlMatch) {
+                            if (!account.creditLimitCents && htmlMatch.creditLimitCents) {
+                                account.creditLimitCents = htmlMatch.creditLimitCents;
+                            }
+                            if (!account.balanceCents && htmlMatch.balanceCents) {
+                                account.balanceCents = htmlMatch.balanceCents;
+                            }
+                            if (!account.monthlyPaymentCents && htmlMatch.monthlyPaymentCents) {
+                                account.monthlyPaymentCents = htmlMatch.monthlyPaymentCents;
+                            }
+                            if (!account.dateOpened && htmlMatch.dateOpened) {
+                                account.dateOpened = htmlMatch.dateOpened;
+                            }
+                            if (!account.dateUpdated && htmlMatch.dateUpdated) {
+                                account.dateUpdated = htmlMatch.dateUpdated;
+                            }
+                            console.log('CardTool Credit: Merged HTML data for', account.name);
+                        }
+                    }
+                }
+            }
+            
             // Always update and show badge with results
             creditReportData = {
                 ...result,
@@ -1710,7 +3071,13 @@
     }
 
     // Valid enums: open, closed, paid, unknown
-    function mapTransUnionStatus(portfolioType, ratingDesc) {
+    function mapTransUnionStatus(portfolioType, ratingDesc, ecoadesignator) {
+        // Check ecoadesignator first - "Relationship Terminated" means account is closed
+        if (ecoadesignator) {
+            const ecoa = ecoadesignator.toUpperCase();
+            if (ecoa.includes('TERMINATED') || ecoa === 'T') return 'closed';
+        }
+        
         if (!portfolioType && !ratingDesc) return 'unknown';
         const combined = ((portfolioType || '') + ' ' + (ratingDesc || '')).toUpperCase();
         if (combined.includes('CURRENT') || combined.includes('AS AGREED')) return 'open';
@@ -1781,6 +3148,107 @@
         return null;
     }
 
+    // Scrape TransUnion account details from visible HTML (fallback method)
+    function scrapeTransUnionHtml() {
+        const results = [];
+        
+        try {
+            // Look for account detail tables on the page
+            // TU uses various table structures for account information
+            
+            // Method 1: Look for "Account Information" sections
+            const accountInfoSections = document.querySelectorAll('.account-info, .trade-detail, [class*="account"]');
+            
+            // Method 2: Look for dl/dt/dd pairs which TU often uses
+            const definitionLists = document.querySelectorAll('dl');
+            
+            for (const dl of definitionLists) {
+                const accountData = {};
+                const terms = dl.querySelectorAll('dt');
+                const definitions = dl.querySelectorAll('dd');
+                
+                for (let i = 0; i < terms.length && i < definitions.length; i++) {
+                    const term = terms[i].textContent.trim().toLowerCase();
+                    const value = definitions[i].textContent.trim();
+                    
+                    if (term.includes('credit limit') || term.includes('credit line')) {
+                        accountData.creditLimitCents = parseDollarsToCents(value);
+                    }
+                    if (term.includes('balance') && !term.includes('high')) {
+                        accountData.balanceCents = parseDollarsToCents(value);
+                    }
+                    if (term.includes('high balance')) {
+                        accountData.highBalanceCents = parseDollarsToCents(value);
+                    }
+                    if (term.includes('monthly payment') || term.includes('terms')) {
+                        const paymentMatch = value.match(/\$[\d,]+/);
+                        if (paymentMatch) {
+                            accountData.monthlyPaymentCents = parseDollarsToCents(paymentMatch[0]);
+                        }
+                    }
+                    if (term.includes('date opened') || term.includes('open date')) {
+                        accountData.dateOpened = parseTransUnionDate(value);
+                    }
+                    if (term.includes('date updated') || term.includes('last updated')) {
+                        accountData.dateUpdated = parseTransUnionDate(value);
+                    }
+                    if (term.includes('account') && term.includes('number')) {
+                        accountData.accountNumber = value;
+                    }
+                }
+                
+                if (Object.keys(accountData).length > 0) {
+                    results.push(accountData);
+                }
+            }
+            
+            // Method 3: Look for table rows with label/value structure
+            const tables = document.querySelectorAll('table');
+            for (const table of tables) {
+                const rows = table.querySelectorAll('tr');
+                const accountData = {};
+                
+                for (const row of rows) {
+                    const cells = row.querySelectorAll('td, th');
+                    if (cells.length >= 2) {
+                        const label = cells[0].textContent.trim().toLowerCase();
+                        const value = cells[1].textContent.trim();
+                        
+                        if (label.includes('credit limit')) {
+                            accountData.creditLimitCents = parseDollarsToCents(value);
+                        }
+                        if (label === 'balance' || label.includes('current balance')) {
+                            accountData.balanceCents = parseDollarsToCents(value);
+                        }
+                        if (label.includes('high balance')) {
+                            accountData.highBalanceCents = parseDollarsToCents(value);
+                        }
+                        if (label.includes('payment') && !label.includes('status')) {
+                            accountData.monthlyPaymentCents = parseDollarsToCents(value);
+                        }
+                        if (label.includes('date opened')) {
+                            accountData.dateOpened = parseTransUnionDate(value);
+                        }
+                        if (label.includes('date updated')) {
+                            accountData.dateUpdated = parseTransUnionDate(value);
+                        }
+                    }
+                }
+                
+                if (Object.keys(accountData).length > 0) {
+                    results.push(accountData);
+                }
+            }
+            
+            console.log('CardTool Credit: HTML scraping found', results.length, 'account data sets');
+            
+        } catch (e) {
+            console.error('CardTool Credit: HTML scraping error:', e);
+        }
+        
+        return results;
+    }
+
     // ============================================
     // UTILITY FUNCTIONS
     // ============================================
@@ -1793,12 +3261,25 @@
     }
 
     function parseDollarsToCents(value) {
-        if (!value) return null;
-        if (typeof value === 'number') return Math.round(value * 100);
+        if (value === null || value === undefined || value === '') return null;
         
-        const str = String(value).replace(/[^0-9.-]/g, '');
-        const num = parseFloat(str);
+        // If already a number, convert dollars to cents
+        if (typeof value === 'number') {
+            return Math.round(value * 100);
+        }
+        
+        const str = String(value);
+        
+        // Check if it looks like it's already in cents (no decimal, no $ sign, large number)
+        // e.g., "620" from histBalanceList is in dollars, not cents
+        
+        // Remove $ and commas, keep decimal and minus
+        const cleaned = str.replace(/[$,]/g, '').trim();
+        const num = parseFloat(cleaned);
+        
         if (isNaN(num)) return null;
+        
+        // Convert dollars to cents
         return Math.round(num * 100);
     }
 
@@ -1825,10 +3306,67 @@
             min-width: 240px !important;
             max-width: 320px !important;
             line-height: 1.4 !important;
+            transition: all 0.2s ease !important;
+        }
+        #cardtool-credit-badge:hover {
+            border-color: #3b82f6 !important;
         }
         #cardtool-credit-badge * {
             box-sizing: border-box !important;
             font-family: inherit !important;
+        }
+        /* Minimized state */
+        #cardtool-credit-badge.cardtool-credit-minimized {
+            min-width: auto !important;
+            max-width: none !important;
+            border-radius: 20px !important;
+            cursor: pointer !important;
+        }
+        #cardtool-credit-badge.cardtool-credit-minimized .cardtool-credit-header {
+            padding: 8px 12px !important;
+            border-bottom: none !important;
+        }
+        #cardtool-credit-badge.cardtool-credit-minimized .cardtool-credit-title,
+        #cardtool-credit-badge.cardtool-credit-minimized .cardtool-credit-debug,
+        #cardtool-credit-badge.cardtool-credit-minimized .cardtool-credit-minimize {
+            display: none !important;
+        }
+        #cardtool-credit-badge.cardtool-credit-minimized .cardtool-credit-close {
+            font-size: 14px !important;
+            padding: 2px !important;
+            margin-left: 4px !important;
+        }
+        #cardtool-credit-badge.cardtool-credit-minimized .cardtool-credit-body {
+            display: none !important;
+        }
+        #cardtool-credit-badge.cardtool-credit-minimized .cardtool-credit-logo {
+            width: 22px !important;
+            height: 22px !important;
+            font-size: 12px !important;
+        }
+        #cardtool-credit-badge.cardtool-credit-minimized .cardtool-credit-mini-summary {
+            display: flex !important;
+            align-items: center !important;
+            margin-left: 8px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            color: #60a5fa !important;
+            gap: 6px !important;
+        }
+        .cardtool-credit-mini-summary {
+            display: none !important;
+        }
+        .cardtool-credit-minimize {
+            background: none !important;
+            border: none !important;
+            color: #71717a !important;
+            cursor: pointer !important;
+            font-size: 14px !important;
+            line-height: 1 !important;
+            padding: 4px !important;
+        }
+        .cardtool-credit-minimize:hover {
+            color: #e4e4e7 !important;
         }
         .cardtool-credit-header {
             background: #1e3a5f !important;
@@ -1856,7 +3394,6 @@
             color: #60a5fa !important;
         }
         .cardtool-credit-close {
-            margin-left: auto !important;
             background: none !important;
             border: none !important;
             color: #71717a !important;
@@ -1928,14 +3465,25 @@
             document.head.appendChild(styleEl);
         }
 
+        // Track if this is a new badge creation
+        const isNewBadge = !creditBadgeElement;
+
         // Create or update badge
         if (!creditBadgeElement) {
             creditBadgeElement = document.createElement('div');
             creditBadgeElement.id = 'cardtool-credit-badge';
             document.body.appendChild(creditBadgeElement);
+            
+            // Check if user prefers minimized state (default to minimized)
+            const isMinimized = GM_getValue('cardtool_credit_minimized', true);
+            if (isMinimized) {
+                creditBadgeElement.classList.add('cardtool-credit-minimized');
+            }
         }
 
-        const bureauName = CREDIT_BUREAU_CONFIGS[currentBureau]?.name || 'Unknown';
+        const bureauName = CREDIT_BUREAU_CONFIGS[currentBureau]?.name || 
+                           SCORE_SOURCE_CONFIGS[currentBureau]?.name || 
+                           'Unknown';
         const scoreDisplay = creditReportData.scores?.length > 0 
             ? creditReportData.scores[0].score 
             : '—';
@@ -1966,10 +3514,28 @@
             showSyncButton = false;
         }
 
+        // Check if any accounts are missing limit/balance data
+        const accountsMissingData = (creditReportData.accounts || []).filter(a => 
+            !a.creditLimitCents && !a.balanceCents
+        ).length;
+        const dataWarning = accountsMissingData > 0 
+            ? `<div style="color: #fbbf24; font-size: 11px; margin-bottom: 8px;">⚠️ ${accountsMissingData} accounts missing limit/balance</div>`
+            : '';
+
+        // Build mini-summary text for minimized state
+        const miniSummaryParts = [];
+        if (scoreDisplay !== '—') miniSummaryParts.push(scoreDisplay);
+        if (accountCount > 0) miniSummaryParts.push(`${accountCount}A`);
+        if (inquiryCount > 0) miniSummaryParts.push(`${inquiryCount}I`);
+        const miniSummaryText = miniSummaryParts.length > 0 ? miniSummaryParts.join(' · ') : 'Credit';
+
         creditBadgeElement.innerHTML = `
             <div class="cardtool-credit-header">
                 <div class="cardtool-credit-logo">C</div>
+                <span class="cardtool-credit-mini-summary">${miniSummaryText}</span>
                 <span class="cardtool-credit-title">CardTool • ${bureauName}</span>
+                <button class="cardtool-credit-debug" title="Export debug data" style="margin-left: auto; background: none; border: none; color: #71717a; cursor: pointer; font-size: 12px; padding: 4px;">🔍</button>
+                <button class="cardtool-credit-minimize" title="Minimize">&#8722;</button>
                 <button class="cardtool-credit-close" title="Close">&times;</button>
             </div>
             <div class="cardtool-credit-body">
@@ -1987,6 +3553,7 @@
                         <div class="cardtool-credit-stat-label">Inquiries</div>
                     </div>
                 </div>
+                ${dataWarning}
                 <div id="cardtool-credit-player-container"></div>
                 ${showSyncButton ? `
                     <button class="cardtool-credit-btn" id="cardtool-credit-sync-btn">
@@ -2000,10 +3567,64 @@
         `;
 
         // Event listeners
-        creditBadgeElement.querySelector('.cardtool-credit-close').addEventListener('click', () => {
+        
+        // Click on minimized badge to expand (only add once on new badge)
+        if (isNewBadge) {
+            creditBadgeElement.addEventListener('click', (e) => {
+                if (creditBadgeElement.classList.contains('cardtool-credit-minimized')) {
+                    // Only expand if clicking on the badge itself, not buttons
+                    if (!e.target.closest('button')) {
+                        creditBadgeElement.classList.remove('cardtool-credit-minimized');
+                        GM_setValue('cardtool_credit_minimized', false);
+                    }
+                }
+            });
+        }
+
+        // Minimize button
+        const minimizeBtn = creditBadgeElement.querySelector('.cardtool-credit-minimize');
+        if (minimizeBtn) {
+            minimizeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                creditBadgeElement.classList.add('cardtool-credit-minimized');
+                GM_setValue('cardtool_credit_minimized', true);
+            });
+        }
+
+        // Close button
+        creditBadgeElement.querySelector('.cardtool-credit-close').addEventListener('click', (e) => {
+            e.stopPropagation();
             creditBadgeElement.remove();
             creditBadgeElement = null;
         });
+
+        // Debug export button
+        const debugBtn = creditBadgeElement.querySelector('.cardtool-credit-debug');
+        if (debugBtn) {
+            debugBtn.addEventListener('click', () => {
+                // Export parsed data and sample of raw data
+                const debugData = {
+                    bureau: currentBureau,
+                    status: creditReportData.status,
+                    parsedAccounts: creditReportData.accounts?.slice(0, 3), // First 3 accounts
+                    parsedInquiries: creditReportData.inquiries?.slice(0, 3), // First 3 inquiries
+                    parsedScores: creditReportData.scores,
+                    // Include a sample trade from raw data if available
+                    sampleRawTrade: creditReportData.rawData?.TU_CONSUMER_DISCLOSURE?.reportData?.product?.[0]?.subject?.[0]?.subjectRecord?.[0]?.custom?.credit?.trade?.[0] || null
+                };
+                
+                // Copy to clipboard
+                const debugJson = JSON.stringify(debugData, null, 2);
+                navigator.clipboard.writeText(debugJson).then(() => {
+                    updateCreditStatus('Debug data copied to clipboard!');
+                    console.log('CardTool Credit Debug Data:', debugJson);
+                }).catch(() => {
+                    // Fallback: log to console
+                    console.log('CardTool Credit Debug Data:', debugJson);
+                    updateCreditStatus('Debug data logged to console (F12)');
+                });
+            });
+        }
 
         const syncBtn = creditBadgeElement.querySelector('#cardtool-credit-sync-btn');
         if (syncBtn) {
@@ -2085,6 +3706,100 @@
         const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
         GM_setValue('lastPlayerNumber', playerNumber);
 
+        // Check if this is a score-only source with multi-bureau scores
+        const scoresWithBureau = creditReportData.scores?.filter(s => s.bureau) || [];
+        const scoresWithoutBureau = creditReportData.scores?.filter(s => !s.bureau) || [];
+        
+        // For score-only sources like Credit Karma, group scores by bureau and send separate requests
+        if (scoresWithBureau.length > 0 && creditReportData.scoreOnly) {
+            const bureauGroups = {};
+            for (const score of scoresWithBureau) {
+                const bureau = score.bureau;
+                if (!bureauGroups[bureau]) {
+                    bureauGroups[bureau] = [];
+                }
+                // Remove bureau from score object before sending (API determines bureau from request)
+                const { bureau: _, ...scoreWithoutBureau } = score;
+                bureauGroups[bureau].push(scoreWithoutBureau);
+            }
+            
+            const bureaus = Object.keys(bureauGroups);
+            let completedCount = 0;
+            let totalScores = 0;
+            let hasError = false;
+            
+            console.log('CardTool Credit: Syncing scores to', bureaus.length, 'bureaus:', bureaus);
+            
+            for (const bureau of bureaus) {
+                const bureauScores = bureauGroups[bureau];
+                
+                GM_xmlhttpRequest({
+                    method: 'POST',
+                    url: `${CARDTOOL_URL}/api/credit-report/import`,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-sync-token': syncToken
+                    },
+                    data: JSON.stringify({
+                        bureau: bureau,
+                        playerNumber: playerNumber,
+                        reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
+                        scores: bureauScores,
+                        accounts: [],
+                        inquiries: []
+                    }),
+                    onload: function(response) {
+                        completedCount++;
+                        try {
+                            const data = JSON.parse(response.responseText);
+                            if (response.status === 200 && data.success) {
+                                totalScores += data.summary?.scores || 0;
+                            } else {
+                                hasError = true;
+                            }
+                        } catch (e) {
+                            hasError = true;
+                        }
+                        
+                        // All requests complete
+                        if (completedCount === bureaus.length) {
+                            if (!hasError) {
+                                updateCreditStatus(`Synced ${totalScores} scores to ${bureaus.length} bureaus ✓`);
+                                if (btn) {
+                                    btn.textContent = 'Synced!';
+                                    btn.style.background = '#059669';
+                                    setTimeout(() => {
+                                        btn.disabled = false;
+                                        btn.textContent = 'Sync to CardTool';
+                                        btn.style.background = '';
+                                    }, 3000);
+                                }
+                            } else {
+                                updateCreditStatus('Some syncs failed', true);
+                                if (btn) {
+                                    btn.disabled = false;
+                                    btn.textContent = 'Sync to CardTool';
+                                }
+                            }
+                        }
+                    },
+                    onerror: function() {
+                        completedCount++;
+                        hasError = true;
+                        if (completedCount === bureaus.length) {
+                            updateCreditStatus('Network error', true);
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.textContent = 'Sync to CardTool';
+                            }
+                        }
+                    }
+                });
+            }
+            return;
+        }
+
+        // Standard single-bureau sync (Equifax, Experian, TransUnion direct)
         GM_xmlhttpRequest({
             method: 'POST',
             url: `${CARDTOOL_URL}/api/credit-report/import`,
@@ -2096,7 +3811,7 @@
                 bureau: currentBureau,
                 playerNumber: playerNumber,
                 reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
-                scores: creditReportData.scores,
+                scores: scoresWithoutBureau.length > 0 ? scoresWithoutBureau : creditReportData.scores,
                 accounts: creditReportData.accounts,
                 inquiries: creditReportData.inquiries,
                 rawData: creditReportData.rawData
@@ -2156,6 +3871,7 @@
     // ============================================
 
     function initCreditReportTracking() {
+        console.log('CardTool Credit: Initializing credit report tracking...');
         // Check if we're on a credit bureau site
         const isCreditBureauSite = setupCreditReportInterceptor();
         
@@ -2168,14 +3884,19 @@
     // START
     // ============================================
 
-    // Wait for DOM to be ready
+    // Install credit interceptors IMMEDIATELY (before page loads)
+    // This must happen at document-start to catch early API calls
+    console.log('CardTool: Installing interceptors at document-start');
+    initCreditReportTracking();
+
+    // Wait for DOM to be ready for everything else
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('CardTool: DOM ready, initializing UI');
             init();
-            initCreditReportTracking();
         });
     } else {
+        console.log('CardTool: DOM already ready, initializing UI');
         init();
-        initCreditReportTracking();
     }
 })();

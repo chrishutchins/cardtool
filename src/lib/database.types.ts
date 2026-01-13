@@ -2980,6 +2980,7 @@ export type Database = {
           player_number: number
           bureau: Database["public"]["Enums"]["credit_bureau"]
           snapshot_id: string | null
+          last_seen_snapshot_id: string | null
           company_name: string
           inquiry_date: string
           inquiry_type: string | null
@@ -2991,6 +2992,7 @@ export type Database = {
           player_number?: number
           bureau: Database["public"]["Enums"]["credit_bureau"]
           snapshot_id?: string | null
+          last_seen_snapshot_id?: string | null
           company_name: string
           inquiry_date: string
           inquiry_type?: string | null
@@ -3002,6 +3004,7 @@ export type Database = {
           player_number?: number
           bureau?: Database["public"]["Enums"]["credit_bureau"]
           snapshot_id?: string | null
+          last_seen_snapshot_id?: string | null
           company_name?: string
           inquiry_date?: string
           inquiry_type?: string | null
@@ -3013,6 +3016,114 @@ export type Database = {
             columns: ["snapshot_id"]
             isOneToOne: false
             referencedRelation: "credit_report_snapshots"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      credit_account_wallet_links: {
+        Row: {
+          id: string
+          user_id: string
+          credit_account_id: string
+          wallet_card_id: string | null
+          display_name: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          credit_account_id: string
+          wallet_card_id?: string | null
+          display_name?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          credit_account_id?: string
+          wallet_card_id?: string | null
+          display_name?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_account_wallet_links_credit_account_id_fkey"
+            columns: ["credit_account_id"]
+            isOneToOne: false
+            referencedRelation: "credit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_account_wallet_links_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      credit_inquiry_groups: {
+        Row: {
+          id: string
+          user_id: string
+          player_number: number
+          group_name: string | null
+          related_card_id: string | null
+          related_note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          player_number?: number
+          group_name?: string | null
+          related_card_id?: string | null
+          related_note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          player_number?: number
+          group_name?: string | null
+          related_card_id?: string | null
+          related_note?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      credit_inquiry_group_members: {
+        Row: {
+          id: string
+          group_id: string
+          inquiry_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          group_id: string
+          inquiry_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          group_id?: string
+          inquiry_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_inquiry_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "credit_inquiry_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_inquiry_group_members_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "credit_inquiries"
             referencedColumns: ["id"]
           }
         ]
@@ -3159,7 +3270,7 @@ export type Database = {
         | "crypto"
       travel_preference_type: "direct" | "brand" | "portal"
       credit_bureau: "equifax" | "experian" | "transunion"
-      credit_score_type: "fico_8" | "fico_9" | "vantage_3" | "vantage_4" | "other"
+      credit_score_type: "fico_8" | "fico_9" | "fico_bankcard_8" | "vantage_3" | "vantage_4" | "other"
       credit_account_status: "open" | "closed" | "paid" | "unknown"
       credit_account_type: "revolving" | "installment" | "mortgage" | "collection" | "other"
       credit_loan_type:
@@ -3339,7 +3450,7 @@ export const Constants = {
       ],
       travel_preference_type: ["direct", "brand", "portal"],
       credit_bureau: ["equifax", "experian", "transunion"],
-      credit_score_type: ["fico_8", "fico_9", "vantage_3", "vantage_4", "other"],
+      credit_score_type: ["fico_8", "fico_9", "fico_bankcard_8", "vantage_3", "vantage_4", "other"],
       credit_account_status: ["open", "closed", "paid", "unknown"],
       credit_account_type: ["revolving", "installment", "mortgage", "collection", "other"],
       credit_loan_type: [
