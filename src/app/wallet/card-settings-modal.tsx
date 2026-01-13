@@ -39,7 +39,7 @@ export interface WalletCardForSettings {
       name: string;
       billing_cycle_formula?: string | null;
     } | null;
-    primary_currency: { name: string; code: string } | null;
+    primary_currency: { name: string; code: string; currency_type?: string } | null;
   } | null;
 }
 
