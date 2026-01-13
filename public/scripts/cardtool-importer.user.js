@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.1.0
+// @version      2.1.1
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -997,13 +997,13 @@
             name: 'Experian',
             domain: 'experian.com',
             apiPatterns: [
+                /\/api\/report\/scores\//i,     // https://usa.experian.com/api/report/scores/history/CA or /latest/CA
+                /\/api\/report\/credit/i,       // Credit report endpoints
                 /api.*credit/i,
                 /api.*score/i,
                 /member.*profile/i,
                 /dashboard/i,
-                /scores\?/i,
-                /creditReport/i,
-                /scoreHistory/i
+                /creditReport/i
             ],
             parseResponse: parseExperianResponse
         },
