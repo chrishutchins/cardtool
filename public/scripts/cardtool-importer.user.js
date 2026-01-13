@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.0.1
+// @version      2.0.2
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -988,7 +988,8 @@
             domain: 'my.equifax.com',
             apiPatterns: [
                 /membercenter\/app\/data\/creditReport/,
-                /membercenter\/.*\/creditReport/
+                /membercenter\/.*\/creditReport/,
+                /score\?featureName=/  // Credit score endpoint
             ],
             parseResponse: parseEquifaxResponse
         },
@@ -1184,14 +1185,43 @@
             });
         }
 
-        // Parse score if present
-        if (data.score || data.creditScore) {
+        // Parse score if present - handle multiple response formats
+        // Format 1: score?featureName= endpoint returns { view: { score: "648", bureau: "VANTAGE", datePulled: timestamp } }
+        if (data.view && data.view.score) {
+            const scoreValue = parseInt(data.view.score, 10);
+            if (scoreValue >= 300 && scoreValue <= 850) {
+                // Map bureau name to our score type
+                const bureauType = (data.view.bureau || '').toLowerCase();
+                let scoreType = 'vantage_3';  // Default for Equifax
+                if (bureauType.includes('fico')) scoreType = 'fico_8';
+                
+                // Convert timestamp to date
+                let scoreDate = null;
+                if (data.view.datePulled) {
+                    const d = new Date(data.view.datePulled);
+                    if (!isNaN(d.getTime())) {
+                        scoreDate = d.toISOString().split('T')[0];
+                    }
+                }
+                
+                result.scores.push({
+                    type: scoreType,
+                    score: scoreValue,
+                    date: scoreDate
+                });
+            }
+        }
+        // Format 2: Direct score field
+        else if (data.score || data.creditScore) {
             const score = data.score || data.creditScore;
-            result.scores.push({
-                type: 'vantage_3',
-                score: typeof score === 'object' ? score.value : score,
-                date: parseEquifaxDate(data.scoreDate || data.asOfDate)
-            });
+            const scoreValue = typeof score === 'object' ? score.value : parseInt(score, 10);
+            if (scoreValue >= 300 && scoreValue <= 850) {
+                result.scores.push({
+                    type: 'vantage_3',
+                    score: scoreValue,
+                    date: parseEquifaxDate(data.scoreDate || data.asOfDate)
+                });
+            }
         }
 
         // Parse inquiries if present (hardInquiries from Equifax API)
