@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.3.2
+// @version      2.3.3
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -1709,24 +1709,28 @@
         }
     }
 
+    // Valid enums: open, closed, paid, unknown
     function mapTransUnionStatus(portfolioType, ratingDesc) {
         if (!portfolioType && !ratingDesc) return 'unknown';
         const combined = ((portfolioType || '') + ' ' + (ratingDesc || '')).toUpperCase();
         if (combined.includes('CURRENT') || combined.includes('AS AGREED')) return 'open';
         if (combined.includes('CLOSED') || combined.includes('TERMINATED')) return 'closed';
         if (combined.includes('PAID')) return 'paid';
-        if (combined.includes('COLLECTION')) return 'collection';
+        // 'collection' maps to 'closed' since it's not a valid status enum
+        if (combined.includes('COLLECTION')) return 'closed';
         if (combined.includes('REVOLVING') || combined.includes('INSTALLMENT') || combined.includes('OPEN')) return 'open';
         return 'unknown';
     }
     
+    // Valid enums: revolving, installment, mortgage, collection, other
     function mapTransUnionAccountType(portfolioType) {
         if (!portfolioType) return 'other';
         const t = portfolioType.toUpperCase();
         if (t.includes('REVOLVING')) return 'revolving';
         if (t.includes('INSTALLMENT')) return 'installment';
         if (t.includes('MORTGAGE')) return 'mortgage';
-        if (t.includes('OPEN')) return 'open';
+        // 'open' portfolio type maps to 'other' since it's not a valid account type enum
+        if (t.includes('OPEN')) return 'other';
         return 'other';
     }
     
@@ -1742,6 +1746,7 @@
         return 'other';
     }
     
+    // Valid enums: individual, joint, authorized_user, cosigner, unknown
     function mapTransUnionResponsibility(ecoa) {
         if (!ecoa) return 'unknown';
         const e = ecoa.toUpperCase();
@@ -1749,7 +1754,8 @@
         if (e === 'J' || e.includes('JOINT')) return 'joint';
         if (e === 'A' || e.includes('AUTHORIZED')) return 'authorized_user';
         if (e === 'C' || e.includes('COSIGNER')) return 'cosigner';
-        if (e === 'T' || e.includes('TERMINATED')) return 'terminated';
+        // 'terminated' maps to 'unknown' since it's not a valid responsibility enum
+        if (e === 'T' || e.includes('TERMINATED')) return 'unknown';
         return 'unknown';
     }
 
