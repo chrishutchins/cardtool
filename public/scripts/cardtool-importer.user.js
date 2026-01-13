@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.3.0
+// @version      2.3.1
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -1041,6 +1041,9 @@
                 
                 if (config.useHtmlScraping) {
                     // For TransUnion, use HTML scraping instead of XHR interception
+                    // Show badge immediately to indicate script is running
+                    creditReportData = { scores: [], accounts: [], inquiries: [], reportDate: null, status: 'scanning' };
+                    showCreditBadge();
                     setTimeout(() => tryScrapeCreditReport(bureauKey), 3000);
                 } else {
                     // Set up XHR interception for Equifax and Experian
@@ -1575,30 +1578,47 @@
         // Look for the UserData script tag that contains the JSON data
         const userDataScript = document.getElementById('UserData');
         if (!userDataScript || !userDataScript.textContent) {
-            console.log('CardTool Credit: No UserData script found');
+            console.log('CardTool Credit: No UserData script found on this page');
+            console.log('CardTool Credit: Available script tags:', 
+                Array.from(document.querySelectorAll('script[id]')).map(s => s.id));
+            creditReportData = { ...result, status: 'no_data', message: 'No UserData found on this page' };
+            showCreditBadge();
             return;
         }
+        
+        console.log('CardTool Credit: Found UserData script, length:', userDataScript.textContent.length);
         
         try {
             const scriptContent = userDataScript.textContent;
             // Extract the JSON object from "var ud = {...};"
-            const udMatch = scriptContent.match(/var\s+ud\s*=\s*(\{[\s\S]*?\});/);
+            // Use a greedy match to capture the entire object
+            const udMatch = scriptContent.match(/var\s+ud\s*=\s*(\{[\s\S]*\});?\s*$/);
             if (!udMatch || !udMatch[1]) {
-                console.log('CardTool Credit: Could not extract ud variable from UserData script');
+                console.log('CardTool Credit: Could not extract ud variable. Script preview:', 
+                    scriptContent.substring(0, 500));
+                creditReportData = { ...result, status: 'parse_error', message: 'Could not parse UserData' };
+                showCreditBadge();
                 return;
             }
             
             const ud = JSON.parse(udMatch[1]);
             rawData = ud;
-            console.log('CardTool Credit: Successfully parsed TransUnion UserData:', ud);
+            console.log('CardTool Credit: Successfully parsed TransUnion UserData');
+            console.log('CardTool Credit: Keys in ud:', Object.keys(ud));
             
             // Navigate to the credit data
             const creditData = ud?.TU_CONSUMER_DISCLOSURE?.reportData?.product?.[0]?.subject?.[0]?.subjectRecord?.[0]?.custom?.credit;
             
             if (!creditData) {
                 console.log('CardTool Credit: Could not find credit data in UserData');
+                console.log('CardTool Credit: TU_CONSUMER_DISCLOSURE exists:', !!ud?.TU_CONSUMER_DISCLOSURE);
+                console.log('CardTool Credit: reportData exists:', !!ud?.TU_CONSUMER_DISCLOSURE?.reportData);
+                creditReportData = { ...result, status: 'no_credit_data', message: 'Credit data not found in report', rawData };
+                showCreditBadge();
                 return;
             }
+            
+            console.log('CardTool Credit: Found credit data, keys:', Object.keys(creditData));
             
             // Parse trade accounts
             const trades = creditData.trade || [];
@@ -1702,16 +1722,22 @@
                 result.accounts.length, 'accounts,',
                 result.inquiries.length, 'inquiries');
             
-            if (result.accounts.length > 0 || result.inquiries.length > 0) {
-                creditReportData = {
-                    ...result,
-                    rawData: rawData
-                };
-                showCreditBadge();
-            }
+            // Always update and show badge with results
+            creditReportData = {
+                ...result,
+                rawData: rawData,
+                status: (result.accounts.length > 0 || result.inquiries.length > 0) ? 'ready' : 'empty'
+            };
+            showCreditBadge();
             
         } catch (e) {
             console.error('CardTool Credit: Error parsing TransUnion UserData:', e);
+            creditReportData = { 
+                scores: [], accounts: [], inquiries: [], reportDate: null,
+                status: 'error', 
+                message: e.message 
+            };
+            showCreditBadge();
         }
     }
 
@@ -1936,9 +1962,35 @@
         }
 
         const bureauName = CREDIT_BUREAU_CONFIGS[currentBureau]?.name || 'Unknown';
-        const scoreDisplay = creditReportData.scores.length > 0 
+        const scoreDisplay = creditReportData.scores?.length > 0 
             ? creditReportData.scores[0].score 
             : '—';
+        const accountCount = creditReportData.accounts?.length || 0;
+        const inquiryCount = creditReportData.inquiries?.length || 0;
+        
+        // Determine status message
+        let statusMessage = 'Data captured. Click to sync.';
+        let showSyncButton = true;
+        
+        if (creditReportData.status === 'scanning') {
+            statusMessage = 'Scanning page for credit data...';
+            showSyncButton = false;
+        } else if (creditReportData.status === 'no_data') {
+            statusMessage = creditReportData.message || 'No credit data found on this page.';
+            showSyncButton = false;
+        } else if (creditReportData.status === 'no_credit_data') {
+            statusMessage = 'Page parsed but no credit data found. Try the full report page.';
+            showSyncButton = false;
+        } else if (creditReportData.status === 'parse_error') {
+            statusMessage = creditReportData.message || 'Error parsing page data.';
+            showSyncButton = false;
+        } else if (creditReportData.status === 'error') {
+            statusMessage = 'Error: ' + (creditReportData.message || 'Unknown error');
+            showSyncButton = false;
+        } else if (creditReportData.status === 'empty') {
+            statusMessage = 'No accounts or inquiries found on this page.';
+            showSyncButton = false;
+        }
 
         creditBadgeElement.innerHTML = `
             <div class="cardtool-credit-header">
@@ -1953,20 +2005,22 @@
                         <div class="cardtool-credit-stat-label">Score</div>
                     </div>
                     <div class="cardtool-credit-stat">
-                        <div class="cardtool-credit-stat-value">${creditReportData.accounts.length}</div>
+                        <div class="cardtool-credit-stat-value">${accountCount}</div>
                         <div class="cardtool-credit-stat-label">Accounts</div>
                     </div>
                     <div class="cardtool-credit-stat">
-                        <div class="cardtool-credit-stat-value">${creditReportData.inquiries.length}</div>
+                        <div class="cardtool-credit-stat-value">${inquiryCount}</div>
                         <div class="cardtool-credit-stat-label">Inquiries</div>
                     </div>
                 </div>
                 <div id="cardtool-credit-player-container"></div>
-                <button class="cardtool-credit-btn" id="cardtool-credit-sync-btn">
-                    Sync to CardTool
-                </button>
+                ${showSyncButton ? `
+                    <button class="cardtool-credit-btn" id="cardtool-credit-sync-btn">
+                        Sync to CardTool
+                    </button>
+                ` : ''}
                 <div class="cardtool-credit-status" id="cardtool-credit-status">
-                    Data captured. Click to sync.
+                    ${statusMessage}
                 </div>
             </div>
         `;
@@ -1977,10 +2031,15 @@
             creditBadgeElement = null;
         });
 
-        creditBadgeElement.querySelector('#cardtool-credit-sync-btn').addEventListener('click', handleCreditSync);
+        const syncBtn = creditBadgeElement.querySelector('#cardtool-credit-sync-btn');
+        if (syncBtn) {
+            syncBtn.addEventListener('click', handleCreditSync);
+        }
 
-        // Load players for selection
-        loadCreditPlayers();
+        // Load players for selection (only if we have data to sync)
+        if (showSyncButton) {
+            loadCreditPlayers();
+        }
     }
 
     function loadCreditPlayers() {
