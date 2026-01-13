@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.1.1
+// @version      2.2.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -997,8 +997,10 @@
             name: 'Experian',
             domain: 'experian.com',
             apiPatterns: [
-                /\/api\/report\/scores\//i,     // https://usa.experian.com/api/report/scores/history/CA or /latest/CA
-                /\/api\/report\/credit/i,       // Credit report endpoints
+                /\/api\/report\/scores\//i,         // https://usa.experian.com/api/report/scores/history/CA or /latest/CA
+                /\/api\/report\/credit/i,           // Credit report endpoints
+                /\/api\/prequal\/wallet\/cards/i,   // Credit card wallet data
+                /\/api\/report\/forcereload/i,      // Full credit report reload
                 /api.*credit/i,
                 /api.*score/i,
                 /member.*profile/i,
@@ -1312,8 +1314,85 @@
 
     function parseExperianResponse(data, url) {
         const result = { scores: [], accounts: [], inquiries: [], reportDate: null };
+        
+        console.log('CardTool Credit: Parsing Experian response from:', url);
 
-        // Format 1: Score history with bureau arrays { experian: [], transunion: [], equifax: [] }
+        // Helper to parse Experian date formats
+        const parseExperianDate = (dateVal) => {
+            if (!dateVal) return null;
+            // Handle timestamp (milliseconds)
+            if (typeof dateVal === 'number') {
+                const d = new Date(dateVal);
+                if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+            }
+            // Handle string formats
+            if (typeof dateVal === 'string') {
+                const d = new Date(dateVal);
+                if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+            }
+            return null;
+        };
+
+        // =============================================
+        // FORMAT: /api/report/forcereload - Full credit report
+        // Structure: { reportInfo: { creditFileInfo: [{ accounts: [], creditInquiries: [] }] } }
+        // =============================================
+        if (data.reportInfo?.creditFileInfo?.[0]) {
+            console.log('CardTool Credit: Parsing forcereload format');
+            const creditFile = data.reportInfo.creditFileInfo[0];
+            
+            // Parse accounts
+            if (creditFile.accounts && Array.isArray(creditFile.accounts)) {
+                for (const acct of creditFile.accounts) {
+                    if (!acct) continue;
+                    
+                    result.accounts.push({
+                        name: acct.accountName || acct.creditorInfo?.name || 'Unknown',
+                        numberMasked: acct.accountNumber || null,
+                        creditorName: acct.creditorInfo?.name || acct.accountName || null,
+                        status: mapExperianStatus(acct.openClosed || acct.accountStatus),
+                        dateOpened: parseExperianDate(acct.dateOpened),
+                        dateUpdated: parseExperianDate(acct.balanceDate || acct.statusDate),
+                        dateClosed: parseExperianDate(acct.dateClosed),
+                        creditLimitCents: parseDollarsToCents(acct.limit || acct.creditLimit),
+                        highBalanceCents: parseDollarsToCents(acct.highBalance),
+                        balanceCents: parseDollarsToCents(acct.balance),
+                        monthlyPaymentCents: parseDollarsToCents(acct.monthlyPayment),
+                        accountType: mapExperianAccountType(acct.classification || acct.accountType),
+                        loanType: mapExperianLoanType(acct.businessType_internalID || acct.type_internalID || acct.industryCode),
+                        responsibility: mapExperianResponsibility(acct.responsibility || acct.ecoaDesignator),
+                        terms: acct.terms || null,
+                        paymentStatus: acct.paymentStatus || null
+                    });
+                }
+                console.log('CardTool Credit: Parsed', result.accounts.length, 'accounts from forcereload');
+            }
+            
+            // Parse inquiries - creditInquiries array
+            if (creditFile.creditInquiries && Array.isArray(creditFile.creditInquiries)) {
+                for (const inq of creditFile.creditInquiries) {
+                    if (!inq) continue;
+                    
+                    const company = inq.companyName || inq.creditorInfo?.name || inq.subscriberName || 'Unknown';
+                    const date = parseExperianDate(inq.dateOfInquiry || inq.inquiryDate);
+                    
+                    if (date) {
+                        result.inquiries.push({
+                            company: company,
+                            date: date,
+                            type: inq.type?.toLowerCase() || 'hard'
+                        });
+                    }
+                }
+                console.log('CardTool Credit: Parsed', result.inquiries.length, 'inquiries from forcereload');
+            }
+            
+            return result;
+        }
+
+        // =============================================
+        // FORMAT: Score history { experian: [], transunion: [], equifax: [] }
+        // =============================================
         if (data.experian && Array.isArray(data.experian)) {
             console.log('CardTool Credit: Parsing Experian score history format');
             for (const scoreEntry of data.experian) {
@@ -1332,20 +1411,10 @@
                     scoreType = 'vantage_3';
                 }
                 
-                // Parse date (ISO string format)
-                let scoreDate = null;
-                if (scoreEntry.date || scoreEntry.scoreDate) {
-                    const dateStr = scoreEntry.date || scoreEntry.scoreDate;
-                    const d = new Date(dateStr);
-                    if (!isNaN(d.getTime())) {
-                        scoreDate = d.toISOString().split('T')[0];
-                    }
-                }
-                
                 result.scores.push({
                     type: scoreType,
                     score: scoreValue,
-                    date: scoreDate,
+                    date: parseExperianDate(scoreEntry.date || scoreEntry.scoreDate),
                     rating: scoreEntry.scoreRating || null
                 });
             }
@@ -1357,20 +1426,10 @@
                     const scoreValue = parseInt(scoreEntry.score, 10);
                     if (scoreValue < 300 || scoreValue > 850) continue;
                     
-                    let scoreDate = null;
-                    if (scoreEntry.date) {
-                        const d = new Date(scoreEntry.date);
-                        if (!isNaN(d.getTime())) {
-                            scoreDate = d.toISOString().split('T')[0];
-                        }
-                    }
-                    
-                    // Note: These are scores from other bureaus in Experian's response
-                    // We store them but mark them appropriately
                     result.scores.push({
                         type: scoreEntry.brand === 'FICO' ? 'fico_8' : 'vantage_3',
                         score: scoreValue,
-                        date: scoreDate,
+                        date: parseExperianDate(scoreEntry.date),
                         rating: scoreEntry.scoreRating || null,
                         bureau: 'transunion'
                     });
@@ -1380,8 +1439,9 @@
             return result;
         }
         
-        // Format 2: Detailed credit report with single score entry
-        // This format has score, scoreDate, brand, scoreVersion, scoreIngredients
+        // =============================================
+        // FORMAT: Detailed single score entry
+        // =============================================
         if (data.score || (Array.isArray(data) && data[0]?.score)) {
             console.log('CardTool Credit: Parsing Experian detailed report format');
             
@@ -1402,28 +1462,22 @@
                     scoreType = 'vantage_3';
                 }
                 
-                let scoreDate = null;
-                if (entry.scoreDate || entry.date) {
-                    const d = new Date(entry.scoreDate || entry.date);
-                    if (!isNaN(d.getTime())) {
-                        scoreDate = d.toISOString().split('T')[0];
-                    }
-                }
-                
                 result.scores.push({
                     type: scoreType,
                     score: scoreValue,
-                    date: scoreDate,
+                    date: parseExperianDate(entry.scoreDate || entry.date),
                     rating: entry.scoreRating || null
                 });
             }
         }
 
-        // Legacy format: tradeLines, accounts, etc.
+        // =============================================
+        // Legacy format: tradeLines, accounts, inquiries at root level
+        // =============================================
         const tradeLines = data.tradeLines || data.accounts || data.creditAccounts || [];
         const hardInquiries = data.inquiries || data.hardInquiries || [];
 
-        // Parse accounts
+        // Parse accounts from legacy format
         for (const acct of tradeLines) {
             if (!acct) continue;
             
@@ -1432,9 +1486,9 @@
                 numberMasked: acct.accountNumber || null,
                 creditorName: acct.creditorName || null,
                 status: mapExperianStatus(acct.accountStatus || acct.status),
-                dateOpened: acct.dateOpened || acct.openDate || null,
-                dateUpdated: acct.dateReported || acct.lastUpdated || null,
-                dateClosed: acct.dateClosed || null,
+                dateOpened: parseExperianDate(acct.dateOpened || acct.openDate),
+                dateUpdated: parseExperianDate(acct.dateReported || acct.lastUpdated),
+                dateClosed: parseExperianDate(acct.dateClosed),
                 creditLimitCents: parseDollarsToCents(acct.creditLimit || acct.highCredit),
                 balanceCents: parseDollarsToCents(acct.balance || acct.currentBalance),
                 monthlyPaymentCents: parseDollarsToCents(acct.monthlyPayment || acct.scheduledPayment),
@@ -1445,14 +1499,17 @@
             });
         }
 
-        // Parse inquiries
+        // Parse inquiries from legacy format
         for (const inq of hardInquiries) {
             if (!inq) continue;
-            result.inquiries.push({
-                company: inq.subscriberName || inq.creditorName || 'Unknown',
-                date: inq.inquiryDate || inq.date || null,
-                type: 'hard'
-            });
+            const date = parseExperianDate(inq.inquiryDate || inq.date);
+            if (date) {
+                result.inquiries.push({
+                    company: inq.subscriberName || inq.creditorName || 'Unknown',
+                    date: date,
+                    type: 'hard'
+                });
+            }
         }
 
         return result;
