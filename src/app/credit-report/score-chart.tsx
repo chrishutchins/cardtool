@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronUp, ExternalLink, Lock } from "lucide-react";
+import { ChevronDown, ChevronUp, Lock } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -429,22 +429,14 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                                     href={source.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-sm transition-colors group"
+                                    className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors group"
                                   >
-                                    {source.cardholderOnly ? (
-                                      <Lock className="h-3 w-3 flex-shrink-0 text-amber-500" />
-                                    ) : (
-                                      <ExternalLink className="h-3 w-3 flex-shrink-0 text-zinc-600 group-hover:text-zinc-400" />
-                                    )}
-                                    <span className={
-                                      source.recommended 
-                                        ? "text-emerald-400 group-hover:text-emerald-300" 
-                                        : source.cardholderOnly
-                                          ? "text-zinc-500 group-hover:text-zinc-300"
-                                          : "text-zinc-400 group-hover:text-white"
-                                    }>
+                                    <span className={`underline decoration-zinc-600 group-hover:decoration-zinc-400 ${source.recommended ? "font-medium" : ""}`}>
                                       {source.name}
                                     </span>
+                                    {source.cardholderOnly && (
+                                      <Lock className="h-3 w-3 flex-shrink-0 text-amber-500" />
+                                    )}
                                   </a>
                                 ))}
                               </div>
@@ -464,12 +456,12 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
             {/* Legend */}
             <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-6 text-xs text-zinc-500">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span>Recommended</span>
+                <span className="font-medium text-zinc-400">Bold</span>
+                <span>= Recommended</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Lock className="h-3 w-3 text-amber-500" />
-                <span>Customers only</span>
+                <span>= Customers only</span>
               </div>
             </div>
           </div>
