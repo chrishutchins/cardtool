@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.20.1
+// @version      2.20.6
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -464,6 +464,10 @@
         // Set up inventory API interceptors (for awards/certificates)
         const hasInventoryApi = setupInventoryApiInterceptors();
         
+        // Set up inventory DOM extraction (for sites that render awards in HTML)
+        const inventoryDomMatch = setupInventoryDomExtraction();
+        const hasInventoryDom = !!inventoryDomMatch;
+        
         // Load server configs first, then initialize
         loadServerConfigs(() => {
             // Find ALL matching site configs by domain
@@ -483,6 +487,17 @@
             if (matchingConfigs.length === 0 && hasInventoryApi && inventoryConfig) {
                 matchingConfigs = [{
                     name: inventoryConfig.name,
+                    currencyCode: null, // No currency, inventory only
+                    balancePageUrl: window.location.href,
+                    selector: null,
+                    inventoryOnly: true
+                }];
+            }
+
+            // If we have inventory DOM config but no balance configs, create a placeholder
+            if (matchingConfigs.length === 0 && hasInventoryDom && inventoryDomConfig) {
+                matchingConfigs = [{
+                    name: inventoryDomConfig.name,
                     currencyCode: null, // No currency, inventory only
                     balancePageUrl: window.location.href,
                     selector: null,
@@ -535,6 +550,23 @@
                     tryExtractBalance();
                 }, 3000);
                 console.log('CardTool: Interval started, ID:', intervalId);
+            }
+            
+            // For DOM-based inventory extraction, run after page loads
+            if (hasInventoryDom) {
+                console.log('CardTool Inventory DOM: Will extract after page loads');
+                // Wait for page to fully render (Hilton uses React)
+                setTimeout(() => {
+                    extractInventoryFromDom();
+                }, 3000);
+                
+                // Re-check after a bit longer in case of slow loading
+                setTimeout(() => {
+                    if (!inventoryItems || inventoryItems.length === 0) {
+                        console.log('CardTool Inventory DOM: Re-checking...');
+                        extractInventoryFromDom();
+                    }
+                }, 6000);
             }
         });
     }
@@ -753,7 +785,7 @@
                 byType[type] = (byType[type] || 0) + 1;
             }
             const summaryText = Object.entries(byType).map(([type, count]) => `${count} ${type}`).join(', ');
-            const brandName = inventoryConfig?.brand || 'Inventory';
+            const brandName = inventoryConfig?.brand || inventoryDomConfig?.brand || 'Inventory';
             
             inventoryRowHtml = `
                 <div class="cardtool-multi-balance-row">
@@ -1516,12 +1548,127 @@
                 }
                 return items;
             }
+        },
+        marriottAwards: {
+            domain: 'marriott.com',
+            pathPattern: /\/loyalty\/myAccount\/activity/i,
+            apiPattern: /\/mi\/query\/phoenixAccountDttGetMyActivityRewardsEarned/i,
+            name: 'Marriott',
+            brand: 'Marriott',
+            parseResponse: (data) => {
+                const items = [];
+                const today = new Date().toISOString().split('T')[0];
+                const loyalty = data?.data?.customer?.loyaltyInformation;
+                if (!loyalty) return items;
+
+                // Free Night Certificates
+                // Track seen external_ids to handle duplicates (same type + same expiration)
+                const seenIds = {};
+                const certificates = loyalty.certificates?.edges || [];
+                for (const edge of certificates) {
+                    const cert = edge.node;
+                    if (!cert) continue;
+                    // Skip expired
+                    if (cert.expirationDate && cert.expirationDate < today) continue;
+                    
+                    // Create base external_id from type code + expiration
+                    const baseId = `${cert.awardType?.code || 'cert'}-${cert.expirationDate || 'noexp'}`;
+                    // If we've seen this combo before, add a suffix
+                    seenIds[baseId] = (seenIds[baseId] || 0) + 1;
+                    const external_id = seenIds[baseId] > 1 ? `${baseId}-${seenIds[baseId]}` : baseId;
+                    
+                    items.push({
+                        external_id,
+                        type_slug: 'free_night',
+                        name: cert.awardType?.description || 'Free Night Award',
+                        brand: 'Marriott',
+                        expiration_date: cert.expirationDate || null,
+                        notes: cert.numberOfNights ? `${cert.numberOfNights} night(s)` : null
+                    });
+                }
+
+                // Suite Night Awards (available only, not expired)
+                const suiteNights = loyalty.nightlyUpgradeAwards?.available;
+                if (suiteNights && suiteNights.count > 0) {
+                    for (const detail of suiteNights.details || []) {
+                        if (!detail.expirationDate || detail.expirationDate < today) continue;
+                        // Create one item per expiration group
+                        items.push({
+                            external_id: `SNA-${detail.expirationDate}`,
+                            type_slug: 'coupon',
+                            name: `Suite Night Award (${detail.count}x)`,
+                            brand: 'Marriott',
+                            expiration_date: detail.expirationDate,
+                            notes: `${detail.count} Suite Night Award(s)`
+                        });
+                    }
+                }
+
+                return items;
+            }
+        }
+    };
+
+    // DOM-based inventory configs (for sites that render awards in HTML or embedded JSON)
+    const INVENTORY_DOM_CONFIGS = {
+        hiltonAwards: {
+            domain: 'hilton.com',
+            pathPattern: /\/hilton-honors\/guest\/my-account/i,
+            name: 'Hilton',
+            brand: 'Hilton',
+            // Hilton embeds data in __NEXT_DATA__ script tag - DOM only shows first item
+            extractFromNextData: true,
+            parseNextData: (nextData) => {
+                const items = [];
+                try {
+                    // Navigate to amexCoupons.available in the deeply nested structure
+                    const queries = nextData?.props?.pageProps?.dehydratedState?.queries || [];
+                    for (const query of queries) {
+                        const guest = query?.state?.data?.guest;
+                        if (guest?.hhonors?.amexCoupons?.available) {
+                            const coupons = guest.hhonors.amexCoupons.available;
+                            for (const coupon of coupons) {
+                                // Extract last 4 digits from codeMasked (e.g., "••••• 4559" -> "4559")
+                                const codeMasked = coupon.codeMasked || '';
+                                const lastFourMatch = codeMasked.match(/(\d{4})$/);
+                                const externalId = lastFourMatch ? lastFourMatch[1] : null;
+                                
+                                if (!externalId) continue; // Skip if no ID
+                                
+                                // Parse expiration date from endDate (e.g., "2026-07-29T23:59:59")
+                                let expirationDate = null;
+                                if (coupon.endDate) {
+                                    expirationDate = coupon.endDate.split('T')[0];
+                                }
+                                
+                                // Determine type: Free Night for names containing "Free Night", otherwise Coupon
+                                const offerName = coupon.offerName || 'Unknown Award';
+                                const typeSlug = offerName.toLowerCase().includes('free night') ? 'free_night' : 'coupon';
+                                
+                                items.push({
+                                    external_id: externalId,
+                                    type_slug: typeSlug,
+                                    name: offerName,
+                                    brand: 'Hilton',
+                                    expiration_date: expirationDate,
+                                    notes: `Certificate # ${codeMasked}`
+                                });
+                            }
+                            break; // Found the data, stop searching
+                        }
+                    }
+                } catch (e) {
+                    console.warn('CardTool Inventory DOM: Failed to parse Hilton __NEXT_DATA__', e);
+                }
+                return items;
+            }
         }
     };
 
     // State for inventory interceptors
     let inventoryItems = null; // Array of parsed inventory items
     let inventoryConfig = null;
+    let inventoryDomConfig = null; // For DOM-based inventory
 
     function setupSpecialApiInterceptors() {
         const hostname = window.location.hostname.toLowerCase();
@@ -1733,6 +1880,83 @@
         }
     }
 
+    // ============================================
+    // INVENTORY DOM EXTRACTION FUNCTIONS
+    // ============================================
+
+    function setupInventoryDomExtraction() {
+        const hostname = window.location.hostname.toLowerCase();
+        const pathname = window.location.pathname.toLowerCase();
+        
+        for (const [key, config] of Object.entries(INVENTORY_DOM_CONFIGS)) {
+            if (hostname.includes(config.domain) && config.pathPattern.test(pathname)) {
+                console.log('CardTool Inventory DOM: Found matching config for', config.name);
+                inventoryDomConfig = config;
+                return config;
+            }
+        }
+        return null;
+    }
+
+    function extractInventoryFromDom() {
+        if (!inventoryDomConfig) {
+            console.log('CardTool Inventory DOM: No config found');
+            return;
+        }
+
+        console.log('CardTool Inventory DOM: Extracting from', inventoryDomConfig.name);
+        
+        let items = [];
+        
+        // Check if we should extract from __NEXT_DATA__ (React SSR data)
+        if (inventoryDomConfig.extractFromNextData) {
+            const nextDataScript = document.getElementById('__NEXT_DATA__');
+            if (nextDataScript) {
+                try {
+                    const nextData = JSON.parse(nextDataScript.textContent);
+                    console.log('CardTool Inventory DOM: Found __NEXT_DATA__, parsing...');
+                    items = inventoryDomConfig.parseNextData(nextData);
+                } catch (e) {
+                    console.warn('CardTool Inventory DOM: Failed to parse __NEXT_DATA__', e);
+                }
+            } else {
+                console.log('CardTool Inventory DOM: No __NEXT_DATA__ script found');
+            }
+        } else {
+            // Standard DOM element extraction
+            const cards = document.querySelectorAll(inventoryDomConfig.selector);
+            
+            if (!cards || cards.length === 0) {
+                console.log('CardTool Inventory DOM: No award cards found with selector', inventoryDomConfig.selector);
+                return;
+            }
+
+            console.log('CardTool Inventory DOM: Found', cards.length, 'award card(s)');
+            
+            for (const card of cards) {
+                try {
+                    const item = inventoryDomConfig.parseElement(card);
+                    if (item && item.external_id) {
+                        items.push(item);
+                    } else {
+                        console.warn('CardTool Inventory DOM: Skipping card without external_id', item);
+                    }
+                } catch (e) {
+                    console.warn('CardTool Inventory DOM: Failed to parse card', e);
+                }
+            }
+        }
+
+        if (items.length > 0) {
+            console.log('CardTool Inventory DOM: Extracted', items.length, 'item(s)');
+            inventoryItems = items;
+            inventoryConfig = inventoryDomConfig; // Use DOM config as inventory config
+            showInventoryFound(items);
+        } else {
+            console.log('CardTool Inventory DOM: No items found');
+        }
+    }
+
     // Show inventory count in the badge
     function showInventoryFound(items) {
         // Check if badge exists, if not create it
@@ -1744,6 +1968,14 @@
 
         // Check if this is an inventory-only site (no balance data)
         const isInventoryOnly = currentConfig && currentConfig.inventoryOnly;
+
+        // If we already have a balance displayed, re-render the combined view
+        // This handles the case where DOM inventory loads after DOM balance
+        if (extractedBalance !== null && !isInventoryOnly) {
+            console.log('CardTool Inventory: Re-rendering combined view with balance');
+            showBalanceFound(extractedBalance);
+            return;
+        }
 
         // Update mini-badge text
         const miniBalance = document.getElementById('cardtool-mini-balance');
@@ -1805,7 +2037,7 @@
             .map(([type, count]) => `${count} ${type}`)
             .join(', ');
 
-        const brandName = inventoryConfig?.brand || 'Inventory';
+        const brandName = inventoryConfig?.brand || inventoryDomConfig?.brand || 'Inventory';
 
         // Use consistent row format (value left, label right) like United balances
         if (isInventoryOnly) {
