@@ -29,34 +29,35 @@ function isNavGroup(item: NavEntry): item is NavGroup {
 const baseNavGroups: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", onboardingId: "dashboard" },
   {
-    label: "Credit Cards",
+    label: "Cards",
     items: [
       { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
       { href: "/compare", label: "Compare", onboardingId: "compare" },
-      { href: "/rules", label: "Application Rules", onboardingId: "rules" },
+      { href: "/credits", label: "Credits", onboardingId: "credits" },
       { href: "/offers", label: "Offers", onboardingId: "offers" },
     ],
   },
-  { href: "/returns", label: "Earnings", onboardingId: "earnings" },
   {
-    label: "Credits",
+    label: "Rewards",
     items: [
-      { href: "/credits", label: "Credit Tracker", onboardingId: "credits" },
+      { href: "/balances", label: "Balances", onboardingId: "balances" },
       { href: "/inventory", label: "Inventory", onboardingId: "inventory" },
+      { href: "/transfer-partners", label: "Transfer Partners", onboardingId: "transfer-partners" },
     ],
   },
   {
-    label: "Points",
+    label: "Planning",
     items: [
-      { href: "/points", label: "Balances", onboardingId: "points" },
-      { href: "/transfer-partners", label: "Transfer Partners", onboardingId: "transfer-partners" },
+      { href: "/spend-optimizer", label: "Spend Optimizer", onboardingId: "spend-optimizer" },
+      { href: "/application-rules", label: "Application Rules", onboardingId: "application-rules" },
+      { href: "/credit-report", label: "Credit Report", onboardingId: "credit-report" },
     ],
   },
   {
     label: "Settings",
     items: [
-      { href: "/spending", label: "Spending", onboardingId: "spending" },
       { href: "/point-values", label: "Point Values", onboardingId: "point-values" },
+      { href: "/spending", label: "Spending", onboardingId: "spending" },
       { href: "/settings", label: "Other Settings", onboardingId: "settings" },
     ],
   },

@@ -13,85 +13,104 @@ interface OnboardingStep {
 
 // Map of targets to their parent dropdowns (for desktop navigation)
 const DROPDOWN_PARENTS: Record<string, string> = {
-  "wallet": "credit-cards-menu",
-  "compare": "credit-cards-menu",
-  "rules": "credit-cards-menu",
-  "credits": "credits-menu",
-  "inventory": "credits-menu",
-  "points": "points-menu",
-  "transfer-partners": "points-menu",
-  "spending": "settings-menu",
+  // Cards group
+  "wallet": "cards-menu",
+  "compare": "cards-menu",
+  "credits": "cards-menu",
+  "offers": "cards-menu",
+  // Rewards group
+  "balances": "rewards-menu",
+  "inventory": "rewards-menu",
+  "transfer-partners": "rewards-menu",
+  // Planning group
+  "spend-optimizer": "planning-menu",
+  "application-rules": "planning-menu",
+  "credit-report": "planning-menu",
+  // Settings group
   "point-values": "settings-menu",
+  "spending": "settings-menu",
   "settings": "settings-menu",
 };
 
 const ONBOARDING_STEPS: OnboardingStep[] = [
+  // Cards group
   {
     target: "wallet",
     title: "Your Wallet",
     message: "Start by adding the credit cards you have to your wallet. This is where you'll manage all your cards and track their rewards.",
     position: "bottom",
-    parentDropdown: "credit-cards-menu",
+    parentDropdown: "cards-menu",
   },
   {
     target: "compare",
     title: "Compare Cards",
     message: "Browse different spending categories to see which cards offer the best return on your spending.",
     position: "bottom",
-    parentDropdown: "credit-cards-menu",
-  },
-  {
-    target: "rules",
-    title: "Application Rules",
-    message: "Track which cards you're eligible to apply for based on issuer-specific rules like Chase 5/24 and Amex 2/90.",
-    position: "bottom",
-    parentDropdown: "credit-cards-menu",
-  },
-  {
-    target: "earnings",
-    title: "View Your Earnings",
-    message: "See an analysis of the total points and/or cash back you can expect from your cards, including recommendations for what categories to spend on.",
-    position: "bottom",
+    parentDropdown: "cards-menu",
   },
   {
     target: "credits",
     title: "Track Your Credits",
     message: "Never let a card credit go to waste. Track monthly Uber credits, airline fee credits, and more to maximize the value you get from your cards.",
     position: "bottom",
-    parentDropdown: "credits-menu",
+    parentDropdown: "cards-menu",
+  },
+  // Rewards group
+  {
+    target: "balances",
+    title: "Points Balances",
+    message: "Track your points and miles balances across all your loyalty programs in one place.",
+    position: "bottom",
+    parentDropdown: "rewards-menu",
   },
   {
     target: "inventory",
     title: "Inventory Tracking",
     message: "Keep track of perks you've earned but haven't used yet—like free nights, companion passes, or lounge passes. Never let them expire!",
     position: "bottom",
-    parentDropdown: "credits-menu",
-  },
-  {
-    target: "points",
-    title: "Points Balances",
-    message: "Track your points and miles balances across all your loyalty programs in one place.",
-    position: "bottom",
-    parentDropdown: "points-menu",
+    parentDropdown: "rewards-menu",
   },
   {
     target: "transfer-partners",
     title: "Transfer Partners",
     message: "Explore transfer partners for your points programs and find the best redemption values for your miles.",
     position: "bottom",
-    parentDropdown: "points-menu",
+    parentDropdown: "rewards-menu",
+  },
+  // Planning group
+  {
+    target: "spend-optimizer",
+    title: "Spend Optimizer",
+    message: "See an analysis of the total points and/or cash back you can expect from your cards, including recommendations for what categories to spend on.",
+    position: "bottom",
+    parentDropdown: "planning-menu",
   },
   {
-    target: "spending",
-    title: "Edit Spending",
-    message: "Edit the default spending assumptions that drive the Earnings tab calculations.",
+    target: "application-rules",
+    title: "Application Rules",
+    message: "Track which cards you're eligible to apply for based on issuer-specific rules like Chase 5/24 and Amex 2/90.",
     position: "bottom",
-    parentDropdown: "settings-menu",
+    parentDropdown: "planning-menu",
   },
+  {
+    target: "credit-report",
+    title: "Credit Report",
+    message: "Import and view your credit report to track accounts, inquiries, and credit score history.",
+    position: "bottom",
+    parentDropdown: "planning-menu",
+  },
+  // Settings group
   {
     target: "point-values",
     title: "Point Valuations",
     message: "Change the assumptions for how much points are worth to customize your earnings calculations.",
+    position: "bottom",
+    parentDropdown: "settings-menu",
+  },
+  {
+    target: "spending",
+    title: "Edit Spending",
+    message: "Edit the default spending assumptions that drive the Spend Optimizer calculations.",
     position: "bottom",
     parentDropdown: "settings-menu",
   },
@@ -276,7 +295,13 @@ interface OnboardingTourProps {
 }
 
 // Nav items that live in the mobile menu (includes dropdown button IDs)
-const NAV_TARGETS = ["dashboard", "credit-cards-menu", "wallet", "earnings", "credits-menu", "credits", "inventory", "points-menu", "points", "transfer-partners", "settings-menu", "spending", "compare", "rules", "point-values", "settings"];
+const NAV_TARGETS = [
+  "dashboard",
+  "cards-menu", "wallet", "compare", "credits", "offers",
+  "rewards-menu", "balances", "inventory", "transfer-partners",
+  "planning-menu", "spend-optimizer", "application-rules", "credit-report",
+  "settings-menu", "point-values", "spending", "settings"
+];
 
 export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   const [currentStep, setCurrentStep] = useState(0);
