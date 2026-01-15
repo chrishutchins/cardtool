@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, Lock } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -376,14 +376,6 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
 
         {showImportSources && (
           <div className="mt-4">
-            {/* Recommended sources callout */}
-            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-              <p className="text-sm text-emerald-400">
-                <span className="font-medium">Recommended for full coverage (free):</span>{" "}
-                <span className="text-zinc-300">Capital One, myFICO, Experian, Credit Karma, Equifax, Chase</span>
-              </p>
-            </div>
-
             <div className="overflow-x-auto">
               <table className="w-full table-fixed">
                 <colgroup>
@@ -394,13 +386,13 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider pb-3 pr-4">
+                    <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider pb-2 pr-4">
                       Data Type
                     </th>
                     {BUREAUS.map((bureau) => (
                       <th
                         key={bureau}
-                        className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider pb-3 px-3"
+                        className="text-center text-xs font-medium text-zinc-500 uppercase tracking-wider pb-2 px-3"
                       >
                         {BUREAU_LABELS[bureau]}
                       </th>
@@ -410,32 +402,37 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                 <tbody>
                   {IMPORT_SOURCES.map((row, idx) => (
                     <tr key={row.label} className={idx > 0 ? "border-t border-zinc-800" : ""}>
-                      <td className="py-3 pr-4 text-sm text-zinc-300 align-top">
+                      <td className="py-2 pr-4 text-sm text-zinc-300 align-top">
                         {row.label}
                       </td>
                       {BUREAUS.map((bureau) => {
                         const sources = row.sources[bureau];
                         return (
-                          <td key={bureau} className="py-3 px-3 align-top">
+                          <td key={bureau} className="py-2 px-3 text-center align-top">
                             {sources.length > 0 ? (
-                              <div className="space-y-1.5">
+                              <div className="space-y-1 inline-flex flex-col items-center">
                                 {sources.map((source) => (
                                   <a
                                     key={source.name}
                                     href={source.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors group"
+                                    className="inline-flex items-center gap-1 text-sm transition-colors group"
                                   >
-                                    <ExternalLink className="h-3 w-3 flex-shrink-0 text-zinc-600 group-hover:text-zinc-400" />
-                                    <span className={source.recommended ? "text-emerald-400 group-hover:text-emerald-300" : ""}>
+                                    {source.cardholderOnly ? (
+                                      <Lock className="h-3 w-3 flex-shrink-0 text-amber-500" />
+                                    ) : (
+                                      <ExternalLink className="h-3 w-3 flex-shrink-0 text-zinc-600 group-hover:text-zinc-400" />
+                                    )}
+                                    <span className={
+                                      source.recommended 
+                                        ? "text-emerald-400 group-hover:text-emerald-300" 
+                                        : source.cardholderOnly
+                                          ? "text-zinc-500 group-hover:text-zinc-300"
+                                          : "text-zinc-400 group-hover:text-white"
+                                    }>
                                       {source.name}
                                     </span>
-                                    {source.cardholderOnly && (
-                                      <span className="text-[10px] px-1.5 py-0.5 bg-zinc-800 text-zinc-500 rounded">
-                                        cardholder
-                                      </span>
-                                    )}
                                   </a>
                                 ))}
                               </div>
@@ -449,6 +446,18 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Legend */}
+            <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-6 text-xs text-zinc-500">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>Recommended (free)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Lock className="h-3 w-3 text-amber-500" />
+                <span>Customers only</span>
+              </div>
             </div>
           </div>
         )}
