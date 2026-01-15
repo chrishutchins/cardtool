@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.9.2
+// @version      2.12.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -44,7 +44,7 @@
             name: "United MileagePlus",
             currencyCode: "UA",
             sitePattern: /united\.com/i,
-            balancePageUrl: "https://www.united.com/en/us/account/overview",
+            balancePageUrl: "https://www.united.com/en/us/myunited",
             selector: "[data-testid='miles-balance'], .miles-balance, .mileage-balance",
             parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
         },
@@ -234,6 +234,30 @@
         }
         .cardtool-badge-minimize:hover {
             color: #e4e4e7 !important;
+        }
+        /* Multi-balance display */
+        .cardtool-multi-balances {
+            margin-bottom: 12px !important;
+        }
+        .cardtool-multi-balance-row {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            padding: 6px 0 !important;
+            border-bottom: 1px solid #27272a !important;
+        }
+        .cardtool-multi-balance-row:last-child {
+            border-bottom: none !important;
+        }
+        .cardtool-multi-balance-value {
+            font-size: 18px !important;
+            font-weight: 700 !important;
+            color: #fbbf24 !important;
+        }
+        .cardtool-multi-balance-name {
+            font-size: 11px !important;
+            color: #a1a1aa !important;
+            text-align: right !important;
         }
         .cardtool-badge-header {
             background: #27272a !important;
@@ -513,10 +537,24 @@
             return;
         }
         
+        // Set up special API interceptors EARLY (before page makes API calls)
+        // This needs to happen before loadServerConfigs since it's async
+        const hasSpecialApi = setupSpecialApiInterceptors();
+        
         // Load server configs first, then initialize
         loadServerConfigs(() => {
             // Find ALL matching site configs by domain
             matchingConfigs = findMatchingConfigs(window.location.hostname);
+
+            // If we have a special API config but no DOM configs, create a placeholder config
+            if (matchingConfigs.length === 0 && hasSpecialApi && specialApiConfig) {
+                matchingConfigs = [{
+                    name: specialApiConfig.name,
+                    currencyCode: specialApiConfig.currencyCode,
+                    balancePageUrl: window.location.href,
+                    selector: null // No DOM selector, balance comes from API
+                }];
+            }
 
             if (matchingConfigs.length === 0) {
                 return; // Site not configured
@@ -533,23 +571,32 @@
             // Create badge
             createBadge();
 
+            // For special API configs, show "waiting for data" message
+            if (hasSpecialApi && specialApiConfig) {
+                updateBadgeContent('<div class="cardtool-badge-status">Waiting for balance data...</div>');
+            }
+
             // Try to find balance on page (wait longer for SPAs to load)
             console.log('CardTool: Found', matchingConfigs.length, 'config(s) for this domain');
-            setTimeout(tryExtractBalance, 2000);
+            
+            // Only do DOM extraction if we have selectors (not just API-based)
+            if (matchingConfigs.some(c => c.selector)) {
+                setTimeout(tryExtractBalance, 2000);
 
-            // Re-check periodically for up to 15 seconds (5 checks at 3s intervals)
-            let checkCount = 0;
-            const maxChecks = 5;
-            const intervalId = setInterval(() => {
-                checkCount++;
-                if (checkCount >= maxChecks || extractedBalance !== null) {
-                    clearInterval(intervalId);
-                    console.log('CardTool: Stopped checking after', checkCount, 'checks');
-                    return;
-                }
-                tryExtractBalance();
-            }, 3000);
-            console.log('CardTool: Interval started, ID:', intervalId);
+                // Re-check periodically for up to 15 seconds (5 checks at 3s intervals)
+                let checkCount = 0;
+                const maxChecks = 5;
+                const intervalId = setInterval(() => {
+                    checkCount++;
+                    if (checkCount >= maxChecks || extractedBalance !== null) {
+                        clearInterval(intervalId);
+                        console.log('CardTool: Stopped checking after', checkCount, 'checks');
+                        return;
+                    }
+                    tryExtractBalance();
+                }, 3000);
+                console.log('CardTool: Interval started, ID:', intervalId);
+            }
         });
     }
 
@@ -572,14 +619,29 @@
                                 selector: config.selector,
                                 attribute: config.attribute || null,  // Read from attribute instead of textContent
                                 aggregate: config.aggregate || false,
+                                format: config.format || 'points',  // 'points' or 'dollars'
                                 parseBalance: (text) => {
                                     // Normalize: replace nbsp and other whitespace between digits
                                     const normalized = text.replace(/[\u00A0\s]+/g, ' ');
                                     // Default regex handles US (1,000), European (1.000), and Scandinavian (1 000) formats
                                     const regex = new RegExp(config.parse_regex || '[\\d][\\d.,\\s]*');
                                     const match = normalized.match(regex);
-                                    return match ? parseInt(match[0].replace(/[^0-9]/g, '')) || 0 : 0;
-                                }
+                                    if (!match) return 0;
+                                    
+                                    // Use explicit format field from admin settings
+                                    const format = config.format || 'points';
+                                    
+                                    // For dollars format (e.g., "$1,550.00"), parse as float and round to whole dollars
+                                    if (format === 'dollars') {
+                                        // Remove everything except digits and decimal point
+                                        const numStr = match[0].replace(/[^0-9.]/g, '');
+                                        return Math.round(parseFloat(numStr)) || 0;
+                                    }
+                                    
+                                    // Default (points): strip all non-digits for points/miles
+                                    return parseInt(match[0].replace(/[^0-9]/g, '')) || 0;
+                                },
+                                currencyType: config.reward_currencies?.currency_type || null
                             }));
                     }
                 } catch (e) {
@@ -705,6 +767,12 @@
     }
 
     function showBalanceFound(balance) {
+        // Don't overwrite if we have multi-balance data from API interceptor
+        if (hasMultiBalanceData) {
+            console.log('CardTool: Skipping single balance display - multi-balance data already shown');
+            return;
+        }
+        
         const formattedBalance = balance.toLocaleString();
         
         // Update mini-balance for minimized state
@@ -1231,6 +1299,341 @@
     let creditReportData = null;
     let creditBadgeElement = null;
     let currentBureau = null;
+
+    // ============================================
+    // SPECIAL API INTERCEPTORS FOR POINTS/BALANCES
+    // ============================================
+
+    // Special API interceptors for multi-balance endpoints
+    const SPECIAL_API_CONFIGS = {
+        unitedBalances: {
+            domain: 'united.com',
+            pathPattern: /\/myunited|\/offers\/travelbank/i,
+            apiPattern: /\/api\/myunited\/user\/balances/i,
+            name: 'United',
+            // Map API currency types to our currency codes
+            currencyMap: {
+                'RDM': { code: 'UA', name: 'United MileagePlus', format: 'points' },
+                'UBC': { code: 'UATB', name: 'United Travel Bank', format: 'dollars' }
+            },
+            parseResponse: (data) => {
+                const results = [];
+                const balances = data?.data?.Balances;
+                
+                if (balances && Array.isArray(balances)) {
+                    for (const bal of balances) {
+                        const currencyInfo = SPECIAL_API_CONFIGS.unitedBalances.currencyMap[bal.ProgramCurrencyType];
+                        if (currencyInfo && bal.TotalBalance > 0) {
+                            results.push({
+                                currencyCode: currencyInfo.code,
+                                name: currencyInfo.name,
+                                balance: bal.TotalBalance,
+                                format: currencyInfo.format,
+                                expiration: bal.EarliestExpirationDate 
+                                    ? bal.EarliestExpirationDate.split('T')[0] 
+                                    : null
+                            });
+                        }
+                    }
+                }
+                
+                return results.length > 0 ? results : null;
+            }
+        }
+    };
+
+    // State for special API interceptors (supports multiple balances)
+    let specialApiBalances = null; // Array of { currencyCode, name, balance, format, expiration }
+    let specialApiConfig = null;
+    let hasMultiBalanceData = false; // Flag to prevent DOM detection from overwriting API data
+
+    function setupSpecialApiInterceptors() {
+        const hostname = window.location.hostname.toLowerCase();
+        const pathname = window.location.pathname.toLowerCase();
+        
+        for (const [key, config] of Object.entries(SPECIAL_API_CONFIGS)) {
+            if (hostname.includes(config.domain) && config.pathPattern.test(pathname)) {
+                console.log('CardTool: Setting up special API interceptor for', config.name);
+                specialApiConfig = config;
+                interceptSpecialApi(config);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function interceptSpecialApi(config) {
+        const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        const cardtoolMarker = '__cardtool_special_api__';
+        
+        // Intercept XMLHttpRequest
+        const origOpen = targetWindow.XMLHttpRequest.prototype.open;
+        const origSend = targetWindow.XMLHttpRequest.prototype.send;
+        
+        if (origOpen[cardtoolMarker]) {
+            console.log('CardTool: Special API interceptor already installed');
+            return;
+        }
+
+        const patchedOpen = function(method, url, async, user, pass) {
+            this._cardtool_special_url = url;
+            return origOpen.apply(this, arguments);
+        };
+        patchedOpen[cardtoolMarker] = true;
+        
+        try {
+            Object.defineProperty(targetWindow.XMLHttpRequest.prototype, 'open', {
+                value: patchedOpen,
+                writable: false,
+                configurable: true
+            });
+        } catch (e) {
+            targetWindow.XMLHttpRequest.prototype.open = patchedOpen;
+        }
+
+        const patchedSend = targetWindow.XMLHttpRequest.prototype.send;
+        targetWindow.XMLHttpRequest.prototype.send = function(body) {
+            const xhr = this;
+            const url = xhr._cardtool_special_url || '';
+
+            xhr.addEventListener('readystatechange', function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    if (config.apiPattern.test(url)) {
+                        console.log('CardTool: ✓ Intercepted special API call:', url.substring(0, 80));
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            const results = config.parseResponse(data);
+                            if (results && results.length > 0) {
+                                console.log('CardTool: Found', results.length, 'balance(s) from API');
+                                specialApiBalances = results;
+                                showMultipleBalancesFound(results);
+                            }
+                        } catch (e) {
+                            console.warn('CardTool: Failed to parse special API response', e);
+                        }
+                    }
+                }
+            });
+
+            return origSend.apply(this, arguments);
+        };
+
+        console.log('CardTool: Special API XHR interceptor installed for', config.name);
+        
+        // Also intercept Fetch API
+        const origFetch = targetWindow.fetch;
+        targetWindow.fetch = async function(input, init) {
+            const url = typeof input === 'string' ? input : input.url;
+            const response = await origFetch.apply(this, arguments);
+            
+            if (config.apiPattern.test(url) && response.ok) {
+                console.log('CardTool: ✓ Intercepted special Fetch call:', url.substring(0, 80));
+                try {
+                    const clonedResponse = response.clone();
+                    const data = await clonedResponse.json();
+                    const results = config.parseResponse(data);
+                    if (results && results.length > 0) {
+                        console.log('CardTool: Found', results.length, 'balance(s) from Fetch API');
+                        specialApiBalances = results;
+                        showMultipleBalancesFound(results);
+                    }
+                } catch (e) {
+                    console.warn('CardTool: Failed to parse special Fetch response', e);
+                }
+            }
+            
+            return response;
+        };
+
+        console.log('CardTool: Special API Fetch interceptor installed for', config.name);
+    }
+
+    // Show multiple balances in the badge (e.g., miles + TravelBank)
+    function showMultipleBalancesFound(balances) {
+        // Set flag to prevent DOM detection from overwriting
+        hasMultiBalanceData = true;
+        
+        // Build the balance display HTML
+        const balanceRowsHtml = balances.map((bal, idx) => {
+            const formattedBalance = bal.format === 'dollars' 
+                ? '$' + bal.balance.toLocaleString()
+                : bal.balance.toLocaleString();
+            return `
+                <div class="cardtool-multi-balance-row" data-idx="${idx}">
+                    <span class="cardtool-multi-balance-value">${formattedBalance}</span>
+                    <span class="cardtool-multi-balance-name">${bal.name}</span>
+                </div>
+            `;
+        }).join('');
+
+        // Update the mini-balance for minimized state (show primary balance)
+        const miniBalance = document.getElementById('cardtool-mini-balance');
+        if (miniBalance) {
+            const primaryBal = balances[0];
+            const miniText = primaryBal.format === 'dollars'
+                ? '$' + primaryBal.balance.toLocaleString()
+                : primaryBal.balance.toLocaleString();
+            miniBalance.textContent = miniText + (balances.length > 1 ? ' +' + (balances.length - 1) : '');
+        }
+
+        const syncBtnText = balances.length > 1 
+            ? `Sync All ${balances.length} Balances to CardTool`
+            : 'Sync to CardTool';
+        
+        // Build expiration inputs for each balance
+        const expirationRowsHtml = balances.map((bal, idx) => {
+            const shortName = bal.name.split(' ').pop(); // "United MileagePlus" -> "MileagePlus"
+            return `
+                <div class="cardtool-option-row">
+                    <label class="cardtool-option-label" for="cardtool-expiration-${idx}">${shortName} expires</label>
+                    <input type="date" class="cardtool-date-input" id="cardtool-expiration-${idx}" value="${bal.expiration || ''}">
+                </div>
+            `;
+        }).join('');
+        
+        updateBadgeContent(`
+            <div class="cardtool-multi-balances">
+                ${balanceRowsHtml}
+            </div>
+            <div id="cardtool-player-container"></div>
+            <div class="cardtool-options-toggle" id="cardtool-options-toggle">▼ Options</div>
+            <div class="cardtool-options" id="cardtool-options" style="display: none;">
+                <div class="cardtool-option-row">
+                    <input type="checkbox" class="cardtool-checkbox" id="cardtool-additive">
+                    <label class="cardtool-option-label" for="cardtool-additive">Add to existing balances</label>
+                </div>
+                ${expirationRowsHtml}
+            </div>
+            <button class="cardtool-badge-btn" id="cardtool-sync-btn">
+                ${syncBtnText}
+            </button>
+        `);
+
+        // Options toggle
+        document.getElementById('cardtool-options-toggle').addEventListener('click', () => {
+            const options = document.getElementById('cardtool-options');
+            const toggle = document.getElementById('cardtool-options-toggle');
+            if (options.style.display === 'none') {
+                options.style.display = 'block';
+                toggle.textContent = '▲ Options';
+            } else {
+                options.style.display = 'none';
+                toggle.textContent = '▼ Options';
+            }
+        });
+
+        document.getElementById('cardtool-sync-btn').addEventListener('click', () => handleMultiSync(balances));
+
+        // Load players
+        loadPlayers();
+        
+        // Store for single-balance compatibility
+        extractedBalance = balances[0].balance;
+        currentConfig = {
+            name: balances[0].name,
+            currencyCode: balances[0].currencyCode,
+            balancePageUrl: window.location.href
+        };
+    }
+
+    // Sync multiple balances
+    async function handleMultiSync(balances) {
+        const syncToken = getSyncToken();
+        if (!syncToken) {
+            showNotLoggedIn();
+            return;
+        }
+
+        const btn = document.getElementById('cardtool-sync-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Syncing...';
+        }
+
+        // Get selected player and remember it
+        const playerSelect = document.getElementById('cardtool-player-select');
+        const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
+        GM_setValue('lastPlayerNumber', playerNumber);
+
+        // Get options
+        const additiveCheckbox = document.getElementById('cardtool-additive');
+        const additive = additiveCheckbox ? additiveCheckbox.checked : false;
+
+        let successCount = 0;
+        let lastError = null;
+
+        for (let idx = 0; idx < balances.length; idx++) {
+            const bal = balances[idx];
+            
+            // Get expiration from the UI (which may have been edited by user)
+            const expirationInput = document.getElementById(`cardtool-expiration-${idx}`);
+            const expirationDate = expirationInput && expirationInput.value ? expirationInput.value : null;
+            
+            try {
+                await new Promise((resolve, reject) => {
+                    GM_xmlhttpRequest({
+                        method: 'POST',
+                        url: `${CARDTOOL_URL}/api/points/import`,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-sync-token': syncToken
+                        },
+                        data: JSON.stringify({
+                            currencyCode: bal.currencyCode,
+                            balance: bal.balance,
+                            playerNumber: playerNumber,
+                            additive: additive,
+                            expirationDate: expirationDate
+                        }),
+                        onload: function(response) {
+                            if (response.status === 200) {
+                                console.log('CardTool: Synced', bal.name, ':', bal.balance);
+                                successCount++;
+                                resolve();
+                            } else {
+                                try {
+                                    const data = JSON.parse(response.responseText);
+                                    reject(new Error(data.error || 'Sync failed'));
+                                } catch {
+                                    reject(new Error('Sync failed'));
+                                }
+                            }
+                        },
+                        onerror: function(error) {
+                            reject(new Error('Network error'));
+                        }
+                    });
+                });
+            } catch (e) {
+                console.error('CardTool: Failed to sync', bal.name, e);
+                lastError = e.message;
+            }
+        }
+
+        if (btn) {
+            btn.disabled = false;
+            if (successCount === balances.length) {
+                btn.textContent = 'All Synced!';
+                btn.style.background = '#059669';
+                showToast(`Synced ${successCount} balance${successCount > 1 ? 's' : ''}`, false);
+            } else if (successCount > 0) {
+                btn.textContent = `Synced ${successCount}/${balances.length}`;
+                btn.style.background = '#f59e0b';
+                showToast(`Synced ${successCount}/${balances.length} balances`, true);
+            } else {
+                btn.textContent = 'Sync Failed';
+                btn.style.background = '#dc2626';
+                showToast(lastError || 'Failed to sync', true);
+            }
+
+            setTimeout(() => {
+                btn.textContent = balances.length > 1 
+                    ? `Sync All ${balances.length} Balances to CardTool`
+                    : 'Sync to CardTool';
+                btn.style.background = '';
+            }, 3000);
+        }
+    }
 
     // ============================================
     // XHR INTERCEPTOR FOR CREDIT BUREAUS

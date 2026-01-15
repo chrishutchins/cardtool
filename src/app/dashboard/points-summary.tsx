@@ -98,7 +98,7 @@ export function PointsSummary({ totalPoints, totalValue, pointsByType }: PointsS
 
   return (
     <Link
-      href="/points"
+      href="/balances"
       className="block p-5 rounded-xl border transition-all duration-200 bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50"
     >
       <div className="flex items-start justify-between mb-3">

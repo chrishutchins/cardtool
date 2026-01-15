@@ -11,6 +11,7 @@ interface NavItem {
   label: string;
   onboardingId?: string;
   exact?: boolean;
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -25,7 +26,7 @@ function isNavGroup(item: NavEntry): item is NavGroup {
 }
 
 // Grouped navigation structure for signed-in users
-const navGroups: NavEntry[] = [
+const baseNavGroups: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", onboardingId: "dashboard" },
   {
     label: "Credit Cards",
@@ -33,6 +34,7 @@ const navGroups: NavEntry[] = [
       { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
       { href: "/compare", label: "Compare", onboardingId: "compare" },
       { href: "/rules", label: "Application Rules", onboardingId: "rules" },
+      { href: "/offers", label: "Offers", onboardingId: "offers" },
     ],
   },
   { href: "/returns", label: "Earnings", onboardingId: "earnings" },
@@ -59,6 +61,19 @@ const navGroups: NavEntry[] = [
     ],
   },
 ];
+
+/** Filter navigation based on admin status */
+function getNavGroups(isAdmin: boolean): NavEntry[] {
+  return baseNavGroups.map((entry) => {
+    if (isNavGroup(entry)) {
+      return {
+        ...entry,
+        items: entry.items.filter((item) => !item.adminOnly || isAdmin),
+      };
+    }
+    return entry;
+  });
+}
 
 interface HomeNavProps {
   isAdmin?: boolean;
@@ -151,7 +166,7 @@ export function HomeNav({ isAdmin = false }: HomeNavProps) {
                 </Link>
               )}
               <SignedIn>
-                {navGroups.map((item) => {
+                {getNavGroups(isAdmin).map((item) => {
                   if (isNavGroup(item)) {
                     return <NavDropdown key={item.label} group={item} pathname={pathname} />;
                   }
@@ -208,7 +223,7 @@ export function HomeNav({ isAdmin = false }: HomeNavProps) {
                         <div className="border-t border-zinc-700 my-1" />
                       </>
                     )}
-                    {navGroups.map((entry, index) => {
+                    {getNavGroups(isAdmin).map((entry, index) => {
                       if (isNavGroup(entry)) {
                         // Render group with section header
                         return (

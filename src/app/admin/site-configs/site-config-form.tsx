@@ -18,6 +18,7 @@ interface SiteConfigFormProps {
     selector: string;
     parse_regex: string | null;
     is_active?: boolean | null;
+    format?: string | null;
   };
   onCancel?: () => void;
 }
@@ -116,6 +117,19 @@ export function SiteConfigForm({ action, currencies, defaultValues, onCancel }: 
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono text-sm"
           />
           <p className="text-xs text-zinc-500 mt-1">Regex to extract number from text</p>
+        </div>
+
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Format</label>
+          <select
+            name="format"
+            defaultValue={defaultValues?.format ?? "points"}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          >
+            <option value="points">Points/Miles (strips decimals)</option>
+            <option value="dollars">Dollars (keeps decimals, rounds)</option>
+          </select>
+          <p className="text-xs text-zinc-500 mt-1">How to parse the balance value</p>
         </div>
 
         {defaultValues && (

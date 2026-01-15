@@ -329,6 +329,244 @@ export type Database = {
           },
         ]
       }
+      card_offer_bonuses: {
+        Row: {
+          benefit_description: string | null
+          cash_amount_cents: number | null
+          component_type: string
+          created_at: string | null
+          currency_id: string | null
+          default_benefit_value_cents: number | null
+          id: string
+          offer_id: string
+          points_amount: number | null
+          spend_requirement_cents: number
+          time_period: number
+          time_period_unit: string
+          updated_at: string | null
+        }
+        Insert: {
+          benefit_description?: string | null
+          cash_amount_cents?: number | null
+          component_type: string
+          created_at?: string | null
+          currency_id?: string | null
+          default_benefit_value_cents?: number | null
+          id?: string
+          offer_id: string
+          points_amount?: number | null
+          spend_requirement_cents?: number
+          time_period?: number
+          time_period_unit?: string
+          updated_at?: string | null
+        }
+        Update: {
+          benefit_description?: string | null
+          cash_amount_cents?: number | null
+          component_type?: string
+          created_at?: string | null
+          currency_id?: string | null
+          default_benefit_value_cents?: number | null
+          id?: string
+          offer_id?: string
+          points_amount?: number | null
+          spend_requirement_cents?: number
+          time_period?: number
+          time_period_unit?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_offer_bonuses_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "reward_currencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_offer_bonuses_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
+          },
+          {
+            foreignKeyName: "card_offer_bonuses_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "card_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      card_offer_elevated_earnings: {
+        Row: {
+          category_id: number | null
+          created_at: string | null
+          duration_months: number | null
+          duration_unit: string
+          elevated_rate: number
+          id: string
+          offer_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          category_id?: number | null
+          created_at?: string | null
+          duration_months?: number | null
+          duration_unit?: string
+          elevated_rate: number
+          id?: string
+          offer_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          category_id?: number | null
+          created_at?: string | null
+          duration_months?: number | null
+          duration_unit?: string
+          elevated_rate?: number
+          id?: string
+          offer_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_offer_elevated_earnings_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "earning_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_offer_elevated_earnings_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "card_offer_elevated_earnings_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "card_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      card_offer_intro_apr: {
+        Row: {
+          apr_rate: number
+          apr_type: string
+          created_at: string | null
+          duration: number
+          duration_unit: string
+          id: string
+          offer_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          apr_rate?: number
+          apr_type?: string
+          created_at?: string | null
+          duration: number
+          duration_unit?: string
+          id?: string
+          offer_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          apr_rate?: number
+          apr_type?: string
+          created_at?: string | null
+          duration?: number
+          duration_unit?: string
+          id?: string
+          offer_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_offer_intro_apr_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "card_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      card_offers: {
+        Row: {
+          application_url: string | null
+          archived_at: string | null
+          ath_redirect_url: string | null
+          card_id: string
+          created_at: string | null
+          editorial_notes: string | null
+          expires_at: string | null
+          first_year_af_waived: boolean | null
+          id: string
+          internal_description: string | null
+          is_active: boolean | null
+          is_archived: boolean | null
+          offer_description: string | null
+          offer_type: "referral" | "affiliate" | "direct" | "nll" | "elevated"
+          rates_fees_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          application_url?: string | null
+          archived_at?: string | null
+          ath_redirect_url?: string | null
+          card_id: string
+          created_at?: string | null
+          editorial_notes?: string | null
+          expires_at?: string | null
+          first_year_af_waived?: boolean | null
+          id?: string
+          internal_description?: string | null
+          is_active?: boolean | null
+          is_archived?: boolean | null
+          offer_description?: string | null
+          offer_type?: "referral" | "affiliate" | "direct" | "nll" | "elevated"
+          rates_fees_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          application_url?: string | null
+          archived_at?: string | null
+          ath_redirect_url?: string | null
+          card_id?: string
+          created_at?: string | null
+          editorial_notes?: string | null
+          expires_at?: string | null
+          first_year_af_waived?: boolean | null
+          id?: string
+          internal_description?: string | null
+          is_active?: boolean | null
+          is_archived?: boolean | null
+          offer_description?: string | null
+          offer_type?: "referral" | "affiliate" | "direct" | "nll" | "elevated"
+          rates_fees_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_offers_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_offers_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       card_spend_bonuses: {
         Row: {
           benefit_description: string | null
@@ -509,9 +747,12 @@ export type Database = {
           default_perks_value: number | null
           exclude_from_recommendations: boolean
           id: string
+          image_url: string | null
           is_active: boolean
           issuer_id: string
           name: string
+          no_foreign_transaction_fees: boolean | null
+          official_name: string | null
           primary_currency_id: string
           product_type: Database["public"]["Enums"]["card_product_type"]
           secondary_currency_id: string | null
@@ -528,9 +769,12 @@ export type Database = {
           default_perks_value?: number | null
           exclude_from_recommendations?: boolean
           id?: string
+          image_url?: string | null
           is_active?: boolean
           issuer_id: string
           name: string
+          no_foreign_transaction_fees?: boolean | null
+          official_name?: string | null
           primary_currency_id: string
           product_type: Database["public"]["Enums"]["card_product_type"]
           secondary_currency_id?: string | null
@@ -547,9 +791,12 @@ export type Database = {
           default_perks_value?: number | null
           exclude_from_recommendations?: boolean
           id?: string
+          image_url?: string | null
           is_active?: boolean
           issuer_id?: string
           name?: string
+          no_foreign_transaction_fees?: boolean | null
+          official_name?: string | null
           primary_currency_id?: string
           product_type?: Database["public"]["Enums"]["card_product_type"]
           secondary_currency_id?: string | null
@@ -594,6 +841,259 @@ export type Database = {
           },
         ]
       }
+      credit_account_wallet_links: {
+        Row: {
+          created_at: string
+          credit_account_id: string
+          display_name: string | null
+          id: string
+          user_id: string
+          wallet_card_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          credit_account_id: string
+          display_name?: string | null
+          id?: string
+          user_id: string
+          wallet_card_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          credit_account_id?: string
+          display_name?: string | null
+          id?: string
+          user_id?: string
+          wallet_card_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_account_wallet_links_credit_account_id_fkey"
+            columns: ["credit_account_id"]
+            isOneToOne: false
+            referencedRelation: "credit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_account_wallet_links_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_accounts: {
+        Row: {
+          account_name: string
+          account_number_masked: string | null
+          account_type: Database["public"]["Enums"]["credit_account_type"]
+          balance_cents: number | null
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          created_at: string
+          credit_limit_cents: number | null
+          creditor_name: string | null
+          date_closed: string | null
+          date_opened: string | null
+          date_updated: string | null
+          high_balance_cents: number | null
+          id: string
+          loan_type: Database["public"]["Enums"]["credit_loan_type"]
+          monthly_payment_cents: number | null
+          payment_status: string | null
+          player_number: number
+          responsibility: Database["public"]["Enums"]["credit_responsibility"]
+          snapshot_id: string | null
+          status: Database["public"]["Enums"]["credit_account_status"]
+          terms: string | null
+          user_id: string
+        }
+        Insert: {
+          account_name: string
+          account_number_masked?: string | null
+          account_type?: Database["public"]["Enums"]["credit_account_type"]
+          balance_cents?: number | null
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          created_at?: string
+          credit_limit_cents?: number | null
+          creditor_name?: string | null
+          date_closed?: string | null
+          date_opened?: string | null
+          date_updated?: string | null
+          high_balance_cents?: number | null
+          id?: string
+          loan_type?: Database["public"]["Enums"]["credit_loan_type"]
+          monthly_payment_cents?: number | null
+          payment_status?: string | null
+          player_number?: number
+          responsibility?: Database["public"]["Enums"]["credit_responsibility"]
+          snapshot_id?: string | null
+          status?: Database["public"]["Enums"]["credit_account_status"]
+          terms?: string | null
+          user_id: string
+        }
+        Update: {
+          account_name?: string
+          account_number_masked?: string | null
+          account_type?: Database["public"]["Enums"]["credit_account_type"]
+          balance_cents?: number | null
+          bureau?: Database["public"]["Enums"]["credit_bureau"]
+          created_at?: string
+          credit_limit_cents?: number | null
+          creditor_name?: string | null
+          date_closed?: string | null
+          date_opened?: string | null
+          date_updated?: string | null
+          high_balance_cents?: number | null
+          id?: string
+          loan_type?: Database["public"]["Enums"]["credit_loan_type"]
+          monthly_payment_cents?: number | null
+          payment_status?: string | null
+          player_number?: number
+          responsibility?: Database["public"]["Enums"]["credit_responsibility"]
+          snapshot_id?: string | null
+          status?: Database["public"]["Enums"]["credit_account_status"]
+          terms?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_accounts_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "credit_report_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_inquiries: {
+        Row: {
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          company_name: string
+          created_at: string
+          id: string
+          inquiry_date: string
+          inquiry_type: string | null
+          last_seen_snapshot_id: string | null
+          player_number: number
+          snapshot_id: string | null
+          user_id: string
+        }
+        Insert: {
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          company_name: string
+          created_at?: string
+          id?: string
+          inquiry_date: string
+          inquiry_type?: string | null
+          last_seen_snapshot_id?: string | null
+          player_number?: number
+          snapshot_id?: string | null
+          user_id: string
+        }
+        Update: {
+          bureau?: Database["public"]["Enums"]["credit_bureau"]
+          company_name?: string
+          created_at?: string
+          id?: string
+          inquiry_date?: string
+          inquiry_type?: string | null
+          last_seen_snapshot_id?: string | null
+          player_number?: number
+          snapshot_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_inquiries_last_seen_snapshot_id_fkey"
+            columns: ["last_seen_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "credit_report_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_inquiries_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "credit_report_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_inquiry_group_members: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          inquiry_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          inquiry_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          inquiry_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_inquiry_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "credit_inquiry_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_inquiry_group_members_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "credit_inquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_inquiry_groups: {
+        Row: {
+          created_at: string
+          group_name: string | null
+          id: string
+          player_number: number
+          related_card_id: string | null
+          related_note: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_name?: string | null
+          id?: string
+          player_number?: number
+          related_card_id?: string | null
+          related_note?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          group_name?: string | null
+          id?: string
+          player_number?: number
+          related_card_id?: string | null
+          related_note?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_inquiry_groups_related_card_id_fkey"
+            columns: ["related_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_matching_rules: {
         Row: {
           created_at: string | null
@@ -625,6 +1125,83 @@ export type Database = {
             columns: ["credit_id"]
             isOneToOne: false
             referencedRelation: "card_credits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_report_snapshots: {
+        Row: {
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          created_at: string
+          fetched_at: string
+          id: string
+          player_number: number
+          raw_data: Json | null
+          report_date: string | null
+          user_id: string
+        }
+        Insert: {
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          player_number?: number
+          raw_data?: Json | null
+          report_date?: string | null
+          user_id: string
+        }
+        Update: {
+          bureau?: Database["public"]["Enums"]["credit_bureau"]
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          player_number?: number
+          raw_data?: Json | null
+          report_date?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      credit_scores: {
+        Row: {
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          created_at: string
+          id: string
+          player_number: number
+          score: number
+          score_date: string | null
+          score_type: Database["public"]["Enums"]["credit_score_type"]
+          snapshot_id: string | null
+          user_id: string
+        }
+        Insert: {
+          bureau: Database["public"]["Enums"]["credit_bureau"]
+          created_at?: string
+          id?: string
+          player_number?: number
+          score: number
+          score_date?: string | null
+          score_type: Database["public"]["Enums"]["credit_score_type"]
+          snapshot_id?: string | null
+          user_id: string
+        }
+        Update: {
+          bureau?: Database["public"]["Enums"]["credit_bureau"]
+          created_at?: string
+          id?: string
+          player_number?: number
+          score?: number
+          score_date?: string | null
+          score_type?: Database["public"]["Enums"]["credit_score_type"]
+          snapshot_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_scores_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "credit_report_snapshots"
             referencedColumns: ["id"]
           },
         ]
@@ -675,11 +1252,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "currency_transfer_partners_destination_currency_id_fkey"
+            columns: ["destination_currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
+          },
+          {
             foreignKeyName: "currency_transfer_partners_source_currency_id_fkey"
             columns: ["source_currency_id"]
             isOneToOne: false
             referencedRelation: "reward_currencies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "currency_transfer_partners_source_currency_id_fkey"
+            columns: ["source_currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
           },
         ]
       }
@@ -1028,73 +1619,52 @@ export type Database = {
       }
       site_configs: {
         Row: {
-          id: string
-          name: string
-          currency_code: string
-          domain: string
-          balance_page_url: string | null
-          selector: string
-          parse_regex: string | null
-          is_active: boolean | null
           aggregate: boolean
           attribute: string | null
+          balance_page_url: string | null
           created_at: string | null
-          updated_at: string | null
           created_by: string | null
-        }
-        Insert: {
-          id?: string
-          name: string
           currency_code: string
           domain: string
-          balance_page_url?: string | null
-          selector: string
-          parse_regex?: string | null
-          is_active?: boolean | null
-          aggregate?: boolean
-          attribute?: string | null
-          created_at?: string | null
-          updated_at?: string | null
-          created_by?: string | null
-        }
-        Update: {
-          id?: string
-          name?: string
-          currency_code?: string
-          domain?: string
-          balance_page_url?: string | null
-          selector?: string
-          parse_regex?: string | null
-          is_active?: boolean | null
-          aggregate?: boolean
-          attribute?: string | null
-          created_at?: string | null
-          updated_at?: string | null
-          created_by?: string | null
-        }
-        Relationships: []
-      }
-      user_sync_tokens: {
-        Row: {
+          format: string | null
           id: string
-          user_id: string
-          token_hash: string
-          created_at: string | null
-          last_used_at: string | null
+          is_active: boolean | null
+          name: string
+          parse_regex: string | null
+          selector: string
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          user_id: string
-          token_hash: string
+          aggregate?: boolean
+          attribute?: string | null
+          balance_page_url?: string | null
           created_at?: string | null
-          last_used_at?: string | null
+          created_by?: string | null
+          currency_code: string
+          domain: string
+          format?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          parse_regex?: string | null
+          selector: string
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          user_id?: string
-          token_hash?: string
+          aggregate?: boolean
+          attribute?: string | null
+          balance_page_url?: string | null
           created_at?: string | null
-          last_used_at?: string | null
+          created_by?: string | null
+          currency_code?: string
+          domain?: string
+          format?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          parse_regex?: string | null
+          selector?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -2301,6 +2871,13 @@ export type Database = {
             referencedRelation: "reward_currencies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_point_balance_history_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
+          },
         ]
       }
       user_point_balances: {
@@ -2348,37 +2925,12 @@ export type Database = {
             referencedRelation: "reward_currencies"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      user_tracked_currencies: {
-        Row: {
-          created_at: string | null
-          currency_id: string
-          id: string
-          is_archived: boolean
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          currency_id: string
-          id?: string
-          is_archived?: boolean
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          currency_id?: string
-          id?: string
-          is_archived?: boolean
-          user_id?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "user_tracked_currencies_currency_id_fkey"
+            foreignKeyName: "user_point_balances_currency_id_fkey"
             columns: ["currency_id"]
             isOneToOne: false
-            referencedRelation: "reward_currencies"
-            referencedColumns: ["id"]
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
           },
         ]
       }
@@ -2540,6 +3092,69 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_wallets"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_sync_tokens: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_used_at: string | null
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_tracked_currencies: {
+        Row: {
+          created_at: string | null
+          currency_id: string
+          id: string
+          is_archived: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          currency_id: string
+          id?: string
+          is_archived?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          currency_id?: string
+          id?: string
+          is_archived?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_tracked_currencies_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "reward_currencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tracked_currencies_currency_id_fkey"
+            columns: ["currency_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_currency_values"
+            referencedColumns: ["currency_id"]
           },
         ]
       }
@@ -2813,321 +3428,6 @@ export type Database = {
           },
         ]
       }
-      credit_report_snapshots: {
-        Row: {
-          id: string
-          user_id: string
-          player_number: number
-          bureau: Database["public"]["Enums"]["credit_bureau"]
-          report_date: string | null
-          fetched_at: string
-          raw_data: Record<string, unknown> | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          player_number?: number
-          bureau: Database["public"]["Enums"]["credit_bureau"]
-          report_date?: string | null
-          fetched_at?: string
-          raw_data?: Record<string, unknown> | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          player_number?: number
-          bureau?: Database["public"]["Enums"]["credit_bureau"]
-          report_date?: string | null
-          fetched_at?: string
-          raw_data?: Record<string, unknown> | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      credit_scores: {
-        Row: {
-          id: string
-          user_id: string
-          player_number: number
-          bureau: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id: string | null
-          score_type: Database["public"]["Enums"]["credit_score_type"]
-          score: number
-          score_date: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          player_number?: number
-          bureau: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id?: string | null
-          score_type: Database["public"]["Enums"]["credit_score_type"]
-          score: number
-          score_date?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          player_number?: number
-          bureau?: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id?: string | null
-          score_type?: Database["public"]["Enums"]["credit_score_type"]
-          score?: number
-          score_date?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "credit_scores_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "credit_report_snapshots"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      credit_accounts: {
-        Row: {
-          id: string
-          user_id: string
-          player_number: number
-          bureau: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id: string | null
-          account_name: string
-          account_number_masked: string | null
-          creditor_name: string | null
-          status: Database["public"]["Enums"]["credit_account_status"]
-          date_opened: string | null
-          date_updated: string | null
-          date_closed: string | null
-          credit_limit_cents: number | null
-          high_balance_cents: number | null
-          balance_cents: number | null
-          monthly_payment_cents: number | null
-          account_type: Database["public"]["Enums"]["credit_account_type"]
-          loan_type: Database["public"]["Enums"]["credit_loan_type"]
-          responsibility: Database["public"]["Enums"]["credit_responsibility"]
-          terms: string | null
-          payment_status: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          player_number?: number
-          bureau: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id?: string | null
-          account_name: string
-          account_number_masked?: string | null
-          creditor_name?: string | null
-          status?: Database["public"]["Enums"]["credit_account_status"]
-          date_opened?: string | null
-          date_updated?: string | null
-          date_closed?: string | null
-          credit_limit_cents?: number | null
-          high_balance_cents?: number | null
-          balance_cents?: number | null
-          monthly_payment_cents?: number | null
-          account_type?: Database["public"]["Enums"]["credit_account_type"]
-          loan_type?: Database["public"]["Enums"]["credit_loan_type"]
-          responsibility?: Database["public"]["Enums"]["credit_responsibility"]
-          terms?: string | null
-          payment_status?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          player_number?: number
-          bureau?: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id?: string | null
-          account_name?: string
-          account_number_masked?: string | null
-          creditor_name?: string | null
-          status?: Database["public"]["Enums"]["credit_account_status"]
-          date_opened?: string | null
-          date_updated?: string | null
-          date_closed?: string | null
-          credit_limit_cents?: number | null
-          high_balance_cents?: number | null
-          balance_cents?: number | null
-          monthly_payment_cents?: number | null
-          account_type?: Database["public"]["Enums"]["credit_account_type"]
-          loan_type?: Database["public"]["Enums"]["credit_loan_type"]
-          responsibility?: Database["public"]["Enums"]["credit_responsibility"]
-          terms?: string | null
-          payment_status?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "credit_accounts_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "credit_report_snapshots"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      credit_inquiries: {
-        Row: {
-          id: string
-          user_id: string
-          player_number: number
-          bureau: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id: string | null
-          last_seen_snapshot_id: string | null
-          company_name: string
-          inquiry_date: string
-          inquiry_type: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          player_number?: number
-          bureau: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id?: string | null
-          last_seen_snapshot_id?: string | null
-          company_name: string
-          inquiry_date: string
-          inquiry_type?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          player_number?: number
-          bureau?: Database["public"]["Enums"]["credit_bureau"]
-          snapshot_id?: string | null
-          last_seen_snapshot_id?: string | null
-          company_name?: string
-          inquiry_date?: string
-          inquiry_type?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "credit_inquiries_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "credit_report_snapshots"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      credit_account_wallet_links: {
-        Row: {
-          id: string
-          user_id: string
-          credit_account_id: string
-          wallet_card_id: string | null
-          display_name: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          credit_account_id: string
-          wallet_card_id?: string | null
-          display_name?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          credit_account_id?: string
-          wallet_card_id?: string | null
-          display_name?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "credit_account_wallet_links_credit_account_id_fkey"
-            columns: ["credit_account_id"]
-            isOneToOne: false
-            referencedRelation: "credit_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_account_wallet_links_wallet_card_id_fkey"
-            columns: ["wallet_card_id"]
-            isOneToOne: false
-            referencedRelation: "user_wallets"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      credit_inquiry_groups: {
-        Row: {
-          id: string
-          user_id: string
-          player_number: number
-          group_name: string | null
-          related_card_id: string | null
-          related_note: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          player_number?: number
-          group_name?: string | null
-          related_card_id?: string | null
-          related_note?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          player_number?: number
-          group_name?: string | null
-          related_card_id?: string | null
-          related_note?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      credit_inquiry_group_members: {
-        Row: {
-          id: string
-          group_id: string
-          inquiry_id: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          group_id: string
-          inquiry_id: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          group_id?: string
-          inquiry_id?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "credit_inquiry_group_members_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "credit_inquiry_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_inquiry_group_members_inquiry_id_fkey"
-            columns: ["inquiry_id"]
-            isOneToOne: false
-            referencedRelation: "credit_inquiries"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
     }
     Views: {
       card_with_currency: {
@@ -3249,6 +3549,25 @@ export type Database = {
       cap_unit: "spend" | "rewards"
       card_charge_type: "credit" | "charge"
       card_product_type: "personal" | "business"
+      credit_account_status: "open" | "closed" | "paid" | "unknown"
+      credit_account_type:
+        | "revolving"
+        | "installment"
+        | "mortgage"
+        | "collection"
+        | "other"
+      credit_bureau: "equifax" | "experian" | "transunion"
+      credit_loan_type:
+        | "credit_card"
+        | "flexible_credit_card"
+        | "charge_card"
+        | "auto_loan"
+        | "mortgage"
+        | "student_loan"
+        | "personal_loan"
+        | "home_equity"
+        | "retail"
+        | "other"
       credit_reset_cycle:
         | "monthly"
         | "quarterly"
@@ -3256,6 +3575,19 @@ export type Database = {
         | "annual"
         | "cardmember_year"
         | "usage_based"
+      credit_responsibility:
+        | "individual"
+        | "joint"
+        | "authorized_user"
+        | "cosigner"
+        | "unknown"
+      credit_score_type:
+        | "fico_8"
+        | "fico_9"
+        | "vantage_3"
+        | "vantage_4"
+        | "other"
+        | "fico_bankcard_8"
       inventory_tracking_type: "quantity" | "dollar_value" | "single_use"
       reward_currency_type:
         | "points"
@@ -3269,22 +3601,6 @@ export type Database = {
         | "cash_back"
         | "crypto"
       travel_preference_type: "direct" | "brand" | "portal"
-      credit_bureau: "equifax" | "experian" | "transunion"
-      credit_score_type: "fico_8" | "fico_9" | "fico_bankcard_8" | "vantage_3" | "vantage_4" | "other"
-      credit_account_status: "open" | "closed" | "paid" | "unknown"
-      credit_account_type: "revolving" | "installment" | "mortgage" | "collection" | "other"
-      credit_loan_type:
-        | "credit_card"
-        | "flexible_credit_card"
-        | "charge_card"
-        | "auto_loan"
-        | "mortgage"
-        | "student_loan"
-        | "personal_loan"
-        | "home_equity"
-        | "retail"
-        | "other"
-      credit_responsibility: "individual" | "joint" | "authorized_user" | "cosigner" | "unknown"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3427,6 +3743,27 @@ export const Constants = {
       cap_unit: ["spend", "rewards"],
       card_charge_type: ["credit", "charge"],
       card_product_type: ["personal", "business"],
+      credit_account_status: ["open", "closed", "paid", "unknown"],
+      credit_account_type: [
+        "revolving",
+        "installment",
+        "mortgage",
+        "collection",
+        "other",
+      ],
+      credit_bureau: ["equifax", "experian", "transunion"],
+      credit_loan_type: [
+        "credit_card",
+        "flexible_credit_card",
+        "charge_card",
+        "auto_loan",
+        "mortgage",
+        "student_loan",
+        "personal_loan",
+        "home_equity",
+        "retail",
+        "other",
+      ],
       credit_reset_cycle: [
         "monthly",
         "quarterly",
@@ -3434,6 +3771,21 @@ export const Constants = {
         "annual",
         "cardmember_year",
         "usage_based",
+      ],
+      credit_responsibility: [
+        "individual",
+        "joint",
+        "authorized_user",
+        "cosigner",
+        "unknown",
+      ],
+      credit_score_type: [
+        "fico_8",
+        "fico_9",
+        "vantage_3",
+        "vantage_4",
+        "other",
+        "fico_bankcard_8",
       ],
       inventory_tracking_type: ["quantity", "dollar_value", "single_use"],
       reward_currency_type: [
@@ -3449,23 +3801,6 @@ export const Constants = {
         "crypto",
       ],
       travel_preference_type: ["direct", "brand", "portal"],
-      credit_bureau: ["equifax", "experian", "transunion"],
-      credit_score_type: ["fico_8", "fico_9", "fico_bankcard_8", "vantage_3", "vantage_4", "other"],
-      credit_account_status: ["open", "closed", "paid", "unknown"],
-      credit_account_type: ["revolving", "installment", "mortgage", "collection", "other"],
-      credit_loan_type: [
-        "credit_card",
-        "flexible_credit_card",
-        "charge_card",
-        "auto_loan",
-        "mortgage",
-        "student_loan",
-        "personal_loan",
-        "home_equity",
-        "retail",
-        "other",
-      ],
-      credit_responsibility: ["individual", "joint", "authorized_user", "cosigner", "unknown"],
     },
   },
 } as const

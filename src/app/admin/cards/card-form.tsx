@@ -19,6 +19,7 @@ interface CardFormProps {
     annual_fee: number;
     default_earn_rate: number;
     default_perks_value: number | null;
+    no_foreign_transaction_fees: boolean | null;
   };
 }
 
@@ -33,6 +34,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
   const [annualFee, setAnnualFee] = useState(defaultValues?.annual_fee ?? 0);
   const [defaultEarnRate, setDefaultEarnRate] = useState(defaultValues?.default_earn_rate ?? 1.0);
   const [defaultPerksValue, setDefaultPerksValue] = useState(defaultValues?.default_perks_value ?? 0);
+  const [noForeignTransactionFees, setNoForeignTransactionFees] = useState(defaultValues?.no_foreign_transaction_fees ?? false);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
 
@@ -49,6 +51,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
       setAnnualFee(defaultValues.annual_fee ?? 0);
       setDefaultEarnRate(defaultValues.default_earn_rate ?? 1.0);
       setDefaultPerksValue(defaultValues.default_perks_value ?? 0);
+      setNoForeignTransactionFees(defaultValues.no_foreign_transaction_fees ?? false);
     }
   }, [defaultValues]);
 
@@ -236,6 +239,19 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
           />
           <p className="mt-1 text-xs text-zinc-500">Rate for &quot;everything else&quot;</p>
         </div>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            name="no_foreign_transaction_fees"
+            checked={noForeignTransactionFees}
+            onChange={(e) => setNoForeignTransactionFees(e.target.checked)}
+            className="rounded border-zinc-600 bg-zinc-700 text-blue-600 focus:ring-blue-500"
+          />
+          No Foreign Transaction Fees
+        </label>
       </div>
 
       <div className="flex items-center gap-3">

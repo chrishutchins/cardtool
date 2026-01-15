@@ -198,7 +198,7 @@ export default async function PointsPage() {
       });
     }
 
-    revalidatePath("/points");
+    revalidatePath("/balances");
   }
 
   async function deleteBalance(currencyId: string, playerNumber: number) {
@@ -214,7 +214,7 @@ export default async function PointsPage() {
       .eq("currency_id", currencyId)
       .eq("player_number", playerNumber);
 
-    revalidatePath("/points");
+    revalidatePath("/balances");
   }
 
   async function trackCurrency(currencyId: string) {
@@ -234,7 +234,7 @@ export default async function PointsPage() {
         onConflict: "user_id,currency_id"
       });
 
-    revalidatePath("/points");
+    revalidatePath("/balances");
   }
 
   async function archiveCurrency(currencyId: string) {
@@ -254,7 +254,7 @@ export default async function PointsPage() {
         onConflict: "user_id,currency_id"
       });
 
-    revalidatePath("/points");
+    revalidatePath("/balances");
   }
 
   const currencies = (currenciesResult.data ?? []) as Currency[];

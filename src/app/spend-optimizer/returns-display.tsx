@@ -410,7 +410,7 @@ export function ReturnsDisplay({ returns, earningsGoal, recommendations = [] }: 
     } else {
       params.set("goal", goal);
     }
-    router.push(`/returns${params.toString() ? `?${params.toString()}` : ""}`);
+    router.push(`/spend-optimizer${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
   const goalButtons: { value: EarningsGoal; label: string; description: string }[] = [

@@ -70,7 +70,7 @@ export function EarningsSummary({ returns, cardCount }: EarningsSummaryProps) {
           </div>
           
           <Link
-            href="/returns"
+            href="/spend-optimizer"
             className="text-sm text-zinc-400 hover:text-white transition-colors whitespace-nowrap"
           >
             View Details →

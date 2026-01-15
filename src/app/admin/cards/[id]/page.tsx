@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { CardForm } from "../card-form";
 import { EarningRulesEditor } from "./earning-rules-editor";
 import { CapsEditor } from "./caps-editor";
+import { OfferEditor } from "./offer-editor";
 import Link from "next/link";
 import { Enums } from "@/lib/database.types";
 import { invalidateCardCaches, invalidateEarningRuleCaches, invalidateCardCapCaches } from "@/lib/cache-invalidation";
@@ -38,6 +39,8 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     capsResult,
     capCategoriesResult,
     userWalletResult,
+    activeOfferResult,
+    archivedOffersResult,
   ] = await Promise.all([
     supabase.from("cards").select("*").eq("id", id).single(),
     supabase.from("issuers").select("*").order("name"),
@@ -48,6 +51,29 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     // Only fetch cap categories for this card's caps (join through card_caps)
     supabase.from("card_cap_categories").select("cap_id, category_id, earning_categories(id, name), card_caps!inner(card_id)").eq("card_caps.card_id", id),
     user ? supabase.from("user_wallets").select("cards(primary_currency_id)").eq("user_id", user.id) : Promise.resolve({ data: [] }),
+    // Fetch all active offers with bonuses, elevated earnings, and intro APRs
+    supabase.from("card_offers")
+      .select(`
+        *,
+        card_offer_bonuses(*),
+        card_offer_elevated_earnings(*),
+        card_offer_intro_apr(*)
+      `)
+      .eq("card_id", id)
+      .eq("is_active", true)
+      .eq("is_archived", false)
+      .order("created_at", { ascending: false }),
+    // Fetch archived offers
+    supabase.from("card_offers")
+      .select(`
+        *,
+        card_offer_bonuses(*),
+        card_offer_elevated_earnings(*),
+        card_offer_intro_apr(*)
+      `)
+      .eq("card_id", id)
+      .eq("is_archived", true)
+      .order("archived_at", { ascending: false }),
   ]);
 
   if (cardResult.error || !cardResult.data) {
@@ -70,6 +96,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     const annual_fee = parseFloat(formData.get("annual_fee") as string) || 0;
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;
     const default_perks_value = parseFloat(formData.get("default_perks_value") as string) || 0;
+    const no_foreign_transaction_fees = formData.get("no_foreign_transaction_fees") === "on";
 
     await supabase
       .from("cards")
@@ -84,6 +111,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
         annual_fee,
         default_earn_rate,
         default_perks_value,
+        no_foreign_transaction_fees,
       })
       .eq("id", id);
 
@@ -272,6 +300,259 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     revalidatePath(`/admin/cards/${id}`);
   }
 
+  // ========== OFFER SERVER ACTIONS ==========
+
+  async function createOffer() {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("card_offers").insert({
+      card_id: id,
+      is_active: true,
+      is_archived: false,
+    });
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function updateOffer(offerId: string, formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    
+    const offer_description = formData.get("offer_description") as string || null;
+    const internal_description = formData.get("internal_description") as string || null;
+    const offer_type = formData.get("offer_type") as "referral" | "affiliate" | "direct" | "nll";
+    const first_year_af_waived = formData.get("first_year_af_waived") === "on";
+    const expires_at = formData.get("expires_at") as string || null;
+    const editorial_notes = formData.get("editorial_notes") as string || null;
+    const ath_redirect_url = formData.get("ath_redirect_url") as string || null;
+    const application_url = formData.get("application_url") as string || null;
+    const rates_fees_url = formData.get("rates_fees_url") as string || null;
+
+    await supabase.from("card_offers").update({
+      offer_description,
+      internal_description,
+      offer_type,
+      first_year_af_waived,
+      expires_at: expires_at || null,
+      editorial_notes,
+      ath_redirect_url,
+      application_url,
+      rates_fees_url,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", offerId);
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function archiveOffer(offerId: string) {
+    "use server";
+    const supabase = createClient();
+    
+    await supabase.from("card_offers").update({
+      is_active: false,
+      is_archived: true,
+      archived_at: new Date().toISOString(),
+    })
+    .eq("id", offerId);
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function deleteOffer(offerId: string) {
+    "use server";
+    const supabase = createClient();
+    
+    // Delete will cascade to bonuses, elevated earnings, and intro APRs
+    await supabase.from("card_offers").delete().eq("id", offerId);
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function cloneOffer(sourceOfferId: string) {
+    "use server";
+    const supabase = createClient();
+
+    const { data: sourceOffer } = await supabase.from("card_offers")
+      .select(`*, card_offer_bonuses(*), card_offer_elevated_earnings(*), card_offer_intro_apr(*)`)
+      .eq("id", sourceOfferId)
+      .single();
+
+    if (!sourceOffer) return;
+
+    // Clone the offer (don't archive the source - we allow multiple active offers now)
+    const { data: newOffer } = await supabase.from("card_offers").insert({
+      card_id: id,
+      is_active: true,
+      is_archived: false,
+      offer_description: sourceOffer.offer_description,
+      internal_description: sourceOffer.internal_description ? `${sourceOffer.internal_description} (copy)` : "(copy)",
+      offer_type: sourceOffer.offer_type,
+      first_year_af_waived: sourceOffer.first_year_af_waived,
+      expires_at: null,
+      editorial_notes: sourceOffer.editorial_notes,
+      ath_redirect_url: sourceOffer.ath_redirect_url,
+      application_url: sourceOffer.application_url,
+      rates_fees_url: sourceOffer.rates_fees_url,
+    }).select().single();
+
+    if (!newOffer) return;
+
+    type SourceBonus = { component_type: string; spend_requirement_cents: number; time_period: number; time_period_unit: string; points_amount: number | null; currency_id: string | null; cash_amount_cents: number | null; benefit_description: string | null; default_benefit_value_cents: number | null; };
+    const bonuses = (sourceOffer.card_offer_bonuses ?? []) as SourceBonus[];
+    if (bonuses.length > 0) {
+      await supabase.from("card_offer_bonuses").insert(
+        bonuses.map((b) => ({ offer_id: newOffer.id, component_type: b.component_type, spend_requirement_cents: b.spend_requirement_cents, time_period: b.time_period, time_period_unit: b.time_period_unit, points_amount: b.points_amount, currency_id: b.currency_id, cash_amount_cents: b.cash_amount_cents, benefit_description: b.benefit_description, default_benefit_value_cents: b.default_benefit_value_cents }))
+      );
+    }
+
+    type SourceEarning = { elevated_rate: number; duration_months: number | null; duration_unit: string; category_id: number | null; };
+    const earnings = (sourceOffer.card_offer_elevated_earnings ?? []) as SourceEarning[];
+    if (earnings.length > 0) {
+      await supabase.from("card_offer_elevated_earnings").insert(
+        earnings.map((e) => ({ offer_id: newOffer.id, elevated_rate: e.elevated_rate, duration_months: e.duration_months, duration_unit: e.duration_unit, category_id: e.category_id }))
+      );
+    }
+
+    type SourceApr = { apr_type: string; apr_rate: number; duration: number; duration_unit: string; };
+    const aprs = (sourceOffer.card_offer_intro_apr ?? []) as SourceApr[];
+    if (aprs.length > 0) {
+      await supabase.from("card_offer_intro_apr").insert(
+        aprs.map((a) => ({ offer_id: newOffer.id, apr_type: a.apr_type, apr_rate: a.apr_rate, duration: a.duration, duration_unit: a.duration_unit }))
+      );
+    }
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function addOfferBonus(offerId: string, formData: FormData) {
+    "use server";
+    const supabase = createClient();
+
+    const component_type = formData.get("component_type") as string;
+    const spend_requirement_cents = parseInt(formData.get("spend_requirement_cents") as string) || 0;
+    const time_period = parseInt(formData.get("time_period") as string) || 3;
+    const time_period_unit = formData.get("time_period_unit") as string || "months";
+    const points_amount = formData.get("points_amount") ? parseInt(formData.get("points_amount") as string) : null;
+    const currency_id = formData.get("currency_id") as string || null;
+    const cash_amount_cents = formData.get("cash_amount_cents") ? parseInt(formData.get("cash_amount_cents") as string) : null;
+    const benefit_description = formData.get("benefit_description") as string || null;
+    const default_benefit_value_cents = formData.get("default_benefit_value_cents") ? parseInt(formData.get("default_benefit_value_cents") as string) : null;
+
+    await supabase.from("card_offer_bonuses").insert({
+      offer_id: offerId, component_type, spend_requirement_cents, time_period, time_period_unit, points_amount, currency_id, cash_amount_cents, benefit_description, default_benefit_value_cents,
+    });
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function updateOfferBonus(bonusId: string, formData: FormData) {
+    "use server";
+    const supabase = createClient();
+
+    const component_type = formData.get("component_type") as string;
+    const spend_requirement_cents = Math.round(parseFloat(formData.get("spend_requirement_cents") as string || "0") * 100);
+    const time_period = parseInt(formData.get("time_period") as string) || 3;
+    const time_period_unit = formData.get("time_period_unit") as string || "months";
+    const points_amount = formData.get("points_amount") ? parseInt(formData.get("points_amount") as string) : null;
+    const currency_id = formData.get("currency_id") as string || null;
+    const cash_amount_cents = formData.get("cash_amount_cents") ? Math.round(parseFloat(formData.get("cash_amount_cents") as string) * 100) : null;
+    const benefit_description = formData.get("benefit_description") as string || null;
+    const default_benefit_value_cents = formData.get("default_benefit_value_cents") ? Math.round(parseFloat(formData.get("default_benefit_value_cents") as string) * 100) : null;
+
+    await supabase.from("card_offer_bonuses").update({
+      component_type, spend_requirement_cents, time_period, time_period_unit, points_amount, currency_id, cash_amount_cents, benefit_description, default_benefit_value_cents, updated_at: new Date().toISOString(),
+    }).eq("id", bonusId);
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function deleteOfferBonus(bonusId: string) {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("card_offer_bonuses").delete().eq("id", bonusId);
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function addElevatedEarning(offerId: string, formData: FormData) {
+    "use server";
+    const supabase = createClient();
+
+    const elevated_rate = parseFloat(formData.get("elevated_rate") as string);
+    const duration_months = formData.get("duration_months") ? parseInt(formData.get("duration_months") as string) : null;
+    const duration_unit = formData.get("duration_unit") as string || "months";
+    const category_id = formData.get("category_id") ? parseInt(formData.get("category_id") as string) : null;
+
+    await supabase.from("card_offer_elevated_earnings").insert({
+      offer_id: offerId, elevated_rate, duration_months, duration_unit, category_id,
+    });
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function updateElevatedEarning(earningId: string, formData: FormData) {
+    "use server";
+    const supabase = createClient();
+
+    const elevated_rate = parseFloat(formData.get("elevated_rate") as string);
+    const duration_months = formData.get("duration_months") ? parseInt(formData.get("duration_months") as string) : null;
+    const duration_unit = formData.get("duration_unit") as string || "months";
+    const category_id = formData.get("category_id") ? parseInt(formData.get("category_id") as string) : null;
+
+    await supabase.from("card_offer_elevated_earnings").update({
+      elevated_rate, duration_months, duration_unit, category_id, updated_at: new Date().toISOString(),
+    }).eq("id", earningId);
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function deleteElevatedEarning(earningId: string) {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("card_offer_elevated_earnings").delete().eq("id", earningId);
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function addIntroApr(offerId: string, formData: FormData) {
+    "use server";
+    const supabase = createClient();
+
+    const apr_type = formData.get("apr_type") as string || "purchases";
+    const apr_rate = parseFloat(formData.get("apr_rate") as string) || 0;
+    const duration = parseInt(formData.get("duration") as string);
+    const duration_unit = formData.get("duration_unit") as string || "months";
+
+    await supabase.from("card_offer_intro_apr").insert({
+      offer_id: offerId, apr_type, apr_rate, duration, duration_unit,
+    });
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function updateIntroApr(aprId: string, formData: FormData) {
+    "use server";
+    const supabase = createClient();
+
+    const apr_type = formData.get("apr_type") as string || "purchases";
+    const apr_rate = parseFloat(formData.get("apr_rate") as string) || 0;
+    const duration = parseInt(formData.get("duration") as string);
+    const duration_unit = formData.get("duration_unit") as string || "months";
+
+    await supabase.from("card_offer_intro_apr").update({
+      apr_type, apr_rate, duration, duration_unit, updated_at: new Date().toISOString(),
+    }).eq("id", aprId);
+
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  async function deleteIntroApr(aprId: string) {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("card_offer_intro_apr").delete().eq("id", aprId);
+    revalidatePath(`/admin/cards/${id}`);
+  }
+
+  // ========== END OFFER SERVER ACTIONS ==========
+
   // Spend Bonuses and Welcome Bonuses have been moved to user-managed in the wallet page
 
   // Pass all categories - cards can have multiple rules per category (e.g., direct vs portal booking)
@@ -326,6 +607,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
             annual_fee: card.annual_fee,
             default_earn_rate: card.default_earn_rate,
             default_perks_value: card.default_perks_value,
+            no_foreign_transaction_fees: card.no_foreign_transaction_fees,
           }}
         />
       </div>
@@ -363,6 +645,203 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                 onUpdateCapCategories={updateCapCategories}
                 currencyType={cardCurrency?.currency_type}
               />
+            </div>
+
+            {/* Active Offers */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white">
+                  Active Offers {(activeOfferResult.data ?? []).length > 0 && `(${(activeOfferResult.data ?? []).length})`}
+                </h2>
+                <form action={createOffer}>
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+                  >
+                    + New Offer
+                  </button>
+                </form>
+              </div>
+
+              {(activeOfferResult.data ?? []).length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-zinc-400">No active offers for this card.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {(activeOfferResult.data ?? []).map((activeOffer) => (
+                    <div key={activeOffer.id} className="border border-zinc-700 rounded-lg p-4">
+                      <OfferEditor
+                        cardId={id}
+                        cardDefaultEarnRate={card.default_earn_rate}
+                        offer={{
+                          ...activeOffer,
+                          offer_type: activeOffer.offer_type as "referral" | "affiliate" | "direct" | "nll",
+                          bonuses: ((activeOffer.card_offer_bonuses ?? []) as unknown[]).map((b: unknown) => {
+                            const bonus = b as {
+                              id: string;
+                              spend_requirement_cents: number;
+                              time_period: number;
+                              time_period_unit: "days" | "months";
+                              component_type: "points" | "cash" | "benefit";
+                              points_amount: number | null;
+                              currency_id: string | null;
+                              cash_amount_cents: number | null;
+                              benefit_description: string | null;
+                              default_benefit_value_cents: number | null;
+                            };
+                            const currency = currenciesResult.data?.find(c => c.id === bonus.currency_id);
+                            return { ...bonus, currency_name: currency?.name };
+                          }),
+                          elevated_earnings: ((activeOffer.card_offer_elevated_earnings ?? []) as unknown[]).map((e: unknown) => {
+                            const earning = e as {
+                              id: string;
+                              elevated_rate: number;
+                              duration_months: number | null;
+                              duration_unit: "days" | "months";
+                              category_id: number | null;
+                            };
+                            const category = categoriesResult.data?.find(c => c.id === earning.category_id);
+                            return { ...earning, category_name: category?.name };
+                          }),
+                          intro_aprs: ((activeOffer.card_offer_intro_apr ?? []) as unknown[]).map((a: unknown) => {
+                            return a as {
+                              id: string;
+                              apr_type: "purchases" | "balance_transfers" | "both";
+                              apr_rate: number;
+                              duration: number;
+                              duration_unit: "days" | "months";
+                            };
+                          }),
+                        }}
+                        archivedOffers={(archivedOffersResult.data ?? []).map((offer) => ({
+                          ...offer,
+                          offer_type: offer.offer_type as "referral" | "affiliate" | "direct" | "nll",
+                          bonuses: ((offer.card_offer_bonuses ?? []) as unknown[]).map((b: unknown) => {
+                            const bonus = b as {
+                              id: string;
+                              spend_requirement_cents: number;
+                              time_period: number;
+                              time_period_unit: "days" | "months";
+                              component_type: "points" | "cash" | "benefit";
+                              points_amount: number | null;
+                              currency_id: string | null;
+                              cash_amount_cents: number | null;
+                              benefit_description: string | null;
+                              default_benefit_value_cents: number | null;
+                            };
+                            const currency = currenciesResult.data?.find(c => c.id === bonus.currency_id);
+                            return { ...bonus, currency_name: currency?.name };
+                          }),
+                          elevated_earnings: ((offer.card_offer_elevated_earnings ?? []) as unknown[]).map((e: unknown) => {
+                            const earning = e as {
+                              id: string;
+                              elevated_rate: number;
+                              duration_months: number | null;
+                              duration_unit: "days" | "months";
+                              category_id: number | null;
+                            };
+                            const category = categoriesResult.data?.find(c => c.id === earning.category_id);
+                            return { ...earning, category_name: category?.name };
+                          }),
+                          intro_aprs: ((offer.card_offer_intro_apr ?? []) as unknown[]).map((a: unknown) => {
+                            return a as {
+                              id: string;
+                              apr_type: "purchases" | "balance_transfers" | "both";
+                              apr_rate: number;
+                              duration: number;
+                              duration_unit: "days" | "months";
+                            };
+                          }),
+                        }))}
+                        currencies={currenciesResult.data ?? []}
+                        categories={(categoriesResult.data ?? []).map(c => ({ id: c.id, name: c.name }))}
+                        onCreateOffer={createOffer}
+                        onUpdateOffer={updateOffer}
+                        onArchiveOffer={archiveOffer}
+                        onDeleteOffer={deleteOffer}
+                        onCloneOffer={cloneOffer}
+                        onAddBonus={addOfferBonus}
+                        onUpdateBonus={updateOfferBonus}
+                        onDeleteBonus={deleteOfferBonus}
+                        onAddElevatedEarning={addElevatedEarning}
+                        onUpdateElevatedEarning={updateElevatedEarning}
+                        onDeleteElevatedEarning={deleteElevatedEarning}
+                        onAddIntroApr={addIntroApr}
+                        onUpdateIntroApr={updateIntroApr}
+                        onDeleteIntroApr={deleteIntroApr}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Archived Offers Section - only show when no active offers */}
+              {(activeOfferResult.data ?? []).length === 0 && (archivedOffersResult.data ?? []).length > 0 && (
+                <div className="mt-6 pt-6 border-t border-zinc-700">
+                  <OfferEditor
+                    cardId={id}
+                    cardDefaultEarnRate={card.default_earn_rate}
+                    offer={null}
+                    archivedOffers={(archivedOffersResult.data ?? []).map((offer) => ({
+                      ...offer,
+                      offer_type: offer.offer_type as "referral" | "affiliate" | "direct" | "nll",
+                      bonuses: ((offer.card_offer_bonuses ?? []) as unknown[]).map((b: unknown) => {
+                        const bonus = b as {
+                          id: string;
+                          spend_requirement_cents: number;
+                          time_period: number;
+                          time_period_unit: "days" | "months";
+                          component_type: "points" | "cash" | "benefit";
+                          points_amount: number | null;
+                          currency_id: string | null;
+                          cash_amount_cents: number | null;
+                          benefit_description: string | null;
+                          default_benefit_value_cents: number | null;
+                        };
+                        const currency = currenciesResult.data?.find(c => c.id === bonus.currency_id);
+                        return { ...bonus, currency_name: currency?.name };
+                      }),
+                      elevated_earnings: ((offer.card_offer_elevated_earnings ?? []) as unknown[]).map((e: unknown) => {
+                        const earning = e as {
+                          id: string;
+                          elevated_rate: number;
+                          duration_months: number | null;
+                          duration_unit: "days" | "months";
+                          category_id: number | null;
+                        };
+                        const category = categoriesResult.data?.find(c => c.id === earning.category_id);
+                        return { ...earning, category_name: category?.name };
+                      }),
+                      intro_aprs: ((offer.card_offer_intro_apr ?? []) as unknown[]).map((a: unknown) => {
+                        return a as {
+                          id: string;
+                          apr_type: "purchases" | "balance_transfers" | "both";
+                          apr_rate: number;
+                          duration: number;
+                          duration_unit: "days" | "months";
+                        };
+                      }),
+                    }))}
+                    currencies={currenciesResult.data ?? []}
+                    categories={(categoriesResult.data ?? []).map(c => ({ id: c.id, name: c.name }))}
+                    onCreateOffer={createOffer}
+                    onUpdateOffer={updateOffer}
+                    onArchiveOffer={archiveOffer}
+                    onDeleteOffer={deleteOffer}
+                    onCloneOffer={cloneOffer}
+                    onAddBonus={addOfferBonus}
+                    onUpdateBonus={updateOfferBonus}
+                    onDeleteBonus={deleteOfferBonus}
+                    onAddElevatedEarning={addElevatedEarning}
+                    onUpdateElevatedEarning={updateElevatedEarning}
+                    onDeleteElevatedEarning={deleteElevatedEarning}
+                    onAddIntroApr={addIntroApr}
+                    onUpdateIntroApr={updateIntroApr}
+                    onDeleteIntroApr={deleteIntroApr}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Spend Bonuses and Welcome Bonuses have been moved to user-managed in the wallet page */}

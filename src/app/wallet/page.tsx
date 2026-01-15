@@ -14,6 +14,16 @@ import { calculateCreditPeriod } from "@/lib/credit-matcher";
 import { calculateBillingDates } from "@/lib/billing-cycle";
 import { calculateStatementBalance, type StatementEstimate } from "@/lib/statement-calculator";
 import {
+  getCachedEarningRules,
+  getCachedCardCaps,
+  getCachedCategories,
+  getCachedPointValueTemplates,
+  getCachedSpecialCategoryIds,
+  getCachedCurrencies,
+  getCachedCards,
+  getCachedCardCredits,
+} from "@/lib/cached-data";
+import {
   CardInput,
   CategorySpending,
   EarningRuleInput,
@@ -49,40 +59,48 @@ export default async function WalletPage() {
   const supabase = createClient();
 
   // Fetch wallet cards and returns data in parallel
+  // Split into cached reference data and user-specific data
   const [
+    // Cached reference data (shared across all users, rarely changes)
+    rulesData,
+    bonusesData,
+    categoriesData,
+    templatesData,
+    specialCategoryIds,
+    currenciesData,
+    allCardsData,
+    cardCreditsData,
+    // User-specific data (must be fresh)
     walletResult,
-    allCardsResult,
     spendingResult,
-    rulesResult,
-    bonusesResult,
-    currenciesResult,
     userCurrencyValuesResult,
     perksResult,
     selectionsResult,
     travelPrefsResult,
-    categoriesResult,
     featureFlagsResult,
     debitPayResult,
     multiplierTiersResult,
     mobilePayCategoriesResult,
-    mobilePayCategoryResult,
     paypalCategoriesResult,
-    paypalCategoryResult,
-    largePurchaseCategoryResult,
     userPointValueSettingsResult,
-    pointValueTemplatesResult,
     userWelcomeBonusesResult,
     userSpendBonusesResult,
     userBonusDisplaySettingsResult,
-    allCurrenciesResult,
     playersResult,
-    cardCreditsResult,
     linkedAccountsResult,
     transactionsResult,
   ] = await Promise.all([
+    // Cached data (hits cache, not DB on subsequent requests)
+    getCachedEarningRules(),
+    getCachedCardCaps(),
+    getCachedCategories(),
+    getCachedPointValueTemplates(),
+    getCachedSpecialCategoryIds(),
+    getCachedCurrencies(),
+    getCachedCards(),
+    getCachedCardCredits(),
+    // User-specific queries (always fresh)
     // User's wallet cards with full details (including closed cards)
-    // Note: closed_date, closed_reason, product_changed_to_id require migration 20260110000000_wallet_card_closure.sql
-    // Note: statement_close_day, payment_due_day require billing_cycle_formulas migration
     supabase
       .from("user_wallets")
       .select(`
@@ -117,56 +135,11 @@ export default async function WalletPage() {
       `)
       .eq("user_id", effectiveUserId),
     
-    // All available cards for adding (includes default_perks_value for recommendations)
-    supabase
-      .from("cards")
-      .select(`
-        id,
-        name,
-        slug,
-        annual_fee,
-        default_earn_rate,
-        default_perks_value,
-        exclude_from_recommendations,
-        primary_currency_id,
-        secondary_currency_id,
-        issuer_id,
-        issuers:issuer_id (id, name),
-        primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
-        secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
-      `)
-      .eq("is_active", true)
-      .order("name"),
-    
     // User's spending per category (including >$5k portions)
     supabase
       .from("user_effective_spending")
       .select("category_id, category_name, category_slug, annual_spend_cents, large_purchase_spend_cents")
       .eq("user_id", effectiveUserId),
-    
-    // All earning rules
-    supabase
-      .from("card_earning_rules")
-      .select("id, card_id, category_id, rate, has_cap, cap_amount, cap_period, cap_unit, post_cap_rate, booking_method, brand_name"),
-    
-    // All category bonuses
-    supabase
-      .from("card_caps")
-      .select(`
-        id,
-        card_id,
-        cap_type,
-        cap_amount,
-        cap_period,
-        elevated_rate,
-        post_cap_rate,
-        card_cap_categories (category_id)
-      `),
-    
-    // All currencies for default values
-    supabase
-      .from("reward_currencies")
-      .select("id, base_value_cents"),
     
     // User's custom currency values
     supabase
@@ -191,11 +164,6 @@ export default async function WalletPage() {
       .from("user_travel_booking_preferences")
       .select("category_slug, preference_type, brand_name, portal_issuer_id")
       .eq("user_id", effectiveUserId),
-    
-    // All categories for parent lookups
-    supabase
-      .from("earning_categories")
-      .select("id, name, slug, parent_category_id, excluded_by_default"),
     
     // User's feature flags (for debit pay, onboarding, and account linking)
     supabase
@@ -230,32 +198,11 @@ export default async function WalletPage() {
       .select("category_id")
       .eq("user_id", effectiveUserId),
     
-    // Mobile Pay category ID
-    supabase
-      .from("earning_categories")
-      .select("id")
-      .eq("slug", "mobile-pay")
-      .single(),
-    
     // PayPal categories (for bonus calculation)
     supabase
       .from("user_paypal_categories")
       .select("category_id")
       .eq("user_id", effectiveUserId),
-    
-    // PayPal category ID
-    supabase
-      .from("earning_categories")
-      .select("id")
-      .eq("slug", "paypal")
-      .single(),
-    
-    // Large purchase (>$5k) category ID
-    supabase
-      .from("earning_categories")
-      .select("id")
-      .eq("slug", "over-5k")
-      .single(),
     
     // User's point value settings
     supabase
@@ -263,15 +210,6 @@ export default async function WalletPage() {
       .select("selected_template_id")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
-    
-    // Point value templates with their currency values
-    supabase
-      .from("point_value_templates")
-      .select(`
-        id,
-        is_default,
-        template_currency_values (currency_id, value_cents)
-      `),
     
     // User's welcome bonuses (with currency name for display)
     supabase
@@ -292,33 +230,13 @@ export default async function WalletPage() {
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
     
-    // All currencies for bonus creation modal
-    supabase
-      .from("reward_currencies")
-      .select("id, name, code, currency_type")
-      .order("name"),
     // User's player configurations
     supabase
       .from("user_players")
       .select("player_number, description")
       .eq("user_id", effectiveUserId)
       .order("player_number"),
-    // Card credits for display in table
-    supabase
-      .from("card_credits")
-      .select(`
-        id,
-        card_id,
-        name,
-        brand_name,
-        reset_cycle,
-        default_value_cents,
-        default_quantity,
-        unit_name,
-        notes,
-        credit_count
-      `)
-      .eq("is_active", true),
+    
     // User's linked Plaid accounts for balance/credit limit data
     supabase
       .from("user_linked_accounts")
@@ -332,6 +250,7 @@ export default async function WalletPage() {
         last_balance_update
       `)
       .eq("user_id", effectiveUserId),
+    
     // Recent transactions for statement balance calculation (last 60 days)
     supabase
       .from("user_plaid_transactions")
@@ -344,8 +263,7 @@ export default async function WalletPage() {
       `)
       .eq("user_id", effectiveUserId)
       .eq("pending", false)
-      .gte("date", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
-      .order("date", { ascending: false }),
+      .gte("date", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]),
   ]);
 
   // Players data
@@ -479,7 +397,7 @@ export default async function WalletPage() {
     primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
     secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
   };
-  const allCards = (allCardsResult.data ?? []) as unknown as AllCardData[];
+  const allCards = allCardsData as unknown as AllCardData[];
   
   // All cards are available to add (users can add duplicates)
   const availableCardsForModal = allCards.filter((card) => card.id);
@@ -507,7 +425,7 @@ export default async function WalletPage() {
   );
 
   // Process ALL earning rules (needed for recommendations)
-  const allEarningRules: EarningRuleInput[] = (rulesResult.data ?? [])
+  const allEarningRules: EarningRuleInput[] = rulesData
     .map((r) => ({
       id: r.id,
       card_id: r.card_id,
@@ -526,7 +444,7 @@ export default async function WalletPage() {
   const earningRules = allEarningRules.filter((r) => userCardIdsSet.has(r.card_id));
 
   // Process ALL category bonuses (needed for recommendations)
-  const allCategoryBonuses: CategoryBonusInput[] = (bonusesResult.data ?? [])
+  const allCategoryBonuses: CategoryBonusInput[] = bonusesData
     .map((b) => ({
       id: b.id,
       card_id: b.card_id,
@@ -546,7 +464,7 @@ export default async function WalletPage() {
   const categoryParentMap = new Map<number, number | null>();
   const categoryNameMap = new Map<number, string>();
   const categorySlugMap = new Map<number, string>();
-  categoriesResult.data?.forEach((c) => {
+  categoriesData.forEach((c) => {
     categoryExclusionMap.set(c.id, c.excluded_by_default);
     categoryParentMap.set(c.id, c.parent_category_id);
     categoryNameMap.set(c.id, c.name);
@@ -627,7 +545,7 @@ export default async function WalletPage() {
     credit_count: number;
   };
   const creditsPerCard = new Map<string, CardCreditData[]>();
-  (cardCreditsResult.data ?? []).forEach((credit: unknown) => {
+  cardCreditsData.forEach((credit: unknown) => {
     const c = credit as CardCreditData;
     const existing = creditsPerCard.get(c.card_id) ?? [];
     existing.push(c);
@@ -735,7 +653,7 @@ export default async function WalletPage() {
     is_default: boolean;
     template_currency_values: { currency_id: string; value_cents: number }[];
   };
-  const templates = (pointValueTemplatesResult.data ?? []) as unknown as TemplateData[];
+  const templates = templatesData as unknown as TemplateData[];
   const defaultTemplate = templates.find((t) => t.is_default) ?? templates[0];
   const selectedTemplateId = userPointValueSettingsResult.data?.selected_template_id ?? defaultTemplate?.id ?? null;
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
@@ -751,7 +669,7 @@ export default async function WalletPage() {
   // Build currency value maps
   // Default values come from: template value > base currency value
   const defaultCurrencyValues = new Map<string, number>();
-  currenciesResult.data?.forEach((c) => {
+  currenciesData.forEach((c) => {
     const templateValue = templateValueMap.get(c.id);
     if (templateValue !== undefined) {
       defaultCurrencyValues.set(c.id, templateValue);
@@ -807,17 +725,17 @@ export default async function WalletPage() {
   mobilePayCategoriesResult.data?.forEach((m) => {
     mobilePayCategories.add(m.category_id);
   });
-  const mobilePayCategoryId = mobilePayCategoryResult.data?.id;
+  const mobilePayCategoryId = specialCategoryIds.mobilePayCategoryId;
   
   // Build PayPal categories set
   const paypalCategories = new Set<number>();
   paypalCategoriesResult.data?.forEach((p) => {
     paypalCategories.add(p.category_id);
   });
-  const paypalCategoryId = paypalCategoryResult.data?.id;
+  const paypalCategoryId = specialCategoryIds.paypalCategoryId;
   
   // Large purchase category ID
-  const largePurchaseCategoryId = largePurchaseCategoryResult.data?.id;
+  const largePurchaseCategoryId = specialCategoryIds.largePurchaseCategoryId;
 
   // Build wallet card id to card_id mapping (for bonus -> card type lookup)
   const walletCardIdToCardId = new Map<string, string>();
@@ -1144,7 +1062,7 @@ export default async function WalletPage() {
       .eq("id", walletId)
       .eq("user_id", userId);
     revalidatePath("/wallet");
-    revalidatePath("/rules");
+    revalidatePath("/application-rules");
   }
 
   async function updatePerksValue(walletCardId: string, perksValue: number) {
@@ -1713,7 +1631,7 @@ export default async function WalletPage() {
                 currency_name: wc.cards?.primary_currency?.name ?? null,
                 currency_id: wc.cards?.primary_currency_id ?? null,
               }))}
-              currencies={allCurrenciesResult.data ?? []}
+              currencies={currenciesData}
               welcomeBonuses={userWelcomeBonuses}
               spendBonuses={userSpendBonuses}
               bonusDisplaySettings={bonusDisplaySettings}

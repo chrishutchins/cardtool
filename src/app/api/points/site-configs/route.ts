@@ -9,7 +9,10 @@ export async function GET() {
 
   const { data: configs, error } = await supabase
     .from("site_configs")
-    .select("id, name, currency_code, domain, balance_page_url, selector, parse_regex, is_active, aggregate, attribute")
+    .select(`
+      id, name, currency_code, domain, balance_page_url, selector, parse_regex, is_active, aggregate, attribute, format,
+      reward_currencies(currency_type)
+    `)
     .order("name");
 
   if (error) {
@@ -62,7 +65,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, currencyCode, domain, balancePageUrl, selector, parseRegex, aggregate, attribute } = body;
+    const { name, currencyCode, domain, balancePageUrl, selector, parseRegex, aggregate, attribute, format } = body;
 
     // Validate required fields
     if (!name || !currencyCode || !domain || !selector) {
@@ -90,6 +93,7 @@ export async function POST(request: Request) {
           is_active: true,
           aggregate: aggregate || false,
           attribute: attribute || null,
+          format: format || "points",
           updated_at: new Date().toISOString(),
           created_by: createdBy,
         },
@@ -128,7 +132,7 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, name, currencyCode, domain, balancePageUrl, selector, parseRegex, isActive, aggregate, attribute } = body;
+    const { id, name, currencyCode, domain, balancePageUrl, selector, parseRegex, isActive, aggregate, attribute, format } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing required field: id" }, { status: 400 });
@@ -149,6 +153,7 @@ export async function PUT(request: Request) {
     if (isActive !== undefined) updateData.is_active = isActive;
     if (aggregate !== undefined) updateData.aggregate = aggregate;
     if (attribute !== undefined) updateData.attribute = attribute || null;
+    if (format !== undefined) updateData.format = format;
 
     const { data, error } = await supabase
       .from("site_configs")

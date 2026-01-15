@@ -29,6 +29,7 @@ interface NavItem {
   label: string;
   onboardingId?: string;
   exact?: boolean;
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -52,6 +53,7 @@ const baseNavGroups: NavEntry[] = [
       { href: "/wallet", label: "Wallet", onboardingId: "wallet" },
       { href: "/compare", label: "Compare", onboardingId: "compare" },
       { href: "/rules", label: "Application Rules", onboardingId: "rules" },
+      { href: "/offers", label: "Offers", onboardingId: "offers" },
     ],
   },
   { href: "/returns", label: "Earnings", onboardingId: "earnings" },
@@ -81,6 +83,19 @@ const baseNavGroups: NavEntry[] = [
     ],
   },
 ];
+
+/** Filter navigation based on admin status */
+function getNavGroups(isAdmin: boolean): NavEntry[] {
+  return baseNavGroups.map((entry) => {
+    if (isNavGroup(entry)) {
+      return {
+        ...entry,
+        items: entry.items.filter((item) => !item.adminOnly || isAdmin),
+      };
+    }
+    return entry;
+  });
+}
 
 interface EmulationInfo {
   isEmulating: boolean;
@@ -181,7 +196,7 @@ export function UserHeader({ isAdmin = false, emulationInfo }: UserHeaderProps) 
             
             {/* Desktop nav with dropdowns - show at 900px+ (fewer top-level items now) */}
             <div className="hidden min-[900px]:flex items-center gap-1">
-              {baseNavGroups.map((item, index) => {
+              {getNavGroups(isAdmin).map((item, index) => {
                 if (isNavGroup(item)) {
                   return <NavDropdown key={item.label} group={item} pathname={pathname} />;
                 }
@@ -226,7 +241,7 @@ export function UserHeader({ isAdmin = false, emulationInfo }: UserHeaderProps) 
               
               {isOpen && (
                 <div className="absolute top-full left-0 mt-1 w-56 rounded-lg border border-zinc-700 bg-zinc-800 shadow-xl z-[70] py-1">
-                  {baseNavGroups.map((entry, index) => {
+                  {getNavGroups(isAdmin).map((entry, index) => {
                     if (isNavGroup(entry)) {
                       // Render group with section header
                       return (

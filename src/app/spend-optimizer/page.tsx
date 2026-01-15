@@ -7,6 +7,16 @@ import { ReturnsDisplay } from "./returns-display";
 import { isAdminEmail } from "@/lib/admin";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import {
+  getCachedEarningRules,
+  getCachedCardCaps,
+  getCachedCurrencies,
+  getCachedCategories,
+  getCachedMultiplierPrograms,
+  getCachedPointValueTemplates,
+  getCachedCards,
+  getCachedSpecialCategoryIds,
+} from "@/lib/cached-data";
+import {
   calculatePortfolioReturns,
   calculateMarginalValues,
   calculateCardRecommendations,
@@ -23,8 +33,8 @@ import {
 } from "@/lib/returns-calculator";
 
 export const metadata: Metadata = {
-  title: "Total Earnings | CardTool",
-  description: "See your projected annual credit card rewards",
+  title: "Spend Optimizer | CardTool",
+  description: "See your projected annual credit card rewards and optimize your spending",
 };
 
 interface Props {
@@ -53,33 +63,43 @@ export default async function ReturnsPage({ searchParams }: Props) {
   const supabase = createClient();
 
   // Fetch all required data in parallel
+  // Split into cached reference data and user-specific data
   const [
+    // Cached reference data (shared across all users, rarely changes)
+    rulesData,
+    bonusesData,
+    currenciesData,
+    categoriesData,
+    multiplierProgramsData,
+    templatesData,
+    allCardsData,
+    specialCategoryIds,
+    // User-specific data (must be fresh)
     walletResult,
     spendingResult,
-    rulesResult,
-    bonusesResult,
-    currenciesResult,
     userCurrencyValuesResult,
     perksResult,
     debitPayResult,
     selectionsResult,
     travelPrefsResult,
-    categoriesResult,
-    multiplierProgramsResult,
     userMultiplierTiersResult,
     mobilePayCategoriesResult,
-    mobilePayCategoryResult,
     paypalCategoriesResult,
-    paypalCategoryResult,
-    largePurchaseCategoryResult,
     userPointValueSettingsResult,
-    templatesResult,
-    allCardsResult,
     userWelcomeBonusesResult,
     userSpendBonusesResult,
     userBonusDisplaySettingsResult,
   ] = await Promise.all([
-    // User's wallet cards with full details (exclude closed cards)
+    // Cached data (hits cache, not DB on subsequent requests)
+    getCachedEarningRules(),
+    getCachedCardCaps(),
+    getCachedCurrencies(),
+    getCachedCategories(),
+    getCachedMultiplierPrograms(),
+    getCachedPointValueTemplates(),
+    getCachedCards(),
+    getCachedSpecialCategoryIds(),
+    // User-specific queries (always fresh)
     supabase
       .from("user_wallets")
       .select(`
@@ -112,30 +132,6 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .select("category_id, category_name, category_slug, annual_spend_cents, large_purchase_spend_cents")
       .eq("user_id", effectiveUserId),
     
-    // All earning rules for user's cards (fetched after we know which cards)
-    supabase
-      .from("card_earning_rules")
-      .select("id, card_id, category_id, rate, has_cap, cap_amount, cap_period, cap_unit, post_cap_rate, booking_method, brand_name"),
-    
-    // All category bonuses with their categories
-    supabase
-      .from("card_caps")
-      .select(`
-        id,
-        card_id,
-        cap_type,
-        cap_amount,
-        cap_period,
-        elevated_rate,
-        post_cap_rate,
-        card_cap_categories (category_id)
-      `),
-    
-    // All currencies for default values and cash out values
-    supabase
-      .from("reward_currencies")
-      .select("id, base_value_cents, cash_out_value_cents"),
-    
     // User's custom currency values
     supabase
       .from("user_currency_values")
@@ -166,22 +162,6 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .select("category_slug, preference_type, brand_name, portal_issuer_id")
       .eq("user_id", effectiveUserId),
     
-    // All categories for parent lookups and exclusion status
-    supabase
-      .from("earning_categories")
-      .select("id, name, slug, parent_category_id, excluded_by_default"),
-    
-    // Multiplier programs with their tiers and eligibility
-    supabase
-      .from("earning_multiplier_programs")
-      .select(`
-        id,
-        name,
-        earning_multiplier_tiers (id, name, multiplier),
-        earning_multiplier_currencies (currency_id),
-        earning_multiplier_cards (card_id)
-      `),
-    
     // User's selected multiplier tiers
     supabase
       .from("user_multiplier_tiers")
@@ -194,32 +174,11 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .select("category_id")
       .eq("user_id", effectiveUserId),
     
-    // Get the Mobile Pay category ID
-    supabase
-      .from("earning_categories")
-      .select("id")
-      .eq("slug", "mobile-pay")
-      .single(),
-    
     // User's PayPal categories
     supabase
       .from("user_paypal_categories")
       .select("category_id")
       .eq("user_id", effectiveUserId),
-    
-    // Get the PayPal category ID
-    supabase
-      .from("earning_categories")
-      .select("id")
-      .eq("slug", "paypal")
-      .single(),
-    
-    // Get the >$5k Purchases category ID
-    supabase
-      .from("earning_categories")
-      .select("id")
-      .eq("slug", "over-5k")
-      .single(),
     
     // User's selected point value template
     supabase
@@ -227,34 +186,6 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .select("selected_template_id")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
-    
-    // All templates with their values
-    supabase
-      .from("point_value_templates")
-      .select(`
-        id,
-        is_default,
-        template_currency_values (currency_id, value_cents)
-      `),
-    
-    // All cards for recommendations
-    supabase
-      .from("cards")
-      .select(`
-        id,
-        name,
-        slug,
-        annual_fee,
-        default_earn_rate,
-        default_perks_value,
-        exclude_from_recommendations,
-        primary_currency_id,
-        secondary_currency_id,
-        issuer_id,
-        primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
-        secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
-      `)
-      .eq("is_active", true),
     
     // User's welcome bonuses
     supabase
@@ -371,7 +302,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
   }
 
   // Process ALL earning rules (needed for recommendations)
-  const allEarningRules: EarningRuleInput[] = (rulesResult.data ?? [])
+  const allEarningRules: EarningRuleInput[] = rulesData
     .map((r) => ({
       id: r.id,
       card_id: r.card_id,
@@ -408,7 +339,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
   const earningRules = earningRulesWithSplit.filter((r) => effectiveCardIds.has(r.card_id));
 
   // Process ALL category bonuses (needed for recommendations)
-  const allCategoryBonuses: CategoryBonusInput[] = (bonusesResult.data ?? [])
+  const allCategoryBonuses: CategoryBonusInput[] = bonusesData
     .map((b) => ({
       id: b.id,
       card_id: b.card_id,
@@ -442,7 +373,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
   // Build category map with exclusion status
   const categoryExclusionMap = new Map<number, boolean>();
   const categoryParentMap = new Map<number, number | null>();
-  categoriesResult.data?.forEach((c) => {
+  categoriesData.forEach((c) => {
     categoryExclusionMap.set(c.id, c.excluded_by_default);
     categoryParentMap.set(c.id, c.parent_category_id);
   });
@@ -459,7 +390,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
   }));
 
   // Determine user's selected template
-  const templates = templatesResult.data ?? [];
+  const templates = templatesData;
   const defaultTemplate = templates.find((t) => t.is_default) ?? templates[0];
   const selectedTemplateId = userPointValueSettingsResult.data?.selected_template_id ?? defaultTemplate?.id ?? null;
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
@@ -477,7 +408,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
   // Default values come from: template value > base currency value
   const defaultCurrencyValues = new Map<string, number>();
   const cashOutValues = new Map<string, number>();
-  currenciesResult.data?.forEach((c) => {
+  currenciesData.forEach((c) => {
     // Use template value if available, otherwise fall back to base value
     const templateValue = templateValueMap.get(c.id);
     if (templateValue !== undefined) {
@@ -572,7 +503,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
   });
 
   const multiplierPrograms: MultiplierProgram[] = [];
-  multiplierProgramsResult.data?.forEach((program) => {
+  multiplierProgramsData.forEach((program) => {
     const selectedTierId = userTierMap.get(program.id);
     if (!selectedTierId) return; // User hasn't selected a tier for this program
     
@@ -598,16 +529,16 @@ export default async function ReturnsPage({ searchParams }: Props) {
   mobilePayCategoriesResult.data?.forEach((m) => {
     mobilePayCategories.add(m.category_id);
   });
-  const mobilePayCategoryId = mobilePayCategoryResult.data?.id;
+  const mobilePayCategoryId = specialCategoryIds.mobilePayCategoryId;
   
   // Build PayPal categories set
   const paypalCategories = new Set<number>();
   paypalCategoriesResult.data?.forEach((p) => {
     paypalCategories.add(p.category_id);
   });
-  const paypalCategoryId = paypalCategoryResult.data?.id;
+  const paypalCategoryId = specialCategoryIds.paypalCategoryId;
   
-  const largePurchaseCategoryId = largePurchaseCategoryResult.data?.id;
+  const largePurchaseCategoryId = specialCategoryIds.largePurchaseCategoryId;
 
   // Process user welcome bonuses (use effective card id - wallet_id if split, card_id otherwise)
   const welcomeBonuses: WelcomeBonusInput[] = (userWelcomeBonusesResult.data ?? []).map((wb) => ({
@@ -713,7 +644,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
     secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
   };
-  const allCards = (allCardsResult.data ?? []) as unknown as AllCardData[];
+  const allCards = allCardsData as unknown as AllCardData[];
   
   const recommendations: CardRecommendation[] = returns.totalSpend > 0 ? calculateCardRecommendations(
     {
@@ -738,7 +669,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
       <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-5xl px-4 py-12">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">Total Earnings</h1>
+          <h1 className="text-3xl font-bold text-white">Spend Optimizer</h1>
           <p className="text-zinc-400 mt-1">
             Optimal allocation of your spending across {cards.length} card{cards.length !== 1 ? "s" : ""}
           </p>

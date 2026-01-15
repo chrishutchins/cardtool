@@ -216,7 +216,7 @@ export function UpcomingUnified({
               return (
                 <Link
                   key={`points-${idx}`}
-                  href="/points"
+                  href="/balances"
                   className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">

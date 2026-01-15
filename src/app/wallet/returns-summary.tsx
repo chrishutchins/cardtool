@@ -46,7 +46,7 @@ export function ReturnsSummary({ returns }: ReturnsSummaryProps) {
           </div>
           
           <Link
-            href="/returns"
+            href="/spend-optimizer"
             className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium transition-colors whitespace-nowrap"
           >
             View Details →

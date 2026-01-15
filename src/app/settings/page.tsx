@@ -372,7 +372,7 @@ export default async function SettingsPage() {
     }
     // Revalidate compare page so mobile pay rates are recalculated
     revalidatePath("/compare");
-    revalidatePath("/returns");
+    revalidatePath("/spend-optimizer");
   }
 
   async function togglePaypalCategory(categoryId: number, selected: boolean) {
@@ -398,7 +398,7 @@ export default async function SettingsPage() {
     }
     // Revalidate compare page so PayPal rates are recalculated
     revalidatePath("/compare");
-    revalidatePath("/returns");
+    revalidatePath("/spend-optimizer");
   }
 
   async function toggleLargePurchaseCategory(categoryId: number, selected: boolean) {
@@ -446,7 +446,7 @@ export default async function SettingsPage() {
 
     revalidatePath("/settings");
     revalidatePath("/wallet");
-    revalidatePath("/returns");
+    revalidatePath("/spend-optimizer");
   }
 
   async function pairLinkedAccount(linkedAccountId: string, walletCardId: string | null) {
@@ -611,7 +611,7 @@ export default async function SettingsPage() {
 
     revalidatePath("/settings");
     revalidatePath("/wallet");
-    revalidatePath("/rules");
+    revalidatePath("/application-rules");
   }
 
   async function resetOnboarding() {

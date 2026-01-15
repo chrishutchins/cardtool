@@ -9,6 +9,26 @@ const clerkFrontendApi = process.env.NEXT_PUBLIC_CLERK_FRONTEND_API || "";
 const isDev = process.env.NODE_ENV === "development";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      // URL renames - permanent redirects from old URLs to new URLs
+      {
+        source: "/returns",
+        destination: "/spend-optimizer",
+        permanent: true,
+      },
+      {
+        source: "/points",
+        destination: "/balances",
+        permanent: true,
+      },
+      {
+        source: "/rules",
+        destination: "/application-rules",
+        permanent: true,
+      },
+    ];
+  },
   env: {
     // Preserve the original prod key before overriding (for admin user list)
     CLERK_SECRET_KEY_PROD: process.env.CLERK_SECRET_KEY,

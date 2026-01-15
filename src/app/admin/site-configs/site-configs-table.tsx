@@ -183,6 +183,7 @@ export function SiteConfigsTable({ configs, currencies, onDelete, onUpdate }: Si
                 selector: editingConfig.selector,
                 parse_regex: editingConfig.parse_regex,
                 is_active: editingConfig.is_active,
+                format: editingConfig.format,
               }}
               onCancel={() => setEditingConfig(null)}
             />
