@@ -11,6 +11,7 @@ import { AccountsTable } from "./accounts-table";
 import { InquiriesTable } from "./inquiries-table";
 import { CreditInsights } from "./credit-insights";
 import { MatchingDebug } from "./matching-debug";
+import { ScoreSources } from "./score-sources";
 import { groupAccountsAcrossBureaus, type CreditAccount as MatchingCreditAccount } from "./account-matching";
 
 export const metadata: Metadata = {
@@ -696,6 +697,11 @@ export default async function CreditReportPage() {
             scores={scores}
             latestScores={Object.fromEntries(latestScores)}
           />
+        </div>
+
+        {/* Score Sources */}
+        <div className="mb-8">
+          <ScoreSources />
         </div>
 
         {/* Accounts Table */}
