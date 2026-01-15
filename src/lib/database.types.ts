@@ -3559,7 +3559,7 @@ export type Database = {
         | "second_top_category"
         | "all_categories"
       cap_unit: "spend" | "rewards"
-      card_charge_type: "credit" | "charge"
+      card_charge_type: "credit" | "charge" | "debit"
       card_product_type: "personal" | "business"
       credit_account_status: "open" | "closed" | "paid" | "unknown"
       credit_account_type:
@@ -3753,7 +3753,7 @@ export const Constants = {
         "all_categories",
       ],
       cap_unit: ["spend", "rewards"],
-      card_charge_type: ["credit", "charge"],
+      card_charge_type: ["credit", "charge", "debit"],
       card_product_type: ["personal", "business"],
       credit_account_status: ["open", "closed", "paid", "unknown"],
       credit_account_type: [

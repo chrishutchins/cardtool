@@ -207,7 +207,7 @@ interface Card {
   currencyName: string;
   currencyType: string;
   productType: "personal" | "business";
-  chargeType: "credit" | "charge" | null;
+  chargeType: "credit" | "charge" | "debit" | null;
   pointValue: number;
   isOwned: boolean;
   playerNumber: number | null;

@@ -25,7 +25,7 @@ interface WalletCard {
     name: string;
     issuer_id: string;
     product_type: "personal" | "business";
-    card_charge_type: "credit" | "charge" | null;
+    card_charge_type: "credit" | "charge" | "debit" | null;
     issuers: { id: string; name: string } | null;
   } | null;
 }

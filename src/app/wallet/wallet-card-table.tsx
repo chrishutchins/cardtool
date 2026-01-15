@@ -37,7 +37,7 @@ export interface WalletCardData {
     secondary_currency_id: string | null;
     issuer_id: string;
     product_type?: "personal" | "business";
-    card_charge_type?: "credit" | "charge" | null;
+    card_charge_type?: "credit" | "charge" | "debit" | null;
     issuers: { id: string; name: string; billing_cycle_formula?: string | null } | null;
     primary_currency: { id: string; name: string; code: string; currency_type: string } | null;
     secondary_currency: { id: string; name: string; code: string; currency_type: string } | null;
@@ -560,7 +560,7 @@ export function WalletCardTable({
         sortAccessor: (row) => row.card.card_charge_type ?? "credit",
         render: (row) => (
           <span className="text-zinc-400">
-            {row.card.card_charge_type === "charge" ? "Charge" : "Credit"}
+            {row.card.card_charge_type === "charge" ? "Charge" : row.card.card_charge_type === "debit" ? "Debit" : "Credit"}
           </span>
         ),
       },

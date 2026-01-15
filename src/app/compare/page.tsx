@@ -938,7 +938,7 @@ export default async function ComparePage() {
     primary_currency_id: string;
     secondary_currency_id: string | null;
     product_type: "personal" | "business";
-    card_charge_type: "credit" | "charge" | null;
+    card_charge_type: "credit" | "charge" | "debit" | null;
     issuers: { id: string; name: string } | null;
     primary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
     secondary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
@@ -956,7 +956,7 @@ export default async function ComparePage() {
     currencyName: string;
     currencyType: string;
     productType: "personal" | "business";
-    chargeType: "credit" | "charge" | null;
+    chargeType: "credit" | "charge" | "debit" | null;
     pointValue: number;
     isOwned: boolean;
     playerNumber: number | null;

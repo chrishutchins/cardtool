@@ -51,7 +51,7 @@ interface DashboardCardRecommendation {
   netFee: number;
   spendingEarnings: number;
   totalEarnings: number;
-  chargeType: "credit" | "charge" | null;
+  chargeType: "credit" | "charge" | "debit" | null;
   primaryCurrency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
   previewEarningRules: CardPreviewEarningRule[];
   previewCategoryBonuses: CardPreviewCategoryBonus[];

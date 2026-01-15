@@ -34,7 +34,7 @@ export interface WalletCardForSettings {
     name: string;
     slug: string;
     annual_fee: number;
-    card_charge_type?: "credit" | "charge" | null;
+    card_charge_type?: "credit" | "charge" | "debit" | null;
     issuers: { 
       name: string;
       billing_cycle_formula?: string | null;

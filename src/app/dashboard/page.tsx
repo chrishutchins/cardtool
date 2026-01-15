@@ -430,7 +430,7 @@ export default async function DashboardPage() {
     primary_currency_id: string;
     secondary_currency_id: string | null;
     issuer_id: string;
-    card_charge_type: "credit" | "charge" | null;
+    card_charge_type: "credit" | "charge" | "debit" | null;
     primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
     secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
     issuer: { id: string; name: string } | null;

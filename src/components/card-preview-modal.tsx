@@ -19,7 +19,7 @@ export interface CardBasicInfo {
   annual_fee: number;
   default_earn_rate: number;
   issuer_name: string | null;
-  card_charge_type?: "credit" | "charge" | null;
+  card_charge_type?: "credit" | "charge" | "debit" | null;
 }
 
 export interface CardCurrency {
@@ -279,6 +279,11 @@ export function CardPreviewModal({
             {card.card_charge_type === "charge" && (
               <span className="text-sm px-2 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 Charge Card
+              </span>
+            )}
+            {card.card_charge_type === "debit" && (
+              <span className="text-sm px-2 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                Debit Card
               </span>
             )}
             {primaryCurrency && currencyConfig && (

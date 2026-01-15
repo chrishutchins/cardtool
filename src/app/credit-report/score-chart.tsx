@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, Lock } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -386,9 +386,7 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider pb-2 pr-4">
-                      Data Type
-                    </th>
+                    <th className="pb-2 pr-4"></th>
                     {BUREAUS.map((bureau) => (
                       <th
                         key={bureau}
@@ -405,9 +403,9 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                     return (
                     <tr 
                       key={row.label} 
-                      className={`${idx > 0 ? "border-t border-zinc-800" : ""} ${isPrimary ? "bg-emerald-500/5" : ""}`}
+                      className={`${idx > 0 ? "border-t border-zinc-800" : ""} ${isPrimary ? "bg-emerald-500/10" : ""}`}
                     >
-                      <td className={`py-2 pr-4 text-sm align-top ${isPrimary ? "text-white font-medium" : "text-zinc-300"}`}>
+                      <td className={`pl-3 pr-4 text-sm align-middle ${isPrimary ? "py-4 text-white font-medium" : "py-2 text-zinc-300"}`}>
                         <div className="flex items-center gap-2">
                           {row.label}
                           {isPrimary && (
@@ -420,8 +418,8 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                       {BUREAUS.map((bureau) => {
                         const sources = row.sources[bureau];
                         return (
-                          <td key={bureau} className="py-2 px-3 text-center align-top">
-                            {sources.length > 0 ? (
+                          <td key={bureau} className={`px-3 text-center align-middle ${isPrimary ? "py-4" : "py-2"}`}>
+                            {sources.length > 0 && (
                               <div className="space-y-1 inline-flex flex-col items-center">
                                 {sources.map((source) => (
                                   <a
@@ -429,19 +427,16 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                                     href={source.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors group"
+                                    className={`inline-flex items-center gap-1 text-sm hover:text-white transition-colors group ${source.recommended ? "text-white" : "text-zinc-500"}`}
                                   >
-                                    <span className={`underline decoration-zinc-600 group-hover:decoration-zinc-400 ${source.recommended ? "font-medium" : ""}`}>
-                                      {source.name}
-                                    </span>
+                                    <ExternalLink className={`h-3 w-3 flex-shrink-0 ${source.recommended ? "text-white" : "text-zinc-500"} group-hover:text-white`} />
+                                    <span>{source.name}</span>
                                     {source.cardholderOnly && (
                                       <Lock className="h-3 w-3 flex-shrink-0 text-amber-500" />
                                     )}
                                   </a>
                                 ))}
                               </div>
-                            ) : (
-                              <span className="text-zinc-600 text-sm">—</span>
                             )}
                           </td>
                         );
@@ -454,14 +449,11 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
             </div>
 
             {/* Legend */}
-            <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-6 text-xs text-zinc-500">
-              <div className="flex items-center gap-1.5">
-                <span className="font-medium text-zinc-400">Bold</span>
-                <span>= Recommended</span>
-              </div>
+            <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-6 text-xs text-zinc-500 pl-3">
+              <span className="text-white">Recommended</span>
               <div className="flex items-center gap-1.5">
                 <Lock className="h-3 w-3 text-amber-500" />
-                <span>= Customers only</span>
+                <span>Customers only</span>
               </div>
             </div>
           </div>

@@ -226,7 +226,7 @@ export default async function OffersPage() {
     issuerId: string;
     issuerName: string;
     productType: "personal" | "business";
-    cardChargeType: "credit" | "charge" | null;
+    cardChargeType: "credit" | "charge" | "debit" | null;
   };
   
   const walletCardsForRules: WalletCardForRules[] = (userWalletResult.data ?? [])
@@ -235,7 +235,7 @@ export default async function OffersPage() {
       const cardData = w.cards as unknown as {
         id: string;
         product_type: "personal" | "business";
-        card_charge_type: "credit" | "charge" | null;
+        card_charge_type: "credit" | "charge" | "debit" | null;
         issuer_id: string;
         issuers: { id: string; name: string };
       };

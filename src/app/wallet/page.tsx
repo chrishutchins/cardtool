@@ -297,7 +297,7 @@ export default async function WalletPage() {
       primary_currency_id: string;
       secondary_currency_id: string | null;
       issuer_id: string;
-      card_charge_type?: "credit" | "charge" | null;
+      card_charge_type?: "credit" | "charge" | "debit" | null;
       issuers: { id: string; name: string; billing_cycle_formula?: string | null } | null;
       primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
       secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;

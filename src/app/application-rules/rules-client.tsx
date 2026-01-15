@@ -15,7 +15,7 @@ interface WalletCard {
     name: string;
     issuer_id: string;
     product_type: "personal" | "business";
-    card_charge_type: "credit" | "charge" | null;
+    card_charge_type: "credit" | "charge" | "debit" | null;
     issuers: { id: string; name: string } | null;
   } | null;
 }
@@ -185,6 +185,9 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
         matchingCards = filteredWalletCards.filter((wc) => {
           if (!wc.cards || !wc.approval_date) return false;
 
+          // Exclude debit cards from all application rules
+          if (wc.cards.card_charge_type === "debit") return false;
+
           // Check card type filter
           if (
             rule.card_type &&
@@ -207,6 +210,9 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
         // Limit rule - count all matching cards
         matchingCards = filteredWalletCards.filter((wc) => {
           if (!wc.cards) return false;
+
+          // Exclude debit cards from all application rules
+          if (wc.cards.card_charge_type === "debit") return false;
 
           // Limits always apply to issuer only
           if (wc.cards.issuer_id !== rule.issuer_id) return false;

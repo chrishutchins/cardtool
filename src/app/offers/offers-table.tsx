@@ -276,7 +276,7 @@ interface WalletCardForRules {
   issuerId: string;
   issuerName: string;
   productType: "personal" | "business";
-  cardChargeType: "credit" | "charge" | null;
+  cardChargeType: "credit" | "charge" | "debit" | null;
 }
 
 interface OffersTableProps {
