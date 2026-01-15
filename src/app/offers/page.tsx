@@ -393,7 +393,7 @@ export default async function OffersPage() {
           id: offer.id,
           description: offer.offer_description,
           internalDescription: offer.internal_description,
-          offerType: offer.offer_type as "referral" | "affiliate" | "direct" | "nll" | "elevated",
+          offerType: offer.offer_type as "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted",
           firstYearAfWaived: offer.first_year_af_waived ?? false,
           expiresAt: offer.expires_at,
           applicationUrl: offer.application_url,

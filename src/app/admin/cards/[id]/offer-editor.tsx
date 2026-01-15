@@ -43,7 +43,7 @@ interface Offer {
   archived_at: string | null;
   offer_description: string | null;
   internal_description: string | null;
-  offer_type: "referral" | "affiliate" | "direct" | "nll" | "elevated";
+  offer_type: "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted";
   first_year_af_waived: boolean | null;
   expires_at: string | null;
   editorial_notes: string | null;
@@ -97,6 +97,7 @@ const offerTypeLabels: Record<string, string> = {
   direct: "Direct",
   nll: "NLL",
   elevated: "Elevated",
+  targeted: "Targeted",
 };
 
 export function OfferEditor({
@@ -400,6 +401,7 @@ export function OfferEditor({
             offer.offer_type === "referral" ? "bg-purple-700/50 text-purple-300" :
             offer.offer_type === "nll" ? "bg-amber-700/50 text-amber-300" :
             offer.offer_type === "direct" ? "bg-blue-700/50 text-blue-300" :
+            offer.offer_type === "targeted" ? "bg-teal-700/50 text-teal-300" :
             "bg-zinc-700/50 text-zinc-300"
           }`}>
             {offerTypeLabels[offer.offer_type]}
@@ -487,6 +489,7 @@ export function OfferEditor({
               <option value="referral">Referral</option>
               <option value="nll">NLL (No Lifetime Language)</option>
               <option value="elevated">Elevated</option>
+              <option value="targeted">Targeted</option>
             </select>
           </div>
         </div>

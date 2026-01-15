@@ -220,7 +220,7 @@ interface CardOffer {
   id: string;
   description: string | null;
   internalDescription: string | null;
-  offerType: "referral" | "affiliate" | "direct" | "nll" | "elevated";
+  offerType: "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted";
   firstYearAfWaived: boolean;
   expiresAt: string | null;
   applicationUrl: string | null;
@@ -894,6 +894,9 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
                           )}
                           {card.offer?.offerType === "nll" && (
                             <span className="px-1.5 py-0.5 text-xs bg-amber-700/50 text-amber-300 rounded">NLL</span>
+                          )}
+                          {card.offer?.offerType === "targeted" && (
+                            <span className="px-1.5 py-0.5 text-xs bg-teal-700/50 text-teal-300 rounded">Targeted</span>
                           )}
                           {card.offer?.expiresAt && (
                             <span className="px-1.5 py-0.5 text-xs bg-amber-700/50 text-amber-300 rounded">

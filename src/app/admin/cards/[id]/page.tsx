@@ -319,7 +319,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     
     const offer_description = formData.get("offer_description") as string || null;
     const internal_description = formData.get("internal_description") as string || null;
-    const offer_type = formData.get("offer_type") as "referral" | "affiliate" | "direct" | "nll";
+    const offer_type = formData.get("offer_type") as "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted";
     const first_year_af_waived = formData.get("first_year_af_waived") === "on";
     const expires_at = formData.get("expires_at") as string || null;
     const editorial_notes = formData.get("editorial_notes") as string || null;
@@ -676,7 +676,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                         cardDefaultEarnRate={card.default_earn_rate}
                         offer={{
                           ...activeOffer,
-                          offer_type: activeOffer.offer_type as "referral" | "affiliate" | "direct" | "nll",
+                          offer_type: activeOffer.offer_type as "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted",
                           bonuses: ((activeOffer.card_offer_bonuses ?? []) as unknown[]).map((b: unknown) => {
                             const bonus = b as {
                               id: string;
@@ -716,7 +716,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                         }}
                         archivedOffers={(archivedOffersResult.data ?? []).map((offer) => ({
                           ...offer,
-                          offer_type: offer.offer_type as "referral" | "affiliate" | "direct" | "nll",
+                          offer_type: offer.offer_type as "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted",
                           bonuses: ((offer.card_offer_bonuses ?? []) as unknown[]).map((b: unknown) => {
                             const bonus = b as {
                               id: string;
@@ -785,7 +785,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                     offer={null}
                     archivedOffers={(archivedOffersResult.data ?? []).map((offer) => ({
                       ...offer,
-                      offer_type: offer.offer_type as "referral" | "affiliate" | "direct" | "nll",
+                      offer_type: offer.offer_type as "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted",
                       bonuses: ((offer.card_offer_bonuses ?? []) as unknown[]).map((b: unknown) => {
                         const bonus = b as {
                           id: string;

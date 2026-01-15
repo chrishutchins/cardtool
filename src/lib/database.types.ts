@@ -510,7 +510,7 @@ export type Database = {
           is_active: boolean | null
           is_archived: boolean | null
           offer_description: string | null
-          offer_type: "referral" | "affiliate" | "direct" | "nll" | "elevated"
+          offer_type: "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted"
           rates_fees_url: string | null
           updated_at: string | null
         }
@@ -528,7 +528,7 @@ export type Database = {
           is_active?: boolean | null
           is_archived?: boolean | null
           offer_description?: string | null
-          offer_type?: "referral" | "affiliate" | "direct" | "nll" | "elevated"
+          offer_type?: "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted"
           rates_fees_url?: string | null
           updated_at?: string | null
         }
@@ -546,7 +546,7 @@ export type Database = {
           is_active?: boolean | null
           is_archived?: boolean | null
           offer_description?: string | null
-          offer_type?: "referral" | "affiliate" | "direct" | "nll" | "elevated"
+          offer_type?: "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted"
           rates_fees_url?: string | null
           updated_at?: string | null
         }
