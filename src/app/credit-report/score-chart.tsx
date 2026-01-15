@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -64,6 +64,78 @@ const TIME_RANGES = [
   { label: "All", months: 0 },
 ];
 
+// Import sources data
+interface ImportSource {
+  name: string;
+  url: string;
+  cardholderOnly?: boolean;
+  recommended?: boolean;
+}
+
+interface ImportRow {
+  label: string;
+  sources: {
+    equifax: ImportSource[];
+    experian: ImportSource[];
+    transunion: ImportSource[];
+  };
+}
+
+const IMPORT_SOURCES: ImportRow[] = [
+  {
+    label: "Credit Report",
+    sources: {
+      equifax: [{ name: "Equifax", url: "https://www.equifax.com/personal/credit-report-services/free-credit-reports/", recommended: true }],
+      experian: [{ name: "Experian", url: "https://www.experian.com/credit/credit-report/", recommended: true }],
+      transunion: [{ name: "TransUnion", url: "https://www.transunion.com/annual-credit-report" }],
+    },
+  },
+  {
+    label: "FICO 8",
+    sources: {
+      equifax: [{ name: "myFICO", url: "https://www.myfico.com/", recommended: true }],
+      experian: [
+        { name: "Experian", url: "https://www.experian.com/credit/credit-report/", recommended: true },
+        { name: "American Express", url: "https://www.americanexpress.com/us/credit-cards/features-benefits/free-credit-score/" },
+      ],
+      transunion: [
+        { name: "Capital One", url: "https://www.capitalone.com/creditwise/", recommended: true },
+        { name: "Bank of America", url: "https://www.bankofamerica.com/", cardholderOnly: true },
+      ],
+    },
+  },
+  {
+    label: "VantageScore 3.0",
+    sources: {
+      equifax: [
+        { name: "Equifax", url: "https://www.equifax.com/personal/credit-report-services/free-credit-reports/", recommended: true },
+        { name: "Credit Karma", url: "https://www.creditkarma.com/free-credit-score", recommended: true },
+      ],
+      experian: [{ name: "Chase", url: "https://www.chase.com/personal/financial-tools/monitor/free-credit-score", recommended: true }],
+      transunion: [
+        { name: "Credit Karma", url: "https://www.creditkarma.com/free-credit-score", recommended: true },
+        { name: "US Bank", url: "https://www.usbank.com/online-mobile-banking/get-your-free-credit-score.html", cardholderOnly: true },
+      ],
+    },
+  },
+  {
+    label: "FICO 8 Bankcard",
+    sources: {
+      equifax: [{ name: "Citi", url: "https://www.cardbenefits.citi.com/en/Products/FICO-Score", cardholderOnly: true }],
+      experian: [],
+      transunion: [],
+    },
+  },
+  {
+    label: "FICO 9",
+    sources: {
+      equifax: [],
+      experian: [{ name: "Wells Fargo", url: "https://www.wellsfargo.com/goals-credit/smarter-credit/credit-101/fico/", cardholderOnly: true }],
+      transunion: [],
+    },
+  },
+];
+
 function getScoreColor(score: number): string {
   if (score >= 800) return "text-emerald-400";
   if (score >= 740) return "text-green-400";
@@ -85,6 +157,7 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
   const [selectedTimeRange, setSelectedTimeRange] = useState(24); // months, 0 = all
   const [showHistory, setShowHistory] = useState(false);
   const [showOtherScores, setShowOtherScores] = useState(false);
+  const [showImportSources, setShowImportSources] = useState(false);
 
   // Get available score types (ones that have data)
   const availableScoreTypes = useMemo(() => {
@@ -283,6 +356,100 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                 </table>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Import Sources - Collapsible */}
+      <div className="mt-3 pt-3 border-t border-zinc-800">
+        <button
+          onClick={() => setShowImportSources(!showImportSources)}
+          className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          {showImportSources ? (
+            <ChevronUp className="h-3 w-3" />
+          ) : (
+            <ChevronDown className="h-3 w-3" />
+          )}
+          {showImportSources ? "Hide Import Sources" : "How to Import Your Scores/Report"}
+        </button>
+
+        {showImportSources && (
+          <div className="mt-4">
+            {/* Recommended sources callout */}
+            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+              <p className="text-sm text-emerald-400">
+                <span className="font-medium">Recommended for full coverage (free):</span>{" "}
+                <span className="text-zinc-300">Capital One, myFICO, Experian, Credit Karma, Equifax, Chase</span>
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col style={{ width: "25%" }} />
+                  <col style={{ width: "25%" }} />
+                  <col style={{ width: "25%" }} />
+                  <col style={{ width: "25%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider pb-3 pr-4">
+                      Data Type
+                    </th>
+                    {BUREAUS.map((bureau) => (
+                      <th
+                        key={bureau}
+                        className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider pb-3 px-3"
+                      >
+                        {BUREAU_LABELS[bureau]}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {IMPORT_SOURCES.map((row, idx) => (
+                    <tr key={row.label} className={idx > 0 ? "border-t border-zinc-800" : ""}>
+                      <td className="py-3 pr-4 text-sm text-zinc-300 align-top">
+                        {row.label}
+                      </td>
+                      {BUREAUS.map((bureau) => {
+                        const sources = row.sources[bureau];
+                        return (
+                          <td key={bureau} className="py-3 px-3 align-top">
+                            {sources.length > 0 ? (
+                              <div className="space-y-1.5">
+                                {sources.map((source) => (
+                                  <a
+                                    key={source.name}
+                                    href={source.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors group"
+                                  >
+                                    <ExternalLink className="h-3 w-3 flex-shrink-0 text-zinc-600 group-hover:text-zinc-400" />
+                                    <span className={source.recommended ? "text-emerald-400 group-hover:text-emerald-300" : ""}>
+                                      {source.name}
+                                    </span>
+                                    {source.cardholderOnly && (
+                                      <span className="text-[10px] px-1.5 py-0.5 bg-zinc-800 text-zinc-500 rounded">
+                                        cardholder
+                                      </span>
+                                    )}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-zinc-600 text-sm">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
