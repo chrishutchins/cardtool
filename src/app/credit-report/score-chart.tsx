@@ -87,7 +87,7 @@ const IMPORT_SOURCES: ImportRow[] = [
     sources: {
       equifax: [{ name: "Equifax", url: "https://www.equifax.com/personal/credit-report-services/free-credit-reports/", recommended: true }],
       experian: [{ name: "Experian", url: "https://www.experian.com/credit/credit-report/", recommended: true }],
-      transunion: [{ name: "TransUnion", url: "https://www.transunion.com/annual-credit-report" }],
+      transunion: [{ name: "TransUnion", url: "https://www.transunion.com/annual-credit-report", recommended: true }],
     },
   },
   {
@@ -400,10 +400,22 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {IMPORT_SOURCES.map((row, idx) => (
-                    <tr key={row.label} className={idx > 0 ? "border-t border-zinc-800" : ""}>
-                      <td className="py-2 pr-4 text-sm text-zinc-300 align-top">
-                        {row.label}
+                  {IMPORT_SOURCES.map((row, idx) => {
+                    const isPrimary = row.label === "Credit Report";
+                    return (
+                    <tr 
+                      key={row.label} 
+                      className={`${idx > 0 ? "border-t border-zinc-800" : ""} ${isPrimary ? "bg-emerald-500/5" : ""}`}
+                    >
+                      <td className={`py-2 pr-4 text-sm align-top ${isPrimary ? "text-white font-medium" : "text-zinc-300"}`}>
+                        <div className="flex items-center gap-2">
+                          {row.label}
+                          {isPrimary && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-normal">
+                              Primary
+                            </span>
+                          )}
+                        </div>
                       </td>
                       {BUREAUS.map((bureau) => {
                         const sources = row.sources[bureau];
@@ -443,7 +455,8 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                         );
                       })}
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -452,7 +465,7 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
             <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-6 text-xs text-zinc-500">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span>Recommended (free)</span>
+                <span>Recommended</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Lock className="h-3 w-3 text-amber-500" />
