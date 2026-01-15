@@ -258,6 +258,33 @@ export async function POST(request: NextRequest) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
         logger.error({ err, userId: effectiveUserId, plaidItemId: plaidItem.id }, 'Failed to sync Plaid item');
         syncErrors.push(`Failed to sync ${plaidItem.institution_name}: ${errorMessage}`);
+
+        // Check if this is an ITEM_LOGIN_REQUIRED or similar reauth error
+        // Plaid errors have error_code in the response data
+        const plaidError = err as { response?: { data?: { error_code?: string; error_message?: string } } };
+        const errorCode = plaidError.response?.data?.error_code;
+        const reauthErrorCodes = ['ITEM_LOGIN_REQUIRED', 'PENDING_EXPIRATION', 'USER_PERMISSION_REVOKED'];
+        
+        if (errorCode && reauthErrorCodes.includes(errorCode)) {
+          logger.warn({ 
+            userId: effectiveUserId, 
+            plaidItemId: plaidItem.id, 
+            errorCode,
+            institution: plaidItem.institution_name 
+          }, 'Plaid item requires re-authentication');
+
+          // Mark this item as needing re-authentication
+          await supabase
+            .from('user_plaid_items')
+            .update({
+              requires_reauth: true,
+              error_code: errorCode,
+              error_message: plaidError.response?.data?.error_message || errorMessage,
+              error_detected_at: new Date().toISOString(),
+            })
+            .eq('id', plaidItem.id)
+            .eq('user_id', effectiveUserId);
+        }
       }
     }
 

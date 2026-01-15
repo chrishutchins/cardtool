@@ -2662,30 +2662,42 @@ export type Database = {
         Row: {
           access_token: string
           created_at: string | null
+          error_code: string | null
+          error_detected_at: string | null
+          error_message: string | null
           id: string
           institution_id: string | null
           institution_name: string | null
           item_id: string
+          requires_reauth: boolean
           updated_at: string | null
           user_id: string
         }
         Insert: {
           access_token: string
           created_at?: string | null
+          error_code?: string | null
+          error_detected_at?: string | null
+          error_message?: string | null
           id?: string
           institution_id?: string | null
           institution_name?: string | null
           item_id: string
+          requires_reauth?: boolean
           updated_at?: string | null
           user_id: string
         }
         Update: {
           access_token?: string
           created_at?: string | null
+          error_code?: string | null
+          error_detected_at?: string | null
+          error_message?: string | null
           id?: string
           institution_id?: string | null
           institution_name?: string | null
           item_id?: string
+          requires_reauth?: boolean
           updated_at?: string | null
           user_id?: string
         }

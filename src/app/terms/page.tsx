@@ -24,11 +24,48 @@ export default function TermsPage() {
               <h2 className="text-2xl font-semibold text-white mb-4">
                 1. Service Description
               </h2>
-              <p className="text-zinc-300 leading-relaxed">
+              <p className="text-zinc-300 leading-relaxed mb-4">
                 CardTool is a credit card rewards tracking and optimization tool. We help you
                 understand which credit cards earn the most rewards for your spending patterns.
                 This service is for informational and educational purposes only.
               </p>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                CardTool offers the following features:
+              </p>
+              <ul className="list-disc list-inside text-zinc-300 space-y-2">
+                <li>
+                  <strong>Card wallet management:</strong> Track your credit cards and their
+                  benefits, including support for managing cards across multiple household members
+                  (&quot;players&quot;)
+                </li>
+                <li>
+                  <strong>Rewards optimization:</strong> Calculate which card to use for different
+                  purchase categories
+                </li>
+                <li>
+                  <strong>Credit tracking:</strong> Monitor card credits, benefits, and their usage
+                </li>
+                <li>
+                  <strong>Bank account linking:</strong> Optionally connect accounts via Plaid to
+                  sync balances and transactions for automatic credit detection
+                </li>
+                <li>
+                  <strong>Points balance tracking:</strong> Track loyalty program balances across
+                  airlines, hotels, and bank programs
+                </li>
+                <li>
+                  <strong>Credit report monitoring:</strong> Track credit scores and report data
+                  from multiple bureaus
+                </li>
+                <li>
+                  <strong>Inventory management:</strong> Track gift cards, travel credits,
+                  certificates, and other card benefits
+                </li>
+                <li>
+                  <strong>Browser extension:</strong> Optional Tampermonkey script to import
+                  loyalty balances and credit report data from program websites
+                </li>
+              </ul>
             </section>
 
             <section className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6">
@@ -39,6 +76,20 @@ export default function TermsPage() {
                 CardTool provides information about credit card rewards programs. This
                 information is for educational and informational purposes only and should
                 not be construed as financial advice.
+              </p>
+              <p className="text-zinc-300 leading-relaxed mb-4 font-medium">
+                CardTool is not a credit reporting agency. Any credit scores or report data
+                displayed are for your convenience only and are retrieved via third-party
+                sources (such as the browser extension or connected accounts). We do not
+                guarantee that this data is the same as the data used by lenders or that it
+                is complete, accurate, or up-to-date. We are not responsible for any
+                inaccuracies in data imported via Plaid or the Browser Extension.
+              </p>
+              <p className="text-zinc-300 leading-relaxed mb-4 font-medium">
+                Credit report data displayed in CardTool is not intended to be used to make
+                decisions about eligibility for credit, employment, housing, insurance, or
+                other purposes covered by the Fair Credit Reporting Act (FCRA). Do not rely
+                on CardTool as your official credit report.
               </p>
               <ul className="list-disc list-inside text-zinc-300 space-y-2">
                 <li>
@@ -55,6 +106,10 @@ export default function TermsPage() {
                 </li>
                 <li>
                   Credit card applications and approvals are subject to issuer requirements
+                </li>
+                <li>
+                  Credit report data synced via our tools may be incomplete, delayed, or
+                  differ from official bureau reports
                 </li>
               </ul>
             </section>
@@ -76,6 +131,30 @@ export default function TermsPage() {
               <p className="text-zinc-300 leading-relaxed mt-4">
                 We reserve the right to suspend or terminate accounts that violate these
                 terms or for any other reason at our sole discretion.
+              </p>
+              <h3 className="text-lg font-medium text-zinc-200 mt-6 mb-3">
+                Beta Service
+              </h3>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                CardTool is currently in beta. This means:
+              </p>
+              <ul className="list-disc list-inside text-zinc-300 space-y-2 mb-4">
+                <li>Features may change, be modified, or be discontinued without notice</li>
+                <li>The service may experience downtime or interruptions</li>
+                <li>We may modify data schemas or storage methods</li>
+                <li>We are not responsible for data loss resulting from service changes,
+                  bugs, or discontinuation</li>
+              </ul>
+              <h3 className="text-lg font-medium text-zinc-200 mt-6 mb-3">
+                Multi-Player / Household Data
+              </h3>
+              <p className="text-zinc-300 leading-relaxed">
+                If you use CardTool&apos;s multi-player feature to track cards or data for
+                other household members, you represent and warrant that you have obtained
+                appropriate consent from those individuals to input their card information,
+                credit data, or other personal details into our service. You are solely
+                responsible for ensuring you have the authority to manage this data on
+                their behalf.
               </p>
             </section>
 
@@ -139,7 +218,8 @@ export default function TermsPage() {
                   <strong>Stripe:</strong> Membership verification
                 </li>
                 <li>
-                  <strong>Plaid</strong> (Optional): Bank account linking for balance display
+                  <strong>Plaid</strong> (Optional): Bank account linking for balance and
+                  transaction syncing
                 </li>
               </ul>
               <p className="text-zinc-300 leading-relaxed mt-4">
@@ -158,6 +238,14 @@ export default function TermsPage() {
               <ul className="list-disc list-inside text-zinc-300 space-y-2">
                 <li>
                   You authorize Plaid Inc. to access your financial accounts on your behalf
+                </li>
+                <li>
+                  You authorize CardTool to retrieve account balances, credit limits, and
+                  transaction history from your linked accounts
+                </li>
+                <li>
+                  Transaction data is used to automatically detect credit card benefit usage
+                  (e.g., Uber credits, airline credits, dining credits)
                 </li>
                 <li>
                   You agree to Plaid&apos;s{" "}
@@ -191,9 +279,81 @@ export default function TermsPage() {
               </ul>
             </section>
 
+            <section className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-6">
+              <h2 className="text-2xl font-semibold text-purple-300 mb-4">
+                8. Browser Extension (Tampermonkey Script)
+              </h2>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                CardTool offers an optional browser extension (Tampermonkey userscript) that
+                allows you to import loyalty program balances and credit report data directly
+                from program websites.
+              </p>
+
+              <h3 className="text-lg font-medium text-zinc-200 mb-3">
+                How It Works
+              </h3>
+              <ul className="list-disc list-inside text-zinc-300 space-y-2 mb-4">
+                <li>
+                  The script runs in your browser and detects when you visit supported
+                  loyalty program or credit bureau websites
+                </li>
+                <li>
+                  Data is only sent to CardTool when you explicitly click the &quot;Sync&quot;
+                  button - it is never sent automatically
+                </li>
+                <li>
+                  The script is open source and available for review at any time
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-medium text-zinc-200 mb-3">
+                Technical Access
+              </h3>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                The browser extension requires broad website access permissions to function
+                across different loyalty program sites. While the extension technically has
+                access to page content on websites you visit, it only reads data from
+                recognized loyalty program and credit bureau sites, and only transmits data
+                when you initiate a sync.
+              </p>
+
+              <h3 className="text-lg font-medium text-zinc-200 mb-3">
+                Your Responsibilities
+              </h3>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                By using the Browser Extension, you acknowledge that you are manually
+                initiating a transfer of data from your loyalty program or credit provider
+                to CardTool. You are responsible for ensuring that this action does not
+                violate the terms of service of those third-party websites.
+              </p>
+              <ul className="list-disc list-inside text-zinc-300 space-y-2">
+                <li>
+                  You are responsible for ensuring your use of the extension complies with
+                  the terms of service of the websites you access
+                </li>
+                <li>
+                  You acknowledge that some loyalty programs may prohibit automated data
+                  collection in their terms of service
+                </li>
+                <li>
+                  CardTool is not responsible for any consequences arising from your use
+                  of the extension on third-party websites, including account suspension
+                  or termination by those services
+                </li>
+                <li>
+                  We do not guarantee that the extension will work on any particular site;
+                  websites may change and break compatibility at any time
+                </li>
+                <li>
+                  CardTool is not affiliated with the loyalty programs, banks, or credit
+                  bureaus whose websites you access unless explicitly stated
+                </li>
+              </ul>
+            </section>
+
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                8. Intellectual Property
+                9. Intellectual Property
               </h2>
               <p className="text-zinc-300 leading-relaxed">
                 All content, features, and functionality of CardTool are owned by us and
@@ -204,7 +364,7 @@ export default function TermsPage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                9. Changes to Terms
+                10. Changes to Terms
               </h2>
               <p className="text-zinc-300 leading-relaxed">
                 We may update these terms from time to time. We will notify you of any
@@ -215,17 +375,115 @@ export default function TermsPage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                10. Governing Law
+                11. User Content
               </h2>
-              <p className="text-zinc-300 leading-relaxed">
-                These terms shall be governed by and construed in accordance with the
-                laws of the United States, without regard to its conflict of law provisions.
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                You may submit content to CardTool, including inventory notes, spending
+                estimates, player descriptions, and other user-generated data.
               </p>
+              <ul className="list-disc list-inside text-zinc-300 space-y-2">
+                <li>You retain ownership of content you submit</li>
+                <li>
+                  You grant CardTool a limited, non-exclusive license to host, store,
+                  and process your content solely to operate and provide the service
+                </li>
+                <li>
+                  You represent that you have the right to submit any content you provide
+                </li>
+              </ul>
             </section>
 
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4">
-                11. Contact Us
+                12. Governing Law and Jurisdiction
+              </h2>
+              <p className="text-zinc-300 leading-relaxed">
+                These terms shall be governed by and construed in accordance with the
+                laws of the State of Delaware, without regard to its conflict of law
+                provisions. Any disputes arising from these terms or your use of CardTool
+                shall be resolved in the state or federal courts located in Delaware,
+                and you consent to the personal jurisdiction of such courts.
+              </p>
+            </section>
+
+            <section className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
+              <h2 className="text-2xl font-semibold text-zinc-200 mb-4">
+                13. Dispute Resolution and Arbitration
+              </h2>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                <strong>Please read this section carefully. It affects your legal rights.</strong>
+              </p>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                You and CardTool agree to resolve any disputes arising from these terms or
+                your use of the service through binding individual arbitration, rather than
+                in court, except that either party may bring claims in small claims court
+                if eligible.
+              </p>
+              <h3 className="text-lg font-medium text-zinc-200 mb-3">
+                Arbitration Rules
+              </h3>
+              <ul className="list-disc list-inside text-zinc-300 space-y-2 mb-4">
+                <li>
+                  Arbitration will be conducted by JAMS under its Streamlined Arbitration
+                  Rules, or by another mutually agreed arbitration provider
+                </li>
+                <li>
+                  The arbitration will be held in Delaware or another mutually agreed location,
+                  or may be conducted remotely
+                </li>
+                <li>The arbitrator&apos;s decision will be final and binding</li>
+              </ul>
+              <h3 className="text-lg font-medium text-zinc-200 mb-3">
+                Class Action Waiver
+              </h3>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                You agree to resolve disputes with CardTool on an individual basis only.
+                You waive any right to participate in a class action lawsuit or class-wide
+                arbitration against CardTool.
+              </p>
+              <p className="text-zinc-300 leading-relaxed text-sm">
+                You may opt out of this arbitration agreement by sending written notice to
+                us within 30 days of first accepting these terms. If you opt out, the
+                Governing Law and Jurisdiction section will apply.
+              </p>
+            </section>
+
+            <section className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
+              <h2 className="text-2xl font-semibold text-red-300 mb-4">
+                14. Storage of Codes and PINs
+              </h2>
+              <p className="text-zinc-300 leading-relaxed mb-4">
+                If you use the Inventory Tracking feature to store gift card PINs, security
+                codes, access keys, or other sensitive credentials, you do so at your own
+                risk.
+              </p>
+              <p className="text-zinc-300 leading-relaxed mb-4 font-medium">
+                Do not store Social Security numbers, full account numbers, bank passwords,
+                or other highly sensitive credentials in CardTool. We may remove content
+                that appears to include such information.
+              </p>
+              <ul className="list-disc list-inside text-zinc-300 space-y-2">
+                <li>
+                  CardTool is not responsible for the loss, theft, or unauthorized access
+                  of any manually entered sensitive credentials
+                </li>
+                <li>
+                  Data is stored on encrypted infrastructure, but no method is 100% secure;
+                  we recommend using a dedicated password manager for high-value credentials
+                </li>
+                <li>
+                  You are responsible for the accuracy of any codes or PINs you enter
+                </li>
+                <li>
+                  We are not liable for any financial loss resulting from compromised,
+                  incorrect, or expired codes stored in our system
+                </li>
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-semibold text-white mb-4">
+                15. Contact Us
               </h2>
               <p className="text-zinc-300 leading-relaxed">
                 If you have any questions about these Terms of Service, please contact us

@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CreditCard, Building2, Link2, Unlink, Pencil, Check, X } from "lucide-react";
+import { RefreshCw, CreditCard, Building2, Link2, Unlink, Pencil, Check, X, AlertTriangle } from "lucide-react";
 import { PlaidLinkButton } from "./plaid-link-button";
+import { PlaidReauthButton } from "./plaid-reauth-button";
 
 interface LinkedAccount {
   id: string;
@@ -18,7 +19,13 @@ interface LinkedAccount {
   manual_credit_limit: number | null;
   iso_currency_code: string | null;
   last_balance_update: string | null;
-  user_plaid_items: { institution_name: string | null } | null;
+  plaid_item_id: string;
+  user_plaid_items: { 
+    id: string;
+    institution_name: string | null;
+    requires_reauth: boolean;
+    error_code: string | null;
+  } | null;
   wallet_card_id: string | null;
 }
 
@@ -193,15 +200,40 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
         </div>
       ) : (
         <div className="space-y-4">
-          {accounts.map((account) => (
+          {accounts.map((account) => {
+            const needsReauth = account.user_plaid_items?.requires_reauth ?? false;
+            
+            return (
             <div
               key={account.id}
-              className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700"
+              className={`bg-zinc-800/50 rounded-lg p-4 border ${needsReauth ? 'border-amber-500/50' : 'border-zinc-700'}`}
             >
+              {/* Reauth Warning Banner */}
+              {needsReauth && (
+                <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-amber-200 font-medium">Reconnection Required</p>
+                        <p className="text-amber-300/80 text-sm">
+                          Your bank connection needs to be refreshed. Click Reconnect to update your credentials.
+                        </p>
+                      </div>
+                    </div>
+                    <PlaidReauthButton
+                      plaidItemId={account.user_plaid_items?.id || account.plaid_item_id}
+                      institutionName={account.user_plaid_items?.institution_name ?? null}
+                      onSuccess={() => window.location.reload()}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="bg-zinc-700 p-2 rounded-lg">
-                    <CreditCard className="h-5 w-5 text-zinc-300" />
+                  <div className={`p-2 rounded-lg ${needsReauth ? 'bg-amber-700/50' : 'bg-zinc-700'}`}>
+                    <CreditCard className={`h-5 w-5 ${needsReauth ? 'text-amber-300' : 'text-zinc-300'}`} />
                   </div>
                   <div>
                     <h3 className="font-medium text-white">
@@ -353,7 +385,8 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
                 Last updated: {formatDate(account.last_balance_update)}
               </p>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>

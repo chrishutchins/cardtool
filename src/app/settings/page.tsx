@@ -2,6 +2,8 @@ import { createClient, createAdminClient, createUntypedClient } from "@/lib/supa
 import { currentUser, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { plaidClient } from "@/lib/plaid";
+import logger from "@/lib/logger";
 import { UserHeader } from "@/components/user-header";
 import { CardCategorySelector } from "@/app/wallet/card-category-selector";
 import { MultiplierSelector } from "@/app/wallet/multiplier-selector";
@@ -131,8 +133,12 @@ export default async function SettingsPage() {
         iso_currency_code,
         last_balance_update,
         wallet_card_id,
+        plaid_item_id,
         user_plaid_items:plaid_item_id (
-          institution_name
+          id,
+          institution_name,
+          requires_reauth,
+          error_code
         )
       `)
       .eq("user_id", effectiveUserId)
@@ -497,8 +503,27 @@ export default async function SettingsPage() {
       .eq("plaid_item_id", plaidItemId)
       .eq("user_id", userId);
     
-    // If no accounts remain, delete the plaid item
+    // If no accounts remain, revoke access with Plaid and delete the item
     if ((count ?? 0) === 0) {
+      // Get the access token before deleting
+      const { data: plaidItem } = await supabase
+        .from("user_plaid_items")
+        .select("access_token")
+        .eq("id", plaidItemId)
+        .eq("user_id", userId)
+        .single();
+
+      // Call Plaid's /item/remove to revoke the connection
+      if (plaidItem?.access_token) {
+        try {
+          await plaidClient.itemRemove({ access_token: plaidItem.access_token });
+          logger.info({ userId, plaidItemId }, "Successfully removed Plaid item");
+        } catch (err) {
+          // Log but don't fail - still clean up our DB
+          logger.error({ err, userId, plaidItemId }, "Failed to remove Plaid item via API");
+        }
+      }
+
       await supabase
         .from("user_plaid_items")
         .delete()
@@ -931,7 +956,13 @@ export default async function SettingsPage() {
                   iso_currency_code: account.iso_currency_code,
                   last_balance_update: account.last_balance_update,
                   wallet_card_id: account.wallet_card_id,
-                  user_plaid_items: account.user_plaid_items as { institution_name: string | null } | null,
+                  plaid_item_id: account.plaid_item_id,
+                  user_plaid_items: account.user_plaid_items as { 
+                    id: string;
+                    institution_name: string | null;
+                    requires_reauth: boolean;
+                    error_code: string | null;
+                  } | null,
                 }))}
                 walletCards={
                   // Show each wallet instance separately - linking is now by wallet instance, not card type
@@ -981,6 +1012,24 @@ export default async function SettingsPage() {
                 .select("id")
                 .eq("user_id", userId);
               const walletIds = wallets?.map((w) => w.id) || [];
+
+              // Revoke all Plaid connections before deleting
+              const { data: plaidItems } = await supabase
+                .from("user_plaid_items")
+                .select("id, access_token")
+                .eq("user_id", userId);
+              
+              if (plaidItems && plaidItems.length > 0) {
+                for (const item of plaidItems) {
+                  try {
+                    await plaidClient.itemRemove({ access_token: item.access_token });
+                    logger.info({ userId, plaidItemId: item.id }, "Removed Plaid item on account deletion");
+                  } catch (err) {
+                    // Log but continue - don't block account deletion
+                    logger.error({ err, userId, plaidItemId: item.id }, "Failed to remove Plaid item on account deletion");
+                  }
+                }
+              }
 
               // Delete in correct order (foreign keys)
               // Use untyped client for tables not in generated types
