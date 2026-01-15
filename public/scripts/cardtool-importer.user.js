@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.chrishutchins.com
-// @version      2.12.0
+// @version      2.20.1
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -16,6 +16,7 @@
 // @grant        GM_setValue
 // @grant        unsafeWindow
 // @connect      cardtool.chrishutchins.com
+// @connect      cardtoolapp.com
 // @connect      localhost
 // @run-at       document-start
 // ==/UserScript==
@@ -35,113 +36,8 @@
     // Server-loaded configs (populated on init)
     let serverConfigs = [];
 
-    // Fallback site configurations (used if server configs unavailable)
-    const FALLBACK_CONFIGS = [
-        // ============================================
-        // AIRLINES
-        // ============================================
-        {
-            name: "United MileagePlus",
-            currencyCode: "UA",
-            sitePattern: /united\.com/i,
-            balancePageUrl: "https://www.united.com/en/us/myunited",
-            selector: "[data-testid='miles-balance'], .miles-balance, .mileage-balance",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-        {
-            name: "Delta SkyMiles",
-            currencyCode: "DL",
-            sitePattern: /delta\.com/i,
-            balancePageUrl: "https://www.delta.com/myprofile/personal",
-            selector: ".skymiles-balance, [data-testid='skymiles-balance']",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-        {
-            name: "American AAdvantage",
-            currencyCode: "AA",
-            sitePattern: /aa\.com/i,
-            balancePageUrl: "https://www.aa.com/aadvantage-program/profile/account-summary",
-            selector: ".aadvantage-miles, .miles-balance",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-        {
-            name: "Southwest Rapid Rewards",
-            currencyCode: "SW",
-            sitePattern: /southwest\.com/i,
-            balancePageUrl: "https://www.southwest.com/myaccount/",
-            selector: ".points-balance, [data-testid='points-balance']",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-        {
-            name: "JetBlue TrueBlue",
-            currencyCode: "B6",
-            sitePattern: /jetblue\.com/i,
-            balancePageUrl: "https://trueblue.jetblue.com/",
-            selector: ".points-balance, .trueblue-points",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-        {
-            name: "Alaska Mileage Plan",
-            currencyCode: "AS",
-            sitePattern: /alaskaair\.com/i,
-            balancePageUrl: "https://www.alaskaair.com/account/overview",
-            selector: ".miles-balance, [data-testid='miles-balance']",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-
-        // ============================================
-        // TRANSFERABLE POINTS
-        // ============================================
-        {
-            name: "Amex Membership Rewards",
-            currencyCode: "MR",
-            sitePattern: /americanexpress\.com/i,
-            balancePageUrl: "https://global.americanexpress.com/rewards/summary",
-            selector: "[data-testid='points-balance'], .points-balance, .membership-rewards-balance",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-        {
-            name: "Chase Ultimate Rewards",
-            currencyCode: "UR",
-            sitePattern: /chase\.com/i,
-            balancePageUrl: "https://ultimaterewards.chase.com/",
-            selector: ".point-balance, [data-testid='ur-points']",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-
-        // ============================================
-        // HOTELS
-        // ============================================
-        {
-            name: "Marriott Bonvoy",
-            currencyCode: "MB",
-            sitePattern: /marriott\.com/i,
-            balancePageUrl: "https://www.marriott.com/loyalty/myAccount/default.mi",
-            selector: ".points-balance, [data-testid='points-balance']",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-        {
-            name: "Hilton Honors",
-            currencyCode: "HH",
-            sitePattern: /hilton\.com/i,
-            balancePageUrl: "https://www.hilton.com/en/hilton-honors/guest/my-account/",
-            selector: ".points-balance, [data-testid='hhonors-points']",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-        {
-            name: "World of Hyatt",
-            currencyCode: "WOH",
-            sitePattern: /hyatt\.com/i,
-            balancePageUrl: "https://world.hyatt.com/content/gp/en/member-dashboard.html",
-            selector: ".points-balance, [data-testid='woh-points']",
-            parseBalance: (text) => parseInt(text.replace(/[^0-9]/g, "")) || 0
-        },
-
-        // ============================================
-        // ADD MORE CONFIGS HERE
-        // Use the CardTool Admin Helper script to generate configs
-        // ============================================
-    ];
+    // Server-loaded configs (populated on init from /api/points/site-configs)
+    // No fallback configs - all configs managed via CardTool admin
 
     // ============================================
     // STYLES
@@ -471,11 +367,11 @@
             -webkit-text-fill-color: #a1a1aa !important;
         }
 
-        /* Toast notification */
+        /* Toast notification - positioned left of the widget */
         #cardtool-toast {
             position: fixed !important;
-            bottom: 100px !important;
-            right: 20px !important;
+            bottom: 20px !important;
+            right: 340px !important;
             background: #18181b !important;
             border: 1px solid #10b981 !important;
             border-radius: 8px !important;
@@ -506,6 +402,30 @@
                 opacity: 1;
                 transform: translateX(0);
             }
+        }
+        /* Inventory section styles */
+        .cardtool-inventory-divider {
+            height: 1px !important;
+            background: #3f3f46 !important;
+            margin: 12px 0 !important;
+        }
+        .cardtool-inventory-header {
+            text-align: center !important;
+            margin-bottom: 4px !important;
+        }
+        .cardtool-inventory-count {
+            font-size: 20px !important;
+            font-weight: 700 !important;
+            color: #fbbf24 !important;
+        }
+        .cardtool-inventory-label {
+            font-size: 12px !important;
+            color: #a1a1aa !important;
+            margin-left: 6px !important;
+        }
+        .cardtool-inventory-summary {
+            font-size: 11px !important;
+            color: #71717a !important;
         }
     `;
 
@@ -541,6 +461,9 @@
         // This needs to happen before loadServerConfigs since it's async
         const hasSpecialApi = setupSpecialApiInterceptors();
         
+        // Set up inventory API interceptors (for awards/certificates)
+        const hasInventoryApi = setupInventoryApiInterceptors();
+        
         // Load server configs first, then initialize
         loadServerConfigs(() => {
             // Find ALL matching site configs by domain
@@ -553,6 +476,17 @@
                     currencyCode: specialApiConfig.currencyCode,
                     balancePageUrl: window.location.href,
                     selector: null // No DOM selector, balance comes from API
+                }];
+            }
+
+            // If we have inventory API but no balance configs, create a placeholder for inventory-only sites
+            if (matchingConfigs.length === 0 && hasInventoryApi && inventoryConfig) {
+                matchingConfigs = [{
+                    name: inventoryConfig.name,
+                    currencyCode: null, // No currency, inventory only
+                    balancePageUrl: window.location.href,
+                    selector: null,
+                    inventoryOnly: true
                 }];
             }
 
@@ -574,6 +508,11 @@
             // For special API configs, show "waiting for data" message
             if (hasSpecialApi && specialApiConfig) {
                 updateBadgeContent('<div class="cardtool-badge-status">Waiting for balance data...</div>');
+            }
+            
+            // For inventory-only sites, show "waiting for inventory" message
+            if (hasInventoryApi && inventoryConfig && currentConfig && currentConfig.inventoryOnly) {
+                updateBadgeContent('<div class="cardtool-badge-status">Waiting for inventory data...</div>');
             }
 
             // Try to find balance on page (wait longer for SPAs to load)
@@ -601,56 +540,85 @@
     }
 
     function loadServerConfigs(callback) {
+        console.log('CardTool: Loading server configs from', `${CARDTOOL_URL}/api/points/site-configs`);
+        
+        // Helper to transform raw config to usable format
+        const transformConfig = (config) => ({
+            name: config.name,
+            currencyCode: config.currency_code,
+            domain: config.domain,
+            balancePageUrl: config.balance_page_url,
+            selector: config.selector,
+            attribute: config.attribute || null,
+            aggregate: config.aggregate || false,
+            format: config.format || 'points',
+            parseRegex: config.parse_regex || null,
+            parseBalance: function(text) {
+                const normalized = text.replace(/[\u00A0\s]+/g, ' ');
+                const regex = new RegExp(this.parseRegex || '[\\d][\\d.,\\s]*');
+                const match = normalized.match(regex);
+                if (!match) return 0;
+                
+                if (this.format === 'dollars') {
+                    const numStr = match[0].replace(/[^0-9.]/g, '');
+                    return Math.round(parseFloat(numStr)) || 0;
+                }
+                return parseInt(match[0].replace(/[^0-9]/g, '')) || 0;
+            }
+        });
+        
+        // Try to load cached configs first (in case API fails)
+        const loadCachedConfigs = () => {
+            try {
+                const cached = GM_getValue('serverConfigsCache', null);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    // Cache is valid for 24 hours
+                    if (parsed.timestamp && (Date.now() - parsed.timestamp) < 24 * 60 * 60 * 1000) {
+                        serverConfigs = parsed.configs.map(c => transformConfig(c));
+                        console.log('CardTool: Loaded', serverConfigs.length, 'configs from cache');
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn('CardTool: Failed to load cached configs', e);
+            }
+            return false;
+        };
+        
         GM_xmlhttpRequest({
             method: 'GET',
             url: `${CARDTOOL_URL}/api/points/site-configs`,
             withCredentials: true,
             onload: function(response) {
+                console.log('CardTool: Server configs response status:', response.status);
                 try {
                     if (response.status === 200) {
                         const data = JSON.parse(response.responseText);
-                        serverConfigs = (data.configs || [])
-                            .filter(config => config.is_active !== false)
-                            .map(config => ({
-                                name: config.name,
-                                currencyCode: config.currency_code,
-                                domain: config.domain,
-                                balancePageUrl: config.balance_page_url,
-                                selector: config.selector,
-                                attribute: config.attribute || null,  // Read from attribute instead of textContent
-                                aggregate: config.aggregate || false,
-                                format: config.format || 'points',  // 'points' or 'dollars'
-                                parseBalance: (text) => {
-                                    // Normalize: replace nbsp and other whitespace between digits
-                                    const normalized = text.replace(/[\u00A0\s]+/g, ' ');
-                                    // Default regex handles US (1,000), European (1.000), and Scandinavian (1 000) formats
-                                    const regex = new RegExp(config.parse_regex || '[\\d][\\d.,\\s]*');
-                                    const match = normalized.match(regex);
-                                    if (!match) return 0;
-                                    
-                                    // Use explicit format field from admin settings
-                                    const format = config.format || 'points';
-                                    
-                                    // For dollars format (e.g., "$1,550.00"), parse as float and round to whole dollars
-                                    if (format === 'dollars') {
-                                        // Remove everything except digits and decimal point
-                                        const numStr = match[0].replace(/[^0-9.]/g, '');
-                                        return Math.round(parseFloat(numStr)) || 0;
-                                    }
-                                    
-                                    // Default (points): strip all non-digits for points/miles
-                                    return parseInt(match[0].replace(/[^0-9]/g, '')) || 0;
-                                },
-                                currencyType: config.reward_currencies?.currency_type || null
-                            }));
+                        const rawConfigs = (data.configs || []).filter(config => config.is_active !== false);
+                        serverConfigs = rawConfigs.map(c => transformConfig(c));
+                        console.log('CardTool: Loaded', serverConfigs.length, 'server configs');
+                        
+                        // Cache the raw configs for offline use
+                        GM_setValue('serverConfigsCache', JSON.stringify({
+                            timestamp: Date.now(),
+                            configs: rawConfigs
+                        }));
+                    } else {
+                        console.warn('CardTool: Server configs returned status', response.status);
+                        loadCachedConfigs();
                     }
                 } catch (e) {
                     console.error('CardTool: Error parsing server configs', e);
+                    loadCachedConfigs();
                 }
                 callback();
             },
-            onerror: function() {
-                console.warn('CardTool: Could not load server configs, using fallbacks');
+            onerror: function(error) {
+                console.warn('CardTool: Could not load server configs from API. Error:', error);
+                if (!loadCachedConfigs()) {
+                    console.warn('CardTool: No cached configs available');
+                }
                 callback();
             }
         });
@@ -661,22 +629,12 @@
         const normalizedHost = hostname.replace(/^www\./, '').toLowerCase();
         const matches = [];
         
-        // Server configs take priority (more up-to-date)
         for (const config of serverConfigs) {
             // Normalize config domain for case-insensitive comparison
             const configDomain = (config.domain || '').toLowerCase();
             // Match if hostname ends with the config domain
             if (normalizedHost === configDomain || normalizedHost.endsWith('.' + configDomain)) {
                 matches.push(config);
-            }
-        }
-        
-        // Fall back to hardcoded configs if no server matches
-        if (matches.length === 0) {
-            for (const config of FALLBACK_CONFIGS) {
-                if (config.sitePattern.test(hostname)) {
-                    matches.push(config);
-                }
             }
         }
         
@@ -778,26 +736,53 @@
         // Update mini-balance for minimized state
         const miniBalance = document.getElementById('cardtool-mini-balance');
         if (miniBalance) {
-            miniBalance.textContent = formattedBalance;
+            let miniText = formattedBalance;
+            // Add inventory count if we have inventory
+            if (inventoryItems && inventoryItems.length > 0) {
+                miniText += ' | ' + inventoryItems.length + ' inv';
+            }
+            miniBalance.textContent = miniText;
         }
         
+        // Build inventory row if we have inventory items
+        let inventoryRowHtml = '';
+        if (inventoryItems && inventoryItems.length > 0) {
+            const byType = {};
+            for (const item of inventoryItems) {
+                const type = item.type_slug === 'free_night' ? 'Free Nights' : 'Coupons/Upgrades';
+                byType[type] = (byType[type] || 0) + 1;
+            }
+            const summaryText = Object.entries(byType).map(([type, count]) => `${count} ${type}`).join(', ');
+            const brandName = inventoryConfig?.brand || 'Inventory';
+            
+            inventoryRowHtml = `
+                <div class="cardtool-multi-balance-row">
+                    <span class="cardtool-multi-balance-value">${inventoryItems.length}</span>
+                    <span class="cardtool-multi-balance-name">${brandName} Inventory</span>
+                </div>
+                <div class="cardtool-inventory-summary" style="text-align: right; margin-bottom: 8px; margin-top: -4px;">${summaryText}</div>
+            `;
+        }
+        
+        const hasInventory = inventoryItems && inventoryItems.length > 0;
+        const syncButtonText = hasInventory ? 'Sync All to CardTool' : 'Sync to CardTool';
+        
         updateBadgeContent(`
-            <div class="cardtool-badge-balance">${formattedBalance}</div>
-            <div class="cardtool-badge-currency">${currentConfig.name}</div>
+            <div class="cardtool-multi-balance-row">
+                <span class="cardtool-multi-balance-value">${formattedBalance}</span>
+                <span class="cardtool-multi-balance-name">${currentConfig.name}</span>
+            </div>
+            ${inventoryRowHtml}
             <div id="cardtool-player-container"></div>
             <div class="cardtool-options-toggle" id="cardtool-options-toggle">▼ Options</div>
             <div class="cardtool-options" id="cardtool-options" style="display: none;">
                 <div class="cardtool-option-row">
-                    <input type="checkbox" class="cardtool-checkbox" id="cardtool-additive">
-                    <label class="cardtool-option-label" for="cardtool-additive">Add to existing balance</label>
-                </div>
-                <div class="cardtool-option-row">
-                    <label class="cardtool-option-label" for="cardtool-expiration">Expires</label>
+                    <label class="cardtool-option-label" for="cardtool-expiration">Points expire</label>
                     <input type="date" class="cardtool-date-input" id="cardtool-expiration">
                 </div>
             </div>
             <button class="cardtool-badge-btn" id="cardtool-sync-btn">
-                Sync to CardTool
+                ${syncButtonText}
             </button>
         `);
 
@@ -814,13 +799,23 @@
             }
         });
 
-        document.getElementById('cardtool-sync-btn').addEventListener('click', handleSync);
+        // Combined sync handler - syncs both balance and inventory if available
+        document.getElementById('cardtool-sync-btn').addEventListener('click', () => {
+            const hasInventory = inventoryItems && inventoryItems.length > 0;
+            handleCombinedSync(hasInventory ? inventoryItems : null);
+        });
 
         // Load players
         loadPlayers();
     }
 
     function showNoBalance() {
+        // Don't overwrite if we have multi-balance data from API interceptor
+        if (hasMultiBalanceData) {
+            console.log('CardTool: Skipping "no balance" display - multi-balance data already shown');
+            return;
+        }
+        
         // Find the first config with a balance page URL to show as the link
         const configWithUrl = matchingConfigs.find(c => c.balancePageUrl);
         const balancePageUrl = configWithUrl ? configWithUrl.balancePageUrl : null;
@@ -920,6 +915,12 @@
         try {
             // Try each matching config's selectors until one finds a balance
             for (const config of matchingConfigs) {
+                // Skip configs without DOM selectors (API-only configs)
+                if (!config.selector) {
+                    console.log('CardTool: Skipping config without selector:', config.name);
+                    continue;
+                }
+                
                 const selectors = config.selector.split(',').map(s => s.trim());
                 console.log('CardTool: Trying config:', config.name, 'selectors:', selectors, 'aggregate:', config.aggregate);
 
@@ -1088,10 +1089,7 @@
         const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
         GM_setValue('lastPlayerNumber', playerNumber);
 
-        // Get options
-        const additiveCheckbox = document.getElementById('cardtool-additive');
-        const additive = additiveCheckbox ? additiveCheckbox.checked : false;
-        
+        // Get expiration option
         const expirationInput = document.getElementById('cardtool-expiration');
         const expirationDate = expirationInput && expirationInput.value ? expirationInput.value : null;
 
@@ -1106,7 +1104,7 @@
                 currencyCode: currentConfig.currencyCode,
                 balance: extractedBalance,
                 playerNumber: playerNumber,
-                additive: additive,
+                additive: false,
                 expirationDate: expirationDate
             }),
             onload: function(response) {
@@ -1134,6 +1132,147 @@
                 showSyncError('Network error - check your connection');
             }
         });
+    }
+
+    // Combined sync for balance + inventory with single toast (runs in parallel)
+    function handleCombinedSync(inventoryToSync) {
+        if (extractedBalance === null) {
+            showSyncError('No balance to sync');
+            return;
+        }
+
+        const syncToken = getSyncToken();
+        if (!syncToken) {
+            showNotLoggedIn();
+            return;
+        }
+
+        const btn = document.getElementById('cardtool-sync-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Syncing...';
+        }
+
+        // Get selected player and remember it
+        const playerSelect = document.getElementById('cardtool-player-select');
+        const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
+        GM_setValue('lastPlayerNumber', playerNumber);
+
+        // Get expiration option
+        const expirationInput = document.getElementById('cardtool-expiration');
+        const expirationDate = expirationInput && expirationInput.value ? expirationInput.value : null;
+
+        // Track results from parallel requests
+        let balanceResult = null;
+        let inventoryResult = null;
+        let balanceDone = false;
+        let inventoryDone = !inventoryToSync || inventoryToSync.length === 0; // Already done if no inventory
+
+        function checkComplete() {
+            if (!balanceDone || !inventoryDone) return;
+
+            // Both done - show combined result
+            if (balanceResult && balanceResult.success) {
+                const balanceMsg = `${balanceResult.balance.toLocaleString()} ${balanceResult.currencyName}`;
+                
+                if (inventoryDone && !inventoryToSync) {
+                    // No inventory to sync
+                    showToast(`Synced ${balanceMsg}`);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Synced!';
+                        btn.style.background = '#22c55e';
+                    }
+                } else if (inventoryResult && inventoryResult.success) {
+                    // Both succeeded
+                    showToast(`Synced ${balanceMsg} + ${inventoryResult.synced} inventory items`);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Synced!';
+                        btn.style.background = '#22c55e';
+                    }
+                } else {
+                    // Balance ok, inventory failed
+                    showToast(`Synced ${balanceMsg}, inventory failed`, true);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Partial Sync';
+                        btn.style.background = '#f59e0b';
+                    }
+                }
+            } else {
+                // Balance failed
+                showSyncError(balanceResult?.error || 'Sync failed');
+            }
+        }
+
+        // Sync balance
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: `${CARDTOOL_URL}/api/points/import`,
+            headers: {
+                'Content-Type': 'application/json',
+                'x-sync-token': syncToken
+            },
+            data: JSON.stringify({
+                currencyCode: currentConfig.currencyCode,
+                balance: extractedBalance,
+                playerNumber: playerNumber,
+                additive: false,
+                expirationDate: expirationDate
+            }),
+            onload: function(response) {
+                try {
+                    if (response.status === 401) {
+                        clearSyncToken();
+                        showNotLoggedIn();
+                        return;
+                    }
+                    const data = JSON.parse(response.responseText);
+                    balanceResult = response.status === 200 ? { success: true, ...data } : { success: false, error: data.error };
+                } catch (e) {
+                    balanceResult = { success: false, error: 'Parse error' };
+                }
+                balanceDone = true;
+                checkComplete();
+            },
+            onerror: function() {
+                balanceResult = { success: false, error: 'Network error' };
+                balanceDone = true;
+                checkComplete();
+            }
+        });
+
+        // Sync inventory in parallel (if any)
+        if (inventoryToSync && inventoryToSync.length > 0) {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: `${CARDTOOL_URL}/api/inventory/sync`,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-sync-token': syncToken
+                },
+                data: JSON.stringify({
+                    items: inventoryToSync,
+                    playerNumber: playerNumber
+                }),
+                onload: function(response) {
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        inventoryResult = response.status === 200 && data.success ? { success: true, ...data } : { success: false, error: data.error };
+                    } catch (e) {
+                        inventoryResult = { success: false, error: 'Parse error' };
+                    }
+                    inventoryDone = true;
+                    checkComplete();
+                },
+                onerror: function() {
+                    inventoryResult = { success: false, error: 'Network error' };
+                    inventoryDone = true;
+                    checkComplete();
+                }
+            });
+        }
     }
 
     // ============================================
@@ -1347,6 +1486,43 @@
     let specialApiConfig = null;
     let hasMultiBalanceData = false; // Flag to prevent DOM detection from overwriting API data
 
+    // ============================================
+    // INVENTORY API INTERCEPTORS
+    // ============================================
+
+    // Inventory interceptor configs for importing awards/certificates from loyalty programs
+    const INVENTORY_API_CONFIGS = {
+        hyattAwards: {
+            domain: 'hyatt.com',
+            pathPattern: /\/profile\/.*\/awards/i,
+            apiPattern: /\/profile\/api\/loyalty\/awarddetail/i,
+            name: 'Hyatt',
+            brand: 'Hyatt',
+            parseResponse: (data) => {
+                const items = [];
+                for (const category of data.awardCategories || []) {
+                    // NIGHTS = Free Night, everything else = Coupon
+                    const typeSlug = category.category === 'NIGHTS' ? 'free_night' : 'coupon';
+                    for (const award of category.awards || []) {
+                        items.push({
+                            external_id: award.code,
+                            type_slug: typeSlug,
+                            name: award.title,
+                            brand: 'Hyatt',
+                            expiration_date: award.expirationDate || null,
+                            notes: award.terms || null
+                        });
+                    }
+                }
+                return items;
+            }
+        }
+    };
+
+    // State for inventory interceptors
+    let inventoryItems = null; // Array of parsed inventory items
+    let inventoryConfig = null;
+
     function setupSpecialApiInterceptors() {
         const hostname = window.location.hostname.toLowerCase();
         const pathname = window.location.pathname.toLowerCase();
@@ -1448,6 +1624,282 @@
         console.log('CardTool: Special API Fetch interceptor installed for', config.name);
     }
 
+    // ============================================
+    // INVENTORY API INTERCEPTOR FUNCTIONS
+    // ============================================
+
+    function setupInventoryApiInterceptors() {
+        const hostname = window.location.hostname.toLowerCase();
+        const pathname = window.location.pathname.toLowerCase();
+        
+        for (const [key, config] of Object.entries(INVENTORY_API_CONFIGS)) {
+            if (hostname.includes(config.domain) && config.pathPattern.test(pathname)) {
+                console.log('CardTool Inventory: Setting up interceptor for', config.name);
+                inventoryConfig = config;
+                interceptInventoryApi(config);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function interceptInventoryApi(config) {
+        try {
+            const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+            const cardtoolMarker = '__cardtool_inventory_api__';
+            
+            // Intercept XMLHttpRequest
+            const origOpen = targetWindow.XMLHttpRequest.prototype.open;
+            const origSend = targetWindow.XMLHttpRequest.prototype.send;
+            
+            // Check if already installed
+            if (origOpen && origOpen[cardtoolMarker]) {
+                console.log('CardTool Inventory: Interceptor already installed');
+                return;
+            }
+
+        const patchedOpen = function(method, url, async, user, pass) {
+            this._cardtool_inventory_url = url;
+            return origOpen.apply(this, arguments);
+        };
+        patchedOpen[cardtoolMarker] = true;
+        
+        try {
+            Object.defineProperty(targetWindow.XMLHttpRequest.prototype, 'open', {
+                value: patchedOpen,
+                writable: false,
+                configurable: true
+            });
+        } catch (e) {
+            targetWindow.XMLHttpRequest.prototype.open = patchedOpen;
+        }
+
+        targetWindow.XMLHttpRequest.prototype.send = function(body) {
+            const xhr = this;
+            const url = xhr._cardtool_inventory_url || '';
+
+            xhr.addEventListener('readystatechange', function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    if (config.apiPattern.test(url)) {
+                        console.log('CardTool Inventory: Intercepted API call:', url.substring(0, 80));
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            const items = config.parseResponse(data);
+                            if (items && items.length > 0) {
+                                console.log('CardTool Inventory: Found', items.length, 'item(s)');
+                                inventoryItems = items;
+                                showInventoryFound(items);
+                            }
+                        } catch (e) {
+                            console.warn('CardTool Inventory: Failed to parse response', e);
+                        }
+                    }
+                }
+            });
+
+            return origSend.apply(this, arguments);
+        };
+
+        console.log('CardTool Inventory: XHR interceptor installed for', config.name);
+        
+        // Also intercept Fetch API
+        const origFetch = targetWindow.fetch;
+        targetWindow.fetch = async function(input, init) {
+            const url = typeof input === 'string' ? input : input.url;
+            const response = await origFetch.apply(this, arguments);
+            
+            if (config.apiPattern.test(url) && response.ok) {
+                console.log('CardTool Inventory: Intercepted Fetch call:', url.substring(0, 80));
+                try {
+                    const clonedResponse = response.clone();
+                    const data = await clonedResponse.json();
+                    const items = config.parseResponse(data);
+                    if (items && items.length > 0) {
+                        console.log('CardTool Inventory: Found', items.length, 'item(s) from Fetch');
+                        inventoryItems = items;
+                        showInventoryFound(items);
+                    }
+                } catch (e) {
+                    console.warn('CardTool Inventory: Failed to parse Fetch response', e);
+                }
+            }
+            
+            return response;
+        };
+
+        console.log('CardTool Inventory: Fetch interceptor installed for', config.name);
+        } catch (e) {
+            console.error('CardTool Inventory: Failed to install interceptor', e);
+        }
+    }
+
+    // Show inventory count in the badge
+    function showInventoryFound(items) {
+        // Check if badge exists, if not create it
+        let badge = document.getElementById('cardtool-badge');
+        if (!badge) {
+            createBadge();
+            badge = document.getElementById('cardtool-badge');
+        }
+
+        // Check if this is an inventory-only site (no balance data)
+        const isInventoryOnly = currentConfig && currentConfig.inventoryOnly;
+
+        // Update mini-badge text
+        const miniBalance = document.getElementById('cardtool-mini-balance');
+        if (miniBalance) {
+            if (isInventoryOnly) {
+                // For inventory-only, just show the count
+                miniBalance.textContent = items.length + ' inv';
+            } else {
+                // For sites with balances, append to existing
+                const currentText = miniBalance.textContent || '';
+                if (!currentText.includes('inv')) {
+                    miniBalance.textContent = currentText + (currentText ? ' | ' : '') + items.length + ' inv';
+                }
+            }
+        }
+
+        // For inventory-only sites, replace the entire badge content
+        if (isInventoryOnly) {
+            updateBadgeContent(buildInventorySectionHtml(items, true));
+            // Add click handler for sync button
+            const syncBtn = document.getElementById('cardtool-inventory-sync-btn');
+            if (syncBtn) {
+                syncBtn.addEventListener('click', () => handleInventorySync(items));
+            }
+            return;
+        }
+
+        // For sites with balances, add/update inventory section
+        const existingInventorySection = document.getElementById('cardtool-inventory-section');
+        if (existingInventorySection) {
+            existingInventorySection.innerHTML = buildInventorySectionHtml(items, false);
+        } else {
+            // Append inventory section to badge content
+            const badgeContent = document.getElementById('cardtool-badge-content');
+            if (badgeContent) {
+                const inventoryDiv = document.createElement('div');
+                inventoryDiv.id = 'cardtool-inventory-section';
+                inventoryDiv.innerHTML = buildInventorySectionHtml(items, false);
+                badgeContent.appendChild(inventoryDiv);
+            }
+        }
+        
+        // Add click handler for sync button
+        const syncBtn = document.getElementById('cardtool-inventory-sync-btn');
+        if (syncBtn) {
+            syncBtn.addEventListener('click', () => handleInventorySync(items));
+        }
+    }
+
+    function buildInventorySectionHtml(items, isInventoryOnly = false) {
+        // Group items by type for display
+        const byType = {};
+        for (const item of items) {
+            const type = item.type_slug === 'free_night' ? 'Free Nights' : 'Coupons/Upgrades';
+            byType[type] = (byType[type] || 0) + 1;
+        }
+        
+        const summaryText = Object.entries(byType)
+            .map(([type, count]) => `${count} ${type}`)
+            .join(', ');
+
+        const brandName = inventoryConfig?.brand || 'Inventory';
+
+        // Use consistent row format (value left, label right) like United balances
+        if (isInventoryOnly) {
+            return `
+                <div class="cardtool-multi-balance-row">
+                    <span class="cardtool-multi-balance-value">${items.length}</span>
+                    <span class="cardtool-multi-balance-name">${brandName} Inventory</span>
+                </div>
+                <div class="cardtool-inventory-summary" style="text-align: right; margin-bottom: 12px; margin-top: -4px;">${summaryText}</div>
+                <button class="cardtool-badge-btn" id="cardtool-inventory-sync-btn">
+                    Sync ${items.length} Items to CardTool
+                </button>
+            `;
+        }
+
+        // If showing alongside balances, use divider format
+        return `
+            <div class="cardtool-inventory-divider"></div>
+            <div class="cardtool-multi-balance-row">
+                <span class="cardtool-multi-balance-value">${items.length}</span>
+                <span class="cardtool-multi-balance-name">${brandName} Inventory</span>
+            </div>
+            <div class="cardtool-inventory-summary" style="text-align: right; margin-bottom: 10px; margin-top: -4px;">${summaryText}</div>
+            <button class="cardtool-badge-btn" id="cardtool-inventory-sync-btn">
+                Sync ${items.length} Items to CardTool
+            </button>
+        `;
+    }
+
+    // Sync inventory items to CardTool
+    async function handleInventorySync(items) {
+        const syncToken = getSyncToken();
+        if (!syncToken) {
+            showNotLoggedIn();
+            return;
+        }
+
+        const btn = document.getElementById('cardtool-inventory-sync-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Syncing...';
+        }
+
+        try {
+            await new Promise((resolve, reject) => {
+                GM_xmlhttpRequest({
+                    method: 'POST',
+                    url: `${CARDTOOL_URL}/api/inventory/sync`,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-sync-token': syncToken
+                    },
+                    data: JSON.stringify({ items }),
+                    onload: function(response) {
+                        try {
+                            const data = JSON.parse(response.responseText);
+                            if (response.status === 200 && data.success) {
+                                console.log('CardTool Inventory: Synced', data.synced, 'items (', data.created, 'new,', data.updated, 'updated)');
+                                showToast(`Synced ${data.synced} inventory items (${data.created} new, ${data.updated} updated)`);
+                                if (btn) {
+                                    btn.textContent = 'Synced!';
+                                    btn.style.background = '#22c55e';
+                                }
+                                resolve(data);
+                            } else {
+                                console.error('CardTool Inventory: Sync failed', data.error);
+                                showToast(data.error || 'Sync failed', true);
+                                if (btn) {
+                                    btn.disabled = false;
+                                    btn.textContent = `Sync ${items.length} Items to CardTool`;
+                                }
+                                reject(new Error(data.error));
+                            }
+                        } catch (e) {
+                            console.error('CardTool Inventory: Failed to parse response', e);
+                            reject(e);
+                        }
+                    },
+                    onerror: function(error) {
+                        console.error('CardTool Inventory: Request failed', error);
+                        showToast('Network error - please try again', true);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = `Sync ${items.length} Items to CardTool`;
+                        }
+                        reject(error);
+                    }
+                });
+            });
+        } catch (e) {
+            console.error('CardTool Inventory: Sync error', e);
+        }
+    }
+
     // Show multiple balances in the badge (e.g., miles + TravelBank)
     function showMultipleBalancesFound(balances) {
         // Set flag to prevent DOM detection from overwriting
@@ -1498,10 +1950,6 @@
             <div id="cardtool-player-container"></div>
             <div class="cardtool-options-toggle" id="cardtool-options-toggle">▼ Options</div>
             <div class="cardtool-options" id="cardtool-options" style="display: none;">
-                <div class="cardtool-option-row">
-                    <input type="checkbox" class="cardtool-checkbox" id="cardtool-additive">
-                    <label class="cardtool-option-label" for="cardtool-additive">Add to existing balances</label>
-                </div>
                 ${expirationRowsHtml}
             </div>
             <button class="cardtool-badge-btn" id="cardtool-sync-btn">
@@ -1555,10 +2003,6 @@
         const playerNumber = playerSelect ? parseInt(playerSelect.value) : 1;
         GM_setValue('lastPlayerNumber', playerNumber);
 
-        // Get options
-        const additiveCheckbox = document.getElementById('cardtool-additive');
-        const additive = additiveCheckbox ? additiveCheckbox.checked : false;
-
         let successCount = 0;
         let lastError = null;
 
@@ -1582,7 +2026,7 @@
                             currencyCode: bal.currencyCode,
                             balance: bal.balance,
                             playerNumber: playerNumber,
-                            additive: additive,
+                            additive: false,
                             expirationDate: expirationDate
                         }),
                         onload: function(response) {

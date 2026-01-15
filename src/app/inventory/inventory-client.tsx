@@ -125,6 +125,47 @@ function getExpirationBucket(date: string | null): { key: string; label: string;
   return { key: `year-${expYear}`, label: String(expYear), sortOrder: 30 + yearOffset };
 }
 
+// Sub-group items by name + expiration for collapsing duplicates
+interface ItemSubGroup {
+  key: string;
+  name: string;
+  brand: string | null;
+  expiration_date: string | null;
+  items: InventoryItemData[];
+}
+
+function subGroupItems(items: InventoryItemData[]): ItemSubGroup[] {
+  const subGroups = new Map<string, ItemSubGroup>();
+  
+  for (const item of items) {
+    // Key by name + expiration + brand (items must match all three to be grouped)
+    const key = `${item.name}|${item.expiration_date ?? "no-exp"}|${item.brand ?? "no-brand"}`;
+    
+    if (!subGroups.has(key)) {
+      subGroups.set(key, {
+        key,
+        name: item.name,
+        brand: item.brand,
+        expiration_date: item.expiration_date,
+        items: [],
+      });
+    }
+    subGroups.get(key)!.items.push(item);
+  }
+  
+  // Convert to array and sort by expiration, then name
+  return Array.from(subGroups.values()).sort((a, b) => {
+    if (!a.expiration_date && !b.expiration_date) {
+      return a.name.localeCompare(b.name);
+    }
+    if (!a.expiration_date) return 1;
+    if (!b.expiration_date) return -1;
+    const dateDiff = new Date(a.expiration_date).getTime() - new Date(b.expiration_date).getTime();
+    if (dateDiff !== 0) return dateDiff;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export function InventoryClient({
   inventoryItems,
   inventoryTypes,
@@ -139,6 +180,7 @@ export function InventoryClient({
   const [filterType, setFilterType] = useState<string>("all");
   const [showUsed, setShowUsed] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedSubGroups, setExpandedSubGroups] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
 
   // Filter items
@@ -229,6 +271,18 @@ export function InventoryClient({
 
   const toggleGroup = (key: string) => {
     setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const toggleSubGroup = (key: string) => {
+    setExpandedSubGroups(prev => {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
@@ -357,20 +411,100 @@ export function InventoryClient({
                 </button>
                 {!isCollapsed && (
                   <div className="divide-y divide-zinc-800">
-                    {group.items.map((item) => (
-                      <InventoryItem
-                        key={item.id}
-                        item={item}
-                        inventoryTypes={inventoryTypes}
-                        brandSuggestions={brandSuggestions}
-                        showBrand={groupBy !== "brand"}
-                        showType={groupBy !== "type"}
-                        onUpdateItem={onUpdateItem}
-                        onUseItem={onUseItem}
-                        onMarkUnused={onMarkUnused}
-                        onDeleteItem={onDeleteItem}
-                      />
-                    ))}
+                    {subGroupItems(group.items).map((subGroup) => {
+                      // Single item - render directly
+                      if (subGroup.items.length === 1) {
+                        return (
+                          <InventoryItem
+                            key={subGroup.items[0].id}
+                            item={subGroup.items[0]}
+                            inventoryTypes={inventoryTypes}
+                            brandSuggestions={brandSuggestions}
+                            showBrand={groupBy !== "brand"}
+                            showType={groupBy !== "type"}
+                            onUpdateItem={onUpdateItem}
+                            onUseItem={onUseItem}
+                            onMarkUnused={onMarkUnused}
+                            onDeleteItem={onDeleteItem}
+                          />
+                        );
+                      }
+                      
+                      // Multiple items - render as expandable subgroup
+                      const isExpanded = expandedSubGroups.has(subGroup.key);
+                      const typeName = subGroup.items[0].inventory_types?.name ?? "";
+                      const expLabel = subGroup.expiration_date 
+                        ? new Date(subGroup.expiration_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                        : "No exp";
+                      
+                      return (
+                        <div key={subGroup.key}>
+                          <button
+                            onClick={() => toggleSubGroup(subGroup.key)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left"
+                          >
+                            {/* Expand/collapse indicator */}
+                            <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                              <svg
+                                className={`w-4 h-4 text-zinc-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                            
+                            {/* Name and brand */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-white truncate">{subGroup.name}</span>
+                                <span className="px-2 py-0.5 text-xs font-medium rounded bg-zinc-700 text-zinc-300">
+                                  {typeName}
+                                </span>
+                                <span className="px-2 py-0.5 text-xs font-medium rounded bg-blue-900/50 text-blue-300">
+                                  ×{subGroup.items.length}
+                                </span>
+                              </div>
+                              {subGroup.brand && groupBy !== "brand" && (
+                                <p className="text-sm text-zinc-500 truncate">{subGroup.brand}</p>
+                              )}
+                            </div>
+                            
+                            {/* Expiration */}
+                            <div className="text-sm text-zinc-400 flex-shrink-0">
+                              Exp {expLabel}
+                            </div>
+                            
+                            {/* Status */}
+                            <div className="text-sm text-emerald-400 flex-shrink-0 w-20 text-right">
+                              {subGroup.items.filter(i => !i.is_used).length} avail
+                            </div>
+                          </button>
+                          
+                          {/* Expanded items */}
+                          {isExpanded && (
+                            <div className="bg-zinc-950/50 divide-y divide-zinc-800/50">
+                              {subGroup.items.map((item) => (
+                                <div key={item.id} className="pl-6">
+                                  <InventoryItem
+                                    item={item}
+                                    inventoryTypes={inventoryTypes}
+                                    brandSuggestions={brandSuggestions}
+                                    showBrand={false}
+                                    showType={false}
+                                    onUpdateItem={onUpdateItem}
+                                    onUseItem={onUseItem}
+                                    onMarkUnused={onMarkUnused}
+                                    onDeleteItem={onDeleteItem}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

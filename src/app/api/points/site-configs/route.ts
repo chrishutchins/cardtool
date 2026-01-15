@@ -10,12 +10,12 @@ export async function GET() {
   const { data: configs, error } = await supabase
     .from("site_configs")
     .select(`
-      id, name, currency_code, domain, balance_page_url, selector, parse_regex, is_active, aggregate, attribute, format,
-      reward_currencies(currency_type)
+      id, name, currency_code, domain, balance_page_url, selector, parse_regex, is_active, aggregate, attribute, format
     `)
     .order("name");
 
   if (error) {
+    console.error("Site configs error:", error);
     return NextResponse.json(
       { error: "Failed to fetch site configs" },
       { status: 500 }

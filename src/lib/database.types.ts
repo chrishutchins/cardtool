@@ -2352,6 +2352,7 @@ export type Database = {
           code: string | null
           created_at: string | null
           expiration_date: string | null
+          external_id: string | null
           id: string
           is_used: boolean
           name: string
@@ -2374,6 +2375,7 @@ export type Database = {
           code?: string | null
           created_at?: string | null
           expiration_date?: string | null
+          external_id?: string | null
           id?: string
           is_used?: boolean
           name: string
@@ -2396,6 +2398,7 @@ export type Database = {
           code?: string | null
           created_at?: string | null
           expiration_date?: string | null
+          external_id?: string | null
           id?: string
           is_used?: boolean
           name?: string
