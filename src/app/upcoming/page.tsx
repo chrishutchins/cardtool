@@ -34,8 +34,6 @@ export default async function UpcomingPage() {
 
   // Calculate date windows
   const now = new Date();
-  const ninetyDaysFromNow = new Date();
-  ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
 
   // Fetch all required data in parallel
   const [
@@ -312,7 +310,7 @@ export default async function UpcomingPage() {
         periodEnd.setDate(periodEnd.getDate() - 1);
       }
 
-      if (!periodEnd || periodEnd < now || periodEnd > ninetyDaysFromNow) continue;
+      if (!periodEnd || periodEnd < now) continue;
 
       // Check if credit is used this period
       const periodStartStr = getPeriodStart(credit.reset_cycle, now, walletCard.approval_date);
@@ -369,7 +367,7 @@ export default async function UpcomingPage() {
     if (!item.expiration_date || item.no_expiration || item.is_used) continue;
 
     const expDate = parseLocalDate(item.expiration_date);
-    if (expDate < now || expDate > ninetyDaysFromNow) continue;
+    if (expDate < now) continue;
 
     const valueCents = item.remaining_value_cents ?? item.original_value_cents ?? 0;
 
@@ -419,7 +417,7 @@ export default async function UpcomingPage() {
       nextAnniversary = createAnniversaryDate(anniversaryYear, approvalMonth, approvalDay);
     }
 
-    if (nextAnniversary >= now && nextAnniversary <= ninetyDaysFromNow) {
+    if (nextAnniversary >= now) {
       upcomingFees.push({
         walletId: wc.id,
         cardName: wc.custom_name ?? wc.cards.name,
@@ -447,7 +445,7 @@ export default async function UpcomingPage() {
     if (pb.balance <= 0 || !pb.expiration_date) continue;
 
     const expDate = parseLocalDate(pb.expiration_date);
-    if (expDate < now || expDate > ninetyDaysFromNow) continue;
+    if (expDate < now) continue;
 
     const currency = currencyMap.get(pb.currency_id);
     if (!currency) continue;

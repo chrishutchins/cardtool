@@ -178,24 +178,6 @@ export function UpcomingItem({
       <div className={`px-4 py-3 ${credit.isUsed ? "opacity-50" : ""}`}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Mark Used Button - first */}
-            {credit.isUsed ? (
-              <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
-                <CheckIcon />
-              </div>
-            ) : (
-              <button
-                onClick={handleMarkUsed}
-                disabled={isPending}
-                className="w-7 h-7 rounded-lg border-2 border-zinc-600 hover:border-emerald-500 hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 transition-all group disabled:opacity-50"
-                title="Mark as used"
-              >
-                <span className="text-zinc-500 group-hover:text-emerald-400">
-                  <CheckIcon />
-                </span>
-              </button>
-            )}
-
             {/* Icon */}
             <div className="p-1.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0">
               <GiftIcon />
@@ -226,6 +208,23 @@ export function UpcomingItem({
               {credit.isValueBased ? formatCurrency(credit.value) : `${credit.value} ${credit.unitName || ""}`}
             </div>
             <div className="flex items-center gap-1">
+              {/* Mark Used Button */}
+              {credit.isUsed ? (
+                <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                  <CheckIcon />
+                </div>
+              ) : (
+                <button
+                  onClick={handleMarkUsed}
+                  disabled={isPending}
+                  className="w-7 h-7 rounded-lg border-2 border-zinc-600 hover:border-emerald-500 hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 transition-all group disabled:opacity-50"
+                  title="Mark as used"
+                >
+                  <span className="text-zinc-500 group-hover:text-emerald-400">
+                    <CheckIcon />
+                  </span>
+                </button>
+              )}
               <Link
                 href="/credits"
                 className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
@@ -256,9 +255,6 @@ export function UpcomingItem({
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Spacer to align with credit checkboxes */}
-            <div className="w-7 flex-shrink-0" />
-
             {/* Icon */}
             <div className="p-1.5 rounded bg-purple-500/20 text-purple-400 flex-shrink-0">
               <PackageIcon />
@@ -314,9 +310,6 @@ export function UpcomingItem({
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Spacer to align with credit checkboxes */}
-            <div className="w-7 flex-shrink-0" />
-
             {/* Icon */}
             <div className="p-1.5 rounded bg-amber-500/20 text-amber-400 flex-shrink-0">
               <CreditCardIcon />
@@ -368,9 +361,6 @@ export function UpcomingItem({
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Spacer to align with credit checkboxes */}
-            <div className="w-7 flex-shrink-0" />
-
             {/* Icon */}
             <div className="p-1.5 rounded bg-red-500/20 text-red-400 flex-shrink-0">
               <ExpiringIcon />
@@ -485,18 +475,13 @@ export function CreditSubGroup({
           </p>
         </div>
 
-        {/* Right side - matches other item types */}
+        {/* Right side */}
         <div className="flex items-center gap-4 flex-shrink-0">
           <div className="text-xs text-zinc-500 hidden sm:block">
             Expires {formatDate(subGroup.expiresAt)}
           </div>
           <div className="text-sm font-medium text-white min-w-[60px] text-right">
             {subGroup.isValueBased ? formatCurrency(availableValue) : `${availableCount} ${subGroup.unitName || ""}`}
-          </div>
-          <div className="flex items-center gap-1">
-            {/* Spacers for action button alignment (matches 2 buttons in credits) */}
-            <div className="w-7 flex-shrink-0" />
-            <div className="w-7 flex-shrink-0" />
           </div>
         </div>
       </button>
@@ -561,30 +546,9 @@ function CreditSubGroupItem({
   };
 
   return (
-    <div className={`px-4 py-2.5 ${credit.isUsed ? "opacity-50" : ""}`}>
+    <div className={`px-4 py-2.5 pl-12 ${credit.isUsed ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {/* Mark Used Button - aligns with expand/collapse in header */}
-          {credit.isUsed ? (
-            <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
-              <CheckIcon />
-            </div>
-          ) : (
-            <button
-              onClick={handleMarkUsed}
-              disabled={isPending}
-              className="w-7 h-7 rounded-lg border-2 border-zinc-600 hover:border-emerald-500 hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 transition-all group disabled:opacity-50"
-              title="Mark as used"
-            >
-              <span className="text-zinc-500 group-hover:text-emerald-400">
-                <CheckIcon />
-              </span>
-            </button>
-          )}
-
-          {/* Spacer to align with parent icon */}
-          <div className="w-7 flex-shrink-0" />
-
           {/* Card name */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -605,14 +569,33 @@ function CreditSubGroupItem({
           <div className="text-sm font-medium text-white min-w-[50px] text-right">
             {credit.isValueBased ? formatCurrency(credit.value) : `${credit.value}`}
           </div>
-          <button
-            onClick={handleToggleHidden}
-            disabled={isPending}
-            className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
-            title="Hide credit"
-          >
-            <EyeOffIcon />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Mark Used Button */}
+            {credit.isUsed ? (
+              <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                <CheckIcon />
+              </div>
+            ) : (
+              <button
+                onClick={handleMarkUsed}
+                disabled={isPending}
+                className="w-7 h-7 rounded-lg border-2 border-zinc-600 hover:border-emerald-500 hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 transition-all group disabled:opacity-50"
+                title="Mark as used"
+              >
+                <span className="text-zinc-500 group-hover:text-emerald-400">
+                  <CheckIcon />
+                </span>
+              </button>
+            )}
+            <button
+              onClick={handleToggleHidden}
+              disabled={isPending}
+              className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              title="Hide credit"
+            >
+              <EyeOffIcon />
+            </button>
+          </div>
         </div>
       </div>
     </div>
