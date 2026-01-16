@@ -178,12 +178,7 @@ export function UpcomingItem({
       <div className={`px-4 py-3 ${credit.isUsed ? "opacity-50" : ""}`}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Icon */}
-            <div className="p-1.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0">
-              <GiftIcon />
-            </div>
-
-            {/* Mark Used Button - after icon */}
+            {/* Mark Used Button - first */}
             {credit.isUsed ? (
               <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
                 <CheckIcon />
@@ -200,6 +195,11 @@ export function UpcomingItem({
                 </span>
               </button>
             )}
+
+            {/* Icon */}
+            <div className="p-1.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0">
+              <GiftIcon />
+            </div>
 
             {/* Info */}
             <div className="flex-1 min-w-0">
@@ -256,13 +256,13 @@ export function UpcomingItem({
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Spacer to align with credit checkboxes */}
+            <div className="w-7 flex-shrink-0" />
+
             {/* Icon */}
             <div className="p-1.5 rounded bg-purple-500/20 text-purple-400 flex-shrink-0">
               <PackageIcon />
             </div>
-
-            {/* Spacer to align with credit checkboxes */}
-            <div className="w-7 flex-shrink-0" />
 
             {/* Info */}
             <div className="flex-1 min-w-0">
@@ -314,13 +314,13 @@ export function UpcomingItem({
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Spacer to align with credit checkboxes */}
+            <div className="w-7 flex-shrink-0" />
+
             {/* Icon */}
             <div className="p-1.5 rounded bg-amber-500/20 text-amber-400 flex-shrink-0">
               <CreditCardIcon />
             </div>
-
-            {/* Spacer to align with credit checkboxes */}
-            <div className="w-7 flex-shrink-0" />
 
             {/* Info */}
             <div className="flex-1 min-w-0">
@@ -368,13 +368,13 @@ export function UpcomingItem({
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Spacer to align with credit checkboxes */}
+            <div className="w-7 flex-shrink-0" />
+
             {/* Icon */}
             <div className="p-1.5 rounded bg-red-500/20 text-red-400 flex-shrink-0">
               <ExpiringIcon />
             </div>
-
-            {/* Spacer to align with credit checkboxes */}
-            <div className="w-7 flex-shrink-0" />
 
             {/* Info */}
             <div className="flex-1 min-w-0">
@@ -455,11 +455,6 @@ export function CreditSubGroup({
         onClick={onToggle}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left"
       >
-        {/* Icon */}
-        <div className="p-1.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0">
-          <GiftIcon />
-        </div>
-
         {/* Expand/collapse indicator */}
         <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
           <svg
@@ -470,6 +465,11 @@ export function CreditSubGroup({
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
+        </div>
+
+        {/* Icon */}
+        <div className="p-1.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0">
+          <GiftIcon />
         </div>
 
         {/* Name and count */}
@@ -564,9 +564,6 @@ function CreditSubGroupItem({
     <div className={`px-4 py-2.5 ${credit.isUsed ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {/* Spacer to align with parent icon */}
-          <div className="w-7 flex-shrink-0" />
-
           {/* Mark Used Button - aligns with expand/collapse in header */}
           {credit.isUsed ? (
             <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
@@ -584,6 +581,9 @@ function CreditSubGroupItem({
               </span>
             </button>
           )}
+
+          {/* Spacer to align with parent icon */}
+          <div className="w-7 flex-shrink-0" />
 
           {/* Card name */}
           <div className="flex-1 min-w-0">
