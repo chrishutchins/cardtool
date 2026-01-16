@@ -68,7 +68,6 @@ interface UpcomingClientProps {
 }
 
 type ItemType = "all" | "credits" | "inventory" | "renewals" | "points";
-type PeriodFilter = "30" | "60" | "90";
 
 // Unified item type for sorting
 type UnifiedItem =
@@ -176,19 +175,9 @@ export function UpcomingClient({
 
   const [typeFilter, setTypeFilter] = useState<ItemType>(initialType);
   const [playerFilter, setPlayerFilter] = useState<number | "all">("all");
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("30");
   const [hideUsedCredits, setHideUsedCredits] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [expandedCreditGroups, setExpandedCreditGroups] = useState<Set<string>>(new Set());
-
-  // Calculate cutoff date based on period
-  const cutoffDate = useMemo(() => {
-    const now = new Date();
-    const days = periodFilter === "30" ? 30 : periodFilter === "60" ? 60 : 90;
-    const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() + days);
-    return cutoff;
-  }, [periodFilter]);
 
   // Build unified item list
   const allItems = useMemo(() => {
@@ -199,7 +188,6 @@ export function UpcomingClient({
       // First filter credits
       const filteredCredits = expiringCredits.filter(credit => {
         if (hideUsedCredits && credit.isUsed) return false;
-        if (credit.expiresAt > cutoffDate) return false;
         if (playerFilter !== "all" && credit.playerNumber !== playerFilter) return false;
         return true;
       });
@@ -241,7 +229,6 @@ export function UpcomingClient({
     // Add inventory
     if (typeFilter === "all" || typeFilter === "inventory") {
       expiringInventory.forEach(item => {
-        if (item.expirationDate > cutoffDate) return;
         if (playerFilter !== "all" && item.playerNumber !== playerFilter) return;
         items.push({ type: "inventory", date: item.expirationDate, data: item });
       });
@@ -250,7 +237,6 @@ export function UpcomingClient({
     // Add renewals
     if (typeFilter === "all" || typeFilter === "renewals") {
       upcomingFees.forEach(fee => {
-        if (fee.anniversaryDate > cutoffDate) return;
         if (playerFilter !== "all" && fee.playerNumber !== playerFilter) return;
         items.push({ type: "renewal", date: fee.anniversaryDate, data: fee });
       });
@@ -259,7 +245,6 @@ export function UpcomingClient({
     // Add points
     if (typeFilter === "all" || typeFilter === "points") {
       expiringPoints.forEach(point => {
-        if (point.expirationDate > cutoffDate) return;
         if (playerFilter !== "all" && point.playerNumber !== playerFilter) return;
         items.push({ type: "points", date: point.expirationDate, data: point });
       });
@@ -276,9 +261,7 @@ export function UpcomingClient({
     expiringPoints,
     typeFilter,
     playerFilter,
-    periodFilter,
     hideUsedCredits,
-    cutoffDate,
   ]);
 
   // Group items by expiration bucket
@@ -392,34 +375,6 @@ export function UpcomingClient({
             </div>
           )}
 
-          {/* Period Filter */}
-          <div className="flex rounded-lg bg-zinc-800 p-0.5">
-            <button
-              onClick={() => setPeriodFilter("30")}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                periodFilter === "30" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              30d
-            </button>
-            <button
-              onClick={() => setPeriodFilter("60")}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                periodFilter === "60" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              60d
-            </button>
-            <button
-              onClick={() => setPeriodFilter("90")}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                periodFilter === "90" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              90d
-            </button>
-          </div>
-
           {/* Hide Used Credits */}
           {(typeFilter === "all" || typeFilter === "credits") && (
             <label className="flex items-center gap-2 cursor-pointer">
@@ -483,10 +438,10 @@ export function UpcomingClient({
       {/* Items List */}
       {allItems.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
-          <p className="text-zinc-400 mb-2">No upcoming items in the next {periodFilter} days</p>
+          <p className="text-zinc-400 mb-2">No upcoming items</p>
           <p className="text-zinc-500 text-sm">
             {typeFilter !== "all"
-              ? "Try selecting 'All' types or extending the time period."
+              ? "Try selecting 'All' types."
               : "Check back later or extend the time period."}
           </p>
         </div>

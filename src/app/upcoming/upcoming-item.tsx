@@ -183,6 +183,24 @@ export function UpcomingItem({
               <GiftIcon />
             </div>
 
+            {/* Mark Used Button - after icon */}
+            {credit.isUsed ? (
+              <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                <CheckIcon />
+              </div>
+            ) : (
+              <button
+                onClick={handleMarkUsed}
+                disabled={isPending}
+                className="w-7 h-7 rounded-lg border-2 border-zinc-600 hover:border-emerald-500 hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 transition-all group disabled:opacity-50"
+                title="Mark as used"
+              >
+                <span className="text-zinc-500 group-hover:text-emerald-400">
+                  <CheckIcon />
+                </span>
+              </button>
+            )}
+
             {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -223,23 +241,6 @@ export function UpcomingItem({
               >
                 <EyeOffIcon />
               </button>
-              {/* Mark Used Button */}
-              {credit.isUsed ? (
-                <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
-                  <CheckIcon />
-                </div>
-              ) : (
-                <button
-                  onClick={handleMarkUsed}
-                  disabled={isPending}
-                  className="w-7 h-7 rounded-lg border-2 border-zinc-600 hover:border-emerald-500 hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 transition-all group disabled:opacity-50"
-                  title="Mark as used"
-                >
-                  <span className="text-zinc-500 group-hover:text-emerald-400">
-                    <CheckIcon />
-                  </span>
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -435,8 +436,13 @@ export function CreditSubGroup({
         onClick={onToggle}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left"
       >
+        {/* Icon */}
+        <div className="p-1.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0">
+          <GiftIcon />
+        </div>
+
         {/* Expand/collapse indicator */}
-        <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
           <svg
             className={`w-4 h-4 text-zinc-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
             fill="none"
@@ -445,11 +451,6 @@ export function CreditSubGroup({
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-        </div>
-
-        {/* Icon */}
-        <div className="p-1.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0">
-          <GiftIcon />
         </div>
 
         {/* Name and count */}
@@ -536,9 +537,30 @@ function CreditSubGroupItem({
   };
 
   return (
-    <div className={`pl-12 pr-4 py-2.5 ${credit.isUsed ? "opacity-50" : ""}`}>
+    <div className={`px-4 py-2.5 ${credit.isUsed ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Spacer to align with parent icon */}
+          <div className="w-7 flex-shrink-0" />
+
+          {/* Mark Used Button - aligns with expand/collapse in header */}
+          {credit.isUsed ? (
+            <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
+              <CheckIcon />
+            </div>
+          ) : (
+            <button
+              onClick={handleMarkUsed}
+              disabled={isPending}
+              className="w-7 h-7 rounded-lg border-2 border-zinc-600 hover:border-emerald-500 hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 transition-all group disabled:opacity-50"
+              title="Mark as used"
+            >
+              <span className="text-zinc-500 group-hover:text-emerald-400">
+                <CheckIcon />
+              </span>
+            </button>
+          )}
+
           {/* Card name */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -559,33 +581,14 @@ function CreditSubGroupItem({
           <div className="text-sm font-medium text-white min-w-[50px] text-right">
             {credit.isValueBased ? formatCurrency(credit.value) : `${credit.value}`}
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleToggleHidden}
-              disabled={isPending}
-              className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
-              title="Hide credit"
-            >
-              <EyeOffIcon />
-            </button>
-            {/* Mark Used Button */}
-            {credit.isUsed ? (
-              <div className="w-6 h-6 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
-                <CheckIcon />
-              </div>
-            ) : (
-              <button
-                onClick={handleMarkUsed}
-                disabled={isPending}
-                className="w-6 h-6 rounded-lg border-2 border-zinc-600 hover:border-emerald-500 hover:bg-emerald-500/10 flex items-center justify-center flex-shrink-0 transition-all group disabled:opacity-50"
-                title="Mark as used"
-              >
-                <span className="text-zinc-500 group-hover:text-emerald-400">
-                  <CheckIcon />
-                </span>
-              </button>
-            )}
-          </div>
+          <button
+            onClick={handleToggleHidden}
+            disabled={isPending}
+            className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+            title="Hide credit"
+          >
+            <EyeOffIcon />
+          </button>
         </div>
       </div>
     </div>
