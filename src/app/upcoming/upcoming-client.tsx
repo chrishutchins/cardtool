@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { UpcomingItem } from "./upcoming-item";
+import { UpcomingItem, CreditSubGroup } from "./upcoming-item";
 
 // Type definitions
 export interface ExpiringCredit {
@@ -73,9 +73,21 @@ type PeriodFilter = "30" | "60" | "90";
 // Unified item type for sorting
 type UnifiedItem =
   | { type: "credit"; date: Date; data: ExpiringCredit }
+  | { type: "credit-group"; date: Date; data: CreditSubGroupData }
   | { type: "inventory"; date: Date; data: ExpiringInventoryItem }
   | { type: "renewal"; date: Date; data: UpcomingFee }
   | { type: "points"; date: Date; data: ExpiringPoint };
+
+// Credit subgroup for grouping same credits across cards
+export interface CreditSubGroupData {
+  key: string;
+  creditName: string;
+  expiresAt: Date;
+  credits: ExpiringCredit[];
+  totalValue: number;
+  isValueBased: boolean;
+  unitName: string | null;
+}
 
 // Helper to get quarter from month (0-indexed)
 function getQuarter(month: number): number {
@@ -167,6 +179,7 @@ export function UpcomingClient({
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("30");
   const [hideUsedCredits, setHideUsedCredits] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedCreditGroups, setExpandedCreditGroups] = useState<Set<string>>(new Set());
 
   // Calculate cutoff date based on period
   const cutoffDate = useMemo(() => {
@@ -181,14 +194,48 @@ export function UpcomingClient({
   const allItems = useMemo(() => {
     const items: UnifiedItem[] = [];
 
-    // Add credits
+    // Add credits - group by name + expiration date
     if (typeFilter === "all" || typeFilter === "credits") {
-      expiringCredits.forEach(credit => {
-        if (hideUsedCredits && credit.isUsed) return;
-        if (credit.expiresAt > cutoffDate) return;
-        if (playerFilter !== "all" && credit.playerNumber !== playerFilter) return;
-        items.push({ type: "credit", date: credit.expiresAt, data: credit });
+      // First filter credits
+      const filteredCredits = expiringCredits.filter(credit => {
+        if (hideUsedCredits && credit.isUsed) return false;
+        if (credit.expiresAt > cutoffDate) return false;
+        if (playerFilter !== "all" && credit.playerNumber !== playerFilter) return false;
+        return true;
       });
+
+      // Group credits by name + expiration date
+      const creditGroups = new Map<string, ExpiringCredit[]>();
+      for (const credit of filteredCredits) {
+        const dateStr = credit.expiresAt.toISOString().split("T")[0];
+        const key = `${credit.creditName}|${dateStr}`;
+        if (!creditGroups.has(key)) {
+          creditGroups.set(key, []);
+        }
+        creditGroups.get(key)!.push(credit);
+      }
+
+      // Convert to unified items
+      for (const [key, credits] of creditGroups.entries()) {
+        if (credits.length === 1) {
+          // Single credit - add directly
+          items.push({ type: "credit", date: credits[0].expiresAt, data: credits[0] });
+        } else {
+          // Multiple credits - create a group
+          const firstCredit = credits[0];
+          const totalValue = credits.reduce((sum, c) => sum + (c.isValueBased ? c.value : 0), 0);
+          const subGroup: CreditSubGroupData = {
+            key,
+            creditName: firstCredit.creditName,
+            expiresAt: firstCredit.expiresAt,
+            credits,
+            totalValue,
+            isValueBased: firstCredit.isValueBased,
+            unitName: firstCredit.unitName,
+          };
+          items.push({ type: "credit-group", date: firstCredit.expiresAt, data: subGroup });
+        }
+      }
     }
 
     // Add inventory
@@ -264,6 +311,18 @@ export function UpcomingClient({
     });
   };
 
+  const toggleCreditGroup = (key: string) => {
+    setExpandedCreditGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
   // Calculate summary totals
   const totals = useMemo(() => {
     let creditsValue = 0;
@@ -274,6 +333,11 @@ export function UpcomingClient({
     for (const item of allItems) {
       if (item.type === "credit" && item.data.isValueBased && !item.data.isUsed) {
         creditsValue += item.data.value;
+      } else if (item.type === "credit-group") {
+        // Sum values from grouped credits (only unused ones)
+        creditsValue += item.data.credits
+          .filter(c => !c.isUsed && c.isValueBased)
+          .reduce((sum, c) => sum + c.value, 0);
       } else if (item.type === "inventory") {
         inventoryValue += item.data.value;
       } else if (item.type === "renewal") {
@@ -453,16 +517,29 @@ export function UpcomingClient({
                 </button>
                 {!isCollapsed && (
                   <div className="divide-y divide-zinc-800">
-                    {group.items.map((item, idx) => (
-                      <UpcomingItem
-                        key={`${item.type}-${idx}`}
-                        item={item}
-                        showPlayer={hasMultiplePlayers}
-                        players={players}
-                        onMarkCreditUsed={onMarkCreditUsed}
-                        onToggleCreditHidden={onToggleCreditHidden}
-                      />
-                    ))}
+                    {group.items.map((item, idx) =>
+                      item.type === "credit-group" ? (
+                        <CreditSubGroup
+                          key={item.data.key}
+                          subGroup={item.data}
+                          isExpanded={expandedCreditGroups.has(item.data.key)}
+                          onToggle={() => toggleCreditGroup(item.data.key)}
+                          showPlayer={hasMultiplePlayers}
+                          players={players}
+                          onMarkCreditUsed={onMarkCreditUsed}
+                          onToggleCreditHidden={onToggleCreditHidden}
+                        />
+                      ) : (
+                        <UpcomingItem
+                          key={`${item.type}-${idx}`}
+                          item={item}
+                          showPlayer={hasMultiplePlayers}
+                          players={players}
+                          onMarkCreditUsed={onMarkCreditUsed}
+                          onToggleCreditHidden={onToggleCreditHidden}
+                        />
+                      )
+                    )}
                   </div>
                 )}
               </div>
