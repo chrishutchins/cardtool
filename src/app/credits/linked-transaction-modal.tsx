@@ -249,7 +249,7 @@ export function LinkedTransactionModal({
                       </div>
                       
                       {/* Per-transaction move button */}
-                      {onMoveTransaction && !isClawback && !isEditing && (
+                      {onMoveTransaction && !isEditing && (
                         <button
                           onClick={() => startEditingTransaction(utxn)}
                           disabled={isPending}
@@ -298,7 +298,7 @@ export function LinkedTransactionModal({
           </div>
 
           {/* Date Override fallback - only show if onMoveTransaction is not available */}
-          {onUpdatePeriod && !onMoveTransaction && !isClawback && transactions.length > 0 && (
+          {onUpdatePeriod && !onMoveTransaction && transactions.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-zinc-400">Override Effective Date</div>

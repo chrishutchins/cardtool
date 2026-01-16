@@ -495,8 +495,10 @@ export default async function CreditsPage() {
     }
 
     const amountToMove = (txnLink.amount_cents || 0) / 100;
+    const isClawback = txnLink.amount_cents < 0;
 
     // Remove the transaction amount from the current usage
+    // For clawbacks (negative amount), subtracting negative = adding back the clawback amount
     const newCurrentAmount = Math.max(0, usageData.amount_used - amountToMove);
     await supabase
       .from("user_credit_usage")
@@ -523,7 +525,8 @@ export default async function CreditsPage() {
 
     if (existingNewPeriodUsage) {
       // Add to existing usage
-      const newAmount = existingNewPeriodUsage.amount_used + amountToMove;
+      // For clawbacks, adding a negative amount reduces the target usage
+      const newAmount = Math.max(0, existingNewPeriodUsage.amount_used + amountToMove);
       await supabase
         .from("user_credit_usage")
         .update({ amount_used: newAmount })
@@ -531,6 +534,7 @@ export default async function CreditsPage() {
       targetUsageId = existingNewPeriodUsage.id;
     } else {
       // Create new usage record for the new period
+      // For clawbacks with no existing usage, create a clawback record with amount 0
       const { data: newUsage, error: insertError } = await supabase
         .from("user_credit_usage")
         .insert({
@@ -538,8 +542,9 @@ export default async function CreditsPage() {
           credit_id: usageData.credit_id,
           period_start: periodStartStr,
           period_end: periodEndStr,
-          amount_used: amountToMove,
+          amount_used: isClawback ? 0 : amountToMove,
           auto_detected: true,
+          is_clawback: isClawback,
           used_at: newDate,
           slot_number: 1,
         })
