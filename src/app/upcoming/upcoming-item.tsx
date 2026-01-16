@@ -261,6 +261,9 @@ export function UpcomingItem({
               <PackageIcon />
             </div>
 
+            {/* Spacer to align with credit checkboxes */}
+            <div className="w-7 flex-shrink-0" />
+
             {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -286,13 +289,17 @@ export function UpcomingItem({
             <div className="text-sm font-medium text-white min-w-[60px] text-right">
               {inv.value > 0 ? formatCurrency(inv.value) : ""}
             </div>
-            <Link
-              href="/inventory"
-              className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-              title="View in Inventory"
-            >
-              <SearchIcon />
-            </Link>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/inventory"
+                className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                title="View in Inventory"
+              >
+                <SearchIcon />
+              </Link>
+              {/* Spacer for alignment with credits (2 buttons) */}
+              <div className="w-7 flex-shrink-0" />
+            </div>
           </div>
         </div>
       </div>
@@ -311,6 +318,9 @@ export function UpcomingItem({
             <div className="p-1.5 rounded bg-amber-500/20 text-amber-400 flex-shrink-0">
               <CreditCardIcon />
             </div>
+
+            {/* Spacer to align with credit checkboxes */}
+            <div className="w-7 flex-shrink-0" />
 
             {/* Info */}
             <div className="flex-1 min-w-0">
@@ -334,13 +344,16 @@ export function UpcomingItem({
             <div className="text-sm font-medium text-white min-w-[60px] text-right">
               {formatCurrency(fee.annualFee)}
             </div>
-            <Link
-              href="/wallet"
-              className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-              title="View in Wallet"
-            >
-              <SettingsIcon />
-            </Link>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/wallet"
+                className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                title="View in Wallet"
+              >
+                <SettingsIcon />
+              </Link>
+              <div className="w-7 flex-shrink-0" />
+            </div>
           </div>
         </div>
       </div>
@@ -359,6 +372,9 @@ export function UpcomingItem({
             <div className="p-1.5 rounded bg-red-500/20 text-red-400 flex-shrink-0">
               <ExpiringIcon />
             </div>
+
+            {/* Spacer to align with credit checkboxes */}
+            <div className="w-7 flex-shrink-0" />
 
             {/* Info */}
             <div className="flex-1 min-w-0">
@@ -382,13 +398,16 @@ export function UpcomingItem({
             <div className="text-sm font-medium text-white min-w-[60px] text-right">
               {point.balance.toLocaleString()}
             </div>
-            <Link
-              href="/balances"
-              className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-              title="View in Balances"
-            >
-              <SearchIcon />
-            </Link>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/balances"
+                className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                title="View in Balances"
+              >
+                <SearchIcon />
+              </Link>
+              <div className="w-7 flex-shrink-0" />
+            </div>
           </div>
         </div>
       </div>
@@ -466,14 +485,19 @@ export function CreditSubGroup({
           </p>
         </div>
 
-        {/* Expiration */}
-        <div className="text-xs text-zinc-500 hidden sm:block flex-shrink-0">
-          Expires {formatDate(subGroup.expiresAt)}
-        </div>
-
-        {/* Total Value */}
-        <div className="text-sm font-medium text-white min-w-[60px] text-right flex-shrink-0">
-          {subGroup.isValueBased ? formatCurrency(availableValue) : `${availableCount} ${subGroup.unitName || ""}`}
+        {/* Right side - matches other item types */}
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="text-xs text-zinc-500 hidden sm:block">
+            Expires {formatDate(subGroup.expiresAt)}
+          </div>
+          <div className="text-sm font-medium text-white min-w-[60px] text-right">
+            {subGroup.isValueBased ? formatCurrency(availableValue) : `${availableCount} ${subGroup.unitName || ""}`}
+          </div>
+          <div className="flex items-center gap-1">
+            {/* Spacers for action button alignment (matches 2 buttons in credits) */}
+            <div className="w-7 flex-shrink-0" />
+            <div className="w-7 flex-shrink-0" />
+          </div>
         </div>
       </button>
 
