@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { UpcomingItem, CreditSubGroup } from "./upcoming-item";
+import { UpcomingItem, CreditSubGroup, InventorySubGroup } from "./upcoming-item";
 
 // Type definitions
 export interface ExpiringCredit {
@@ -65,15 +65,18 @@ interface UpcomingClientProps {
   players: Player[];
   onMarkCreditUsed: (formData: FormData) => Promise<void>;
   onToggleCreditHidden: (formData: FormData) => Promise<void>;
+  onHideItem: (formData: FormData) => Promise<void>;
 }
 
-type ItemType = "all" | "credits" | "inventory" | "renewals" | "points";
+type ItemType = "credits" | "inventory" | "renewals" | "points";
+const ALL_TYPES: ItemType[] = ["credits", "inventory", "renewals", "points"];
 
 // Unified item type for sorting
 type UnifiedItem =
   | { type: "credit"; date: Date; data: ExpiringCredit }
   | { type: "credit-group"; date: Date; data: CreditSubGroupData }
   | { type: "inventory"; date: Date; data: ExpiringInventoryItem }
+  | { type: "inventory-group"; date: Date; data: InventorySubGroupData }
   | { type: "renewal"; date: Date; data: UpcomingFee }
   | { type: "points"; date: Date; data: ExpiringPoint };
 
@@ -86,6 +89,19 @@ export interface CreditSubGroupData {
   totalValue: number;
   isValueBased: boolean;
   unitName: string | null;
+}
+
+// Inventory subgroup for grouping same inventory items
+export interface InventorySubGroupData {
+  key: string;
+  name: string;
+  brand: string | null;
+  typeName: string;
+  typeSlug: string;
+  expirationDate: Date;
+  items: ExpiringInventoryItem[];
+  totalValue: number;
+  trackingType: string;
 }
 
 // Helper to get quarter from month (0-indexed)
@@ -169,22 +185,48 @@ export function UpcomingClient({
   players,
   onMarkCreditUsed,
   onToggleCreditHidden,
+  onHideItem,
 }: UpcomingClientProps) {
   const searchParams = useSearchParams();
-  const initialType = (searchParams.get("type") as ItemType) || "all";
+  const initialType = searchParams.get("type") as ItemType | null;
 
-  const [typeFilter, setTypeFilter] = useState<ItemType>(initialType);
+  const [selectedTypes, setSelectedTypes] = useState<Set<ItemType>>(() => {
+    if (initialType && ALL_TYPES.includes(initialType)) {
+      return new Set([initialType]);
+    }
+    return new Set(ALL_TYPES); // Default to all selected
+  });
+
+  const toggleType = (type: ItemType) => {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        // Don't allow deselecting all
+        if (next.size > 1) {
+          next.delete(type);
+        }
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  const selectAllTypes = () => {
+    setSelectedTypes(new Set(ALL_TYPES));
+  };
   const [playerFilter, setPlayerFilter] = useState<number | "all">("all");
   const [hideUsedCredits, setHideUsedCredits] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [expandedCreditGroups, setExpandedCreditGroups] = useState<Set<string>>(new Set());
+  const [expandedInventoryGroups, setExpandedInventoryGroups] = useState<Set<string>>(new Set());
 
   // Build unified item list
   const allItems = useMemo(() => {
     const items: UnifiedItem[] = [];
 
     // Add credits - group by name + expiration date
-    if (typeFilter === "all" || typeFilter === "credits") {
+    if (selectedTypes.has("credits")) {
       // First filter credits
       const filteredCredits = expiringCredits.filter(credit => {
         if (hideUsedCredits && credit.isUsed) return false;
@@ -226,16 +268,52 @@ export function UpcomingClient({
       }
     }
 
-    // Add inventory
-    if (typeFilter === "all" || typeFilter === "inventory") {
-      expiringInventory.forEach(item => {
-        if (playerFilter !== "all" && item.playerNumber !== playerFilter) return;
-        items.push({ type: "inventory", date: item.expirationDate, data: item });
+    // Add inventory - group by name + expiration date
+    if (selectedTypes.has("inventory")) {
+      // First filter inventory
+      const filteredInventory = expiringInventory.filter(item => {
+        if (playerFilter !== "all" && item.playerNumber !== playerFilter) return false;
+        return true;
       });
+
+      // Group inventory by name + expiration date
+      const inventoryGroups = new Map<string, ExpiringInventoryItem[]>();
+      for (const item of filteredInventory) {
+        const dateStr = item.expirationDate.toISOString().split("T")[0];
+        const key = `${item.name}|${dateStr}`;
+        if (!inventoryGroups.has(key)) {
+          inventoryGroups.set(key, []);
+        }
+        inventoryGroups.get(key)!.push(item);
+      }
+
+      // Convert to unified items
+      for (const [key, invItems] of inventoryGroups.entries()) {
+        if (invItems.length === 1) {
+          // Single item - add directly
+          items.push({ type: "inventory", date: invItems[0].expirationDate, data: invItems[0] });
+        } else {
+          // Multiple items - create a group
+          const firstItem = invItems[0];
+          const totalValue = invItems.reduce((sum, i) => sum + i.value, 0);
+          const subGroup: InventorySubGroupData = {
+            key,
+            name: firstItem.name,
+            brand: firstItem.brand,
+            typeName: firstItem.typeName,
+            typeSlug: firstItem.typeSlug,
+            expirationDate: firstItem.expirationDate,
+            items: invItems,
+            totalValue,
+            trackingType: firstItem.trackingType,
+          };
+          items.push({ type: "inventory-group", date: firstItem.expirationDate, data: subGroup });
+        }
+      }
     }
 
     // Add renewals
-    if (typeFilter === "all" || typeFilter === "renewals") {
+    if (selectedTypes.has("renewals")) {
       upcomingFees.forEach(fee => {
         if (playerFilter !== "all" && fee.playerNumber !== playerFilter) return;
         items.push({ type: "renewal", date: fee.anniversaryDate, data: fee });
@@ -243,7 +321,7 @@ export function UpcomingClient({
     }
 
     // Add points
-    if (typeFilter === "all" || typeFilter === "points") {
+    if (selectedTypes.has("points")) {
       expiringPoints.forEach(point => {
         if (playerFilter !== "all" && point.playerNumber !== playerFilter) return;
         items.push({ type: "points", date: point.expirationDate, data: point });
@@ -259,22 +337,50 @@ export function UpcomingClient({
     expiringInventory,
     upcomingFees,
     expiringPoints,
-    typeFilter,
+    selectedTypes,
     playerFilter,
     hideUsedCredits,
   ]);
 
   // Group items by expiration bucket
   const groupedItems = useMemo(() => {
-    const groups = new Map<string, { label: string; items: UnifiedItem[]; sortOrder: number }>();
+    const groups = new Map<string, { 
+      label: string; 
+      items: UnifiedItem[]; 
+      sortOrder: number;
+      totals: { credits: number; inventory: number; fees: number; points: number };
+    }>();
 
     for (const item of allItems) {
       const bucket = getExpirationBucket(item.date);
 
       if (!groups.has(bucket.key)) {
-        groups.set(bucket.key, { label: bucket.label, items: [], sortOrder: bucket.sortOrder });
+        groups.set(bucket.key, { 
+          label: bucket.label, 
+          items: [], 
+          sortOrder: bucket.sortOrder,
+          totals: { credits: 0, inventory: 0, fees: 0, points: 0 }
+        });
       }
-      groups.get(bucket.key)!.items.push(item);
+      const group = groups.get(bucket.key)!;
+      group.items.push(item);
+
+      // Calculate totals per bucket
+      if (item.type === "credit" && item.data.isValueBased && !item.data.isUsed) {
+        group.totals.credits += item.data.value;
+      } else if (item.type === "credit-group") {
+        group.totals.credits += item.data.credits
+          .filter(c => !c.isUsed && c.isValueBased)
+          .reduce((sum, c) => sum + c.value, 0);
+      } else if (item.type === "inventory") {
+        group.totals.inventory += item.data.value;
+      } else if (item.type === "inventory-group") {
+        group.totals.inventory += item.data.items.reduce((sum, i) => sum + i.value, 0);
+      } else if (item.type === "renewal") {
+        group.totals.fees += item.data.annualFee;
+      } else if (item.type === "points") {
+        group.totals.points += item.data.balance;
+      }
     }
 
     return Array.from(groups.entries())
@@ -306,33 +412,19 @@ export function UpcomingClient({
     });
   };
 
-  // Calculate summary totals
-  const totals = useMemo(() => {
-    let creditsValue = 0;
-    let inventoryValue = 0;
-    let feesTotal = 0;
-    let pointsTotal = 0;
-
-    for (const item of allItems) {
-      if (item.type === "credit" && item.data.isValueBased && !item.data.isUsed) {
-        creditsValue += item.data.value;
-      } else if (item.type === "credit-group") {
-        // Sum values from grouped credits (only unused ones)
-        creditsValue += item.data.credits
-          .filter(c => !c.isUsed && c.isValueBased)
-          .reduce((sum, c) => sum + c.value, 0);
-      } else if (item.type === "inventory") {
-        inventoryValue += item.data.value;
-      } else if (item.type === "renewal") {
-        feesTotal += item.data.annualFee;
-      } else if (item.type === "points") {
-        pointsTotal += item.data.balance;
+  const toggleInventoryGroup = (key: string) => {
+    setExpandedInventoryGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
       }
-    }
+      return next;
+    });
+  };
 
-    return { creditsValue, inventoryValue, feesTotal, pointsTotal };
-  }, [allItems]);
-
+  // Calculate summary totals
   const hasMultiplePlayers = players.length > 1;
 
   return (
@@ -340,20 +432,58 @@ export function UpcomingClient({
       {/* Controls Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
         <div className="flex items-center gap-4 flex-wrap">
-          {/* Type Filter */}
+          {/* Type Filter - Multi-select buttons */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-zinc-400">Type:</span>
-            <select
-              value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value as ItemType)}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+            <button
+              onClick={selectAllTypes}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                selectedTypes.size === ALL_TYPES.length
+                  ? "border-zinc-500 bg-zinc-700 text-white"
+                  : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"
+              }`}
             >
-              <option value="all">All</option>
-              <option value="credits">Credits</option>
-              <option value="inventory">Inventory</option>
-              <option value="renewals">Card Renewals</option>
-              <option value="points">Expiring Points</option>
-            </select>
+              All
+            </button>
+            <button
+              onClick={() => toggleType("credits")}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                selectedTypes.has("credits")
+                  ? "border-blue-500/50 bg-blue-500/20 text-blue-400"
+                  : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"
+              }`}
+            >
+              Credits
+            </button>
+            <button
+              onClick={() => toggleType("inventory")}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                selectedTypes.has("inventory")
+                  ? "border-purple-500/50 bg-purple-500/20 text-purple-400"
+                  : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"
+              }`}
+            >
+              Inventory
+            </button>
+            <button
+              onClick={() => toggleType("renewals")}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                selectedTypes.has("renewals")
+                  ? "border-amber-500/50 bg-amber-500/20 text-amber-400"
+                  : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"
+              }`}
+            >
+              Renewals
+            </button>
+            <button
+              onClick={() => toggleType("points")}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                selectedTypes.has("points")
+                  ? "border-red-500/50 bg-red-500/20 text-red-400"
+                  : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"
+              }`}
+            >
+              Points
+            </button>
           </div>
 
           {/* Player Filter */}
@@ -376,7 +506,7 @@ export function UpcomingClient({
           )}
 
           {/* Hide Used Credits */}
-          {(typeFilter === "all" || typeFilter === "credits") && (
+          {selectedTypes.has("credits") && (
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -406,33 +536,6 @@ export function UpcomingClient({
           </div>
         </div>
 
-        {/* Totals */}
-        <div className="flex items-center gap-6">
-          {(typeFilter === "all" || typeFilter === "credits") && totals.creditsValue > 0 && (
-            <div className="text-right">
-              <div className="text-xs text-zinc-500">Credits</div>
-              <div className="text-sm font-medium text-blue-400">${Math.round(totals.creditsValue).toLocaleString()}</div>
-            </div>
-          )}
-          {(typeFilter === "all" || typeFilter === "inventory") && totals.inventoryValue > 0 && (
-            <div className="text-right">
-              <div className="text-xs text-zinc-500">Inventory</div>
-              <div className="text-sm font-medium text-purple-400">${Math.round(totals.inventoryValue).toLocaleString()}</div>
-            </div>
-          )}
-          {(typeFilter === "all" || typeFilter === "renewals") && totals.feesTotal > 0 && (
-            <div className="text-right">
-              <div className="text-xs text-zinc-500">Renewals</div>
-              <div className="text-sm font-medium text-amber-400">${Math.round(totals.feesTotal).toLocaleString()}</div>
-            </div>
-          )}
-          {(typeFilter === "all" || typeFilter === "points") && totals.pointsTotal > 0 && (
-            <div className="text-right">
-              <div className="text-xs text-zinc-500">Points</div>
-              <div className="text-sm font-medium text-red-400">{totals.pointsTotal.toLocaleString()}</div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Items List */}
@@ -440,9 +543,9 @@ export function UpcomingClient({
         <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
           <p className="text-zinc-400 mb-2">No upcoming items</p>
           <p className="text-zinc-500 text-sm">
-            {typeFilter !== "all"
-              ? "Try selecting 'All' types."
-              : "Check back later or extend the time period."}
+            {selectedTypes.size < ALL_TYPES.length
+              ? "Try selecting more types."
+              : "Check back later."}
           </p>
         </div>
       ) : (
@@ -455,11 +558,28 @@ export function UpcomingClient({
                   onClick={() => toggleGroup(group.key)}
                   className="w-full flex items-center justify-between bg-zinc-800/50 px-4 py-2 border-b border-zinc-700 hover:bg-zinc-800/70 transition-colors"
                 >
-                  <h3 className="font-medium text-white">{group.label}</h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-medium text-white">{group.label}</h3>
                     <span className="text-xs text-zinc-500">
                       {group.items.length} item{group.items.length !== 1 ? "s" : ""}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {/* Bucket Totals */}
+                    <div className="flex items-center gap-3 text-xs">
+                      {group.totals.credits > 0 && (
+                        <span className="text-blue-400">${Math.round(group.totals.credits).toLocaleString()}</span>
+                      )}
+                      {group.totals.inventory > 0 && (
+                        <span className="text-purple-400">${Math.round(group.totals.inventory).toLocaleString()}</span>
+                      )}
+                      {group.totals.fees > 0 && (
+                        <span className="text-amber-400">${Math.round(group.totals.fees).toLocaleString()}</span>
+                      )}
+                      {group.totals.points > 0 && (
+                        <span className="text-red-400">{group.totals.points.toLocaleString()} pts</span>
+                      )}
+                    </div>
                     <svg
                       className={`w-5 h-5 text-zinc-400 transition-transform ${isCollapsed ? "" : "rotate-180"}`}
                       fill="none"
@@ -472,29 +592,46 @@ export function UpcomingClient({
                 </button>
                 {!isCollapsed && (
                   <div className="divide-y divide-zinc-800">
-                    {group.items.map((item, idx) =>
-                      item.type === "credit-group" ? (
-                        <CreditSubGroup
-                          key={item.data.key}
-                          subGroup={item.data}
-                          isExpanded={expandedCreditGroups.has(item.data.key)}
-                          onToggle={() => toggleCreditGroup(item.data.key)}
-                          showPlayer={hasMultiplePlayers}
-                          players={players}
-                          onMarkCreditUsed={onMarkCreditUsed}
-                          onToggleCreditHidden={onToggleCreditHidden}
-                        />
-                      ) : (
-                        <UpcomingItem
-                          key={`${item.type}-${idx}`}
-                          item={item}
-                          showPlayer={hasMultiplePlayers}
-                          players={players}
-                          onMarkCreditUsed={onMarkCreditUsed}
-                          onToggleCreditHidden={onToggleCreditHidden}
-                        />
-                      )
-                    )}
+                    {group.items.map((item, idx) => {
+                      if (item.type === "credit-group") {
+                        return (
+                          <CreditSubGroup
+                            key={item.data.key}
+                            subGroup={item.data}
+                            isExpanded={expandedCreditGroups.has(item.data.key)}
+                            onToggle={() => toggleCreditGroup(item.data.key)}
+                            showPlayer={hasMultiplePlayers}
+                            players={players}
+                            onMarkCreditUsed={onMarkCreditUsed}
+                            onToggleCreditHidden={onToggleCreditHidden}
+                          />
+                        );
+                      } else if (item.type === "inventory-group") {
+                        return (
+                          <InventorySubGroup
+                            key={item.data.key}
+                            subGroup={item.data}
+                            isExpanded={expandedInventoryGroups.has(item.data.key)}
+                            onToggle={() => toggleInventoryGroup(item.data.key)}
+                            showPlayer={hasMultiplePlayers}
+                            players={players}
+                            onHideItem={onHideItem}
+                          />
+                        );
+                      } else {
+                        return (
+                          <UpcomingItem
+                            key={`${item.type}-${idx}`}
+                            item={item}
+                            showPlayer={hasMultiplePlayers}
+                            players={players}
+                            onMarkCreditUsed={onMarkCreditUsed}
+                            onToggleCreditHidden={onToggleCreditHidden}
+                            onHideItem={onHideItem}
+                          />
+                        );
+                      }
+                    })}
                   </div>
                 )}
               </div>

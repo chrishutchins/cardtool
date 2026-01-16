@@ -2241,6 +2241,30 @@ export type Database = {
           },
         ]
       }
+      user_hidden_items: {
+        Row: {
+          id: string
+          user_id: string
+          item_type: string
+          item_key: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          item_type: string
+          item_key: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          item_type?: string
+          item_key?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       user_currency_values: {
         Row: {
           created_at: string | null

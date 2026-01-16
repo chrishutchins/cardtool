@@ -35,6 +35,7 @@ export interface WalletCardForSettings {
     slug: string;
     annual_fee: number;
     card_charge_type?: "credit" | "charge" | null;
+    product_type?: "personal" | "business" | null;
     issuers: { 
       name: string;
       billing_cycle_formula?: string | null;
@@ -192,16 +193,17 @@ export function CardSettingsModal({
   // For Chase, use different formula for business vs personal cards
   const baseBillingFormula = card.issuers?.billing_cycle_formula as BillingCycleFormula | null | undefined;
   const billingFormula = useMemo(() => {
-    // For Chase: cobrand cards (airline/hotel) use +3, regular Chase cards use +6
+    // For Chase: cobrand (airline/hotel) +3, personal UR +3, business UR +6
     if (baseBillingFormula === 'due_plus_3') {
       const currencyType = card.primary_currency?.currency_type;
       const isCobrand = currencyType === 'airline_miles' || currencyType === 'hotel_points';
-      if (!isCobrand) {
+      // Only use +6 for non-cobrand business cards (Chase Business UR)
+      if (!isCobrand && card.product_type === 'business') {
         return 'due_plus_6' as BillingCycleFormula;
       }
     }
     return baseBillingFormula ?? null;
-  }, [baseBillingFormula, card.primary_currency?.currency_type]);
+  }, [baseBillingFormula, card.primary_currency?.currency_type, card.product_type]);
   
   const formulaInfo = getFormulaInfo(billingFormula);
   const primaryInput = formulaInfo?.primaryInput ?? 'due';

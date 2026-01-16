@@ -326,12 +326,13 @@ export function WalletCardTable({
       const totalBonuses = bonusRulesCount + categoryBonuses.length;
       
       // Calculate billing dates
-      // For Chase: cobrand cards (airline/hotel) use +3, regular Chase cards use +6
+      // For Chase: cobrand (airline/hotel) +3, personal UR +3, business UR +6
       let billingFormula = card.issuers?.billing_cycle_formula ?? null;
       if (billingFormula === 'due_plus_3') {
         const currencyType = card.primary_currency?.currency_type;
         const isCobrand = currencyType === 'airline_miles' || currencyType === 'hotel_points';
-        if (!isCobrand) {
+        // Only use +6 for non-cobrand business cards (Chase Business UR)
+        if (!isCobrand && card.product_type === 'business') {
           billingFormula = 'due_plus_6';
         }
       }

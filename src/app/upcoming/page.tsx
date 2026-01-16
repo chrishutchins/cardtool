@@ -45,6 +45,7 @@ export default async function UpcomingPage() {
     pointBalancesResult,
     playersResult,
     currenciesResult,
+    hiddenItemsResult,
   ] = await Promise.all([
     // User's wallet cards (including closed for context)
     supabase
@@ -135,6 +136,12 @@ export default async function UpcomingPage() {
     supabase
       .from("reward_currencies")
       .select("id, name, code"),
+
+    // Hidden items
+    supabase
+      .from("user_hidden_items")
+      .select("item_type, item_key")
+      .eq("user_id", effectiveUserId),
   ]);
 
   // Type definitions
@@ -207,6 +214,11 @@ export default async function UpcomingPage() {
     code: string;
   };
 
+  type HiddenItem = {
+    item_type: string;
+    item_key: string;
+  };
+
   const walletCards = (walletCardsResult.data ?? []) as unknown as WalletCard[];
   const creditUsage = (creditUsageResult.data ?? []) as CreditUsage[];
   const creditSettings = (creditSettingsResult.data ?? []) as CreditSettings[];
@@ -214,6 +226,10 @@ export default async function UpcomingPage() {
   const pointBalances = (pointBalancesResult.data ?? []) as PointBalance[];
   const players = (playersResult.data ?? []) as Player[];
   const currencies = (currenciesResult.data ?? []) as Currency[];
+  const hiddenItems = (hiddenItemsResult.data ?? []) as HiddenItem[];
+
+  // Build hidden items lookup
+  const hiddenItemKeys = new Set(hiddenItems.map(h => `${h.item_type}:${h.item_key}`));
 
   // Build lookup maps
   const walletCardMap = new Map<string, WalletCard>();
@@ -365,6 +381,7 @@ export default async function UpcomingPage() {
 
   for (const item of inventoryItems) {
     if (!item.expiration_date || item.no_expiration || item.is_used) continue;
+    if (hiddenItemKeys.has(`inventory:${item.id}`)) continue;
 
     const expDate = parseLocalDate(item.expiration_date);
     if (expDate < now) continue;
@@ -404,6 +421,7 @@ export default async function UpcomingPage() {
   for (const wc of walletCards) {
     if (!wc.approval_date || !wc.cards) continue;
     if (wc.cards.annual_fee <= 0) continue;
+    if (hiddenItemKeys.has(`renewal:${wc.id}`)) continue;
 
     const approvalDate = parseLocalDate(wc.approval_date);
     const approvalMonth = approvalDate.getMonth();
@@ -443,6 +461,7 @@ export default async function UpcomingPage() {
 
   for (const pb of pointBalances) {
     if (pb.balance <= 0 || !pb.expiration_date) continue;
+    if (hiddenItemKeys.has(`points:${pb.currency_id}:${pb.player_number}`)) continue;
 
     const expDate = parseLocalDate(pb.expiration_date);
     if (expDate < now) continue;
@@ -473,6 +492,7 @@ export default async function UpcomingPage() {
     const periodStart = formData.get("period_start") as string;
     const periodEnd = formData.get("period_end") as string;
     const amountUsed = parseFloat(formData.get("amount_used") as string) || 0;
+    const isCurrentlyUsed = formData.get("is_used") === "true";
 
     // Verify ownership
     const { data: wallet } = await supabase
@@ -493,23 +513,32 @@ export default async function UpcomingPage() {
       .eq("period_start", periodStart)
       .single();
 
-    if (existingUsage) {
+    if (isCurrentlyUsed && existingUsage) {
+      // Unmark as used - delete the usage record
       await supabase
         .from("user_credit_usage")
-        .update({
-          amount_used: existingUsage.amount_used + amountUsed,
-          used_at: new Date().toISOString(),
-        })
+        .delete()
         .eq("id", existingUsage.id);
-    } else {
-      await supabase.from("user_credit_usage").insert({
-        user_wallet_id: userWalletId,
-        credit_id: creditId,
-        period_start: periodStart,
-        period_end: periodEnd,
-        amount_used: amountUsed,
-        used_at: new Date().toISOString(),
-      });
+    } else if (!isCurrentlyUsed) {
+      // Mark as used
+      if (existingUsage) {
+        await supabase
+          .from("user_credit_usage")
+          .update({
+            amount_used: existingUsage.amount_used + amountUsed,
+            used_at: new Date().toISOString(),
+          })
+          .eq("id", existingUsage.id);
+      } else {
+        await supabase.from("user_credit_usage").insert({
+          user_wallet_id: userWalletId,
+          credit_id: creditId,
+          period_start: periodStart,
+          period_end: periodEnd,
+          amount_used: amountUsed,
+          used_at: new Date().toISOString(),
+        });
+      }
     }
 
     revalidatePath("/upcoming");
@@ -551,6 +580,25 @@ export default async function UpcomingPage() {
     revalidatePath("/dashboard");
   }
 
+  async function hideItem(formData: FormData) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    const itemType = formData.get("item_type") as string;
+    const itemKey = formData.get("item_key") as string;
+
+    await supabase.from("user_hidden_items").insert({
+      user_id: userId,
+      item_type: itemType,
+      item_key: itemKey,
+    });
+
+    revalidatePath("/upcoming");
+    revalidatePath("/dashboard");
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950">
       <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
@@ -570,6 +618,7 @@ export default async function UpcomingPage() {
           players={players}
           onMarkCreditUsed={markCreditUsed}
           onToggleCreditHidden={toggleCreditHidden}
+          onHideItem={hideItem}
         />
       </div>
     </div>
