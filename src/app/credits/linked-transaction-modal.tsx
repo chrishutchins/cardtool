@@ -226,15 +226,17 @@ export function LinkedTransactionModal({
                 if (!txn) return null;
                 
                 const isEditing = editingTxnId === utxn.id;
+                // Check if this specific transaction is a clawback (positive amount = debit = clawback)
+                const isTxnClawback = txn.amount_cents > 0;
                 
                 return (
                   <div 
                     key={utxn.id}
-                    className={`p-3 rounded-lg border ${isClawback ? 'bg-amber-950/30 border-amber-800/50' : 'bg-zinc-800/50 border-zinc-700'}`}
+                    className={`p-3 rounded-lg border ${isTxnClawback ? 'bg-amber-950/30 border-amber-800/50' : 'bg-zinc-800/50 border-zinc-700'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className={`font-medium ${isClawback ? 'text-amber-300' : 'text-emerald-400'}`}>
+                        <div className={`font-medium ${isTxnClawback ? 'text-amber-300' : 'text-emerald-400'}`}>
                           {formatAmount(txn.amount_cents)}
                         </div>
                         <div className="text-sm text-white mt-1 truncate" title={txn.original_description || txn.name}>

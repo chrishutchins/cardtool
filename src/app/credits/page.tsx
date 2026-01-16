@@ -433,6 +433,7 @@ export default async function CreditsPage() {
           period_end,
           amount_used,
           slot_number,
+          is_clawback,
           user_wallets!inner (
             user_id,
             approval_date
@@ -462,6 +463,7 @@ export default async function CreditsPage() {
       period_end: string;
       amount_used: number;
       slot_number: number;
+      is_clawback: boolean | null;
       user_wallets: { user_id: string; approval_date: string | null };
       card_credits: { 
         id: string; 
@@ -495,21 +497,28 @@ export default async function CreditsPage() {
     }
 
     const amountToMove = (txnLink.amount_cents || 0) / 100;
-    const isClawback = txnLink.amount_cents < 0;
+    const isClawbackTxn = txnLink.amount_cents < 0;
+    const isClawbackUsage = usageData.is_clawback === true;
 
-    // Remove the transaction amount from the current usage
-    // For clawbacks (negative amount), subtracting negative = adding back the clawback amount
-    const newCurrentAmount = Math.max(0, usageData.amount_used - amountToMove);
-    await supabase
-      .from("user_credit_usage")
-      .update({ amount_used: newCurrentAmount })
-      .eq("id", usageData.id);
-
-    // Remove the transaction link from current usage
+    // Remove the transaction link from current usage first
     await supabase
       .from("user_credit_usage_transactions")
       .delete()
       .eq("id", txnLink.id);
+
+    // Handle the source usage record
+    // If it's a clawback-only usage record, don't adjust the amount - just check if we should delete it
+    // If it's a regular usage that was reduced by a clawback, restore the original amount
+    let newCurrentAmount = usageData.amount_used;
+    if (!isClawbackUsage) {
+      // For regular usage records, adjust the amount
+      // For clawbacks (negative amountToMove), subtracting negative = adding back
+      newCurrentAmount = Math.max(0, usageData.amount_used - amountToMove);
+      await supabase
+        .from("user_credit_usage")
+        .update({ amount_used: newCurrentAmount })
+        .eq("id", usageData.id);
+    }
 
     // Check if there's an existing usage record for the new period
     const { data: existingNewPeriodUsage } = await supabase
@@ -542,9 +551,9 @@ export default async function CreditsPage() {
           credit_id: usageData.credit_id,
           period_start: periodStartStr,
           period_end: periodEndStr,
-          amount_used: isClawback ? 0 : amountToMove,
+          amount_used: isClawbackTxn ? 0 : amountToMove,
           auto_detected: true,
-          is_clawback: isClawback,
+          is_clawback: isClawbackTxn,
           used_at: newDate,
           slot_number: 1,
         })
@@ -575,8 +584,8 @@ export default async function CreditsPage() {
       })
       .eq("id", transactionId);
 
-    // If the original usage has no more amount, delete it
-    if (newCurrentAmount === 0) {
+    // If the original usage has no more amount or was a clawback-only record, check if we should delete it
+    if (newCurrentAmount === 0 || isClawbackUsage) {
       // Check if there are any other linked transactions
       const { data: remainingLinks } = await supabase
         .from("user_credit_usage_transactions")
