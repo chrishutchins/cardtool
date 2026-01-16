@@ -11,7 +11,7 @@ if (process.env.SENDGRID_API_KEY) {
 }
 
 const FEEDBACK_NOTIFY_EMAIL = process.env.FEEDBACK_NOTIFY_EMAIL || "";
-const FEEDBACK_FROM_EMAIL = process.env.FEEDBACK_FROM_EMAIL || "noreply@cardtool.chrishutchins.com";
+const FEEDBACK_FROM_EMAIL = process.env.FEEDBACK_FROM_EMAIL || "noreply@cardtool.app";
 
 export async function POST(request: Request) {
   const user = await currentUser();

@@ -76,7 +76,7 @@ export function SyncTokenSettings({
       <p className="text-sm text-zinc-400 mb-4">
         Use this token to sync your loyalty program balances from the{" "}
         <a
-          href="https://cardtool.chrishutchins.com/scripts/cardtool-importer.user.js"
+          href="https://cardtool.app/scripts/cardtool-importer.user.js"
           target="_blank"
           rel="noopener noreferrer"
           className="text-emerald-400 hover:underline"

@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
-// @namespace    https://cardtool.chrishutchins.com
+// @namespace    https://cardtool.app
 // @version      1.6.6
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
 // @exclude      *://localhost*/*
-// @exclude      *://cardtool.chrishutchins.com/*
+// @exclude      *://cardtool.app/*
 // @exclude      *://www.google.com/*
 // @exclude      *://www.google.com.*/*
 // @exclude      *://*.github.com/*
@@ -15,14 +15,14 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @connect      cardtool.chrishutchins.com
+// @connect      cardtool.app
 // @connect      localhost
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    const CARDTOOL_URL = 'https://cardtool.chrishutchins.com';
+    const CARDTOOL_URL = 'https://cardtool.app';
 
     // State
     let isPickMode = false;

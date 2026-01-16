@@ -37,8 +37,8 @@ export default clerkMiddleware(async (auth, req) => {
   authorizedParties: [
     'http://localhost:3000',
     'http://Chriss-Mac-Studio.local:3000',
-    'https://cardtool.chrishutchins.com',
-    'https://cardtool-staging.chrishutchins.com',
+    'https://cardtool.app',
+    'https://staging.cardtool.app',
   ],
 });
 

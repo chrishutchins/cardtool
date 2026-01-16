@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         CardTool Points Importer
-// @namespace    https://cardtool.chrishutchins.com
+// @namespace    https://cardtool.app
 // @version      2.20.6
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
 // @exclude      *://localhost:*/*
-// @exclude      *://cardtool.chrishutchins.com/*
+// @exclude      *://cardtool.app/*
 // @exclude      *://www.google.com/*
 // @exclude      *://www.google.com.*/*
 // @exclude      *://*.github.com/*
@@ -15,8 +15,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        unsafeWindow
-// @connect      cardtool.chrishutchins.com
-// @connect      cardtoolapp.com
+// @connect      cardtool.app
 // @connect      localhost
 // @run-at       document-start
 // ==/UserScript==
@@ -31,7 +30,7 @@
     // ============================================
 
     // Change this to localhost:3000 for development
-    const CARDTOOL_URL = 'https://cardtool.chrishutchins.com';
+    const CARDTOOL_URL = 'https://cardtool.app';
 
     // Server-loaded configs (populated on init)
     let serverConfigs = [];
