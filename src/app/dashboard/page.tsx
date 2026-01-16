@@ -89,6 +89,7 @@ export default async function DashboardPage() {
     pointBalancesResult,
     linkedAccountsResult,
     allCurrenciesResult,
+    inventoryResult,
   ] = await Promise.all([
     // Cached data (hits cache, not DB on subsequent requests)
     getCachedCards(),
@@ -156,6 +157,12 @@ export default async function DashboardPage() {
     // All currencies for points breakdown by type
     supabase.from("reward_currencies")
       .select("id, name, code, currency_type, base_value_cents"),
+    // Inventory items for upcoming expiration
+    supabase.from("user_inventory")
+      .select("id, name, brand, expiration_date, original_value_cents, remaining_value_cents, is_used")
+      .eq("user_id", effectiveUserId)
+      .eq("is_used", false)
+      .not("expiration_date", "is", null),
   ]);
 
   // Process wallet cards
@@ -698,6 +705,55 @@ export default async function DashboardPage() {
   // Sort by expiration date
   expiringCredits.sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime());
 
+  // ============================================================================
+  // Expiring Inventory
+  // ============================================================================
+  
+  interface ExpiringInventory {
+    id: string;
+    name: string;
+    brand: string | null;
+    expirationDate: Date;
+    value: number;
+  }
+
+  const expiringInventory: ExpiringInventory[] = [];
+  
+  type InventoryRow = {
+    id: string;
+    name: string;
+    brand: string | null;
+    expiration_date: string | null;
+    original_value_cents: number | null;
+    remaining_value_cents: number | null;
+    is_used: boolean;
+  };
+  
+  const inventoryRows = (inventoryResult.data ?? []) as InventoryRow[];
+  
+  for (const item of inventoryRows) {
+    if (!item.expiration_date || item.is_used) continue;
+    
+    const expDate = parseLocalDate(item.expiration_date);
+    
+    // Only include items expiring within 90 days
+    if (expDate < now || expDate > ninetyDaysFromNow) continue;
+    
+    // Calculate value (use remaining if available, otherwise original)
+    const valueCents = item.remaining_value_cents ?? item.original_value_cents ?? 0;
+    
+    expiringInventory.push({
+      id: item.id,
+      name: item.name,
+      brand: item.brand,
+      expirationDate: expDate,
+      value: valueCents / 100,
+    });
+  }
+  
+  // Sort by expiration date
+  expiringInventory.sort((a, b) => a.expirationDate.getTime() - b.expirationDate.getTime());
+
   // Calculate totals for stats
   const totalAnnualFees = Array.from(cardInstanceCounts.entries()).reduce((sum, [cardId, count]) => {
     const card = cardMap.get(cardId);
@@ -947,6 +1003,7 @@ export default async function DashboardPage() {
             expiringPoints={expiringPoints}
             expiringCredits={expiringCredits}
             upcomingFees={upcomingFees}
+            expiringInventory={expiringInventory}
           />
         </div>
 

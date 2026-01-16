@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
-import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard, UsageTransaction } from "./credits-client";
+import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard, UsageTransaction, Player } from "./credits-client";
 import { parseLocalDate } from "@/lib/utils";
 import { LinkedTransactionModal } from "./linked-transaction-modal";
 
@@ -178,6 +178,7 @@ interface CreditCardProps {
   onMoveTransaction?: (transactionId: string, newDate: string) => Promise<void>;
   showCardName: boolean;
   hideUsed: boolean;
+  players: Player[];
 }
 
 interface Period {
@@ -205,6 +206,7 @@ export function CreditCard({
   onMoveTransaction,
   showCardName,
   hideUsed,
+  players,
 }: CreditCardProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsNotes, setSettingsNotes] = useState(settings?.notes ?? "");
@@ -220,6 +222,16 @@ export function CreditCard({
     usage: CreditUsage;
     periodLabel: string;
   } | null>(null);
+
+  // Get player label for display
+  const playerLabel = useMemo(() => {
+    if (walletCard.player_number === null || players.length <= 1) return null;
+    const player = players.find(p => p.player_number === walletCard.player_number);
+    if (player?.description) {
+      return player.description.substring(0, 2).toUpperCase();
+    }
+    return `P${walletCard.player_number}`;
+  }, [walletCard.player_number, players]);
 
   // Get the most recent usage for usage_based credits
   const lastUsage = useMemo(() => {
@@ -578,7 +590,14 @@ export function CreditCard({
               </span>
             </div>
             {showCardName && (
-              <div className="text-sm text-zinc-500 mt-0.5">{walletCard.display_name}</div>
+              <div className="text-sm text-zinc-500 mt-0.5 flex items-center gap-2">
+                {walletCard.display_name}
+                {playerLabel && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">
+                    {playerLabel}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -769,7 +788,14 @@ export function CreditCard({
               </span>
             </div>
             {showCardName && (
-              <div className="text-sm text-zinc-500 mt-0.5">{walletCard.display_name}</div>
+              <div className="text-sm text-zinc-500 mt-0.5 flex items-center gap-2">
+                {walletCard.display_name}
+                {playerLabel && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">
+                    {playerLabel}
+                  </span>
+                )}
+              </div>
             )}
             {settings?.notes && settings.notes !== "NEVER_USED" && (
               <div className="text-xs text-sky-400/70 mt-0.5 italic truncate">{settings.notes}</div>

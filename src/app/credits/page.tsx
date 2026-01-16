@@ -44,6 +44,7 @@ export default async function CreditsPage() {
       approval_date,
       closed_date,
       closed_reason,
+      player_number,
       cards:card_id (
         id,
         name,
@@ -51,6 +52,13 @@ export default async function CreditsPage() {
       )
     `)
     .eq("user_id", effectiveUserId);
+
+  // Fetch user's players
+  const { data: players } = await supabase
+    .from("user_players")
+    .select("player_number, description")
+    .eq("user_id", effectiveUserId)
+    .order("player_number");
 
   // Get all credits for cards in user's wallet
   const walletCardIds = walletCards?.map((wc) => wc.card_id) ?? [];
@@ -603,6 +611,21 @@ export default async function CreditsPage() {
     const originalValueStr = formData.get("original_value") as string;
     const originalValueCents = originalValueStr ? Math.round(parseFloat(originalValueStr) * 100) : null;
     const sourceCreditUsageId = (formData.get("source_credit_usage_id") as string)?.trim() || null;
+    const sourceWalletId = (formData.get("source_wallet_id") as string)?.trim() || null;
+
+    // If we have a source wallet, look up its player_number to auto-populate
+    let playerNumber: number | null = null;
+    if (sourceWalletId) {
+      const { data: walletData } = await supabase
+        .from("user_wallets")
+        .select("player_number")
+        .eq("id", sourceWalletId)
+        .maybeSingle();
+      
+      if (walletData?.player_number) {
+        playerNumber = walletData.player_number;
+      }
+    }
 
     const { error } = await supabase.from("user_inventory").insert({
       user_id: userId,
@@ -620,6 +643,8 @@ export default async function CreditsPage() {
       remaining_value_cents: originalValueCents,
       is_used: false,
       source_credit_usage_id: sourceCreditUsageId,
+      source_wallet_id: sourceWalletId,
+      player_number: playerNumber,
     });
 
     if (error) {
@@ -639,10 +664,12 @@ export default async function CreditsPage() {
     approval_date: string | null;
     closed_date: string | null;
     closed_reason: string | null;
+    player_number: number | null;
     cards: { id: string; name: string; slug: string } | null;
   };
 
   const transformedWalletCards = (walletCards ?? []) as unknown as WalletCardData[];
+  const transformedPlayers = (players ?? []) as { player_number: number; description: string | null }[];
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -664,11 +691,13 @@ export default async function CreditsPage() {
             card_name: wc.cards?.name ?? "",
             approval_date: wc.approval_date,
             closed_date: wc.closed_date,
+            player_number: wc.player_number,
           }))}
           credits={credits ?? []}
           creditUsage={creditUsage ?? []}
           creditSettings={creditSettings ?? []}
           inventoryTypes={inventoryTypes ?? []}
+          players={transformedPlayers}
           isAdmin={isAdmin}
           accountLinkingEnabled={accountLinkingEnabled}
           onMarkUsed={markCreditUsed}

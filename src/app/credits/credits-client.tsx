@@ -10,12 +10,14 @@ import { parseLocalDate } from "@/lib/utils";
 function AddToInventoryPrompt({
   credit,
   usageId,
+  walletCard,
   inventoryTypes,
   onClose,
   onSubmit,
 }: {
   credit: Credit;
   usageId?: string;
+  walletCard?: WalletCard;
   inventoryTypes: InventoryType[];
   onClose: () => void;
   onSubmit: (formData: FormData) => Promise<void>;
@@ -62,6 +64,11 @@ function AddToInventoryPrompt({
       // Link to the credit usage
       if (usageId) {
         formData.set("source_credit_usage_id", usageId);
+      }
+      
+      // Link to the source wallet card (for player auto-population)
+      if (walletCard) {
+        formData.set("source_wallet_id", walletCard.id);
       }
       
       await onSubmit(formData);
@@ -119,6 +126,12 @@ export interface WalletCard {
   card_name: string;
   approval_date: string | null;
   closed_date: string | null;
+  player_number: number | null;
+}
+
+export interface Player {
+  player_number: number;
+  description: string | null;
 }
 
 export interface Credit {
@@ -202,6 +215,7 @@ interface CreditsClientProps {
   creditUsage: CreditUsage[];
   creditSettings: CreditSettings[];
   inventoryTypes: InventoryType[];
+  players: Player[];
   isAdmin?: boolean;
   accountLinkingEnabled?: boolean;
   onMarkUsed: (formData: FormData) => Promise<void>;
@@ -280,6 +294,7 @@ export function CreditsClient({
   creditUsage,
   creditSettings,
   inventoryTypes,
+  players,
   isAdmin = false,
   accountLinkingEnabled = false,
   onMarkUsed,
@@ -296,6 +311,7 @@ export function CreditsClient({
   const [hideUsed, setHideUsed] = useState(true);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [playerFilter, setPlayerFilter] = useState<number | "all">("all");
   const [markUsedModal, setMarkUsedModal] = useState<{
     credit: CreditWithSlot;
     walletCard: WalletCard;
@@ -305,10 +321,13 @@ export function CreditsClient({
   const [inventoryPrompt, setInventoryPrompt] = useState<{
     credit: Credit;
     usageId?: string;
+    walletCard?: WalletCard;
   } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  
+  const hasMultiplePlayers = players.length > 1;
 
   // Sync transactions from Plaid (what they already have)
   const handleSync = async () => {
@@ -526,6 +545,9 @@ export function CreditsClient({
 
         // Filter out hidden credits unless showHidden is true
         if (!showHidden && settings?.is_hidden) continue;
+        
+        // Filter by player if filter is active
+        if (playerFilter !== "all" && walletCard.player_number !== playerFilter) continue;
 
         const periodEnd = getCurrentPeriodEnd(credit, walletCard);
         const totalSlots = credit.credit_count ?? 1;
@@ -581,7 +603,7 @@ export function CreditsClient({
     });
 
     return result;
-  }, [credits, cardToWalletEntries, settingsMap, usageMap, showHidden]);
+  }, [credits, cardToWalletEntries, settingsMap, usageMap, showHidden, playerFilter]);
 
   // Effective sort mode - force card/brand in history view
   const effectiveSortMode = viewMode === "history" && sortMode === "expiration" ? "card" : sortMode;
@@ -806,6 +828,25 @@ export function CreditsClient({
             </select>
           </div>
 
+          {/* Player Filter */}
+          {hasMultiplePlayers && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-zinc-400">Player:</span>
+              <select
+                value={playerFilter}
+                onChange={(e) => setPlayerFilter(e.target.value === "all" ? "all" : parseInt(e.target.value))}
+                className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="all">All Players</option>
+                {players.map(p => (
+                  <option key={p.player_number} value={p.player_number}>
+                    {p.description || `Player ${p.player_number}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {viewMode === "history" && (
             <div className="flex items-center gap-2">
               <button
@@ -1010,6 +1051,7 @@ export function CreditsClient({
                           onUpdateCreditUsagePeriod={onUpdateUsagePeriod}
                           onMoveTransaction={onMoveTransaction}
                           showCardName={sortMode !== "card"}
+                          players={players}
                         />
                       ) : (
                         <CreditCard
@@ -1029,6 +1071,7 @@ export function CreditsClient({
                           onMoveTransaction={onMoveTransaction}
                           showCardName={sortMode !== "card"}
                           hideUsed={hideUsed}
+                          players={players}
                         />
                       )
                     ))}
@@ -1056,7 +1099,7 @@ export function CreditsClient({
             // Check if this is a must_be_earned credit with an inventory type
             const credit = markUsedModal.credit;
             if (credit.must_be_earned && credit.inventory_type_id) {
-              setInventoryPrompt({ credit });
+              setInventoryPrompt({ credit, walletCard: markUsedModal.walletCard });
             }
           }}
           onUpdateSettings={onUpdateSettings}
@@ -1067,6 +1110,7 @@ export function CreditsClient({
       {inventoryPrompt && (
         <AddToInventoryPrompt
           credit={inventoryPrompt.credit}
+          walletCard={inventoryPrompt.walletCard}
           inventoryTypes={inventoryTypes}
           onClose={() => setInventoryPrompt(null)}
           onSubmit={onAddInventoryItem}

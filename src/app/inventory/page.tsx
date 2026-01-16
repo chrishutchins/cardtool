@@ -60,6 +60,7 @@ export default async function InventoryPage() {
       used_at,
       source_credit_usage_id,
       created_at,
+      player_number,
       inventory_types:type_id (
         id,
         name,
@@ -69,6 +70,13 @@ export default async function InventoryPage() {
     `)
     .eq("user_id", effectiveUserId)
     .order("expiration_date", { ascending: true, nullsFirst: false });
+
+  // Fetch user's players
+  const { data: players } = await supabase
+    .from("user_players")
+    .select("player_number, description")
+    .eq("user_id", effectiveUserId)
+    .order("player_number");
 
   // Fetch existing brands for autocomplete (from credits and inventory)
   const [creditBrands, inventoryBrands] = await Promise.all([
@@ -115,6 +123,8 @@ export default async function InventoryPage() {
     const originalValueStr = formData.get("original_value") as string;
     const originalValueCents = originalValueStr ? Math.round(parseFloat(originalValueStr) * 100) : null;
     const sourceCreditUsageId = (formData.get("source_credit_usage_id") as string)?.trim() || null;
+    const playerNumberStr = formData.get("player_number") as string;
+    const playerNumber = playerNumberStr ? parseInt(playerNumberStr) : null;
 
     const { error } = await supabase.from("user_inventory").insert({
       user_id: userId,
@@ -132,6 +142,7 @@ export default async function InventoryPage() {
       remaining_value_cents: originalValueCents,
       is_used: false,
       source_credit_usage_id: sourceCreditUsageId,
+      player_number: playerNumber,
     });
 
     if (error) {
@@ -182,6 +193,8 @@ export default async function InventoryPage() {
     const remainingValueCents = remainingValueStr ? Math.round(parseFloat(remainingValueStr) * 100) : null;
     const quantityUsedStr = formData.get("quantity_used") as string;
     const quantityUsed = quantityUsedStr ? parseInt(quantityUsedStr) : 0;
+    const playerNumberStr = formData.get("player_number") as string;
+    const playerNumber = playerNumberStr ? parseInt(playerNumberStr) : null;
 
     await supabase.from("user_inventory").update({
       type_id: typeId,
@@ -197,6 +210,7 @@ export default async function InventoryPage() {
       quantity_used: quantityUsed,
       original_value_cents: originalValueCents,
       remaining_value_cents: remainingValueCents,
+      player_number: playerNumber,
       updated_at: new Date().toISOString(),
     }).eq("id", itemId);
 
@@ -345,6 +359,7 @@ export default async function InventoryPage() {
     used_at: string | null;
     source_credit_usage_id: string | null;
     created_at: string;
+    player_number: number | null;
     inventory_types: {
       id: string;
       name: string;
@@ -354,6 +369,7 @@ export default async function InventoryPage() {
   };
 
   const transformedItems = (inventoryItems ?? []) as unknown as InventoryItemRaw[];
+  const transformedPlayers = (players ?? []) as { player_number: number; description: string | null }[];
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -370,6 +386,7 @@ export default async function InventoryPage() {
           inventoryItems={transformedItems}
           inventoryTypes={inventoryTypes ?? []}
           brandSuggestions={brandSuggestions}
+          players={transformedPlayers}
           onAddItem={addInventoryItem}
           onUpdateItem={updateInventoryItem}
           onUseItem={useInventoryItem}

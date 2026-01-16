@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { InventoryItemData, InventoryType } from "./inventory-client";
+import { InventoryItemData, InventoryType, Player } from "./inventory-client";
 
 interface EditInventoryModalProps {
   item: InventoryItemData;
   inventoryTypes: InventoryType[];
   brandSuggestions: string[];
+  players: Player[];
   onClose: () => void;
   onSubmit: (formData: FormData) => Promise<void>;
   onDelete: (itemId: string) => Promise<void>;
@@ -16,6 +17,7 @@ export function EditInventoryModal({
   item,
   inventoryTypes,
   brandSuggestions,
+  players,
   onClose,
   onSubmit,
   onDelete,
@@ -26,6 +28,9 @@ export function EditInventoryModal({
   const [selectedTypeId, setSelectedTypeId] = useState(item.type_id);
   const [brandInput, setBrandInput] = useState(item.brand ?? "");
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<number | "">(item.player_number ?? "");
+  
+  const hasMultiplePlayers = players.length > 1;
 
   const selectedType = useMemo(() => {
     return inventoryTypes.find(t => t.id === selectedTypeId);
@@ -126,6 +131,26 @@ export function EditInventoryModal({
               </div>
             )}
           </div>
+
+          {/* Player (only if multiple players) */}
+          {hasMultiplePlayers && (
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">Player (optional)</label>
+              <select
+                name="player_number"
+                value={selectedPlayer}
+                onChange={(e) => setSelectedPlayer(e.target.value ? parseInt(e.target.value) : "")}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="">No player assigned</option>
+                {players.map((p) => (
+                  <option key={p.player_number} value={p.player_number}>
+                    {p.description || `Player ${p.player_number}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Value for dollar_value types */}
           {trackingType === "dollar_value" && (

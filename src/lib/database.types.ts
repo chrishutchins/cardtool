@@ -2360,10 +2360,12 @@ export type Database = {
           notes: string | null
           original_value_cents: number | null
           pin: string | null
+          player_number: number | null
           quantity: number | null
           quantity_used: number | null
           remaining_value_cents: number | null
           source_credit_usage_id: string | null
+          source_wallet_id: string | null
           type_id: string
           updated_at: string | null
           url: string | null
@@ -2383,10 +2385,12 @@ export type Database = {
           notes?: string | null
           original_value_cents?: number | null
           pin?: string | null
+          player_number?: number | null
           quantity?: number | null
           quantity_used?: number | null
           remaining_value_cents?: number | null
           source_credit_usage_id?: string | null
+          source_wallet_id?: string | null
           type_id: string
           updated_at?: string | null
           url?: string | null
@@ -2406,10 +2410,12 @@ export type Database = {
           notes?: string | null
           original_value_cents?: number | null
           pin?: string | null
+          player_number?: number | null
           quantity?: number | null
           quantity_used?: number | null
           remaining_value_cents?: number | null
           source_credit_usage_id?: string | null
+          source_wallet_id?: string | null
           type_id?: string
           updated_at?: string | null
           url?: string | null
@@ -2422,6 +2428,13 @@ export type Database = {
             columns: ["source_credit_usage_id"]
             isOneToOne: false
             referencedRelation: "user_credit_usage"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_inventory_source_wallet_id_fkey"
+            columns: ["source_wallet_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
             referencedColumns: ["id"]
           },
           {

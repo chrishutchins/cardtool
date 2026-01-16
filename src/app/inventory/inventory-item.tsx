@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { InventoryItemData, InventoryType } from "./inventory-client";
+import { InventoryItemData, InventoryType, Player } from "./inventory-client";
 import { ViewItemModal } from "./view-item-modal";
 import { EditInventoryModal } from "./edit-inventory-modal";
 import { UseInventoryModal } from "./use-inventory-modal";
@@ -10,6 +10,7 @@ interface InventoryItemProps {
   item: InventoryItemData;
   inventoryTypes: InventoryType[];
   brandSuggestions: string[];
+  players: Player[];
   showBrand: boolean;
   showType: boolean;
   onUpdateItem: (itemId: string, formData: FormData) => Promise<void>;
@@ -63,6 +64,7 @@ export function InventoryItem({
   item,
   inventoryTypes,
   brandSuggestions,
+  players,
   showBrand,
   showType,
   onUpdateItem,
@@ -77,6 +79,16 @@ export function InventoryItem({
 
   const trackingType = item.inventory_types?.tracking_type ?? "single_use";
   const typeName = item.inventory_types?.name ?? "Unknown";
+  
+  // Get player label for display
+  const playerLabel = (() => {
+    if (item.player_number === null || players.length <= 1) return null;
+    const player = players.find(p => p.player_number === item.player_number);
+    if (player?.description) {
+      return player.description.substring(0, 2).toUpperCase();
+    }
+    return `P${item.player_number}`;
+  })();
 
   // Check if expiration needs to be set
   const needsExpirationPrompt = !item.expiration_date && !item.no_expiration && !item.is_used;
@@ -277,6 +289,11 @@ export function InventoryItem({
                     {typeName}
                   </span>
                 )}
+                {playerLabel && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">
+                    {playerLabel}
+                  </span>
+                )}
                 {item.code && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-300 whitespace-nowrap">
                     Has code
@@ -340,8 +357,7 @@ export function InventoryItem({
                 title="View details"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </button>
               <button
@@ -391,6 +407,7 @@ export function InventoryItem({
           item={item}
           inventoryTypes={inventoryTypes}
           brandSuggestions={brandSuggestions}
+          players={players}
           onClose={() => setShowEditModal(false)}
           onSubmit={async (formData) => {
             await onUpdateItem(item.id, formData);

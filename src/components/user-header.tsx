@@ -69,6 +69,7 @@ const baseNavGroups: NavEntry[] = [
     label: "Planning",
     onboardingId: "planning-menu",
     items: [
+      { href: "/upcoming", label: "Upcoming", onboardingId: "upcoming" },
       { href: "/spend-optimizer", label: "Spend Optimizer", onboardingId: "spend-optimizer" },
       { href: "/application-rules", label: "Application Rules", onboardingId: "application-rules" },
       { href: "/credit-report", label: "Credit Report", onboardingId: "credit-report" },

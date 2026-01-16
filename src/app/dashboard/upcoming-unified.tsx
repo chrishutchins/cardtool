@@ -27,14 +27,19 @@ interface UpcomingFee {
   walletId: string;
 }
 
+interface ExpiringInventory {
+  id: string;
+  name: string;
+  brand: string | null;
+  expirationDate: Date;
+  value: number; // in dollars
+}
+
 interface UpcomingUnifiedProps {
   expiringPoints: ExpiringPoint[];
   expiringCredits: ExpiringCredit[];
   upcomingFees: UpcomingFee[];
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  expiringInventory: ExpiringInventory[];
 }
 
 function formatCurrency(value: number): string {
@@ -44,6 +49,10 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
 }
 
 // Icons
@@ -59,7 +68,6 @@ const CreditCardIcon = () => (
   </svg>
 );
 
-// Hourglass/timer icon for expiring points - conveys urgency
 const ExpiringIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -72,14 +80,36 @@ const GiftIcon = () => (
   </svg>
 );
 
-type UpcomingItem = 
-  | { type: "fee"; date: Date; data: UpcomingFee }
-  | { type: "points"; date: Date; data: ExpiringPoint };
+const PackageIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+  </svg>
+);
+
+// Helper to truncate a list of names with "..."
+function truncateList(items: string[], maxLength: number = 35): string {
+  if (items.length === 0) return "";
+  
+  let result = items[0];
+  let i = 1;
+  
+  while (i < items.length) {
+    const next = result + ", " + items[i];
+    if (next.length > maxLength) {
+      return result + ", ...";
+    }
+    result = next;
+    i++;
+  }
+  
+  return result;
+}
 
 export function UpcomingUnified({ 
   expiringPoints, 
   expiringCredits, 
   upcomingFees,
+  expiringInventory,
 }: UpcomingUnifiedProps) {
   const [period, setPeriod] = useState<"30" | "60" | "90">("30");
   
@@ -93,35 +123,31 @@ export function UpcomingUnified({
   const activeCredits = expiringCredits.filter(c => c.expiresAt <= cutoffDate);
   const activePoints = expiringPoints.filter(p => p.expirationDate <= cutoffDate);
   const activeFees = upcomingFees.filter(f => f.anniversaryDate <= cutoffDate);
+  const activeInventory = expiringInventory.filter(i => i.expirationDate <= cutoffDate);
   
-  // Build list of fees and points, sorted by date
-  const items: UpcomingItem[] = [];
-  
-  activeFees.forEach((fee) => {
-    items.push({ type: "fee", date: fee.anniversaryDate, data: fee });
-  });
-  
-  activePoints.forEach((point) => {
-    items.push({ type: "points", date: point.expirationDate, data: point });
-  });
-  
-  // Sort by date (soonest first)
-  items.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  const hasAnyItems = activeCredits.length > 0 || items.length > 0;
-  
-  // Calculate total value of expiring credits
+  // Calculate totals
   const totalCreditValue = activeCredits.reduce((sum, c) => sum + (c.isValueBased ? c.value : 0), 0);
+  const totalInventoryValue = activeInventory.reduce((sum, i) => sum + i.value, 0);
+  const totalFeeValue = activeFees.reduce((sum, f) => sum + f.annualFee, 0);
+  const totalPointsExpiring = activePoints.reduce((sum, p) => sum + p.balance, 0);
+  
+  // Get unique names for each category (deduplicate)
+  const creditNames = [...new Set(activeCredits.map(c => c.creditName))];
+  const inventoryNames = [...new Set(activeInventory.map(i => i.brand ? `${i.brand} ${i.name}` : i.name))];
+  const feeCardNames = activeFees
+    .sort((a, b) => a.anniversaryDate.getTime() - b.anniversaryDate.getTime())
+    .map(f => f.cardName);
+  const pointsNames = [...new Set(activePoints.map(p => p.currencyName))];
+  
+  const hasAnyItems = activeCredits.length > 0 || activeInventory.length > 0 || activeFees.length > 0 || activePoints.length > 0;
 
   return (
     <div className="p-5 rounded-xl border bg-zinc-900/50 border-zinc-800">
       <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div>
-            <p className="text-sm text-zinc-400">Upcoming</p>
-            <p className="text-xl font-bold text-white">Next {period} Days</p>
-          </div>
-        </div>
+        <Link href="/upcoming" className="group">
+          <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors">Upcoming</p>
+          <p className="text-xl font-bold text-white group-hover:text-emerald-400 transition-colors">Next {period} Days</p>
+        </Link>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg bg-zinc-800 p-0.5">
             <button
@@ -155,9 +181,9 @@ export function UpcomingUnified({
               90d
             </button>
           </div>
-          <div className="p-2 rounded-lg bg-zinc-800 text-zinc-400">
+          <Link href="/upcoming" className="p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
             <CalendarIcon />
-          </div>
+          </Link>
         </div>
       </div>
       
@@ -165,79 +191,65 @@ export function UpcomingUnified({
         <p className="text-sm text-zinc-500">No items expiring in the next {period} days</p>
       ) : (
         <div className="space-y-2">
-          {/* Expiring Credits Summary */}
+          {/* Expiring Credits */}
           {activeCredits.length > 0 && (
             <Link
-              href="/credits"
-              className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
+              href="/upcoming?type=credits"
+              className="flex items-center gap-3 py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className="p-1.5 rounded bg-blue-500/20 text-blue-400">
-                  <GiftIcon />
-                </div>
-                <span className="text-white font-medium">{activeCredits.length} Expiring Credits</span>
+              <div className="p-1.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0">
+                <GiftIcon />
               </div>
-              <div className="flex items-center gap-3 text-right">
-                <span className="text-zinc-500 text-sm">By {formatDate(cutoffDate)}</span>
-                {totalCreditValue > 0 && (
-                  <span className="text-white font-medium min-w-[70px] text-right">{formatCurrency(totalCreditValue)}</span>
-                )}
-              </div>
+              <span className="text-white font-medium flex-shrink-0">Expiring Credits</span>
+              <span className="text-sm text-zinc-500 truncate flex-1 min-w-0">{truncateList(creditNames)}</span>
+              <span className="text-white font-medium flex-shrink-0">{formatCurrency(totalCreditValue)}</span>
             </Link>
           )}
 
-          {/* Annual Fees and Expiring Points sorted by date */}
-          {items.map((item, idx) => {
-            if (item.type === "fee") {
-              return (
-                <Link
-                  key={`fee-${idx}`}
-                  href="/wallet"
-                  className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded bg-amber-500/20 text-amber-400">
-                      <CreditCardIcon />
-                    </div>
-                    <div>
-                      <span className="text-white font-medium">Annual Fee</span>
-                      <span className="text-zinc-500 ml-2">{item.data.cardName}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-right">
-                    <span className="text-zinc-500 text-sm">{formatDate(item.date)}</span>
-                    <span className="text-white font-medium min-w-[70px] text-right">{formatCurrency(item.data.annualFee)}</span>
-                  </div>
-                </Link>
-              );
-            }
-            
-            if (item.type === "points") {
-              return (
-                <Link
-                  key={`points-${idx}`}
-                  href="/balances"
-                  className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded bg-red-500/20 text-red-400">
-                      <ExpiringIcon />
-                    </div>
-                    <div>
-                      <span className="text-white font-medium">Expiring Points</span>
-                      <span className="text-zinc-500 ml-2">{item.data.currencyName}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-right">
-                    <span className="text-zinc-500 text-sm">{formatDate(item.date)}</span>
-                    <span className="text-white font-medium min-w-[70px] text-right">{item.data.balance.toLocaleString()}</span>
-                  </div>
-                </Link>
-              );
-            }
-            
-            return null;
-          })}
+          {/* Expiring Inventory */}
+          {activeInventory.length > 0 && (
+            <Link
+              href="/upcoming?type=inventory"
+              className="flex items-center gap-3 py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
+            >
+              <div className="p-1.5 rounded bg-purple-500/20 text-purple-400 flex-shrink-0">
+                <PackageIcon />
+              </div>
+              <span className="text-white font-medium flex-shrink-0">Expiring Inventory</span>
+              <span className="text-sm text-zinc-500 truncate flex-1 min-w-0">{truncateList(inventoryNames)}</span>
+              <span className="text-white font-medium flex-shrink-0">{formatCurrency(totalInventoryValue)}</span>
+            </Link>
+          )}
+
+          {/* Card Renewals */}
+          {activeFees.length > 0 && (
+            <Link
+              href="/upcoming?type=renewals"
+              className="flex items-center gap-3 py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
+            >
+              <div className="p-1.5 rounded bg-amber-500/20 text-amber-400 flex-shrink-0">
+                <CreditCardIcon />
+              </div>
+              <span className="text-white font-medium flex-shrink-0">Card Renewals</span>
+              <span className="text-sm text-zinc-500 truncate flex-1 min-w-0">{truncateList(feeCardNames)}</span>
+              <span className="text-white font-medium flex-shrink-0">{formatCurrency(totalFeeValue)}</span>
+            </Link>
+          )}
+
+          {/* Expiring Points */}
+          {activePoints.length > 0 && (
+            <Link
+              href="/upcoming?type=points"
+              className="flex items-center gap-3 py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors"
+            >
+              <div className="p-1.5 rounded bg-red-500/20 text-red-400 flex-shrink-0">
+                <ExpiringIcon />
+              </div>
+              <span className="text-white font-medium flex-shrink-0">Expiring Points</span>
+              <span className="text-sm text-zinc-500 truncate flex-1 min-w-0">{truncateList(pointsNames)}</span>
+              <span className="text-white font-medium flex-shrink-0">{formatNumber(totalPointsExpiring)}</span>
+            </Link>
+          )}
         </div>
       )}
     </div>

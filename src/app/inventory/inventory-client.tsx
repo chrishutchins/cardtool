@@ -31,6 +31,7 @@ export interface InventoryItemData {
   used_at: string | null;
   source_credit_usage_id: string | null;
   created_at: string;
+  player_number: number | null;
   inventory_types: {
     id: string;
     name: string;
@@ -39,10 +40,16 @@ export interface InventoryItemData {
   } | null;
 }
 
+export interface Player {
+  player_number: number;
+  description: string | null;
+}
+
 interface InventoryClientProps {
   inventoryItems: InventoryItemData[];
   inventoryTypes: InventoryType[];
   brandSuggestions: string[];
+  players: Player[];
   onAddItem: (formData: FormData) => Promise<void>;
   onUpdateItem: (itemId: string, formData: FormData) => Promise<void>;
   onUseItem: (itemId: string, formData: FormData) => Promise<void>;
@@ -170,6 +177,7 @@ export function InventoryClient({
   inventoryItems,
   inventoryTypes,
   brandSuggestions,
+  players,
   onAddItem,
   onUpdateItem,
   onUseItem,
@@ -178,10 +186,13 @@ export function InventoryClient({
 }: InventoryClientProps) {
   const [groupBy, setGroupBy] = useState<GroupBy>("expiration");
   const [filterType, setFilterType] = useState<string>("all");
+  const [playerFilter, setPlayerFilter] = useState<number | "all">("all");
   const [showUsed, setShowUsed] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [expandedSubGroups, setExpandedSubGroups] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
+  
+  const hasMultiplePlayers = players.length > 1;
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -190,13 +201,17 @@ export function InventoryClient({
       if (filterType !== "all" && item.type_id !== filterType) {
         return false;
       }
+      // Filter by player
+      if (playerFilter !== "all" && item.player_number !== playerFilter) {
+        return false;
+      }
       // Filter by used status
       if (!showUsed && item.is_used) {
         return false;
       }
       return true;
     });
-  }, [inventoryItems, filterType, showUsed]);
+  }, [inventoryItems, filterType, playerFilter, showUsed]);
 
   // Group items
   const groupedItems = useMemo(() => {
@@ -327,6 +342,25 @@ export function InventoryClient({
             </select>
           </div>
 
+          {/* Player Filter */}
+          {hasMultiplePlayers && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-zinc-400">Player:</span>
+              <select
+                value={playerFilter}
+                onChange={(e) => setPlayerFilter(e.target.value === "all" ? "all" : parseInt(e.target.value))}
+                className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="all">All Players</option>
+                {players.map(p => (
+                  <option key={p.player_number} value={p.player_number}>
+                    {p.description || `Player ${p.player_number}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -420,6 +454,7 @@ export function InventoryClient({
                             item={subGroup.items[0]}
                             inventoryTypes={inventoryTypes}
                             brandSuggestions={brandSuggestions}
+                            players={players}
                             showBrand={groupBy !== "brand"}
                             showType={groupBy !== "type"}
                             onUpdateItem={onUpdateItem}
@@ -491,6 +526,7 @@ export function InventoryClient({
                                     item={item}
                                     inventoryTypes={inventoryTypes}
                                     brandSuggestions={brandSuggestions}
+                                    players={players}
                                     showBrand={false}
                                     showType={false}
                                     onUpdateItem={onUpdateItem}
@@ -518,6 +554,7 @@ export function InventoryClient({
         <AddInventoryModal
           inventoryTypes={inventoryTypes}
           brandSuggestions={brandSuggestions}
+          players={players}
           onClose={() => setShowAddModal(false)}
           onSubmit={onAddItem}
         />

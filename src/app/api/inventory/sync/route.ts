@@ -13,6 +13,7 @@ interface InventoryImportItem {
   brand: string;
   expiration_date?: string | null;
   notes?: string | null;
+  player_number?: number | null;
 }
 
 // Authenticate via Clerk session OR sync token
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { items } = body as { items: InventoryImportItem[] };
+    const { items, playerNumber } = body as { items: InventoryImportItem[]; playerNumber?: number };
 
     // Validate required fields
     if (!items || !Array.isArray(items)) {
@@ -144,6 +145,9 @@ export async function POST(request: Request) {
         .eq("external_id", item.external_id)
         .maybeSingle();
 
+      // Use item's player_number if set, otherwise use body-level playerNumber
+      const itemPlayerNumber = item.player_number ?? playerNumber ?? null;
+
       if (existing) {
         // Update existing item
         const { error: updateError } = await supabase
@@ -154,6 +158,7 @@ export async function POST(request: Request) {
             brand: item.brand,
             expiration_date: item.expiration_date || null,
             notes: item.notes || null,
+            player_number: itemPlayerNumber,
             updated_at: new Date().toISOString(),
           })
           .eq("id", existing.id);
@@ -176,6 +181,7 @@ export async function POST(request: Request) {
             brand: item.brand,
             expiration_date: item.expiration_date || null,
             notes: item.notes || null,
+            player_number: itemPlayerNumber,
             quantity: 1,
             quantity_used: 0,
             is_used: false,

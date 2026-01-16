@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { InventoryType } from "./inventory-client";
+import { InventoryType, Player } from "./inventory-client";
 
 interface AddInventoryModalProps {
   inventoryTypes: InventoryType[];
   brandSuggestions: string[];
+  players: Player[];
   onClose: () => void;
   onSubmit: (formData: FormData) => Promise<void>;
   prefillData?: {
@@ -15,12 +16,14 @@ interface AddInventoryModalProps {
     original_value?: number;
     quantity?: number;
     source_credit_usage_id?: string;
+    player_number?: number;
   };
 }
 
 export function AddInventoryModal({
   inventoryTypes,
   brandSuggestions,
+  players,
   onClose,
   onSubmit,
   prefillData,
@@ -29,6 +32,9 @@ export function AddInventoryModal({
   const [selectedTypeId, setSelectedTypeId] = useState(prefillData?.type_id ?? inventoryTypes[0]?.id ?? "");
   const [brandInput, setBrandInput] = useState(prefillData?.brand ?? "");
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<number | "">(prefillData?.player_number ?? "");
+  
+  const hasMultiplePlayers = players.length > 1;
 
   const selectedType = useMemo(() => {
     return inventoryTypes.find(t => t.id === selectedTypeId);
@@ -131,6 +137,26 @@ export function AddInventoryModal({
               </div>
             )}
           </div>
+
+          {/* Player (only if multiple players) */}
+          {hasMultiplePlayers && (
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">Player (optional)</label>
+              <select
+                name="player_number"
+                value={selectedPlayer}
+                onChange={(e) => setSelectedPlayer(e.target.value ? parseInt(e.target.value) : "")}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="">No player assigned</option>
+                {players.map((p) => (
+                  <option key={p.player_number} value={p.player_number}>
+                    {p.description || `Player ${p.player_number}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Value for dollar_value types */}
           {trackingType === "dollar_value" && (

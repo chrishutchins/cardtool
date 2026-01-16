@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo, useRef, useEffect } from "react";
-import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard } from "./credits-client";
+import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard, Player } from "./credits-client";
 import { parseLocalDate } from "@/lib/utils";
 import { LinkedTransactionModal } from "./linked-transaction-modal";
 
@@ -90,6 +90,7 @@ interface CreditHistoryRowProps {
   onUpdateCreditUsagePeriod?: (usageId: string, newDate: string) => Promise<void>;
   onMoveTransaction?: (transactionId: string, newDate: string) => Promise<void>;
   showCardName: boolean;
+  players: Player[];
 }
 
 interface Period {
@@ -269,6 +270,7 @@ export function CreditHistoryRow({
   onUpdateCreditUsagePeriod,
   onMoveTransaction,
   showCardName,
+  players,
 }: CreditHistoryRowProps) {
   const [isPending, startTransition] = useTransition();
   const [showApprovalDateInput, setShowApprovalDateInput] = useState(false);
@@ -276,6 +278,16 @@ export function CreditHistoryRow({
   const [showUsageBasedSetup, setShowUsageBasedSetup] = useState(false);
   const [usageBasedDate, setUsageBasedDate] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Get player label for display
+  const playerLabel = useMemo(() => {
+    if (walletCard.player_number === null || players.length <= 1) return null;
+    const player = players.find(p => p.player_number === walletCard.player_number);
+    if (player?.description) {
+      return player.description.substring(0, 2).toUpperCase();
+    }
+    return `P${walletCard.player_number}`;
+  }, [walletCard.player_number, players]);
   const [isHidden, setIsHidden] = useState(settings?.is_hidden ?? false);
   const [valueOverride, setValueOverride] = useState(
     settings?.user_value_override_cents 
@@ -524,7 +536,14 @@ export function CreditHistoryRow({
             </Tooltip>
           )}
           {showCardName && (
-            <span className="text-sm text-zinc-500">({walletCard.display_name})</span>
+            <span className="text-sm text-zinc-500 inline-flex items-center gap-1">
+              ({walletCard.display_name})
+              {playerLabel && (
+                <span className="text-xs px-1 py-0.5 rounded bg-zinc-700 text-zinc-300">
+                  {playerLabel}
+                </span>
+              )}
+            </span>
           )}
           {resetInfo && resetInfo !== "Set approval date to track" && (
             <span className="text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">
