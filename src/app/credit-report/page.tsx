@@ -6,12 +6,7 @@ import { revalidatePath } from "next/cache";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
-import { ScoreChart } from "./score-chart";
-import { AccountsTable } from "./accounts-table";
-import { InquiriesTable } from "./inquiries-table";
-import { CreditInsights } from "./credit-insights";
-import { MatchingDebug } from "./matching-debug";
-import { groupAccountsAcrossBureaus, type CreditAccount as MatchingCreditAccount } from "./account-matching";
+import { CreditReportClient } from "./credit-report-client";
 
 export const metadata: Metadata = {
   title: "Credit Report | CardTool",
@@ -27,6 +22,7 @@ interface CreditScore {
   score_type: ScoreType;
   score: number;
   score_date: string | null;
+  player_number: number;
 }
 
 interface CreditAccount {
@@ -48,6 +44,7 @@ interface CreditAccount {
   responsibility: string;
   terms: string | null;
   payment_status: string | null;
+  player_number: number;
 }
 
 interface CreditInquiry {
@@ -58,6 +55,12 @@ interface CreditInquiry {
   inquiry_type: string | null;
   snapshot_id: string | null;
   last_seen_snapshot_id: string | null;
+  player_number: number;
+}
+
+interface Player {
+  player_number: number;
+  description: string | null;
 }
 
 interface WalletCard {
@@ -117,11 +120,12 @@ export default async function CreditReportPage() {
     linkedAccountsResult,
     accountLinksResult,
     inquiryGroupsResult,
+    playersResult,
   ] = await Promise.all([
     // All credit scores (historical)
     supabase
       .from("credit_scores")
-      .select("id, bureau, score_type, score, score_date")
+      .select("id, bureau, score_type, score, score_date, player_number")
       .eq("user_id", effectiveUserId)
       .order("score_date", { ascending: true }),
 
@@ -133,7 +137,7 @@ export default async function CreditReportPage() {
         status, date_opened, date_updated, date_closed,
         credit_limit_cents, high_balance_cents, balance_cents, monthly_payment_cents,
         account_type, loan_type, responsibility, terms, payment_status,
-        snapshot_id,
+        snapshot_id, player_number,
         credit_report_snapshots!inner(fetched_at)
       `)
       .eq("user_id", effectiveUserId)
@@ -142,7 +146,7 @@ export default async function CreditReportPage() {
     // All inquiries (with last_seen tracking)
     supabase
       .from("credit_inquiries")
-      .select("id, bureau, company_name, inquiry_date, inquiry_type, snapshot_id, last_seen_snapshot_id")
+      .select("id, bureau, company_name, inquiry_date, inquiry_type, snapshot_id, last_seen_snapshot_id, player_number")
       .eq("user_id", effectiveUserId)
       .order("inquiry_date", { ascending: false }),
 
@@ -176,6 +180,13 @@ export default async function CreditReportPage() {
         credit_inquiry_group_members(inquiry_id)
       `)
       .eq("user_id", effectiveUserId),
+
+    // User's player configurations
+    supabase
+      .from("user_players")
+      .select("player_number, description")
+      .eq("user_id", effectiveUserId)
+      .order("player_number"),
   ]);
 
   const scores = (scoresResult.data ?? []) as CreditScore[];
@@ -185,6 +196,7 @@ export default async function CreditReportPage() {
   const linkedAccounts = (linkedAccountsResult.data ?? []) as LinkedAccount[];
   const accountLinks = (accountLinksResult.data ?? []) as AccountWalletLink[];
   const inquiryGroups = (inquiryGroupsResult.data ?? []) as unknown as InquiryGroup[];
+  const players = (playersResult.data ?? []) as Player[];
 
   // Deduplicate accounts - keep only from the latest snapshot per bureau
   const latestSnapshotByBureau = new Map<CreditBureau, string>();
@@ -231,16 +243,6 @@ export default async function CreditReportPage() {
     members?.forEach((member) => {
       inquiryToGroupMap.set(member.inquiry_id, group.id);
     });
-  });
-
-  // Get latest scores per bureau and score type
-  const latestScores = new Map<string, CreditScore>();
-  scores.forEach((score) => {
-    const key = `${score.bureau}-${score.score_type}`;
-    const existing = latestScores.get(key);
-    if (!existing || (score.score_date && existing.score_date && score.score_date > existing.score_date)) {
-      latestScores.set(key, score);
-    }
   });
 
   // Server actions for mutations
@@ -547,101 +549,6 @@ export default async function CreditReportPage() {
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
-  // Group accounts across bureaus to get unique account counts
-  const accountGroups = groupAccountsAcrossBureaus(accounts as unknown as MatchingCreditAccount[]);
-  const uniqueOpenAccounts = accountGroups.filter((g) => g.status === "open");
-  const uniqueClosedAccounts = accountGroups.filter((g) => g.status === "closed");
-
-  // Calculate credit insights using unique grouped accounts (open revolving accounts only)
-  // For utilization, we need the best balance/limit per unique account
-  let totalCreditLimit = 0;
-  let totalBalance = 0;
-  
-  for (const group of uniqueOpenAccounts) {
-    // Find the best account data for this group (prefer one with credit_limit)
-    const revolvingAccounts = group.accounts.filter(
-      (a) => a.account_type === "revolving"
-    );
-    
-    if (revolvingAccounts.length === 0) continue;
-    
-    // Get max credit limit and most recent balance from any bureau
-    let groupLimit = 0;
-    let groupBalance = 0;
-    
-    for (const account of revolvingAccounts) {
-      if (account.credit_limit_cents && account.credit_limit_cents > groupLimit) {
-        groupLimit = account.credit_limit_cents;
-      }
-      // Use the balance from the account with the most recent date_updated
-      if (account.balance_cents !== null) {
-        groupBalance = account.balance_cents;
-      }
-    }
-    
-    totalCreditLimit += groupLimit;
-    totalBalance += groupBalance;
-  }
-
-  const utilization = totalCreditLimit > 0 ? (totalBalance / totalCreditLimit) * 100 : 0;
-
-  // Calculate average account age using unique accounts
-  const now = new Date();
-  const openGroupsWithDate = uniqueOpenAccounts.filter((g) => g.dateOpened);
-  const totalAgeMonths = openGroupsWithDate.reduce((sum, g) => {
-    if (!g.dateOpened) return sum;
-    const opened = new Date(g.dateOpened);
-    const months = (now.getFullYear() - opened.getFullYear()) * 12 + (now.getMonth() - opened.getMonth());
-    return sum + months;
-  }, 0);
-  const avgAgeMonths = openGroupsWithDate.length > 0 ? totalAgeMonths / openGroupsWithDate.length : 0;
-
-  // Find oldest account from unique groups
-  const oldestGroup = uniqueOpenAccounts.reduce<typeof accountGroups[0] | null>((oldest, group) => {
-    if (!group.dateOpened) return oldest;
-    if (!oldest || !oldest.dateOpened) return group;
-    return new Date(group.dateOpened) < new Date(oldest.dateOpened) ? group : oldest;
-  }, null);
-  
-  // Convert to CreditAccount format for CreditInsights
-  const oldestAccount: CreditAccount | null = oldestGroup
-    ? {
-        id: oldestGroup.id,
-        bureau: oldestGroup.accounts[0]?.bureau ?? "equifax",
-        account_name: oldestGroup.displayName,
-        account_number_masked: null,
-        creditor_name: oldestGroup.displayName,
-        status: oldestGroup.status,
-        date_opened: oldestGroup.dateOpened,
-        date_updated: null,
-        date_closed: null,
-        credit_limit_cents: null,
-        high_balance_cents: null,
-        balance_cents: null,
-        monthly_payment_cents: null,
-        account_type: oldestGroup.loanType,
-        loan_type: oldestGroup.loanType,
-        responsibility: "individual",
-        terms: null,
-        payment_status: null,
-      }
-    : null;
-
-  // Count unique accounts
-  const closedAccountCount = uniqueClosedAccounts.length;
-  const openAccountCount = uniqueOpenAccounts.length;
-
-  // Calculate active inquiries by bureau
-  // An inquiry is "active" if last_seen_snapshot_id matches the latest snapshot for that bureau
-  const activeInquiryCounts = {
-    equifax: 0,
-    experian: 0,
-    transunion: 0,
-  };
-  
-  const twoYearsAgo = new Date();
-  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-  
   // Get latest snapshot ID per bureau
   const latestSnapshotIds = new Map<string, string>();
   accounts.forEach((account) => {
@@ -650,20 +557,23 @@ export default async function CreditReportPage() {
     }
   });
 
-  // Filter to recent inquiries and count active ones per bureau
-  const recentInquiries = inquiries.filter(
-    (i) => new Date(i.inquiry_date) >= twoYearsAgo
-  );
-  
-  // Count active inquiries per bureau (those still on the report)
-  recentInquiries.forEach((inquiry) => {
-    const inq = inquiry as unknown as { last_seen_snapshot_id?: string };
-    const latestForBureau = latestSnapshotIds.get(inquiry.bureau);
-    // If last_seen matches latest snapshot OR we don't have tracking yet, count as active
-    if (!latestForBureau || inq.last_seen_snapshot_id === latestForBureau || !inq.last_seen_snapshot_id) {
-      activeInquiryCounts[inquiry.bureau]++;
-    }
+  // Prepare wallet cards data for the client
+  const walletCardsForTable = walletCards.map((wc) => {
+    const linkedAccount = linkedAccountsMap.get(wc.id);
+    return {
+      id: wc.id,
+      name: wc.custom_name ?? wc.cards?.name ?? "Unknown",
+      issuer_name: wc.cards?.issuers?.name ?? null,
+      approval_date: wc.approval_date,
+      credit_limit_cents: linkedAccount?.credit_limit ? linkedAccount.credit_limit * 100 : null,
+    };
   });
+
+  const walletCardsForInquiries = walletCards.map((wc) => ({
+    id: wc.id,
+    name: wc.custom_name || wc.cards?.name || "Unknown Card",
+    issuer_name: wc.cards?.issuers?.name || null,
+  }));
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -676,77 +586,29 @@ export default async function CreditReportPage() {
           </p>
         </div>
 
-        {/* Credit Insights Row */}
-        <div className="mb-8">
-          <CreditInsights
-            utilization={utilization}
-            totalBalance={totalBalance}
-            totalCreditLimit={totalCreditLimit}
-            avgAgeMonths={avgAgeMonths}
-            oldestAccount={oldestAccount}
-            activeInquiryCounts={activeInquiryCounts}
-            openAccountCount={openAccountCount}
-            closedAccountCount={closedAccountCount}
-          />
-        </div>
-
-        {/* Score Section */}
-        <div className="mb-8">
-          <ScoreChart
-            scores={scores}
-            latestScores={Object.fromEntries(latestScores)}
-          />
-        </div>
-
-        {/* Accounts Table */}
-        <div id="accounts-section" className="mb-8 scroll-mt-8">
-          <AccountsTable
-            accounts={accounts}
-            walletCards={walletCards.map((wc) => {
-              const linkedAccount = linkedAccountsMap.get(wc.id);
-              return {
-                id: wc.id,
-                name: wc.custom_name ?? wc.cards?.name ?? "Unknown",
-                issuer_name: wc.cards?.issuers?.name ?? null,
-                approval_date: wc.approval_date,
-                credit_limit_cents: linkedAccount?.credit_limit ? linkedAccount.credit_limit * 100 : null,
-              };
-            })}
-            accountLinks={accountLinksMap}
-            displayNames={displayNamesMap}
-            onLinkAccount={linkAccountToWallet}
-            onSetDisplayName={setDisplayName}
-          />
-        </div>
-
-        {/* Hard Inquiries Section */}
-        <div id="inquiries-section" className="mb-8 scroll-mt-8">
-          <InquiriesTable
-            inquiries={recentInquiries}
-            latestSnapshotIds={latestSnapshotIds}
-            inquiryToGroupMap={inquiryToGroupMap}
-            groupNamesMap={groupNamesMap}
-            groupDataMap={groupDataMap}
-            walletCards={walletCards.map((wc) => ({
-              id: wc.id,
-              name: wc.custom_name || wc.cards?.name || "Unknown Card",
-              issuer_name: wc.cards?.issuers?.name || null,
-            }))}
-            onCreateGroup={createInquiryGroup}
-            onAddToGroup={addToInquiryGroup}
-            onRemoveFromGroup={removeFromInquiryGroup}
-            onUpdateGroupName={updateGroupName}
-            onUpdateRelatedApplication={updateRelatedApplication}
-            onCreateGroupWithRelatedApp={createGroupWithRelatedApp}
-          />
-        </div>
-
-        {/* Matching Debug - Admin Only */}
-        {isAdmin && (
-          <div className="mb-8">
-            <MatchingDebug accounts={accounts} />
-          </div>
-        )}
+        <CreditReportClient
+          scores={scores}
+          accounts={accounts as (CreditAccount & { snapshot_id: string })[]}
+          inquiries={inquiries}
+          players={players}
+          walletCardsForTable={walletCardsForTable}
+          walletCardsForInquiries={walletCardsForInquiries}
+          accountLinksMap={accountLinksMap}
+          displayNamesMap={displayNamesMap}
+          latestSnapshotIds={latestSnapshotIds}
+          inquiryToGroupMap={inquiryToGroupMap}
+          groupNamesMap={groupNamesMap}
+          groupDataMap={groupDataMap}
+          isAdmin={isAdmin}
+          onLinkAccount={linkAccountToWallet}
+          onSetDisplayName={setDisplayName}
+          onCreateGroup={createInquiryGroup}
+          onAddToGroup={addToInquiryGroup}
+          onRemoveFromGroup={removeFromInquiryGroup}
+          onUpdateGroupName={updateGroupName}
+          onUpdateRelatedApplication={updateRelatedApplication}
+          onCreateGroupWithRelatedApp={createGroupWithRelatedApp}
+        />
       </div>
     </div>
   );
