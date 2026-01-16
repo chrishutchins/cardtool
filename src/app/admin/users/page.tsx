@@ -36,14 +36,11 @@ export default async function UsersPage() {
   // Fetch all users from Clerk Prod first (source of truth)
   const clerkUsers = await prodClerk.users.getUserList({ limit: 500 });
 
-  // Get user IDs that exist in Clerk Prod
-  const prodUserIds = clerkUsers.data.map((u) => u.id);
-
-  // Only fetch database stats for Clerk Prod users
+  // Fetch ALL database stats (don't filter by Clerk IDs - data may have different user IDs)
   const [walletResult, spendingResult, featureFlagsResult] = await Promise.all([
-    supabase.from("user_wallets").select("user_id, added_at").in("user_id", prodUserIds),
-    supabase.from("user_category_spend").select("user_id, created_at").in("user_id", prodUserIds),
-    supabase.from("user_feature_flags").select("user_id, account_linking_enabled").in("user_id", prodUserIds),
+    supabase.from("user_wallets").select("user_id, added_at"),
+    supabase.from("user_category_spend").select("user_id, created_at"),
+    supabase.from("user_feature_flags").select("user_id, account_linking_enabled"),
   ]);
 
   // Build feature flags map
@@ -72,9 +69,18 @@ export default async function UsersPage() {
     }
   }
 
-  // Build user stats from Clerk users
-  const users: UserStats[] = clerkUsers.data.map((clerkUser) => {
-    const userId = clerkUser.id;
+  // Build a map of Clerk users for lookup
+  const clerkUserMap = new Map(clerkUsers.data.map((u) => [u.id, u]));
+
+  // Collect all unique user IDs from both Clerk and database
+  const allUserIds = new Set<string>();
+  clerkUsers.data.forEach((u) => allUserIds.add(u.id));
+  Object.keys(cardsByUser).forEach((id) => allUserIds.add(id));
+  Object.keys(spendingByUser).forEach((id) => allUserIds.add(id));
+
+  // Build user stats from all sources
+  const users: UserStats[] = Array.from(allUserIds).map((userId) => {
+    const clerkUser = clerkUserMap.get(userId);
     const walletDate = earliestWalletDate[userId];
     const spendDate = earliestSpendingDate[userId];
     let createdAt: string | null = null;
@@ -86,12 +92,12 @@ export default async function UsersPage() {
 
     return {
       userId,
-      email: clerkUser.emailAddresses?.[0]?.emailAddress ?? null,
-      firstName: clerkUser.firstName,
-      lastName: clerkUser.lastName,
+      email: clerkUser?.emailAddresses?.[0]?.emailAddress ?? null,
+      firstName: clerkUser?.firstName ?? null,
+      lastName: clerkUser?.lastName ?? null,
       cardsAdded: cardsByUser[userId] ?? 0,
       spendingEdits: spendingByUser[userId] ?? 0,
-      createdAt: createdAt ?? new Date(clerkUser.createdAt).toISOString(),
+      createdAt: createdAt ?? (clerkUser ? new Date(clerkUser.createdAt).toISOString() : null),
       accountLinkingEnabled: accountLinkingByUser[userId] ?? false,
     };
   });

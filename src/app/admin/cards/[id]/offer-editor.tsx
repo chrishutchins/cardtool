@@ -8,7 +8,7 @@ interface BonusTier {
   id: string;
   spend_requirement_cents: number;
   time_period: number;
-  time_period_unit: "days" | "months";
+  time_period_unit: "days" | "months" | "statement_cycles";
   component_type: "points" | "cash" | "benefit";
   points_amount: number | null;
   currency_id: string | null;
@@ -22,7 +22,7 @@ interface ElevatedEarning {
   id: string;
   elevated_rate: number;
   duration_months: number | null;
-  duration_unit: "days" | "months";
+  duration_unit: "days" | "months" | "statement_cycles";
   category_id: number | null;
   category_name?: string;
 }
@@ -32,7 +32,7 @@ interface IntroApr {
   apr_type: "purchases" | "balance_transfers" | "both";
   apr_rate: number;
   duration: number;
-  duration_unit: "days" | "months";
+  duration_unit: "days" | "months" | "statement_cycles";
 }
 
 interface Offer {
@@ -140,7 +140,7 @@ export function OfferEditor({
   const [newBonusType, setNewBonusType] = useState<"points" | "cash" | "benefit">("points");
   const [newSpendRequirement, setNewSpendRequirement] = useState("");
   const [newTimePeriod, setNewTimePeriod] = useState("3");
-  const [newTimePeriodUnit, setNewTimePeriodUnit] = useState<"days" | "months">("months");
+  const [newTimePeriodUnit, setNewTimePeriodUnit] = useState<"days" | "months" | "statement_cycles">("months");
   const [newPointsAmount, setNewPointsAmount] = useState("");
   const [newCurrencyId, setNewCurrencyId] = useState("");
   const [newCashAmount, setNewCashAmount] = useState("");
@@ -150,14 +150,14 @@ export function OfferEditor({
   // New elevated earning form state
   const [newElevatedRate, setNewElevatedRate] = useState("");
   const [newDuration, setNewDuration] = useState("");
-  const [newDurationUnit, setNewDurationUnit] = useState<"days" | "months">("months");
+  const [newDurationUnit, setNewDurationUnit] = useState<"days" | "months" | "statement_cycles">("months");
   const [newCategoryId, setNewCategoryId] = useState("");
 
   // New intro APR form state
   const [newAprType, setNewAprType] = useState<"purchases" | "balance_transfers" | "both">("purchases");
   const [newAprRate, setNewAprRate] = useState("0");
   const [newAprDuration, setNewAprDuration] = useState("");
-  const [newAprDurationUnit, setNewAprDurationUnit] = useState<"days" | "months">("months");
+  const [newAprDurationUnit, setNewAprDurationUnit] = useState<"days" | "months" | "statement_cycles">("months");
 
   const resetBonusForm = () => {
     setNewBonusType("points");
@@ -630,7 +630,13 @@ export function OfferEditor({
                       </span>
                       <span className="text-emerald-400 font-medium">{formatBonusValue(bonus)}</span>
                       <span className="text-zinc-400 ml-2">
-                        after ${(bonus.spend_requirement_cents / 100).toLocaleString()} in {bonus.time_period} {bonus.time_period_unit}
+                        {bonus.spend_requirement_cents === 0 ? (
+                          "after approval"
+                        ) : bonus.spend_requirement_cents === 100 ? (
+                          "after first purchase"
+                        ) : (
+                          <>after ${(bonus.spend_requirement_cents / 100).toLocaleString()} in {bonus.time_period} {bonus.time_period_unit === "statement_cycles" ? "statement cycles" : bonus.time_period_unit}</>
+                        )}
                       </span>
                     </div>
                     <div className="flex gap-1">
@@ -712,11 +718,12 @@ export function OfferEditor({
                 <label className="block text-xs text-zinc-400 mb-1">Unit</label>
                 <select
                   value={newTimePeriodUnit}
-                  onChange={(e) => setNewTimePeriodUnit(e.target.value as "days" | "months")}
+                  onChange={(e) => setNewTimePeriodUnit(e.target.value as "days" | "months" | "statement_cycles")}
                   className="w-full rounded border border-zinc-600 bg-zinc-700 px-2 py-1.5 text-white text-sm"
                 >
                   <option value="days">Days</option>
                   <option value="months">Months</option>
+                  <option value="statement_cycles">Statement Cycles</option>
                 </select>
               </div>
 
@@ -929,11 +936,12 @@ export function OfferEditor({
                 <label className="block text-xs text-zinc-400 mb-1">Unit</label>
                 <select
                   value={newDurationUnit}
-                  onChange={(e) => setNewDurationUnit(e.target.value as "days" | "months")}
+                  onChange={(e) => setNewDurationUnit(e.target.value as "days" | "months" | "statement_cycles")}
                   className="w-full rounded border border-zinc-600 bg-zinc-700 px-2 py-1.5 text-white text-sm"
                 >
                   <option value="days">Days</option>
                   <option value="months">Months</option>
+                  <option value="statement_cycles">Statement Cycles</option>
                 </select>
               </div>
               <div>
@@ -1098,11 +1106,12 @@ export function OfferEditor({
                 <label className="block text-xs text-zinc-400 mb-1">Unit</label>
                 <select
                   value={newAprDurationUnit}
-                  onChange={(e) => setNewAprDurationUnit(e.target.value as "days" | "months")}
+                  onChange={(e) => setNewAprDurationUnit(e.target.value as "days" | "months" | "statement_cycles")}
                   className="w-full rounded border border-zinc-600 bg-zinc-700 px-2 py-1.5 text-white text-sm"
                 >
                   <option value="days">Days</option>
                   <option value="months">Months</option>
+                  <option value="statement_cycles">Statement Cycles</option>
                 </select>
               </div>
             </div>
@@ -1216,6 +1225,7 @@ function BonusFormFields({ bonus, currencies }: { bonus: BonusTier; currencies: 
         >
           <option value="days">Days</option>
           <option value="months">Months</option>
+          <option value="statement_cycles">Statement Cycles</option>
         </select>
       </div>
       {bonus.component_type === "points" && (
@@ -1312,6 +1322,7 @@ function ElevatedEarningFormFields({ earning, categories }: { earning: ElevatedE
         >
           <option value="days">Days</option>
           <option value="months">Months</option>
+          <option value="statement_cycles">Statement Cycles</option>
         </select>
       </div>
       <div>
@@ -1375,6 +1386,7 @@ function IntroAprFormFields({ apr }: { apr: IntroApr }) {
         >
           <option value="days">Days</option>
           <option value="months">Months</option>
+          <option value="statement_cycles">Statement Cycles</option>
         </select>
       </div>
     </div>

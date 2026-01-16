@@ -359,10 +359,14 @@ export default async function OffersPage() {
       const spendDollars = primarySpendRequirement / 100;
       let returnOnSpend = 0;
       
-      if (spendDollars > 0) {
+      if (spendDollars > 1) {
+        // Normal calculation for spend > $1
         const earnRate = card.default_earn_rate ?? 1;
         const earnedValue = (spendDollars * earnRate * cardCurrencyValue) / 100;
         returnOnSpend = ((totalBonusValue + earnedValue) / spendDollars) * 100;
+      } else if (totalBonusValue > 0) {
+        // $0 or $1 spend requirement with a bonus = infinite return
+        returnOnSpend = Infinity;
       }
 
       return {
@@ -388,7 +392,6 @@ export default async function OffersPage() {
         defaultEarnRate: card.default_earn_rate ?? 1,
         players: cardPlayers,
         isExcluded: card.exclude_from_recommendations,
-        noFtf: card.no_foreign_transaction_fees ?? false,
         offer: {
           id: offer.id,
           description: offer.offer_description,

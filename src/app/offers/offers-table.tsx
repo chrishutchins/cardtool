@@ -257,7 +257,6 @@ interface CardWithOffer {
   defaultEarnRate: number;
   players: PlayerOwnership[];
   isExcluded: boolean;
-  noFtf: boolean;
   offer: CardOffer;
   bonusValue: number;
   spendRequirement: number;
@@ -567,7 +566,7 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
   // Calculate min/max for spectrum coloring
   const valueStats = useMemo(() => {
     const values = filteredCards.map(c => c.bonusValue).filter(v => v > 0);
-    const ros = filteredCards.map(c => c.returnOnSpend).filter(v => v > 0);
+    const ros = filteredCards.map(c => c.returnOnSpend).filter(v => v > 0 && v !== Infinity);
     return {
       minValue: Math.min(...values, 0),
       // Cap bonus value max at $1000 so outliers don't skew the color scale
@@ -680,7 +679,14 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
 
   // Build ROS calculation tooltip content
   const buildRosTooltip = (card: CardWithOffer) => {
-    if (!card.offer || card.spendRequirement <= 0) return "";
+    if (!card.offer) return "";
+    
+    // Handle infinite ROS (no spend or first purchase only)
+    if (card.spendRequirement <= 1) {
+      const spendText = card.spendRequirement === 0 ? "No spend required" : "First purchase only";
+      return `${spendText}\nBonus Value: $${card.bonusValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}\nROS: ∞ (infinite)`;
+    }
+    
     const earnRate = card.defaultEarnRate;
     const currencyValue = card.currencyValue;
     const earnedPoints = card.spendRequirement * earnRate;
@@ -889,9 +895,6 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
                               </span>
                             ))
                           )}
-                          {card.offer?.offerType === "referral" && (
-                            <span className="px-1.5 py-0.5 text-xs bg-purple-700/50 text-purple-300 rounded">Referral</span>
-                          )}
                           {card.offer?.offerType === "nll" && (
                             <span className="px-1.5 py-0.5 text-xs bg-amber-700/50 text-amber-300 rounded">NLL</span>
                           )}
@@ -918,11 +921,15 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
                       {card.offer?.bonuses.slice(0, 2).map((bonus) => (
                         <div key={bonus.id}>
                           <span className="text-white font-medium">{formatBonus(bonus, card)}</span>
-                          {bonus.spendRequirement > 0 && (
-                            <span className="text-zinc-400 text-sm ml-1">
-                              after ${bonus.spendRequirement.toLocaleString()}/{bonus.timePeriod}{bonus.timePeriodUnit === "days" ? "d" : "mo"}
-                            </span>
-                          )}
+                          <span className="text-zinc-400 text-sm ml-1">
+                            {bonus.spendRequirement === 0 ? (
+                              "after approval"
+                            ) : bonus.spendRequirement === 1 ? (
+                              "after first purchase"
+                            ) : (
+                              <>after ${bonus.spendRequirement.toLocaleString()} in {bonus.timePeriod} {bonus.timePeriodUnit === "days" ? "days" : bonus.timePeriodUnit === "statement_cycles" ? "statement cycles" : "months"}</>
+                            )}
+                          </span>
                         </div>
                       ))}
                       {(card.offer?.bonuses.length ?? 0) > 2 && (
@@ -954,13 +961,8 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
                         </div>
                       )}
                       {/* Features */}
-                      {(card.offer?.firstYearAfWaived || card.noFtf) && (
-                        <div className="text-sm text-zinc-400">
-                          {[
-                            card.offer?.firstYearAfWaived && "AF waived",
-                            card.noFtf && "No FTF",
-                          ].filter(Boolean).join(" • ")}
-                        </div>
+                      {card.offer?.firstYearAfWaived && (
+                        <div className="text-sm text-zinc-400">AF waived</div>
                       )}
                     </div>
                   </td>
@@ -979,9 +981,13 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
                   </td>
                   <td className="px-4 py-3 text-right">
                     <RichTooltip content={buildRosTooltip(card)}>
-                      <span className={`font-medium ${getSpectrumColor(card.returnOnSpend, valueStats.minRos, valueStats.maxRos)}`}>
-                        {card.returnOnSpend >= 100 ? Math.round(card.returnOnSpend) : card.returnOnSpend.toFixed(1)}%
-                      </span>
+                      {card.returnOnSpend === Infinity ? (
+                        <span className="font-medium text-emerald-400">∞</span>
+                      ) : (
+                        <span className={`font-medium ${getSpectrumColor(card.returnOnSpend, valueStats.minRos, valueStats.maxRos)}`}>
+                          {card.returnOnSpend >= 100 ? Math.round(card.returnOnSpend) : card.returnOnSpend.toFixed(1)}%
+                        </span>
+                      )}
                       <Info className="w-3 h-3 text-zinc-500" />
                     </RichTooltip>
                   </td>
@@ -993,7 +999,7 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
                   {isAdmin && (
                     <td className="px-4 py-3 text-right">
                       <Link
-                        href={`/admin/cards/${card.id}`}
+                        href={`/admin/cards/${card.cardId}`}
                         className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-400 hover:text-blue-300"
                       >
                         Edit

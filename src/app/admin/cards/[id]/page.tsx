@@ -682,7 +682,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                               id: string;
                               spend_requirement_cents: number;
                               time_period: number;
-                              time_period_unit: "days" | "months";
+                              time_period_unit: "days" | "months" | "statement_cycles";
                               component_type: "points" | "cash" | "benefit";
                               points_amount: number | null;
                               currency_id: string | null;
@@ -698,7 +698,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                               id: string;
                               elevated_rate: number;
                               duration_months: number | null;
-                              duration_unit: "days" | "months";
+                              duration_unit: "days" | "months" | "statement_cycles";
                               category_id: number | null;
                             };
                             const category = categoriesResult.data?.find(c => c.id === earning.category_id);
@@ -710,7 +710,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                               apr_type: "purchases" | "balance_transfers" | "both";
                               apr_rate: number;
                               duration: number;
-                              duration_unit: "days" | "months";
+                              duration_unit: "days" | "months" | "statement_cycles";
                             };
                           }),
                         }}
@@ -722,7 +722,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                               id: string;
                               spend_requirement_cents: number;
                               time_period: number;
-                              time_period_unit: "days" | "months";
+                              time_period_unit: "days" | "months" | "statement_cycles";
                               component_type: "points" | "cash" | "benefit";
                               points_amount: number | null;
                               currency_id: string | null;
@@ -738,7 +738,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                               id: string;
                               elevated_rate: number;
                               duration_months: number | null;
-                              duration_unit: "days" | "months";
+                              duration_unit: "days" | "months" | "statement_cycles";
                               category_id: number | null;
                             };
                             const category = categoriesResult.data?.find(c => c.id === earning.category_id);
@@ -750,7 +750,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                               apr_type: "purchases" | "balance_transfers" | "both";
                               apr_rate: number;
                               duration: number;
-                              duration_unit: "days" | "months";
+                              duration_unit: "days" | "months" | "statement_cycles";
                             };
                           }),
                         }))}
@@ -791,7 +791,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                           id: string;
                           spend_requirement_cents: number;
                           time_period: number;
-                          time_period_unit: "days" | "months";
+                          time_period_unit: "days" | "months" | "statement_cycles";
                           component_type: "points" | "cash" | "benefit";
                           points_amount: number | null;
                           currency_id: string | null;
@@ -807,7 +807,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                           id: string;
                           elevated_rate: number;
                           duration_months: number | null;
-                          duration_unit: "days" | "months";
+                          duration_unit: "days" | "months" | "statement_cycles";
                           category_id: number | null;
                         };
                         const category = categoriesResult.data?.find(c => c.id === earning.category_id);
@@ -819,7 +819,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                           apr_type: "purchases" | "balance_transfers" | "both";
                           apr_rate: number;
                           duration: number;
-                          duration_unit: "days" | "months";
+                          duration_unit: "days" | "months" | "statement_cycles";
                         };
                       }),
                     }))}

@@ -400,7 +400,8 @@ export default async function WalletPage() {
   const allCards = allCardsData as unknown as AllCardData[];
   
   // All cards are available to add (users can add duplicates)
-  const availableCardsForModal = allCards.filter((card) => card.id);
+  // Filter out cards that are excluded from recommendations
+  const availableCardsForModal = allCards.filter((card) => card.id && !card.exclude_from_recommendations);
 
   // Calculate portfolio returns
   const userCardIdsSet = new Set(userCardIds);
