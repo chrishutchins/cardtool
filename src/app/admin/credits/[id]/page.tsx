@@ -103,7 +103,7 @@ export default async function EditCreditPage({ params }: Props) {
     }).eq("id", creditId);
 
     revalidatePath("/admin/credits");
-    revalidateTag("card-credits");
+    revalidateTag("card-credits", "max");
     redirect("/admin/credits");
   }
 
