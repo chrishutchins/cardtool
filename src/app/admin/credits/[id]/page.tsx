@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { EditCreditForm } from "./edit-credit-form";
@@ -29,7 +29,8 @@ export default async function EditCreditPage({ params }: Props) {
         is_active,
         notes,
         must_be_earned,
-        inventory_type_id
+        inventory_type_id,
+        travel_category
       `)
       .eq("id", id)
       .single(),
@@ -75,6 +76,8 @@ export default async function EditCreditPage({ params }: Props) {
     const mustBeEarned = formData.get("must_be_earned") === "on";
     const inventoryTypeIdRaw = formData.get("inventory_type_id") as string;
     const inventoryTypeId = inventoryTypeIdRaw?.trim() || null;
+    const travelCategoryRaw = formData.get("travel_category") as string;
+    const travelCategory = travelCategoryRaw?.trim() || null;
 
     const defaultValueCents = defaultValueStr ? Math.round(parseFloat(defaultValueStr) * 100) : null;
     const defaultQuantity = defaultQuantityStr ? parseInt(defaultQuantityStr) : null;
@@ -96,9 +99,11 @@ export default async function EditCreditPage({ params }: Props) {
       is_active: isActive,
       must_be_earned: mustBeEarned,
       inventory_type_id: inventoryTypeId,
+      travel_category: travelCategory,
     }).eq("id", creditId);
 
     revalidatePath("/admin/credits");
+    revalidateTag("card-credits");
     redirect("/admin/credits");
   }
 

@@ -18,6 +18,7 @@ export interface ExpiringCredit {
   unitName: string | null;
   isUsed: boolean;
   resetCycle: string;
+  travelCategory: string | null;
 }
 
 export interface ExpiringInventoryItem {
@@ -47,6 +48,7 @@ export interface UpcomingFee {
 export interface ExpiringPoint {
   currencyId: string;
   currencyName: string;
+  currencyType: string | null;
   balance: number;
   expirationDate: Date;
   playerNumber: number;
@@ -217,6 +219,7 @@ export function UpcomingClient({
   };
   const [playerFilter, setPlayerFilter] = useState<number | "all">("all");
   const [hideUsedCredits, setHideUsedCredits] = useState(true);
+  const [travelFilter, setTravelFilter] = useState<"all" | "hotel" | "flight">("all");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [expandedCreditGroups, setExpandedCreditGroups] = useState<Set<string>>(new Set());
   const [expandedInventoryGroups, setExpandedInventoryGroups] = useState<Set<string>>(new Set());
@@ -231,6 +234,12 @@ export function UpcomingClient({
       const filteredCredits = expiringCredits.filter(credit => {
         if (hideUsedCredits && credit.isUsed) return false;
         if (playerFilter !== "all" && credit.playerNumber !== playerFilter) return false;
+        // Travel filter: show credits that match the travel category
+        if (travelFilter !== "all") {
+          if (!credit.travelCategory) return false;
+          if (travelFilter === "hotel" && credit.travelCategory !== "hotel" && credit.travelCategory !== "both") return false;
+          if (travelFilter === "flight" && credit.travelCategory !== "flight" && credit.travelCategory !== "both") return false;
+        }
         return true;
       });
 
@@ -268,11 +277,23 @@ export function UpcomingClient({
       }
     }
 
+    // Hotel and airline brands for inventory filtering
+    const hotelBrands = ["Hilton", "Hyatt", "IHG", "Marriott", "Ritz Carlton", "Best Western", "Choice", "Wyndham", "Accor"];
+    const airlineBrands = ["Alaska", "American", "Delta", "Southwest", "United", "JetBlue", "Frontier", "Spirit"];
+
     // Add inventory - group by name + expiration date
     if (selectedTypes.has("inventory")) {
       // First filter inventory
       const filteredInventory = expiringInventory.filter(item => {
         if (playerFilter !== "all" && item.playerNumber !== playerFilter) return false;
+        // Travel filter: show inventory items that match brand category
+        if (travelFilter !== "all") {
+          const brand = item.brand?.toLowerCase() ?? "";
+          const isHotel = hotelBrands.some(h => brand.includes(h.toLowerCase()));
+          const isAirline = airlineBrands.some(a => brand.includes(a.toLowerCase()));
+          if (travelFilter === "hotel" && !isHotel) return false;
+          if (travelFilter === "flight" && !isAirline) return false;
+        }
         return true;
       });
 
@@ -312,8 +333,8 @@ export function UpcomingClient({
       }
     }
 
-    // Add renewals
-    if (selectedTypes.has("renewals")) {
+    // Add renewals (skip when travel filter is active - renewals aren't travel-specific)
+    if (selectedTypes.has("renewals") && travelFilter === "all") {
       upcomingFees.forEach(fee => {
         if (playerFilter !== "all" && fee.playerNumber !== playerFilter) return;
         items.push({ type: "renewal", date: fee.anniversaryDate, data: fee });
@@ -324,6 +345,11 @@ export function UpcomingClient({
     if (selectedTypes.has("points")) {
       expiringPoints.forEach(point => {
         if (playerFilter !== "all" && point.playerNumber !== playerFilter) return;
+        // Travel filter: show points that match currency type
+        if (travelFilter !== "all") {
+          if (travelFilter === "hotel" && point.currencyType !== "hotel_points") return;
+          if (travelFilter === "flight" && point.currencyType !== "airline_miles") return;
+        }
         items.push({ type: "points", date: point.expirationDate, data: point });
       });
     }
@@ -340,6 +366,7 @@ export function UpcomingClient({
     selectedTypes,
     playerFilter,
     hideUsedCredits,
+    travelFilter,
   ]);
 
   // Group items by expiration bucket
@@ -536,6 +563,35 @@ export function UpcomingClient({
           </div>
         </div>
 
+        {/* Travel Filter - Hotel/Flight */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTravelFilter(travelFilter === "hotel" ? "all" : "hotel")}
+            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors flex items-center gap-1.5 ${
+              travelFilter === "hotel"
+                ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-400"
+                : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            Hotel
+          </button>
+          <button
+            onClick={() => setTravelFilter(travelFilter === "flight" ? "all" : "flight")}
+            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors flex items-center gap-1.5 ${
+              travelFilter === "flight"
+                ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-400"
+                : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Flight
+          </button>
+        </div>
       </div>
 
       {/* Items List */}

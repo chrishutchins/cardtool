@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface ExpiringPoint {
   currencyName: string;
@@ -111,6 +112,7 @@ export function UpcomingUnified({
   upcomingFees,
   expiringInventory,
 }: UpcomingUnifiedProps) {
+  const router = useRouter();
   const [period, setPeriod] = useState<"30" | "60" | "90">("30");
   
   // Calculate cutoff date based on period
@@ -141,14 +143,26 @@ export function UpcomingUnified({
   
   const hasAnyItems = activeCredits.length > 0 || activeInventory.length > 0 || activeFees.length > 0 || activePoints.length > 0;
 
+  const handleWidgetClick = (e: React.MouseEvent) => {
+    // Only navigate if clicking on the widget background, not on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('a') || target.closest('button')) {
+      return;
+    }
+    router.push('/upcoming');
+  };
+
   return (
-    <div className="p-5 rounded-xl border bg-zinc-900/50 border-zinc-800">
+    <div 
+      className="p-5 rounded-xl border bg-zinc-900/50 border-zinc-800 cursor-pointer hover:border-zinc-700 transition-colors"
+      onClick={handleWidgetClick}
+    >
       <div className="flex items-start justify-between mb-4">
-        <Link href="/upcoming" className="group">
-          <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors">Upcoming</p>
-          <p className="text-xl font-bold text-white group-hover:text-emerald-400 transition-colors">Next {period} Days</p>
-        </Link>
-        <div className="flex items-center gap-2">
+        <div>
+          <p className="text-sm text-zinc-400">Upcoming</p>
+          <p className="text-xl font-bold text-white">Next {period} Days</p>
+        </div>
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
           <div className="flex rounded-lg bg-zinc-800 p-0.5">
             <button
               onClick={() => setPeriod("30")}
@@ -181,9 +195,6 @@ export function UpcomingUnified({
               90d
             </button>
           </div>
-          <Link href="/upcoming" className="p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
-            <CalendarIcon />
-          </Link>
         </div>
       </div>
       

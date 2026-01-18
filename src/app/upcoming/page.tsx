@@ -132,10 +132,10 @@ export default async function UpcomingPage() {
       .eq("user_id", effectiveUserId)
       .order("player_number"),
 
-    // Currencies for points names
+    // Currencies for points names and type
     supabase
       .from("reward_currencies")
-      .select("id, name, code"),
+      .select("id, name, code, currency_type"),
 
     // Hidden items
     supabase
@@ -212,6 +212,7 @@ export default async function UpcomingPage() {
     id: string;
     name: string;
     code: string;
+    currency_type: string | null;
   };
 
   type HiddenItem = {
@@ -278,6 +279,7 @@ export default async function UpcomingPage() {
     unitName: string | null;
     isUsed: boolean;
     resetCycle: string;
+    travelCategory: string | null;
   }
 
   const expiringCredits: ExpiringCredit[] = [];
@@ -353,6 +355,7 @@ export default async function UpcomingPage() {
         unitName: credit.unit_name,
         isUsed,
         resetCycle: credit.reset_cycle,
+        travelCategory: credit.travel_category ?? null,
       });
     }
   }
@@ -452,6 +455,7 @@ export default async function UpcomingPage() {
   interface ExpiringPoint {
     currencyId: string;
     currencyName: string;
+    currencyType: string | null;
     balance: number;
     expirationDate: Date;
     playerNumber: number;
@@ -472,6 +476,7 @@ export default async function UpcomingPage() {
     expiringPoints.push({
       currencyId: pb.currency_id,
       currencyName: currency.name,
+      currencyType: currency.currency_type,
       balance: pb.balance,
       expirationDate: expDate,
       playerNumber: pb.player_number,

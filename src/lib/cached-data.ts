@@ -283,7 +283,8 @@ export const getCachedCardCredits = unstable_cache(
         unit_name,
         renewal_period_months,
         credit_count,
-        notes
+        notes,
+        travel_category
       `)
       .eq("is_active", true);
     

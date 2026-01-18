@@ -68,6 +68,19 @@ export function AddCreditForm({ cards, onSubmit }: AddCreditFormProps) {
       </div>
 
       <div>
+        <label className="block text-sm font-medium text-zinc-400 mb-1">Travel Category</label>
+        <select
+          name="travel_category"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+        >
+          <option value="">None</option>
+          <option value="hotel">Hotel</option>
+          <option value="flight">Flight</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+
+      <div>
         <label className="block text-sm font-medium text-zinc-400 mb-1">
           Credit Count
           <span className="text-zinc-500 font-normal ml-1">(for multi-use credits)</span>

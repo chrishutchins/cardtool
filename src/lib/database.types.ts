@@ -184,6 +184,7 @@ export type Database = {
           renewal_period_months: number | null
           reset_cycle: Database["public"]["Enums"]["credit_reset_cycle"]
           reset_day_of_month: number | null
+          travel_category: string | null
           unit_name: string | null
           updated_at: string | null
         }
@@ -203,6 +204,7 @@ export type Database = {
           renewal_period_months?: number | null
           reset_cycle?: Database["public"]["Enums"]["credit_reset_cycle"]
           reset_day_of_month?: number | null
+          travel_category?: string | null
           unit_name?: string | null
           updated_at?: string | null
         }
@@ -222,6 +224,7 @@ export type Database = {
           renewal_period_months?: number | null
           reset_cycle?: Database["public"]["Enums"]["credit_reset_cycle"]
           reset_day_of_month?: number | null
+          travel_category?: string | null
           unit_name?: string | null
           updated_at?: string | null
         }

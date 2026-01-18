@@ -31,6 +31,7 @@ interface Credit {
   notes: string | null;
   must_be_earned: boolean;
   inventory_type_id: string | null;
+  travel_category: string | null;
 }
 
 interface EditCreditFormProps {
@@ -94,6 +95,23 @@ export function EditCreditForm({ credit, cards, inventoryTypes, onSubmit }: Edit
             placeholder="e.g., Uber, Clear, Delta"
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Travel Category</label>
+          <select
+            name="travel_category"
+            defaultValue={credit.travel_category ?? ""}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+          >
+            <option value="">None (not travel-related)</option>
+            <option value="hotel">Hotel</option>
+            <option value="flight">Flight</option>
+            <option value="both">Both (Hotel & Flight)</option>
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">
+            Used for Hotel/Flight filtering on the Upcoming page
+          </p>
         </div>
 
         <div>

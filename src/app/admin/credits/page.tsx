@@ -94,6 +94,8 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
     const notesRaw = formData.get("notes") as string;
     const notes = notesRaw?.trim() || null;
     const mustBeEarned = formData.get("must_be_earned") === "true";
+    const travelCategoryRaw = formData.get("travel_category") as string;
+    const travelCategory = travelCategoryRaw?.trim() || null;
 
     const defaultValueCents = defaultValueStr ? Math.round(parseFloat(defaultValueStr) * 100) : null;
     const defaultQuantity = defaultQuantityStr ? parseInt(defaultQuantityStr) : null;
@@ -112,6 +114,7 @@ export default async function AdminCreditsPage({ searchParams }: PageProps) {
       notes,
       is_active: true,
       must_be_earned: mustBeEarned,
+      travel_category: travelCategory,
     });
 
     revalidatePath("/admin/credits");
