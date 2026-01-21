@@ -1,14 +1,44 @@
 # CardTool Project Rules
 
+## Project Info
+- **Domain**: cardtool.app
+- **Production URL**: https://cardtool.app
+
 ## Database Schema Changes
 When creating Supabase migrations that add or modify tables/columns:
 1. Create the migration in `supabase/migrations/`
 2. **ALWAYS update `src/lib/database.types.ts`** in the same commit to include the new types
 3. The types file must stay in sync with the database schema or builds will fail
+4. **ALWAYS enable RLS on new tables** - see RLS section below
+
+## Row Level Security (RLS)
+All tables must have RLS enabled, even though the app primarily uses the service role key (which bypasses RLS). This provides defense-in-depth against direct database access via the anon key.
+
+When creating a new table:
+1. Enable RLS: `ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;`
+2. Add appropriate policy based on table type:
+
+**User tables** (have `user_id` column):
+```sql
+CREATE POLICY "Users can manage their own data"
+  ON table_name FOR ALL TO authenticated
+  USING (user_id = (auth.jwt()->>'sub'))
+  WITH CHECK (user_id = (auth.jwt()->>'sub'));
+```
+
+**Reference tables** (read-only shared data like `cards`, `issuers`):
+```sql
+CREATE POLICY "Authenticated users can read table_name"
+  ON table_name FOR SELECT TO authenticated
+  USING (true);
+```
+
+**Service-role-only tables** (like `stripe_members`):
+- Enable RLS but add NO policies - this blocks all non-service-role access
 
 ## Tech Stack
 - Next.js 16 with App Router
-- Supabase for database (accessed via service role key, not RLS)
+- Supabase for database (service role key for app access, RLS + Clerk JWT for defense-in-depth)
 - Clerk for authentication
 - Tailwind CSS for styling
 - TypeScript throughout
