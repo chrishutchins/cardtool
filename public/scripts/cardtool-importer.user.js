@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.43.0
+// @version      2.44.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -3405,6 +3405,31 @@
                 return 'other';
             };
             
+            // Helper to map loan type to valid enum values
+            const mapLoanType = (loanType, subType) => {
+                const type = (loanType || '').toLowerCase();
+                const sub = (subType || '').toLowerCase();
+                if (type.includes('credit card') || sub.includes('credit card')) return 'credit_card';
+                if (type.includes('charge') || sub.includes('charge')) return 'charge_card';
+                if (type.includes('auto') || sub.includes('auto')) return 'auto_loan';
+                if (type.includes('mortgage') || sub.includes('mortgage')) return 'mortgage';
+                if (type.includes('student') || sub.includes('student')) return 'student_loan';
+                if (type.includes('personal') || sub.includes('personal')) return 'personal_loan';
+                if (type.includes('home equity') || sub.includes('heloc') || sub.includes('home equity')) return 'home_equity';
+                if (type.includes('retail') || sub.includes('retail')) return 'retail';
+                return 'other';
+            };
+            
+            // Helper to map responsibility to valid enum values
+            const mapResponsibility = (holder) => {
+                const h = (holder || '').toLowerCase();
+                if (h.includes('individual') || h.includes('borrower') || h === 'i') return 'individual';
+                if (h.includes('joint') || h === 'j') return 'joint';
+                if (h.includes('authorized') || h === 'a') return 'authorized_user';
+                if (h.includes('cosign') || h === 'c') return 'cosigner';
+                return 'unknown';
+            };
+            
             // Helper to map myFICO score type to our internal type
             const mapScoreType = (scoreType, scoreVersion) => {
                 const type = (scoreType || '').toUpperCase();
@@ -3513,8 +3538,8 @@
                                 balanceCents: status.balance !== undefined ? Math.round(status.balance * 100) : null,
                                 monthlyPaymentCents: terms.scheduled_payment_amount ? Math.round(terms.scheduled_payment_amount * 100) : null,
                                 accountType: mapAccountType(profile.account_type, profile.account_sub_type),
-                                loanType: profile.loan_type || null,
-                                responsibility: profile.account_holder || null,
+                                loanType: mapLoanType(profile.loan_type, profile.account_sub_type),
+                                responsibility: mapResponsibility(profile.account_holder),
                                 paymentStatus: status.status || null,
                                 bureau: bureau
                             });
