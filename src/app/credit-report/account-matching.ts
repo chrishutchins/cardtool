@@ -346,6 +346,15 @@ export function groupAccountsAcrossBureaus(accounts: CreditAccount[]): AccountGr
     }
   }
 
+  // Reconcile group status: if ANY account is closed, the group is closed
+  // This handles inconsistencies across bureaus conservatively
+  for (const group of groups) {
+    const hasClosedAccount = group.accounts.some((a) => a.status === "closed");
+    if (hasClosedAccount) {
+      group.status = "closed";
+    }
+  }
+
   // Sort groups by status (open first), then by date opened (newest first)
   groups.sort((a, b) => {
     const aOpen = a.status === "open" ? 0 : 1;

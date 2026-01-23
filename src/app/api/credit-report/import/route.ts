@@ -48,7 +48,6 @@ interface CreditReportImportRequest {
   scores?: CreditScoreInput[];
   accounts?: CreditAccountInput[];
   inquiries?: CreditInquiryInput[];
-  rawData?: import("@/lib/database.types").Json;
 }
 
 // Authenticate using sync token
@@ -99,8 +98,7 @@ export async function POST(request: Request) {
       reportDate, 
       scores = [], 
       accounts = [], 
-      inquiries = [],
-      rawData 
+      inquiries = []
     } = body;
 
     // Validate required fields
@@ -121,7 +119,6 @@ export async function POST(request: Request) {
         player_number: playerNumber,
         bureau,
         report_date: reportDate || null,
-        raw_data: rawData ?? null,
         fetched_at: new Date().toISOString(),
       })
       .select("id")

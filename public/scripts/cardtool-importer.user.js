@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.23.0
+// @version      2.27.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -2706,6 +2706,12 @@
     function parseEquifaxResponse(data, url) {
         const result = { scores: [], accounts: [], inquiries: [], reportDate: null };
 
+        // Extract report date from displayReportDate field
+        if (data.displayReportDate) {
+            result.reportDate = parseEquifaxDate(data.displayReportDate);
+            console.log('CardTool Credit: Extracted Equifax report date:', result.reportDate);
+        }
+
         // Handle array of accounts (revolving, installment, etc.)
         let accounts = [];
         if (Array.isArray(data)) {
@@ -2930,6 +2936,12 @@
         if (data.reportInfo?.creditFileInfo?.[0]) {
             console.log('CardTool Credit: Parsing forcereload format');
             const creditFile = data.reportInfo.creditFileInfo[0];
+            
+            // Extract report date from top-level dateOfReport field
+            if (data.dateOfReport) {
+                result.reportDate = parseExperianDate(data.dateOfReport);
+                console.log('CardTool Credit: Extracted Experian report date:', result.reportDate);
+            }
             
             // Parse accounts
             if (creditFile.accounts && Array.isArray(creditFile.accounts)) {
@@ -4278,11 +4290,13 @@
         
         if (!portfolioType && !ratingDesc) return 'unknown';
         const combined = ((portfolioType || '') + ' ' + (ratingDesc || '')).toUpperCase();
-        if (combined.includes('CURRENT') || combined.includes('AS AGREED')) return 'open';
+        // Check CLOSED/TERMINATED first - takes precedence over "AS AGREED" 
+        // (e.g. "Paid, Closed; was Paid as agreed" should be closed, not open)
         if (combined.includes('CLOSED') || combined.includes('TERMINATED')) return 'closed';
-        if (combined.includes('PAID')) return 'paid';
         // 'collection' maps to 'closed' since it's not a valid status enum
         if (combined.includes('COLLECTION')) return 'closed';
+        if (combined.includes('CURRENT') || combined.includes('AS AGREED')) return 'open';
+        if (combined.includes('PAID')) return 'paid';
         if (combined.includes('REVOLVING') || combined.includes('INSTALLMENT') || combined.includes('OPEN')) return 'open';
         return 'unknown';
     }
@@ -5011,8 +5025,8 @@
                 reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
                 scores: scoresWithoutBureau.length > 0 ? scoresWithoutBureau : creditReportData.scores,
                 accounts: creditReportData.accounts,
-                inquiries: creditReportData.inquiries,
-                rawData: creditReportData.rawData
+                inquiries: creditReportData.inquiries
+                // Note: rawData intentionally not sent - contains PII (names, addresses)
             }),
             onload: function(response) {
                 try {

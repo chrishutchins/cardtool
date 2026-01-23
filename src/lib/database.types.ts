@@ -1139,7 +1139,6 @@ export type Database = {
           fetched_at: string
           id: string
           player_number: number
-          raw_data: Json | null
           report_date: string | null
           user_id: string
         }
@@ -1149,7 +1148,6 @@ export type Database = {
           fetched_at?: string
           id?: string
           player_number?: number
-          raw_data?: Json | null
           report_date?: string | null
           user_id: string
         }
@@ -1159,7 +1157,6 @@ export type Database = {
           fetched_at?: string
           id?: string
           player_number?: number
-          raw_data?: Json | null
           report_date?: string | null
           user_id?: string
         }
