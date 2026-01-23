@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.44.0
+// @version      2.46.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -4775,8 +4775,7 @@
             color: #e4e4e7 !important;
             z-index: 999998 !important;
             overflow: hidden !important;
-            min-width: 240px !important;
-            max-width: 320px !important;
+            width: 280px !important;
             line-height: 1.4 !important;
             transition: all 0.2s ease !important;
         }
@@ -4847,6 +4846,12 @@
             align-items: center !important;
             gap: 8px !important;
             border-bottom: 1px solid #3f3f46 !important;
+        }
+        .cardtool-credit-header-actions {
+            margin-left: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 4px !important;
         }
         .cardtool-credit-logo {
             width: 18px !important;
@@ -5083,19 +5088,22 @@
         const accountsMissingData = (creditReportData.accounts || []).filter(a => 
             !a.creditLimitCents && !a.balanceCents
         ).length;
+        // Consistent warning style for all messages
+        const warningStyle = 'color: #fbbf24; font-size: 11px; margin-bottom: 8px;';
+        
         const dataWarning = accountsMissingData > 0 
-            ? `<div style="color: #fbbf24; font-size: 11px; margin-bottom: 8px;">⚠️ ${accountsMissingData} accounts missing limit/balance</div>`
+            ? `<div style="${warningStyle}">⚠️ ${accountsMissingData} accounts missing limit/balance</div>`
             : '';
         
         // myFICO inquiry note - show when there's data to sync
         const inquiryNote = (currentBureau === 'myfico' && hasData) 
-            ? `<div style="color: #71717a; font-size: 11px; margin-bottom: 8px;">ℹ️ Inquiries not imported from myFICO</div>`
+            ? `<div style="${warningStyle}">⚠️ Inquiries not imported from myFICO</div>`
             : '';
         
         // Instruction message for sites that need user navigation
         let instructionMessage = '';
         if (hasScoresButNoAccounts && siteInstructions[currentBureau]) {
-            instructionMessage = `<div style="color: #a1a1aa; font-size: 11px; margin-bottom: 8px;">📋 ${siteInstructions[currentBureau]}</div>`;
+            instructionMessage = `<div style="${warningStyle}">⚠️ ${siteInstructions[currentBureau]}</div>`;
         }
 
         // Build mini-summary text for minimized state
@@ -5128,11 +5136,10 @@
                 <div class="cardtool-credit-logo">C</div>
                 <span class="cardtool-credit-mini-summary">${miniSummaryText}</span>
                 <span class="cardtool-credit-title">CardTool • ${bureauName}</span>
-                <!-- Debug button hidden for now
-                <button class="cardtool-credit-debug" title="Export debug data" style="margin-left: auto; background: none; border: none; color: #71717a; cursor: pointer; font-size: 12px; padding: 4px;">🔍</button>
-                -->
-                <button class="cardtool-credit-minimize" title="Minimize">&#8722;</button>
-                <button class="cardtool-credit-close" title="Close">&times;</button>
+                <div class="cardtool-credit-header-actions">
+                    <button class="cardtool-credit-minimize" title="Minimize">&#8722;</button>
+                    <button class="cardtool-credit-close" title="Close">&times;</button>
+                </div>
             </div>
             <div class="cardtool-credit-body">
                 ${statsHtml}
@@ -5309,7 +5316,6 @@
             const skipInquiries = currentBureau === 'myfico';
             if (skipInquiries) {
                 console.log('CardTool Credit: Skipping inquiries for myFICO (use direct bureau imports for inquiries)');
-                updateCreditStatus('Note: Inquiries not imported from myFICO (use bureau sites for inquiries)');
             }
             
             console.log('CardTool Credit: Syncing multi-bureau full report to', bureaus.length, 'bureaus:', bureaus);

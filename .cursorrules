@@ -50,9 +50,11 @@ CREATE POLICY "Authenticated users can read table_name"
 - Consistent tooltip style using fixed positioning (see existing Tooltip components)
 
 ## Git Workflow
-- **NEVER commit to main unless explicitly instructed by the user**
+- **NEVER commit or push to main unless explicitly instructed by the user for THAT SPECIFIC change**
+- A "push" instruction applies ONLY to the changes discussed at that moment, NOT future changes
 - Always run `npm run build` and verify it passes before any commit
-- Wait for user approval before pushing changes
+- After fixing bugs or making changes, ALWAYS ask "Ready to push?" before pushing
+- When in doubt, ask first
 
 ## Testing
 - Build must pass (`npm run build`) before pushing
