@@ -122,12 +122,14 @@ export default async function CreditReportPage() {
     inquiryGroupsResult,
     playersResult,
   ] = await Promise.all([
-    // All credit scores (historical)
+    // All credit scores (historical) - order descending to ensure newest within limit
+    // Limit increased to 5000 to accommodate users with extensive score history
     supabase
       .from("credit_scores")
       .select("id, bureau, score_type, score, score_date, player_number")
       .eq("user_id", effectiveUserId)
-      .order("score_date", { ascending: true }),
+      .order("score_date", { ascending: false })
+      .limit(5000),
 
     // Latest accounts from each bureau (get from most recent snapshot per bureau)
     supabase
@@ -198,17 +200,19 @@ export default async function CreditReportPage() {
   const inquiryGroups = (inquiryGroupsResult.data ?? []) as unknown as InquiryGroup[];
   const players = (playersResult.data ?? []) as Player[];
 
-  // Deduplicate accounts - keep only from the latest snapshot per bureau
-  const latestSnapshotByBureau = new Map<CreditBureau, string>();
+  // Deduplicate accounts - keep only from the latest snapshot per bureau PER PLAYER
+  const latestSnapshotByBureauAndPlayer = new Map<string, string>();
   allAccounts.forEach((account) => {
-    if (!latestSnapshotByBureau.has(account.bureau)) {
-      latestSnapshotByBureau.set(account.bureau, account.snapshot_id);
+    const key = `${account.bureau}-${account.player_number}`;
+    if (!latestSnapshotByBureauAndPlayer.has(key)) {
+      latestSnapshotByBureauAndPlayer.set(key, account.snapshot_id);
     }
   });
 
-  const accounts = allAccounts.filter(
-    (account) => latestSnapshotByBureau.get(account.bureau) === account.snapshot_id
-  );
+  const accounts = allAccounts.filter((account) => {
+    const key = `${account.bureau}-${account.player_number}`;
+    return latestSnapshotByBureauAndPlayer.get(key) === account.snapshot_id;
+  });
 
   // Build linked accounts map
   const linkedAccountsMap = new Map<string, LinkedAccount>();
@@ -549,11 +553,16 @@ export default async function CreditReportPage() {
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
   
-  // Get latest snapshot ID per bureau
+  // Get latest snapshot ID per bureau per player (for inquiry tracking)
+  // This map uses just bureau as key since the client filters by player
   const latestSnapshotIds = new Map<string, string>();
   accounts.forEach((account) => {
-    if (!latestSnapshotIds.has(account.bureau)) {
-      latestSnapshotIds.set(account.bureau, (account as unknown as { snapshot_id: string }).snapshot_id);
+    const snapshotId = (account as unknown as { snapshot_id: string }).snapshot_id;
+    // For each bureau, we keep track of all latest snapshots (may have multiple per player)
+    // The client will filter by player, so we need to include all
+    const key = `${account.bureau}-${account.player_number}`;
+    if (!latestSnapshotIds.has(key)) {
+      latestSnapshotIds.set(key, snapshotId);
     }
   });
 

@@ -549,7 +549,7 @@ export function AccountsTable({
 }: AccountsTableProps) {
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [linkPopupGroupId, setLinkPopupGroupId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("open");
   const [typeFilter, setTypeFilter] = useState<"all" | "credit" | "other">("all");
   const [sortColumn, setSortColumn] = useState<SortColumn>("utilization");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");

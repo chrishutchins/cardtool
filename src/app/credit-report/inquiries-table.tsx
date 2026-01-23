@@ -13,6 +13,7 @@ interface CreditInquiry {
   inquiry_type: string | null;
   last_seen_snapshot_id: string | null;
   snapshot_id: string | null;
+  player_number: number;
 }
 
 interface WalletCard {
@@ -137,6 +138,8 @@ function RelatedApplicationInput({
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [openUpward, setOpenUpward] = useState(false);
 
   // Get display value for linked card or note
   const displayValue = useMemo(() => {
@@ -199,6 +202,16 @@ function RelatedApplicationInput({
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
+  // Check if dropdown should open upward when opened
+  const checkDropdownDirection = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const dropdownHeight = 200; // approximate max height
+      setOpenUpward(spaceBelow < dropdownHeight);
+    }
+  };
+
   // If we have a linked value, show it as text with clear button
   if (displayValue && !isEditing) {
     return (
@@ -220,13 +233,16 @@ function RelatedApplicationInput({
 
   // Show input field for editing/adding
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <input
         ref={inputRef}
         type="text"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        onFocus={() => setIsOpen(true)}
+        onFocus={() => {
+          checkDropdownDirection();
+          setIsOpen(true);
+        }}
         onBlur={handleBlur}
         placeholder="Link to card..."
         disabled={isPending}
@@ -235,7 +251,9 @@ function RelatedApplicationInput({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 mt-1 w-56 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg max-h-48 overflow-auto right-0"
+          className={`absolute z-50 w-56 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg max-h-48 overflow-auto right-0 ${
+            openUpward ? "bottom-full mb-1" : "top-full mt-1"
+          }`}
         >
           {filteredCards.length > 0 ? (
             filteredCards.map((card) => (
@@ -288,14 +306,16 @@ export function InquiriesTable({
   const [sortColumn, setSortColumn] = useState<SortColumn>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [editMode, setEditMode] = useState(false);
+  const [inquiryTypeFilter, setInquiryTypeFilter] = useState<"all" | "hard" | "soft">("hard");
 
   // Determine if an inquiry is "active" (still on the report)
   const isInquiryActive = (inquiry: CreditInquiry): boolean => {
-    const latestForBureau = latestSnapshotIds.get(inquiry.bureau);
+    // Use bureau-player key to get the correct snapshot ID
+    const latestForBureauAndPlayer = latestSnapshotIds.get(`${inquiry.bureau}-${inquiry.player_number}`);
     // If no tracking data yet, assume active
-    if (!latestForBureau || !inquiry.last_seen_snapshot_id) return true;
+    if (!latestForBureauAndPlayer || !inquiry.last_seen_snapshot_id) return true;
     // Active if last_seen matches the latest snapshot
-    return inquiry.last_seen_snapshot_id === latestForBureau;
+    return inquiry.last_seen_snapshot_id === latestForBureauAndPlayer;
   };
 
   // Count active inquiries per bureau
@@ -438,11 +458,32 @@ export function InquiriesTable({
     return groups;
   }, [inquiries, inquiryToGroupMap, groupNamesMap, groupDataMap, walletCards, latestSnapshotIds]);
 
+  // Helper to check if an inquiry is "soft" (includes account_review, promotional, soft)
+  const isSoftInquiry = (type: string | null) => {
+    if (!type) return false;
+    const t = type.toLowerCase();
+    return t === 'soft' || t === 'account_review' || t === 'promotional';
+  };
+
   // Sort and filter groups
   const filteredAndSortedGroups = useMemo(() => {
     let filtered = showDropped
       ? groupedInquiries
       : groupedInquiries.filter((g) => !g.isDropped);
+
+    // Filter by inquiry type
+    if (inquiryTypeFilter !== "all") {
+      filtered = filtered.filter((g) => {
+        // A group matches if ANY of its inquiries match the filter
+        return g.inquiries.some((inq) => {
+          if (inquiryTypeFilter === "hard") {
+            return !isSoftInquiry(inq.inquiry_type);
+          } else {
+            return isSoftInquiry(inq.inquiry_type);
+          }
+        });
+      });
+    }
 
     // Sort
     filtered = [...filtered].sort((a, b) => {
@@ -462,7 +503,7 @@ export function InquiriesTable({
     });
 
     return filtered;
-  }, [groupedInquiries, showDropped, sortColumn, sortDirection]);
+  }, [groupedInquiries, showDropped, sortColumn, sortDirection, inquiryTypeFilter]);
 
   const droppedCount = groupedInquiries.filter((g) => g.isDropped).length;
   const activeCount = groupedInquiries.filter((g) => !g.isDropped).length;
@@ -549,17 +590,27 @@ export function InquiriesTable({
   if (inquiries.length === 0) {
     return (
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center text-zinc-500">
-        No hard inquiries found in the last 2 years.
+        No inquiries found in the last 2 years.
       </div>
     );
   }
+
+  // Count soft inquiries
+  const softCount = groupedInquiries.filter((g) => 
+    g.inquiries.some((inq) => isSoftInquiry(inq.inquiry_type))
+  ).length;
+  const hardCount = groupedInquiries.filter((g) => 
+    g.inquiries.some((inq) => !isSoftInquiry(inq.inquiry_type))
+  ).length;
 
   return (
     <div className="bg-zinc-900 rounded-xl border border-zinc-800">
       <div className="p-4 border-b border-zinc-800">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Hard Inquiries</h2>
+            <h2 className="text-lg font-semibold text-white">
+              {inquiryTypeFilter === "hard" ? "Hard" : inquiryTypeFilter === "soft" ? "Soft" : "All"} Inquiries
+            </h2>
             <p className="text-sm text-zinc-500 mt-1">
               {activeCount} active
               {droppedCount > 0 && (
@@ -569,6 +620,17 @@ export function InquiriesTable({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Inquiry type filter */}
+            <select
+              value={inquiryTypeFilter}
+              onChange={(e) => setInquiryTypeFilter(e.target.value as "all" | "hard" | "soft")}
+              className="px-2 py-1 text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg focus:outline-none focus:border-emerald-500"
+            >
+              <option value="hard">Hard ({hardCount})</option>
+              <option value="soft">Soft ({softCount})</option>
+              <option value="all">All ({hardCount + softCount})</option>
+            </select>
+
             {/* Toggle dropped */}
             {droppedCount > 0 && (
               <button
@@ -623,16 +685,16 @@ export function InquiriesTable({
       </div>
 
       <div className="overflow-x-auto overflow-y-visible">
-        <table className="w-full table-fixed">
+        <table className="w-full">
           <colgroup>
-            {editMode && <col style={{ width: 40 }} />}
-            <col style={{ width: 180 }} />
-            <col style={{ width: 200 }} />
-            <col style={{ width: 56 }} />
-            <col style={{ width: 56 }} />
-            <col style={{ width: 56 }} />
-            <col style={{ width: 100 }} />
-            <col style={{ width: 60 }} />
+            {editMode && <col className="w-10" />}
+            <col className="w-44" />
+            <col className="w-48" />
+            <col className="w-14" />
+            <col className="w-14" />
+            <col className="w-14" />
+            <col className="w-24" />
+            <col className="w-16" />
           </colgroup>
           <thead>
             <tr className="bg-zinc-800/50">
@@ -668,10 +730,10 @@ export function InquiriesTable({
                 </span>
               </th>
               <th
-                className="text-right text-xs font-medium text-zinc-500 uppercase tracking-wider px-3 py-3 cursor-pointer hover:text-zinc-300"
+                className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider px-3 py-3 cursor-pointer hover:text-zinc-300"
                 onClick={() => handleSort("age")}
               >
-                <span className="flex items-center justify-end">
+                <span className="flex items-center">
                   Age
                   <SortIcon column="age" />
                 </span>
@@ -766,7 +828,7 @@ export function InquiriesTable({
                     <td className={`px-3 py-3 text-sm ${group.isDropped ? "text-zinc-600" : "text-zinc-400"}`}>
                       {formatDate(group.inquiry_date)}
                     </td>
-                    <td className="px-3 py-3 text-right">
+                    <td className="px-3 py-3">
                       {group.isDropped ? (
                         <span className="text-zinc-600 text-sm">—</span>
                       ) : (

@@ -264,8 +264,9 @@ export function CreditReportClient({
     );
 
     recentInquiries.forEach((inquiry) => {
-      const latestForBureau = latestSnapshotIds.get(inquiry.bureau);
-      if (!latestForBureau || inquiry.last_seen_snapshot_id === latestForBureau || !inquiry.last_seen_snapshot_id) {
+      // Use bureau-player key to get the correct snapshot ID
+      const latestForBureauAndPlayer = latestSnapshotIds.get(`${inquiry.bureau}-${inquiry.player_number}`);
+      if (!latestForBureauAndPlayer || inquiry.last_seen_snapshot_id === latestForBureauAndPlayer || !inquiry.last_seen_snapshot_id) {
         counts[inquiry.bureau]++;
       }
     });

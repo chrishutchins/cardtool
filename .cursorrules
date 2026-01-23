@@ -49,6 +49,11 @@ CREATE POLICY "Authenticated users can read table_name"
 - Dark theme UI (zinc-900/950 backgrounds, zinc-300/400 text)
 - Consistent tooltip style using fixed positioning (see existing Tooltip components)
 
+## Git Workflow
+- **NEVER commit to main unless explicitly instructed by the user**
+- Always run `npm run build` and verify it passes before any commit
+- Wait for user approval before pushing changes
+
 ## Testing
 - Build must pass (`npm run build`) before pushing
 - Test UI changes in browser before considering complete

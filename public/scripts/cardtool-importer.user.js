@@ -2798,7 +2798,7 @@
             }
         }
 
-        // Parse inquiries if present (hardInquiries from Equifax API)
+        // Parse hard inquiries from Equifax API
         if (data.hardInquiries || data.inquiries) {
             const inquiries = data.hardInquiries || data.inquiries || [];
             for (const inq of inquiries) {
@@ -2815,6 +2815,29 @@
                     });
                 } else {
                     console.warn('CardTool Credit: Skipping inquiry without date:', company);
+                }
+            }
+        }
+        
+        // Parse soft inquiries (account review, promotional) from Equifax
+        const softInquiryArrays = [
+            { arr: data.softInquiries, type: 'soft' },
+            { arr: data.accountReviewInquiries, type: 'account_review' },
+            { arr: data.promotionalInquiries, type: 'promotional' }
+        ];
+        
+        for (const { arr, type } of softInquiryArrays) {
+            if (arr && Array.isArray(arr)) {
+                for (const inq of arr) {
+                    const company = inq.companyName || inq.creditorName || inq.subscriberName || 'Unknown';
+                    const date = parseEquifaxDate(inq.displayDateReported || inq.displayDate || inq.inquiryDate);
+                    if (date) {
+                        result.inquiries.push({
+                            company: company,
+                            date: date,
+                            type: type
+                        });
+                    }
                 }
             }
         }
@@ -2935,7 +2958,7 @@
                 console.log('CardTool Credit: Parsed', result.accounts.length, 'accounts from forcereload');
             }
             
-            // Parse inquiries - creditInquiries array
+            // Parse hard inquiries - creditInquiries array
             if (creditFile.creditInquiries && Array.isArray(creditFile.creditInquiries)) {
                 for (const inq of creditFile.creditInquiries) {
                     if (!inq) continue;
@@ -2951,7 +2974,36 @@
                         });
                     }
                 }
-                console.log('CardTool Credit: Parsed', result.inquiries.length, 'inquiries from forcereload');
+                console.log('CardTool Credit: Parsed', result.inquiries.length, 'hard inquiries from forcereload');
+            }
+            
+            // Parse soft inquiries from Experian (accountReviewInquiries, consumerStatementInquiries)
+            const experianSoftInquiryArrays = [
+                { arr: creditFile.accountReviewInquiries, type: 'account_review' },
+                { arr: creditFile.consumerStatementInquiries, type: 'soft' },
+                { arr: creditFile.promotionalInquiries, type: 'promotional' }
+            ];
+            
+            let softCount = 0;
+            for (const { arr, type } of experianSoftInquiryArrays) {
+                if (arr && Array.isArray(arr)) {
+                    for (const inq of arr) {
+                        if (!inq) continue;
+                        const company = inq.companyName || inq.creditorInfo?.name || inq.subscriberName || 'Unknown';
+                        const date = parseExperianDate(inq.dateOfInquiry || inq.inquiryDate);
+                        if (date) {
+                            result.inquiries.push({
+                                company: company,
+                                date: date,
+                                type: type
+                            });
+                            softCount++;
+                        }
+                    }
+                }
+            }
+            if (softCount > 0) {
+                console.log('CardTool Credit: Parsed', softCount, 'soft inquiries from forcereload');
             }
             
             return result;
@@ -3067,7 +3119,7 @@
             });
         }
 
-        // Parse inquiries from legacy format
+        // Parse hard inquiries from legacy format
         for (const inq of hardInquiries) {
             if (!inq) continue;
             const date = parseExperianDate(inq.inquiryDate || inq.date);
@@ -3077,6 +3129,29 @@
                     date: date,
                     type: 'hard'
                 });
+            }
+        }
+        
+        // Parse soft inquiries from legacy format
+        const legacySoftArrays = [
+            { arr: data.softInquiries, type: 'soft' },
+            { arr: data.accountReviewInquiries, type: 'account_review' },
+            { arr: data.promotionalInquiries, type: 'promotional' }
+        ];
+        
+        for (const { arr, type } of legacySoftArrays) {
+            if (arr && Array.isArray(arr)) {
+                for (const inq of arr) {
+                    if (!inq) continue;
+                    const date = parseExperianDate(inq.inquiryDate || inq.date);
+                    if (date) {
+                        result.inquiries.push({
+                            company: inq.subscriberName || inq.creditorName || 'Unknown',
+                            date: date,
+                            type: type
+                        });
+                    }
+                }
             }
         }
 
@@ -4068,7 +4143,7 @@
                 });
             }
             
-            // Parse hard inquiries only (skip promotional and account review inquiries)
+            // Parse hard inquiries
             const hardInquiries = creditData.inquiry || [];
             console.log('CardTool Credit: Found', hardInquiries.length, 'hard inquiries');
             
@@ -4095,7 +4170,36 @@
                 }
             }
             
-            // Note: Skipping soft inquiries (promotionalInquiry, accountReviewInquiry)
+            // Parse soft inquiries (promotional and account review)
+            const promotionalInquiries = creditData.promotionalInquiry || [];
+            const accountReviewInquiries = creditData.accountReviewInquiry || [];
+            console.log('CardTool Credit: Found', promotionalInquiries.length, 'promotional +', accountReviewInquiries.length, 'account review (soft) inquiries');
+            
+            // Helper to parse soft inquiries
+            const parseSoftInquiries = (inquiries, subType) => {
+                for (const inq of inquiries) {
+                    if (!inq) continue;
+                    const subscriber = inq.subscriber || {};
+                    const dateStr = inq.combinedDates || '';
+                    const dates = dateStr.split(',').map(d => parseTransUnionDate(d.trim())).filter(Boolean);
+                    
+                    if (dates.length === 0) {
+                        const singleDate = parseTransUnionDate(inq.date?.value || inq.dateOfInquiry);
+                        if (singleDate) dates.push(singleDate);
+                    }
+                    
+                    for (const date of dates) {
+                        result.inquiries.push({
+                            company: subscriber.name?.unparsed || 'Unknown',
+                            date: date,
+                            type: subType // 'promotional' or 'account_review'
+                        });
+                    }
+                }
+            };
+            
+            parseSoftInquiries(promotionalInquiries, 'promotional');
+            parseSoftInquiries(accountReviewInquiries, 'account_review');
             
             // Report timestamp
             const timestamp = ud?.TU_CONSUMER_DISCLOSURE?.reportData?.transactionControl?.tracking?.transactionTimeStamp;
