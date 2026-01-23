@@ -130,6 +130,14 @@ export async function POST(request: Request) {
         .eq("player_number", playerNumber)
         .maybeSingle();
       
+      if (fetchError) {
+        logger.error({ err: fetchError, userId, currencyCode }, "Failed to fetch existing balance for additive mode");
+        return NextResponse.json(
+          { error: "Failed to fetch existing balance" },
+          { status: 500 }
+        );
+      }
+      
       if (existing) {
         finalBalance = existing.balance + Math.round(balance);
       }
