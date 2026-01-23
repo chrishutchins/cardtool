@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (typeof playerNumber !== "number" || playerNumber < 1) {
+    if (typeof playerNumber !== "number" || playerNumber < 1 || !Number.isInteger(playerNumber)) {
       return NextResponse.json(
         { error: "Invalid playerNumber: must be a positive integer" },
         { status: 400 }
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
     }
 
     // Log to history
-    await supabase.from("user_point_balance_history").insert({
+    const { error: historyError } = await supabase.from("user_point_balance_history").insert({
       user_id: userId,
       currency_id: currency.id,
       player_number: playerNumber,
@@ -178,6 +178,12 @@ export async function POST(request: Request) {
       recorded_at: new Date().toISOString(),
       source,
     });
+
+    if (historyError) {
+      // Log the error but don't fail the request since the balance was already saved
+      // This is a non-critical failure - the balance is correct, just the history entry is missing
+      logger.error({ err: historyError, userId, currencyCode, playerNumber }, "Failed to insert balance history record");
+    }
 
     logger.info(
       { userId, currencyCode, balance: finalBalance, playerNumber, source, additive },

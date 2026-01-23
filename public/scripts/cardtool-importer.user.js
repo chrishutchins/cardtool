@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.29.0
+// @version      2.34.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -1377,11 +1377,12 @@
             domain: 'myfico.com',
             apiPatterns: [
                 /\/v4\/users\/products/i,
+                /\/v4\/users\/reports\/1b\//i,  // Full credit report with accounts
                 /\/v4\/users\/reports/i,
                 /\/v2\/users\/reports/i
             ],
-            parseResponse: parseMyFicoResponse,
-            scoreOnly: true
+            parseResponse: parseMyFicoResponse
+            // Note: scoreOnly is determined dynamically based on response content
         },
         creditwise: {
             name: 'Capital One CreditWise',
@@ -2654,7 +2655,12 @@
     function processInterceptedData(data, url, config) {
         try {
             const parsed = config.parseResponse(data, url);
-            if (parsed && (parsed.accounts?.length > 0 || parsed.scores?.length > 0 || parsed.inquiries?.length > 0)) {
+            
+            // Check for multi-bureau data (like myFICO full reports) or regular data
+            const hasMultiBureauData = parsed?.bureauData && Object.keys(parsed.bureauData).length > 0;
+            const hasRegularData = parsed?.accounts?.length > 0 || parsed?.scores?.length > 0 || parsed?.inquiries?.length > 0;
+            
+            if (parsed && (hasMultiBureauData || hasRegularData)) {
                 // Merge with existing data
                 if (!creditReportData) {
                     creditReportData = { scores: [], accounts: [], inquiries: [], rawData: {} };
@@ -2682,14 +2688,32 @@
                 if (parsed.scoreOnly) {
                     creditReportData.scoreOnly = true;
                 }
+                // Track multi-bureau data (like myFICO full reports)
+                if (parsed.multiBureau) {
+                    creditReportData.multiBureau = true;
+                }
+                if (parsed.bureauData) {
+                    creditReportData.bureauData = parsed.bureauData;
+                }
                 
-                // Store raw data for debugging
-                creditReportData.rawData[url] = data;
+                // Store raw data for debugging (but not the full raw data which may contain PII)
+                creditReportData.rawData[url] = { parsed: true, timestamp: Date.now() };
+                
+                // Calculate total counts for logging
+                let totalAccounts = creditReportData.accounts.length;
+                let totalInquiries = creditReportData.inquiries.length;
+                if (creditReportData.bureauData) {
+                    totalAccounts = Object.values(creditReportData.bureauData)
+                        .reduce((sum, bd) => sum + (bd.accounts?.length || 0), 0);
+                    totalInquiries = Object.values(creditReportData.bureauData)
+                        .reduce((sum, bd) => sum + (bd.inquiries?.length || 0), 0);
+                }
                 
                 console.log('CardTool Credit: Data collected -', 
                     creditReportData.scores.length, 'scores,',
-                    creditReportData.accounts.length, 'accounts,',
-                    creditReportData.inquiries.length, 'inquiries');
+                    totalAccounts, 'accounts,',
+                    totalInquiries, 'inquiries',
+                    creditReportData.multiBureau ? '(multi-bureau)' : '');
                 
                 // Show or update credit badge
                 showCreditBadge();
@@ -3311,9 +3335,9 @@
         return result;
     }
 
-    // myFICO - FICO 8 scores (Equifax is free)
+    // myFICO - FICO scores and full credit reports (Equifax free tier available)
     function parseMyFicoResponse(data, url) {
-        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, scoreOnly: true };
+        const result = { scores: [], accounts: [], inquiries: [], reportDate: null, bureauData: {} };
         console.log('CardTool Credit: Parsing myFICO response', url);
         
         try {
@@ -3327,15 +3351,200 @@
                 return null;
             };
             
-            // Helper to parse myFICO date format (2026-01-12T20:41:35.840)
+            // Helper to parse myFICO date format (2026-01-12T20:41:35.840 or "November 13, 2025")
             const parseDate = (dateStr) => {
-                if (!dateStr) return new Date().toISOString().split('T')[0];
-                return dateStr.split('T')[0];
+                if (!dateStr) return null;
+                // ISO format
+                if (dateStr.includes('T')) {
+                    return dateStr.split('T')[0];
+                }
+                // "November 13, 2025" format
+                const parsed = new Date(dateStr);
+                if (!isNaN(parsed.getTime())) {
+                    return parsed.toISOString().split('T')[0];
+                }
+                return null;
             };
             
-            // Format 1: /v4/users/products endpoint with "latest" array
+            // Helper to map account status
+            const mapStatus = (condition) => {
+                if (!condition) return 'unknown';
+                const lower = condition.toLowerCase();
+                if (lower === 'open' || lower === 'active') return 'open';
+                if (lower === 'closed') return 'closed';
+                if (lower.includes('paid')) return 'paid';
+                return 'unknown';
+            };
+            
+            // Helper to map account type
+            const mapAccountType = (acctType, subType) => {
+                const type = (acctType || '').toLowerCase();
+                const sub = (subType || '').toLowerCase();
+                if (type === 'revolving' || sub.includes('credit card')) return 'revolving';
+                if (type === 'installment' || sub.includes('loan')) return 'installment';
+                if (sub.includes('mortgage')) return 'mortgage';
+                return 'other';
+            };
+            
+            // Helper to map myFICO score type to our internal type
+            const mapScoreType = (scoreType, scoreVersion) => {
+                const type = (scoreType || '').toUpperCase();
+                const version = (scoreVersion || '8').toString();
+                
+                if (type === 'AUTO') {
+                    return `fico_auto_${version}`;
+                } else if (type === 'BANKCARD') {
+                    return `fico_bankcard_${version}`;
+                } else if (type === 'MORTGAGE') {
+                    // Mortgage scores use base FICO versions (2, 4, 5, 9, 10, 10T)
+                    return `fico_${version}`;
+                } else {
+                    // Default FICO 8
+                    return version === '9' ? 'fico_9' : 'fico_8';
+                }
+            };
+            
+            // =============================================
+            // Format 1: Full credit report (/v4/users/reports/1b/{reportId})
+            // Structure has report_date, scores.fico_scores.{efx,tu,exp}, accounts[].{efx,tu,exp}, inquiries.{efx,tu,exp}
+            // Paid accounts also have merged_other_scores with additional score types
+            // =============================================
+            if (data.report_date && (data.scores || data.accounts)) {
+                console.log('CardTool Credit: Parsing myFICO full report format');
+                result.reportDate = parseDate(data.report_date);
+                
+                // Parse FICO 8 scores from scores.fico_scores.{efx,tu,exp}
+                if (data.scores?.fico_scores) {
+                    for (const [bureauKey, scoreData] of Object.entries(data.scores.fico_scores)) {
+                        const bureau = mapBureau(bureauKey);
+                        if (!bureau || !scoreData?.score) continue;
+                        
+                        result.scores.push({
+                            type: 'fico_8',
+                            score: scoreData.score,
+                            date: parseDate(scoreData.score_date) || result.reportDate,
+                            bureau: bureau
+                        });
+                        console.log('CardTool Credit: Found myFICO FICO 8 score:', scoreData.score, bureau);
+                    }
+                }
+                
+                // Parse additional scores from merged_other_scores (for paid users)
+                // Structure: { auto: [{efx:{score,score_version,...}, tu:{...}, exp:{...}}, ...], bankcard: [...], mortgage: [...], newly_released: [...] }
+                if (data.scores?.merged_other_scores) {
+                    const categories = ['auto', 'bankcard', 'mortgage', 'newly_released'];
+                    
+                    for (const category of categories) {
+                        const scoreRows = data.scores.merged_other_scores[category];
+                        if (!Array.isArray(scoreRows)) continue;
+                        
+                        for (const scoreRow of scoreRows) {
+                            // Each row has bureau keys (efx, tu, exp) with score data
+                            for (const [bureauKey, scoreData] of Object.entries(scoreRow)) {
+                                const bureau = mapBureau(bureauKey);
+                                // Only process if there's an actual score value (paid users)
+                                if (!bureau || typeof scoreData?.score !== 'number') continue;
+                                
+                                const scoreType = mapScoreType(scoreData.score_type, scoreData.score_version);
+                                
+                                // Validate score is in reasonable range
+                                const minScore = scoreData.score_min || 250;
+                                const maxScore = scoreData.score_max || 900;
+                                if (scoreData.score < minScore || scoreData.score > maxScore) continue;
+                                
+                                result.scores.push({
+                                    type: scoreType,
+                                    score: scoreData.score,
+                                    date: parseDate(scoreData.score_date) || result.reportDate,
+                                    bureau: bureau
+                                });
+                                console.log('CardTool Credit: Found myFICO', scoreType, 'score:', scoreData.score, bureau);
+                            }
+                        }
+                    }
+                }
+                
+                // Parse accounts - each account object has bureau keys (efx, tu, exp) with nested data
+                if (data.accounts && Array.isArray(data.accounts)) {
+                    for (const acctGroup of data.accounts) {
+                        for (const [bureauKey, acctData] of Object.entries(acctGroup)) {
+                            const bureau = mapBureau(bureauKey);
+                            if (!bureau || !acctData) continue;
+                            
+                            const profile = acctData.profile || {};
+                            const status = acctData.status || {};
+                            const terms = acctData.terms_and_remarks || {};
+                            
+                            // Initialize bureau data structure if needed
+                            if (!result.bureauData[bureau]) {
+                                result.bureauData[bureau] = { accounts: [], inquiries: [] };
+                            }
+                            
+                            result.bureauData[bureau].accounts.push({
+                                name: profile.company || 'Unknown',
+                                numberMasked: profile.account_number || null,
+                                creditorName: profile.company || null,
+                                status: mapStatus(status.condition),
+                                dateOpened: parseDate(profile.date_opened),
+                                dateUpdated: parseDate(profile.date_reported),
+                                dateClosed: parseDate(status.closed_date),
+                                creditLimitCents: terms.credit_limit ? Math.round(terms.credit_limit * 100) : null,
+                                highBalanceCents: status.largest_past_balance ? Math.round(status.largest_past_balance * 100) : null,
+                                balanceCents: status.balance !== undefined ? Math.round(status.balance * 100) : null,
+                                monthlyPaymentCents: terms.scheduled_payment_amount ? Math.round(terms.scheduled_payment_amount * 100) : null,
+                                accountType: mapAccountType(profile.account_type, profile.account_sub_type),
+                                loanType: profile.loan_type || null,
+                                responsibility: profile.account_holder || null,
+                                paymentStatus: status.status || null,
+                                bureau: bureau
+                            });
+                        }
+                    }
+                }
+                
+                // Parse inquiries - organized by bureau key
+                if (data.inquiries) {
+                    for (const [bureauKey, inquiryList] of Object.entries(data.inquiries)) {
+                        const bureau = mapBureau(bureauKey);
+                        if (!bureau || !Array.isArray(inquiryList)) continue;
+                        
+                        // Initialize bureau data structure if needed
+                        if (!result.bureauData[bureau]) {
+                            result.bureauData[bureau] = { accounts: [], inquiries: [] };
+                        }
+                        
+                        for (const inq of inquiryList) {
+                            const date = parseDate(inq.date);
+                            if (date) {
+                                result.bureauData[bureau].inquiries.push({
+                                    company: inq.company || 'Unknown',
+                                    date: date,
+                                    type: 'hard',
+                                    bureau: bureau
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                // Log summary
+                const bureaus = Object.keys(result.bureauData);
+                console.log('CardTool Credit: myFICO full report has data for bureaus:', bureaus);
+                for (const bureau of bureaus) {
+                    const bd = result.bureauData[bureau];
+                    console.log(`  ${bureau}: ${bd.accounts.length} accounts, ${bd.inquiries.length} inquiries`);
+                }
+                
+                // Set flag indicating this is a multi-bureau full report
+                result.multiBureau = bureaus.length > 0;
+                result.scoreOnly = false;
+            }
+            // =============================================
+            // Format 2: /v4/users/products endpoint with "latest" array (score-only)
             // Structure: { products: [...], latest: [{ score, datasource, score_version, score_date }] }
-            if (data.latest && Array.isArray(data.latest)) {
+            // =============================================
+            else if (data.latest && Array.isArray(data.latest)) {
+                result.scoreOnly = true;
                 for (const item of data.latest) {
                     const score = item.score;
                     const bureau = mapBureau(item.datasource);
@@ -3349,17 +3558,19 @@
                         result.scores.push({
                             type: scoreType,
                             score: score,
-                            date: parseDate(item.score_date),
+                            date: parseDate(item.score_date) || new Date().toISOString().split('T')[0],
                             bureau: bureau
                         });
                         console.log('CardTool Credit: Found myFICO score:', score, bureau, scoreType);
                     }
                 }
             }
-            
-            // Format 2: /v4/users/reports endpoint with "response.reports" array
+            // =============================================
+            // Format 3: /v4/users/reports endpoint with "response.reports" array (score-only)
             // Structure: { response: { reports: [{ score, datasource, score_version, report_date }] } }
-            if (data.response?.reports && Array.isArray(data.response.reports)) {
+            // =============================================
+            else if (data.response?.reports && Array.isArray(data.response.reports)) {
+                result.scoreOnly = true;
                 for (const report of data.response.reports) {
                     const score = report.score;
                     const bureau = mapBureau(report.datasource);
@@ -3372,7 +3583,7 @@
                         result.scores.push({
                             type: scoreType,
                             score: score,
-                            date: parseDate(report.report_date),
+                            date: parseDate(report.report_date) || new Date().toISOString().split('T')[0],
                             bureau: bureau
                         });
                         console.log('CardTool Credit: Found myFICO historical score:', score, bureau);
@@ -3380,7 +3591,7 @@
                 }
             }
             
-            // Deduplicate by bureau+type+date (keep all historical scores!)
+            // Deduplicate scores by bureau+type+date
             const scoreMap = new Map();
             for (const s of result.scores) {
                 const key = `${s.bureau}-${s.type}-${s.date}`;
@@ -4697,27 +4908,88 @@
             }
         }
 
-        const bureauName = CREDIT_BUREAU_CONFIGS[currentBureau]?.name || 
-                           SCORE_SOURCE_CONFIGS[currentBureau]?.name || 
-                           'Unknown';
-        const scoreDisplay = creditReportData.scores?.length > 0 
-            ? creditReportData.scores[0].score 
-            : '—';
-        const accountCount = creditReportData.accounts?.length || 0;
-        const inquiryCount = creditReportData.inquiries?.length || 0;
+        // Determine if this is multi-bureau data
+        const bureauKeys = creditReportData.bureauData ? Object.keys(creditReportData.bureauData) : [];
+        const isMultiBureau = bureauKeys.length > 1;
+        
+        // Get display name - show bureau count for multi-bureau reports
+        let bureauName;
+        if (isMultiBureau) {
+            bureauName = `${bureauKeys.length} Bureaus`;
+        } else {
+            bureauName = CREDIT_BUREAU_CONFIGS[currentBureau]?.name || 
+                         SCORE_SOURCE_CONFIGS[currentBureau]?.name || 
+                         'Unknown';
+        }
+        
+        // For multi-bureau reports, show score range; otherwise show first score
+        let scoreDisplay;
+        let scoreLabel = 'Score';
+        const allScores = creditReportData.scores || [];
+        
+        if (allScores.length > 1) {
+            // Multiple scores - show range and count
+            const scoreValues = allScores.map(s => s.score).sort((a,b) => a - b);
+            const minScore = scoreValues[0];
+            const maxScore = scoreValues[scoreValues.length - 1];
+            if (minScore === maxScore) {
+                scoreDisplay = minScore;
+            } else {
+                scoreDisplay = `${minScore}-${maxScore}`;
+            }
+            scoreLabel = `${allScores.length} Scores`;
+        } else if (allScores.length === 1) {
+            scoreDisplay = allScores[0].score;
+            scoreLabel = 'Score';
+        } else {
+            scoreDisplay = '—';
+            scoreLabel = 'Score';
+        }
+        
+        // Calculate counts - for multi-bureau data, sum across all bureaus
+        let accountCount = creditReportData.accounts?.length || 0;
+        let inquiryCount = creditReportData.inquiries?.length || 0;
+        if (creditReportData.bureauData) {
+            accountCount = Object.values(creditReportData.bureauData)
+                .reduce((sum, bd) => sum + (bd.accounts?.length || 0), 0);
+            inquiryCount = Object.values(creditReportData.bureauData)
+                .reduce((sum, bd) => sum + (bd.inquiries?.length || 0), 0);
+        }
+        
+        // Count total scores for display
+        const totalScoreCount = creditReportData.scores?.length || 0;
+        
+        // Site-specific instructions for when data hasn't been collected yet
+        // Only for sites where users need to navigate to specific pages
+        const siteInstructions = {
+            equifax: 'Navigate to Credit Report Summary, Credit Accounts (and each type), and Inquiries to collect all data.',
+            myfico: 'Navigate to Reports and click on your latest report to collect all data.'
+        };
         
         // Determine status message
         let statusMessage = 'Data captured. Click to sync.';
         let showSyncButton = true;
         
+        // Check if we have meaningful data to sync
+        const hasData = allScores.length > 0 || accountCount > 0 || inquiryCount > 0;
+        
         if (creditReportData.status === 'scanning') {
-            statusMessage = 'Scanning page for credit data...';
+            // Show site-specific instructions while waiting for data
+            const instructions = siteInstructions[currentBureau];
+            if (instructions) {
+                statusMessage = `Waiting for data... ${instructions}`;
+            } else {
+                statusMessage = 'Scanning page for credit data...';
+            }
             showSyncButton = false;
-        } else if (creditReportData.status === 'no_data') {
-            statusMessage = creditReportData.message || 'No credit data found on this page.';
-            showSyncButton = false;
-        } else if (creditReportData.status === 'no_credit_data') {
-            statusMessage = 'Page parsed but no credit data found. Try the full report page.';
+        } else if (creditReportData.status === 'no_data' || creditReportData.status === 'no_credit_data') {
+            // Show site-specific instructions
+            const instructions = siteInstructions[currentBureau];
+            if (instructions) {
+                statusMessage = instructions;
+            } else {
+                statusMessage = creditReportData.message || 'No credit data found. Try navigating to the full report.';
+            }
             showSyncButton = false;
         } else if (creditReportData.status === 'parse_error') {
             statusMessage = creditReportData.message || 'Error parsing page data.';
@@ -4725,8 +4997,14 @@
         } else if (creditReportData.status === 'error') {
             statusMessage = 'Error: ' + (creditReportData.message || 'Unknown error');
             showSyncButton = false;
-        } else if (creditReportData.status === 'empty') {
-            statusMessage = 'No accounts or inquiries found on this page.';
+        } else if (creditReportData.status === 'empty' || !hasData) {
+            // No data captured yet - show instructions
+            const instructions = siteInstructions[currentBureau];
+            if (instructions) {
+                statusMessage = instructions;
+            } else {
+                statusMessage = 'No data captured yet. Navigate to your credit report.';
+            }
             showSyncButton = false;
         }
 
@@ -4745,6 +5023,23 @@
         if (inquiryCount > 0) miniSummaryParts.push(`${inquiryCount}I`);
         const miniSummaryText = miniSummaryParts.length > 0 ? miniSummaryParts.join(' · ') : 'Credit';
 
+        // Build stats section
+        const statsHtml = `
+            <div class="cardtool-credit-stats">
+                <div class="cardtool-credit-stat">
+                    <div class="cardtool-credit-stat-value">${scoreDisplay}</div>
+                    <div class="cardtool-credit-stat-label">${scoreLabel}</div>
+                </div>
+                <div class="cardtool-credit-stat">
+                    <div class="cardtool-credit-stat-value">${accountCount}</div>
+                    <div class="cardtool-credit-stat-label">Accounts</div>
+                </div>
+                <div class="cardtool-credit-stat">
+                    <div class="cardtool-credit-stat-value">${inquiryCount}</div>
+                    <div class="cardtool-credit-stat-label">Inquiries</div>
+                </div>
+            </div>`;
+        
         creditBadgeElement.innerHTML = `
             <div class="cardtool-credit-header">
                 <div class="cardtool-credit-logo">C</div>
@@ -4755,20 +5050,7 @@
                 <button class="cardtool-credit-close" title="Close">&times;</button>
             </div>
             <div class="cardtool-credit-body">
-                <div class="cardtool-credit-stats">
-                    <div class="cardtool-credit-stat">
-                        <div class="cardtool-credit-stat-value">${scoreDisplay}</div>
-                        <div class="cardtool-credit-stat-label">Score</div>
-                    </div>
-                    <div class="cardtool-credit-stat">
-                        <div class="cardtool-credit-stat-value">${accountCount}</div>
-                        <div class="cardtool-credit-stat-label">Accounts</div>
-                    </div>
-                    <div class="cardtool-credit-stat">
-                        <div class="cardtool-credit-stat-value">${inquiryCount}</div>
-                        <div class="cardtool-credit-stat-label">Inquiries</div>
-                    </div>
-                </div>
+                ${statsHtml}
                 ${dataWarning}
                 <div id="cardtool-credit-player-container"></div>
                 ${showSyncButton ? `
@@ -4925,6 +5207,95 @@
         // Check if this is a score-only source with multi-bureau scores
         const scoresWithBureau = creditReportData.scores?.filter(s => s.bureau) || [];
         const scoresWithoutBureau = creditReportData.scores?.filter(s => !s.bureau) || [];
+        
+        // For multi-bureau full reports (like myFICO), sync each bureau with its full data
+        if (creditReportData.multiBureau && creditReportData.bureauData) {
+            const bureaus = Object.keys(creditReportData.bureauData);
+            let completedCount = 0;
+            let totalAccounts = 0;
+            let totalInquiries = 0;
+            let totalScores = 0;
+            let hasError = false;
+            
+            console.log('CardTool Credit: Syncing multi-bureau full report to', bureaus.length, 'bureaus:', bureaus);
+            
+            for (const bureau of bureaus) {
+                const bureauData = creditReportData.bureauData[bureau];
+                // Get scores for this bureau, removing the bureau field
+                const bureauScores = scoresWithBureau
+                    .filter(s => s.bureau === bureau)
+                    .map(({ bureau: _, ...rest }) => rest);
+                
+                GM_xmlhttpRequest({
+                    method: 'POST',
+                    url: `${CARDTOOL_URL}/api/credit-report/import`,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-sync-token': syncToken
+                    },
+                    data: JSON.stringify({
+                        bureau: bureau,
+                        playerNumber: playerNumber,
+                        reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
+                        scores: bureauScores,
+                        accounts: bureauData.accounts || [],
+                        inquiries: bureauData.inquiries || []
+                    }),
+                    onload: function(response) {
+                        completedCount++;
+                        try {
+                            const data = JSON.parse(response.responseText);
+                            if (response.status === 200 && data.success) {
+                                totalScores += data.summary?.scores || 0;
+                                totalAccounts += data.summary?.accounts || 0;
+                                totalInquiries += data.summary?.inquiries || 0;
+                            } else {
+                                hasError = true;
+                                console.error('CardTool Credit: Sync failed for', bureau, data.error);
+                            }
+                        } catch (e) {
+                            hasError = true;
+                            console.error('CardTool Credit: Parse error for', bureau, e);
+                        }
+                        
+                        // All requests complete
+                        if (completedCount === bureaus.length) {
+                            if (!hasError) {
+                                updateCreditStatus(`Synced to ${bureaus.length} bureaus: ${totalScores}S, ${totalAccounts}A, ${totalInquiries}I ✓`);
+                                if (btn) {
+                                    btn.textContent = 'Synced!';
+                                    btn.style.background = '#059669';
+                                    setTimeout(() => {
+                                        btn.disabled = false;
+                                        btn.textContent = 'Sync to CardTool';
+                                        btn.style.background = '';
+                                    }, 3000);
+                                }
+                            } else {
+                                updateCreditStatus('Some syncs failed', true);
+                                if (btn) {
+                                    btn.disabled = false;
+                                    btn.textContent = 'Sync to CardTool';
+                                }
+                            }
+                        }
+                    },
+                    onerror: function() {
+                        completedCount++;
+                        hasError = true;
+                        console.error('CardTool Credit: Network error for', bureau);
+                        if (completedCount === bureaus.length) {
+                            updateCreditStatus('Network error', true);
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.textContent = 'Sync to CardTool';
+                            }
+                        }
+                    }
+                });
+            }
+            return;
+        }
         
         // For score-only sources like Credit Karma, group scores by bureau and send separate requests
         if (scoresWithBureau.length > 0 && creditReportData.scoreOnly) {
