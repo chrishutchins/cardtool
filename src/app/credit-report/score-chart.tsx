@@ -254,17 +254,25 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
 
   // Transform data for Recharts
   const chartData = useMemo(() => {
-    // Group by date
-    const byDate = new Map<string, Record<string, number>>();
+    // Group by month, keeping only the MOST RECENT score per bureau per month
+    // Track both the score and the actual date to pick the newest
+    const byDate = new Map<string, Record<string, { score: number; date: string }>>();
 
     filteredScores.forEach((score) => {
       if (!score.score_date) return;
-      const dateKey = score.score_date.slice(0, 7); // YYYY-MM
+      const monthKey = score.score_date.slice(0, 7); // YYYY-MM
 
-      if (!byDate.has(dateKey)) {
-        byDate.set(dateKey, {});
+      if (!byDate.has(monthKey)) {
+        byDate.set(monthKey, {});
       }
-      byDate.get(dateKey)![score.bureau] = score.score;
+      
+      const monthData = byDate.get(monthKey)!;
+      const existing = monthData[score.bureau];
+      
+      // Only update if no existing score OR this score is more recent
+      if (!existing || score.score_date > existing.date) {
+        monthData[score.bureau] = { score: score.score, date: score.score_date };
+      }
     });
 
     // Convert to array and sort
@@ -275,7 +283,10 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
           month: "short",
           year: "2-digit",
         }),
-        ...bureaus,
+        // Extract just the score values
+        ...Object.fromEntries(
+          Object.entries(bureaus).map(([bureau, data]) => [bureau, data.score])
+        ),
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [filteredScores]);

@@ -318,22 +318,12 @@ export function InquiriesTable({
     return inquiry.last_seen_snapshot_id === latestForBureauAndPlayer;
   };
 
-  // Count active inquiries per bureau
-  const activeCountsByBureau = useMemo(() => {
-    const counts: Record<CreditBureau, number> = {
-      equifax: 0,
-      experian: 0,
-      transunion: 0,
-    };
-    
-    inquiries.forEach((inquiry) => {
-      if (isInquiryActive(inquiry)) {
-        counts[inquiry.bureau]++;
-      }
-    });
-    
-    return counts;
-  }, [inquiries, latestSnapshotIds]);
+  // Helper to check if an inquiry is "soft" (includes account_review, promotional, soft)
+  const isSoftInquiry = (type: string | null) => {
+    if (!type) return false;
+    const t = type.toLowerCase();
+    return t === 'soft' || t === 'account_review' || t === 'promotional';
+  };
 
   // Get display name for a group
   const getDisplayName = (
@@ -458,13 +448,6 @@ export function InquiriesTable({
     return groups;
   }, [inquiries, inquiryToGroupMap, groupNamesMap, groupDataMap, walletCards, latestSnapshotIds]);
 
-  // Helper to check if an inquiry is "soft" (includes account_review, promotional, soft)
-  const isSoftInquiry = (type: string | null) => {
-    if (!type) return false;
-    const t = type.toLowerCase();
-    return t === 'soft' || t === 'account_review' || t === 'promotional';
-  };
-
   // Sort and filter groups
   const filteredAndSortedGroups = useMemo(() => {
     let filtered = showDropped
@@ -520,6 +503,25 @@ export function InquiriesTable({
 
   const droppedCount = typeFilteredGroups.filter((g) => g.isDropped).length;
   const activeCount = typeFilteredGroups.filter((g) => !g.isDropped).length;
+
+  // Count active (non-dropped) GROUPS per bureau (not individual inquiries)
+  const activeCountsByBureau = useMemo(() => {
+    const counts: Record<CreditBureau, number> = {
+      equifax: 0,
+      experian: 0,
+      transunion: 0,
+    };
+    
+    typeFilteredGroups.forEach((group) => {
+      if (group.isDropped) return;
+      // Count each bureau that appears in this group
+      group.bureaus.forEach((bureau) => {
+        counts[bureau]++;
+      });
+    });
+    
+    return counts;
+  }, [typeFilteredGroups]);
 
   const handleCreateGroup = () => {
     if (selectedForGrouping.size < 2) return;

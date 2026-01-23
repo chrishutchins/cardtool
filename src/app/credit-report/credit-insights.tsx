@@ -142,13 +142,13 @@ export function CreditInsights({
         </p>
       </button>
 
-      {/* Active Inquiries - clickable to jump to section */}
+      {/* Hard Inquiries - clickable to jump to section */}
       <button
         onClick={() => scrollToSection("inquiries-section")}
         className="block bg-zinc-900 rounded-xl border border-zinc-800 p-4 text-left hover:border-zinc-700 hover:bg-zinc-800/50 transition-all"
       >
         <div className="flex items-start justify-between mb-3">
-          <p className="text-sm text-zinc-400">Inquiries</p>
+          <p className="text-sm text-zinc-400">Hard Inquiries</p>
           <div className="p-2 rounded-lg bg-zinc-800 text-zinc-400 flex-shrink-0">
             <Search className="h-4 w-4" />
           </div>
