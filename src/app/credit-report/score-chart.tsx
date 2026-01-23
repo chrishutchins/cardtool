@@ -277,17 +277,22 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
 
     // Convert to array and sort
     return Array.from(byDate.entries())
-      .map(([date, bureaus]) => ({
-        date,
-        displayDate: new Date(date + "-01").toLocaleDateString("en-US", {
-          month: "short",
-          year: "2-digit",
-        }),
-        // Extract just the score values
-        ...Object.fromEntries(
-          Object.entries(bureaus).map(([bureau, data]) => [bureau, data.score])
-        ),
-      }))
+      .map(([date, bureaus]) => {
+        // Parse YYYY-MM and create local date (avoid timezone issues with ISO string parsing)
+        const [year, month] = date.split("-").map(Number);
+        const localDate = new Date(year, month - 1, 1); // month is 0-indexed
+        return {
+          date,
+          displayDate: localDate.toLocaleDateString("en-US", {
+            month: "short",
+            year: "2-digit",
+          }),
+          // Extract just the score values
+          ...Object.fromEntries(
+            Object.entries(bureaus).map(([bureau, data]) => [bureau, data.score])
+          ),
+        };
+      })
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [filteredScores]);
 

@@ -174,6 +174,7 @@ export function CreditReportClient({
   );
 
   // Calculate credit insights using unique grouped accounts (open revolving accounts only)
+  // Skip accounts with no credit limit (charge cards) to avoid skewing utilization
   const { utilization, totalCreditLimit, totalBalance } = useMemo(() => {
     let limit = 0;
     let balance = 0;
@@ -185,16 +186,28 @@ export function CreditReportClient({
       
       if (revolvingAccounts.length === 0) continue;
       
+      // For credit limit, take the maximum across bureaus
       let groupLimit = 0;
-      let groupBalance = 0;
-      
       for (const account of revolvingAccounts) {
         if (account.credit_limit_cents && account.credit_limit_cents > groupLimit) {
           groupLimit = account.credit_limit_cents;
         }
-        if (account.balance_cents !== null) {
-          groupBalance = account.balance_cents;
-        }
+      }
+      
+      // Skip accounts with no credit limit (charge cards would skew utilization)
+      if (groupLimit === 0) continue;
+      
+      // For balance, use the most recently updated account
+      const accountsWithBalance = revolvingAccounts.filter(a => a.balance_cents !== null);
+      let groupBalance = 0;
+      if (accountsWithBalance.length > 0) {
+        // Sort by date_updated descending, use most recent
+        const sorted = [...accountsWithBalance].sort((a, b) => {
+          const dateA = a.date_updated || "";
+          const dateB = b.date_updated || "";
+          return dateB.localeCompare(dateA);
+        });
+        groupBalance = sorted[0].balance_cents ?? 0;
       }
       
       limit += groupLimit;
@@ -253,7 +266,14 @@ export function CreditReportClient({
     };
   }, [uniqueOpenAccounts, accountGroups]);
 
-  // Calculate active inquiries by bureau
+  // Helper to check if an inquiry is soft
+  const isSoftInquiry = (type: string | null): boolean => {
+    if (!type) return false;
+    const t = type.toLowerCase();
+    return t === "soft" || t === "account_review" || t === "promotional";
+  };
+
+  // Calculate active HARD inquiries by bureau (for dashboard card)
   const activeInquiryCounts = useMemo(() => {
     const counts = {
       equifax: 0,
@@ -264,11 +284,12 @@ export function CreditReportClient({
     const twoYearsAgo = new Date();
     twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
 
-    const recentInquiries = filteredInquiries.filter(
-      (i) => new Date(i.inquiry_date) >= twoYearsAgo
+    // Filter to only hard inquiries within 2 years
+    const recentHardInquiries = filteredInquiries.filter(
+      (i) => new Date(i.inquiry_date) >= twoYearsAgo && !isSoftInquiry(i.inquiry_type)
     );
 
-    recentInquiries.forEach((inquiry) => {
+    recentHardInquiries.forEach((inquiry) => {
       // Use bureau-player key to get the correct snapshot ID
       const latestForBureauAndPlayer = latestSnapshotIds.get(`${inquiry.bureau}-${inquiry.player_number}`);
       if (!latestForBureauAndPlayer || inquiry.last_seen_snapshot_id === latestForBureauAndPlayer || !inquiry.last_seen_snapshot_id) {

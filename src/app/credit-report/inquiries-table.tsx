@@ -60,8 +60,20 @@ function normalizeCompanyName(name: string): string {
     .trim();
 }
 
+// Helper to check if an inquiry type is "soft"
+function isInquiryTypeSoft(type: string | null): boolean {
+  if (!type) return false;
+  const t = type.toLowerCase();
+  return t === 'soft' || t === 'account_review' || t === 'promotional';
+}
+
 // Check if two inquiries should be auto-grouped
 function shouldAutoGroup(a: CreditInquiry, b: CreditInquiry): boolean {
+  // Don't group hard and soft inquiries together
+  const aIsSoft = isInquiryTypeSoft(a.inquiry_type);
+  const bIsSoft = isInquiryTypeSoft(b.inquiry_type);
+  if (aIsSoft !== bIsSoft) return false;
+
   // Within 14 days
   const dateA = new Date(a.inquiry_date);
   const dateB = new Date(b.inquiry_date);

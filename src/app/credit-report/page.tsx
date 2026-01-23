@@ -222,6 +222,7 @@ export default async function CreditReportPage() {
   const players = (playersResult.data ?? []) as Player[];
 
   // Deduplicate accounts - keep only from the latest snapshot per bureau PER PLAYER
+  // Ordered by fetched_at DESC, so first occurrence is the most recently synced
   const latestSnapshotByBureauAndPlayer = new Map<string, string>();
   allAccounts.forEach((account) => {
     const key = `${account.bureau}-${account.player_number}`;

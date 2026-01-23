@@ -121,9 +121,12 @@ export function CreditInsights({
       </div>
 
       {/* Accounts - clickable to jump to section */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => scrollToSection("accounts-section")}
-        className="block bg-zinc-900 rounded-xl border border-zinc-800 p-4 text-left hover:border-zinc-700 hover:bg-zinc-800/50 transition-all"
+        onKeyDown={(e) => e.key === "Enter" && scrollToSection("accounts-section")}
+        className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 cursor-pointer hover:border-zinc-700 hover:bg-zinc-800/50 transition-all"
       >
         <div className="flex items-start justify-between mb-3">
           <p className="text-sm text-zinc-400">Accounts</p>
@@ -140,12 +143,15 @@ export function CreditInsights({
             <span className="text-zinc-500"> · {closedAccountCount} closed</span>
           )}
         </p>
-      </button>
+      </div>
 
       {/* Hard Inquiries - clickable to jump to section */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => scrollToSection("inquiries-section")}
-        className="block bg-zinc-900 rounded-xl border border-zinc-800 p-4 text-left hover:border-zinc-700 hover:bg-zinc-800/50 transition-all"
+        onKeyDown={(e) => e.key === "Enter" && scrollToSection("inquiries-section")}
+        className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 cursor-pointer hover:border-zinc-700 hover:bg-zinc-800/50 transition-all"
       >
         <div className="flex items-start justify-between mb-3">
           <p className="text-sm text-zinc-400">Hard Inquiries</p>
@@ -162,7 +168,7 @@ export function CreditInsights({
         <p className="text-xs text-zinc-600 mt-1">
           EQ:{activeInquiryCounts.equifax} · EX:{activeInquiryCounts.experian} · TU:{activeInquiryCounts.transunion}
         </p>
-      </button>
+      </div>
 
       {/* Average Account Age */}
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
