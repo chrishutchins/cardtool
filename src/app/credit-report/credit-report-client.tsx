@@ -9,7 +9,7 @@ import { MatchingDebug } from "./matching-debug";
 import { groupAccountsAcrossBureaus, type CreditAccount as MatchingCreditAccount } from "./account-matching";
 
 type CreditBureau = "equifax" | "experian" | "transunion";
-type ScoreType = "fico_8" | "fico_9" | "vantage_3" | "vantage_4" | "other";
+type ScoreType = "fico_8" | "fico_9" | "fico_bankcard_8" | "vantage_3" | "vantage_4" | "other";
 
 interface CreditScore {
   id: string;
@@ -120,23 +120,22 @@ export function CreditReportClient({
   onUpdateRelatedApplication,
   onCreateGroupWithRelatedApp,
 }: CreditReportClientProps) {
-  const [playerFilter, setPlayerFilter] = useState<number | "all">("all");
+  // Default to player 1, or the first player in the list
+  const defaultPlayer = players.find(p => p.player_number === 1)?.player_number ?? players[0]?.player_number ?? 1;
+  const [playerFilter, setPlayerFilter] = useState<number>(defaultPlayer);
 
   const hasMultiplePlayers = players.length > 1;
 
   // Filter data by player
   const filteredScores = useMemo(() => {
-    if (playerFilter === "all") return scores;
     return scores.filter((s) => s.player_number === playerFilter);
   }, [scores, playerFilter]);
 
   const filteredAccounts = useMemo(() => {
-    if (playerFilter === "all") return accounts;
     return accounts.filter((a) => a.player_number === playerFilter);
   }, [accounts, playerFilter]);
 
   const filteredInquiries = useMemo(() => {
-    if (playerFilter === "all") return inquiries;
     return inquiries.filter((i) => i.player_number === playerFilter);
   }, [inquiries, playerFilter]);
 
@@ -289,10 +288,9 @@ export function CreditReportClient({
           <span className="text-sm text-zinc-400">Player:</span>
           <select
             value={playerFilter}
-            onChange={(e) => setPlayerFilter(e.target.value === "all" ? "all" : parseInt(e.target.value))}
+            onChange={(e) => setPlayerFilter(parseInt(e.target.value))}
             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
           >
-            <option value="all">All Players</option>
             {players.map((p) => (
               <option key={p.player_number} value={p.player_number}>
                 {p.description || `Player ${p.player_number}`}

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.20.6
+// @version      2.21.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -1340,7 +1340,10 @@
         },
         transunion: {
             name: 'TransUnion',
-            domain: 'service.transunion.com',
+            domains: [
+                'service.transunion.com',
+                'annualcreditreport.transunion.com'
+            ],
             apiPatterns: [
                 /creditreport/i,
                 /dashboard/i
@@ -2320,16 +2323,28 @@
         
         // Determine which bureau we're on
         for (const [bureauKey, config] of Object.entries(CREDIT_BUREAU_CONFIGS)) {
-            if (hostname.includes(config.domain.replace('www.', ''))) {
+            // Support both single domain and array of domains
+            const domains = config.domains || [config.domain];
+            const domainMatch = domains.some(d => hostname.includes(d.replace('www.', '')));
+            
+            if (domainMatch) {
                 currentBureau = bureauKey;
                 console.log('CardTool Credit: Detected bureau:', config.name);
                 
                 if (config.useHtmlScraping) {
                     // For TransUnion, use HTML scraping instead of XHR interception
-                    // Show badge immediately to indicate script is running
-                    creditReportData = { scores: [], accounts: [], inquiries: [], reportDate: null, status: 'scanning' };
-                    showCreditBadge();
-                    setTimeout(() => tryScrapeCreditReport(bureauKey), 3000);
+                    // Must wait for DOM to be ready before showing badge
+                    const startHtmlScraping = () => {
+                        creditReportData = { scores: [], accounts: [], inquiries: [], reportDate: null, status: 'scanning' };
+                        showCreditBadge();
+                        setTimeout(() => tryScrapeCreditReport(bureauKey), 3000);
+                    };
+                    
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', startHtmlScraping);
+                    } else {
+                        startHtmlScraping();
+                    }
                 } else {
                     // Set up XHR interception for Equifax and Experian
                     interceptXHR(config);

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Teller API Test</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+    button { background: #0066cc; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 6px; cursor: pointer; margin: 5px; }
+    button:hover { background: #0052a3; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    pre { background: #1a1a2e; color: #00ff88; padding: 20px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+    .token-box { background: #fffbe6; border: 2px solid #ffd700; padding: 15px; border-radius: 8px; margin: 20px 0; }
+    .token-box code { background: #fff; padding: 8px 12px; display: block; border-radius: 4px; font-size: 14px; word-break: break-all; }
+    h1 { color: #333; }
+    .instructions { background: #f0f8ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .copy-btn { background: #28a745; font-size: 12px; padding: 6px 12px; }
+  </style>
+</head>
+<body>
+  <h1>Teller Connect Test</h1>
+  
+  <div class="instructions">
+    <strong>Instructions:</strong>
+    <ol>
+      <li>Click "Connect Account" to link a bank account via Teller Connect</li>
+      <li>Copy the access token that appears</li>
+      <li>Use the curl commands below to fetch data</li>
+    </ol>
+  </div>
+
+  <button id="connect">Connect Account</button>
+  
+  <div id="token-section" style="display:none;">
+    <div class="token-box">
+      <strong>Your Access Token (save this!):</strong>
+      <code id="access-token"></code>
+      <button class="copy-btn" onclick="copyToken()">Copy Token</button>
+    </div>
+    
+    <div class="token-box">
+      <strong>Enrollment ID:</strong>
+      <code id="enrollment-id"></code>
+    </div>
+    
+    <div class="token-box">
+      <strong>Institution:</strong>
+      <code id="institution"></code>
+    </div>
+  </div>
+
+  <h2>Results</h2>
+  <pre id="result">Click "Connect Account" to start...</pre>
+
+  <div id="curl-section" style="display:none;">
+    <h2>Curl Commands to Fetch Data</h2>
+    <p>Run these in your terminal (from the cardtool directory):</p>
+    
+    <h3>1. List Accounts</h3>
+    <pre id="curl-accounts"></pre>
+    
+    <h3>2. Get Balances (replace acc_xxx)</h3>
+    <pre id="curl-balances"></pre>
+    
+    <h3>3. Get Transactions (replace acc_xxx)</h3>
+    <pre id="curl-transactions"></pre>
+  </div>
+
+  <script src="https://cdn.teller.io/connect/connect.js"></script>
+  <script>
+    let savedToken = '';
+    
+    function copyToken() {
+      navigator.clipboard.writeText(savedToken);
+      alert('Token copied to clipboard!');
+    }
+    
+    document.getElementById('connect').onclick = function() {
+      var tellerConnect = TellerConnect.setup({
+        applicationId: "app_pnof4i4k4li88607lo000",
+        environment: "development",
+        products: ["transactions", "balance"],
+        onSuccess: function(enrollment) {
+          savedToken = enrollment.accessToken;
+          
+          // Show token section
+          document.getElementById('token-section').style.display = 'block';
+          document.getElementById('access-token').textContent = enrollment.accessToken;
+          document.getElementById('enrollment-id').textContent = enrollment.enrollment.id;
+          document.getElementById('institution').textContent = enrollment.enrollment.institution.name;
+          
+          // Show curl commands
+          document.getElementById('curl-section').style.display = 'block';
+          
+          const certPath = 'teller-certs/certificate.pem';
+          const keyPath = 'teller-certs/private_key.pem';
+          const token = enrollment.accessToken;
+          
+          document.getElementById('curl-accounts').textContent = 
+            `curl --cert ${certPath} --key ${keyPath} \\\n  -u ${token}: \\\n  https://api.teller.io/accounts`;
+          
+          document.getElementById('curl-balances').textContent = 
+            `curl --cert ${certPath} --key ${keyPath} \\\n  -u ${token}: \\\n  https://api.teller.io/accounts/acc_xxx/balances`;
+          
+          document.getElementById('curl-transactions').textContent = 
+            `curl --cert ${certPath} --key ${keyPath} \\\n  -u ${token}: \\\n  https://api.teller.io/accounts/acc_xxx/transactions`;
+          
+          // Show full response
+          document.getElementById('result').textContent = 
+            "SUCCESS!\n\n" + JSON.stringify(enrollment, null, 2);
+        },
+        onExit: function() {
+          document.getElementById('result').textContent = "User closed Teller Connect (no account linked)";
+        }
+      });
+      tellerConnect.open();
+    };
+  </script>
+</body>
+</html>

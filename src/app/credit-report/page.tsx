@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 type CreditBureau = "equifax" | "experian" | "transunion";
-type ScoreType = "fico_8" | "fico_9" | "vantage_3" | "vantage_4" | "other";
+type ScoreType = "fico_8" | "fico_9" | "fico_bankcard_8" | "vantage_3" | "vantage_4" | "other";
 
 interface CreditScore {
   id: string;
@@ -548,7 +548,7 @@ export default async function CreditReportPage() {
   }
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
-
+  
   // Get latest snapshot ID per bureau
   const latestSnapshotIds = new Map<string, string>();
   accounts.forEach((account) => {
@@ -587,7 +587,7 @@ export default async function CreditReportPage() {
         </div>
 
         <CreditReportClient
-          scores={scores}
+            scores={scores}
           accounts={accounts as (CreditAccount & { snapshot_id: string })[]}
           inquiries={inquiries}
           players={players}
@@ -595,20 +595,20 @@ export default async function CreditReportPage() {
           walletCardsForInquiries={walletCardsForInquiries}
           accountLinksMap={accountLinksMap}
           displayNamesMap={displayNamesMap}
-          latestSnapshotIds={latestSnapshotIds}
-          inquiryToGroupMap={inquiryToGroupMap}
-          groupNamesMap={groupNamesMap}
-          groupDataMap={groupDataMap}
+            latestSnapshotIds={latestSnapshotIds}
+            inquiryToGroupMap={inquiryToGroupMap}
+            groupNamesMap={groupNamesMap}
+            groupDataMap={groupDataMap}
           isAdmin={isAdmin}
           onLinkAccount={linkAccountToWallet}
           onSetDisplayName={setDisplayName}
-          onCreateGroup={createInquiryGroup}
-          onAddToGroup={addToInquiryGroup}
-          onRemoveFromGroup={removeFromInquiryGroup}
-          onUpdateGroupName={updateGroupName}
-          onUpdateRelatedApplication={updateRelatedApplication}
-          onCreateGroupWithRelatedApp={createGroupWithRelatedApp}
-        />
+            onCreateGroup={createInquiryGroup}
+            onAddToGroup={addToInquiryGroup}
+            onRemoveFromGroup={removeFromInquiryGroup}
+            onUpdateGroupName={updateGroupName}
+            onUpdateRelatedApplication={updateRelatedApplication}
+            onCreateGroupWithRelatedApp={createGroupWithRelatedApp}
+          />
       </div>
     </div>
   );
