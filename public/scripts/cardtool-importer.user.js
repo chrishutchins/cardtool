@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.27.0
+// @version      2.28.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -2706,9 +2706,12 @@
     function parseEquifaxResponse(data, url) {
         const result = { scores: [], accounts: [], inquiries: [], reportDate: null };
 
-        // Extract report date from displayReportDate field
-        if (data.displayReportDate) {
-            result.reportDate = parseEquifaxDate(data.displayReportDate);
+        // Extract report date from displayReportDate field (may be at top level or inside creditFileInfo)
+        const reportDateStr = data.displayReportDate 
+            || data.creditFileInfo?.[0]?.displayReportDate
+            || data.dateOfReport;
+        if (reportDateStr) {
+            result.reportDate = parseEquifaxDate(reportDateStr);
             console.log('CardTool Credit: Extracted Equifax report date:', result.reportDate);
         }
 
