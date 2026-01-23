@@ -513,7 +513,7 @@ export type Database = {
           is_active: boolean | null
           is_archived: boolean | null
           offer_description: string | null
-          offer_type: "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted"
+          offer_type: string
           rates_fees_url: string | null
           updated_at: string | null
         }
@@ -531,7 +531,7 @@ export type Database = {
           is_active?: boolean | null
           is_archived?: boolean | null
           offer_description?: string | null
-          offer_type?: "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted"
+          offer_type?: string
           rates_fees_url?: string | null
           updated_at?: string | null
         }
@@ -549,7 +549,7 @@ export type Database = {
           is_active?: boolean | null
           is_archived?: boolean | null
           offer_description?: string | null
-          offer_type?: "referral" | "affiliate" | "direct" | "nll" | "elevated" | "targeted"
+          offer_type?: string
           rates_fees_url?: string | null
           updated_at?: string | null
         }
@@ -2241,30 +2241,6 @@ export type Database = {
           },
         ]
       }
-      user_hidden_items: {
-        Row: {
-          id: string
-          user_id: string
-          item_type: string
-          item_key: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          item_type: string
-          item_key: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          item_type?: string
-          item_key?: string
-          created_at?: string
-        }
-        Relationships: []
-      }
       user_currency_values: {
         Row: {
           created_at: string | null
@@ -2366,6 +2342,30 @@ export type Database = {
           message?: string
           page_url?: string | null
           user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_hidden_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_key: string
+          item_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_key: string
+          item_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_key?: string
+          item_type?: string
           user_id?: string
         }
         Relationships: []
@@ -2703,13 +2703,11 @@ export type Database = {
           access_token: string
           created_at: string | null
           error_code: string | null
-          error_detected_at: string | null
-          error_message: string | null
           id: string
           institution_id: string | null
           institution_name: string | null
           item_id: string
-          requires_reauth: boolean
+          requires_reauth: boolean | null
           updated_at: string | null
           user_id: string
         }
@@ -2717,13 +2715,11 @@ export type Database = {
           access_token: string
           created_at?: string | null
           error_code?: string | null
-          error_detected_at?: string | null
-          error_message?: string | null
           id?: string
           institution_id?: string | null
           institution_name?: string | null
           item_id: string
-          requires_reauth?: boolean
+          requires_reauth?: boolean | null
           updated_at?: string | null
           user_id: string
         }
@@ -2731,13 +2727,11 @@ export type Database = {
           access_token?: string
           created_at?: string | null
           error_code?: string | null
-          error_detected_at?: string | null
-          error_message?: string | null
           id?: string
           institution_id?: string | null
           institution_name?: string | null
           item_id?: string
-          requires_reauth?: boolean
+          requires_reauth?: boolean | null
           updated_at?: string | null
           user_id?: string
         }
@@ -3585,6 +3579,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      upsert_balance_additive: {
+        Args: {
+          p_balance_delta: number
+          p_currency_id: string
+          p_expiration_date?: string
+          p_player_number: number
+          p_source: string
+          p_user_id: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       booking_method: "any" | "portal" | "brand"
@@ -3599,7 +3604,7 @@ export type Database = {
         | "second_top_category"
         | "all_categories"
       cap_unit: "spend" | "rewards"
-      card_charge_type: "credit" | "charge"
+      card_charge_type: "credit" | "charge" | "debit"
       card_product_type: "personal" | "business"
       credit_account_status: "open" | "closed" | "paid" | "unknown"
       credit_account_type:
@@ -3636,6 +3641,10 @@ export type Database = {
       credit_score_type:
         | "fico_8"
         | "fico_9"
+        | "vantage_3"
+        | "vantage_4"
+        | "other"
+        | "fico_bankcard_8"
         | "fico_2"
         | "fico_4"
         | "fico_5"
@@ -3651,12 +3660,8 @@ export type Database = {
         | "fico_bankcard_3"
         | "fico_bankcard_4"
         | "fico_bankcard_5"
-        | "fico_bankcard_8"
         | "fico_bankcard_9"
         | "fico_bankcard_10"
-        | "vantage_3"
-        | "vantage_4"
-        | "other"
       inventory_tracking_type: "quantity" | "dollar_value" | "single_use"
       reward_currency_type:
         | "points"
@@ -3810,7 +3815,7 @@ export const Constants = {
         "all_categories",
       ],
       cap_unit: ["spend", "rewards"],
-      card_charge_type: ["credit", "charge"],
+      card_charge_type: ["credit", "charge", "debit"],
       card_product_type: ["personal", "business"],
       credit_account_status: ["open", "closed", "paid", "unknown"],
       credit_account_type: [
@@ -3851,6 +3856,10 @@ export const Constants = {
       credit_score_type: [
         "fico_8",
         "fico_9",
+        "vantage_3",
+        "vantage_4",
+        "other",
+        "fico_bankcard_8",
         "fico_2",
         "fico_4",
         "fico_5",
@@ -3866,12 +3875,8 @@ export const Constants = {
         "fico_bankcard_3",
         "fico_bankcard_4",
         "fico_bankcard_5",
-        "fico_bankcard_8",
         "fico_bankcard_9",
         "fico_bankcard_10",
-        "vantage_3",
-        "vantage_4",
-        "other",
       ],
       inventory_tracking_type: ["quantity", "dollar_value", "single_use"],
       reward_currency_type: [

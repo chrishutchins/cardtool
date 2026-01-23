@@ -139,7 +139,7 @@ interface ImportRow {
 
 const IMPORT_SOURCES: ImportRow[] = [
   {
-    label: "Credit Report",
+    label: "Credit Report & Inquiries",
     sources: {
       equifax: [{ name: "Equifax", url: "https://www.equifax.com/personal/credit-report-services/free-credit-reports/", recommended: true }],
       experian: [{ name: "Experian", url: "https://www.experian.com/credit/credit-report/", recommended: true }],
@@ -519,7 +519,7 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                 </thead>
                 <tbody>
                   {IMPORT_SOURCES.map((row, idx) => {
-                    const isPrimary = row.label === "Credit Report";
+                    const isPrimary = row.label === "Credit Report & Inquiries";
                     return (
                       <tr 
                         key={row.label} 

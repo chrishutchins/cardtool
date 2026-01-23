@@ -116,34 +116,78 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calculate final balance (additive mode adds to existing)
-    let finalBalance = Math.round(balance);
-    
-    
+    // Calculate final balance
+    const inputBalance = Math.round(balance);
+    let finalBalance = inputBalance;
+
     if (additive) {
-      // Fetch current balance to add to
-      const { data: existing, error: fetchError } = await supabase
-        .from("user_point_balances")
-        .select("balance")
-        .eq("user_id", userId)
-        .eq("currency_id", currency.id)
-        .eq("player_number", playerNumber)
-        .maybeSingle();
-      
-      if (fetchError) {
-        logger.error({ err: fetchError, userId, currencyCode }, "Failed to fetch existing balance for additive mode");
-        return NextResponse.json(
-          { error: "Failed to fetch existing balance" },
-          { status: 500 }
+      // Use atomic SQL to prevent race conditions in additive mode
+      // This uses INSERT ... ON CONFLICT ... DO UPDATE with atomic increment
+      const { data: result, error: atomicError } = await supabase.rpc('upsert_balance_additive', {
+        p_user_id: userId,
+        p_currency_id: currency.id,
+        p_player_number: playerNumber,
+        p_balance_delta: inputBalance,
+        p_source: source,
+        p_expiration_date: expirationDate || null,
+      });
+
+      if (atomicError) {
+        // Fallback to non-atomic if RPC doesn't exist (backward compatibility)
+        if (atomicError.code === '42883') { // function does not exist
+          logger.warn({ userId, currencyCode }, "Atomic upsert function not found, using fallback");
+          const { data: existing } = await supabase
+            .from("user_point_balances")
+            .select("balance")
+            .eq("user_id", userId)
+            .eq("currency_id", currency.id)
+            .eq("player_number", playerNumber)
+            .maybeSingle();
+          
+          if (existing) {
+            finalBalance = existing.balance + inputBalance;
+          }
+        } else {
+          logger.error({ err: atomicError, userId, currencyCode }, "Failed atomic balance update");
+          return NextResponse.json(
+            { error: "Failed to update balance" },
+            { status: 500 }
+          );
+        }
+      } else if (result !== null) {
+        // RPC returns the new balance
+        finalBalance = result;
+        
+        // Skip the upsert below since RPC already did it
+        // Log to history
+        const { error: historyError } = await supabase.from("user_point_balance_history").insert({
+          user_id: userId,
+          currency_id: currency.id,
+          player_number: playerNumber,
+          balance: finalBalance,
+          recorded_at: new Date().toISOString(),
+          source,
+        });
+
+        if (historyError) {
+          logger.error({ err: historyError, userId, currencyCode, playerNumber }, "Failed to insert balance history record");
+        }
+
+        logger.info(
+          { userId, currencyCode, balance: finalBalance, playerNumber, source, additive },
+          "Point balance updated (atomic)"
         );
-      }
-      
-      if (existing) {
-        finalBalance = existing.balance + Math.round(balance);
+
+        return NextResponse.json({
+          success: true,
+          balance: finalBalance,
+          currency: currencyCode,
+          playerNumber,
+        });
       }
     }
 
-    // Build upsert data
+    // Build upsert data (used for non-additive mode or fallback)
     const upsertData = {
       user_id: userId,
       currency_id: currency.id,

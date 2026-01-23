@@ -12,11 +12,16 @@ async function authenticateUser(request: Request): Promise<string | null> {
     const tokenHash = crypto.createHash("sha256").update(syncToken).digest("hex");
     const supabase = createClient();
     
-    const { data: tokenData } = await supabase
+    const { data: tokenData, error } = await supabase
       .from("user_sync_tokens")
       .select("user_id")
       .eq("token_hash", tokenHash)
       .maybeSingle();
+    
+    if (error) {
+      console.error("Error validating sync token:", error);
+      throw new Error("Database error during token validation");
+    }
     
     if (tokenData) {
       return tokenData.user_id;
@@ -30,7 +35,13 @@ async function authenticateUser(request: Request): Promise<string | null> {
 }
 
 export async function GET(request: Request) {
-  const userId = await authenticateUser(request);
+  let userId: string | null;
+  try {
+    userId = await authenticateUser(request);
+  } catch (error) {
+    console.error("Authentication error:", error);
+    return NextResponse.json({ error: "Server error during authentication" }, { status: 500 });
+  }
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

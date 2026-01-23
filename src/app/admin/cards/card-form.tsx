@@ -15,7 +15,7 @@ interface CardFormProps {
     primary_currency_id: string;
     secondary_currency_id: string | null;
     product_type: "personal" | "business";
-    card_charge_type: "credit" | "charge" | null;
+    card_charge_type: "credit" | "charge" | "debit" | null;
     annual_fee: number;
     default_earn_rate: number;
     default_perks_value: number | null;
@@ -30,7 +30,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
   const [primaryCurrencyId, setPrimaryCurrencyId] = useState(defaultValues?.primary_currency_id ?? "");
   const [secondaryCurrencyId, setSecondaryCurrencyId] = useState(defaultValues?.secondary_currency_id ?? "");
   const [productType, setProductType] = useState<"personal" | "business">(defaultValues?.product_type ?? "personal");
-  const [cardChargeType, setCardChargeType] = useState<"credit" | "charge">(defaultValues?.card_charge_type ?? "credit");
+  const [cardChargeType, setCardChargeType] = useState<"credit" | "charge" | "debit">(defaultValues?.card_charge_type ?? "credit");
   const [annualFee, setAnnualFee] = useState(defaultValues?.annual_fee ?? 0);
   const [defaultEarnRate, setDefaultEarnRate] = useState(defaultValues?.default_earn_rate ?? 1.0);
   const [defaultPerksValue, setDefaultPerksValue] = useState(defaultValues?.default_perks_value ?? 0);

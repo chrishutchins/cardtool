@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.40.0
+// @version      2.43.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -4869,6 +4869,9 @@
             font-weight: 700 !important;
             color: #60a5fa !important;
         }
+        .cardtool-credit-stat-value.score-range {
+            font-size: 15px !important;
+        }
         .cardtool-credit-stat-label {
             font-size: 10px !important;
             color: #71717a !important;
@@ -4947,8 +4950,17 @@
         let scoreLabel = 'Score';
         const allScores = creditReportData.scores || [];
         
+        // Count unique score types (bureau+type combinations) not total historical scores
+        const uniqueScoreTypes = new Set();
+        for (const s of allScores) {
+            const key = s.bureau ? `${s.bureau}-${s.type}` : s.type;
+            uniqueScoreTypes.add(key);
+        }
+        const uniqueScoreCount = uniqueScoreTypes.size;
+        
+        let isScoreRange = false;
         if (allScores.length > 1) {
-            // Multiple scores - show range and count
+            // Multiple scores - show range
             const scoreValues = allScores.map(s => s.score).sort((a,b) => a - b);
             const minScore = scoreValues[0];
             const maxScore = scoreValues[scoreValues.length - 1];
@@ -4956,8 +4968,10 @@
                 scoreDisplay = minScore;
             } else {
                 scoreDisplay = `${minScore}-${maxScore}`;
+                isScoreRange = true;
             }
-            scoreLabel = `${allScores.length} Scores`;
+            // Show count of unique score types, not total historical scores
+            scoreLabel = uniqueScoreCount > 1 ? `${uniqueScoreCount} Scores` : 'Score';
         } else if (allScores.length === 1) {
             scoreDisplay = allScores[0].score;
             scoreLabel = 'Score';
@@ -5010,8 +5024,8 @@
             }
             showSyncButton = false;
         } else if (hasScoresButNoAccounts && siteInstructions[currentBureau]) {
-            // Has scores but no accounts - prompt user to navigate to full report
-            statusMessage = `Scores captured. ${siteInstructions[currentBureau]}`;
+            // Has scores but no accounts - show simple message (instructions shown above)
+            statusMessage = 'Scores captured. Click to sync.';
             // Still allow sync for scores-only
             showSyncButton = true;
         } else if (creditReportData.status === 'no_data' || creditReportData.status === 'no_credit_data') {
@@ -5047,6 +5061,17 @@
         const dataWarning = accountsMissingData > 0 
             ? `<div style="color: #fbbf24; font-size: 11px; margin-bottom: 8px;">⚠️ ${accountsMissingData} accounts missing limit/balance</div>`
             : '';
+        
+        // myFICO inquiry note - show when there's data to sync
+        const inquiryNote = (currentBureau === 'myfico' && hasData) 
+            ? `<div style="color: #71717a; font-size: 11px; margin-bottom: 8px;">ℹ️ Inquiries not imported from myFICO</div>`
+            : '';
+        
+        // Instruction message for sites that need user navigation
+        let instructionMessage = '';
+        if (hasScoresButNoAccounts && siteInstructions[currentBureau]) {
+            instructionMessage = `<div style="color: #a1a1aa; font-size: 11px; margin-bottom: 8px;">📋 ${siteInstructions[currentBureau]}</div>`;
+        }
 
         // Build mini-summary text for minimized state
         const miniSummaryParts = [];
@@ -5056,10 +5081,11 @@
         const miniSummaryText = miniSummaryParts.length > 0 ? miniSummaryParts.join(' · ') : 'Credit';
 
         // Build stats section
+        const scoreValueClass = isScoreRange ? 'cardtool-credit-stat-value score-range' : 'cardtool-credit-stat-value';
         const statsHtml = `
             <div class="cardtool-credit-stats">
                 <div class="cardtool-credit-stat">
-                    <div class="cardtool-credit-stat-value">${scoreDisplay}</div>
+                    <div class="${scoreValueClass}">${scoreDisplay}</div>
                     <div class="cardtool-credit-stat-label">${scoreLabel}</div>
                 </div>
                 <div class="cardtool-credit-stat">
@@ -5086,6 +5112,8 @@
             <div class="cardtool-credit-body">
                 ${statsHtml}
                 ${dataWarning}
+                ${instructionMessage}
+                ${inquiryNote}
                 <div id="cardtool-credit-player-container"></div>
                 ${showSyncButton ? `
                     <button class="cardtool-credit-btn" id="cardtool-credit-sync-btn">
@@ -5260,9 +5288,16 @@
             }
             
             console.log('CardTool Credit: Syncing multi-bureau full report to', bureaus.length, 'bureaus:', bureaus);
+            console.log('CardTool Credit: bureauData contents:', JSON.stringify(Object.fromEntries(
+                Object.entries(creditReportData.bureauData).map(([k, v]) => [k, {
+                    accounts: v?.accounts?.length || 0,
+                    inquiries: v?.inquiries?.length || 0
+                }])
+            )));
             
             for (const bureau of bureaus) {
                 const bureauData = creditReportData.bureauData[bureau];
+                console.log(`CardTool Credit: Bureau ${bureau} has ${bureauData?.accounts?.length || 0} accounts`);
                 // Get scores for this bureau, removing the bureau field
                 const bureauScores = scoresWithBureau
                     .filter(s => s.bureau === bureau)

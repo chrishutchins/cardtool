@@ -92,7 +92,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     const primary_currency_id = formData.get("primary_currency_id") as string;
     const secondary_currency_id = (formData.get("secondary_currency_id") as string | null) || null;
     const product_type = formData.get("product_type") as "personal" | "business";
-    const card_charge_type = formData.get("card_charge_type") as "credit" | "charge";
+    const card_charge_type = formData.get("card_charge_type") as "credit" | "charge" | "debit";
     const annual_fee = parseFloat(formData.get("annual_fee") as string) || 0;
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;
     const default_perks_value = parseFloat(formData.get("default_perks_value") as string) || 0;

@@ -505,8 +505,21 @@ export function InquiriesTable({
     return filtered;
   }, [groupedInquiries, showDropped, sortColumn, sortDirection, inquiryTypeFilter]);
 
-  const droppedCount = groupedInquiries.filter((g) => g.isDropped).length;
-  const activeCount = groupedInquiries.filter((g) => !g.isDropped).length;
+  // Filter groups by inquiry type for counts
+  const typeFilteredGroups = useMemo(() => {
+    if (inquiryTypeFilter === "all") return groupedInquiries;
+    return groupedInquiries.filter((g) => {
+      const isSoft = g.inquiries.some((inq) => isSoftInquiry(inq.inquiry_type));
+      if (inquiryTypeFilter === "hard") {
+        return !isSoft;
+      } else {
+        return isSoft;
+      }
+    });
+  }, [groupedInquiries, inquiryTypeFilter]);
+
+  const droppedCount = typeFilteredGroups.filter((g) => g.isDropped).length;
+  const activeCount = typeFilteredGroups.filter((g) => !g.isDropped).length;
 
   const handleCreateGroup = () => {
     if (selectedForGrouping.size < 2) return;
