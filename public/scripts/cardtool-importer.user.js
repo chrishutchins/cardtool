@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.22.0
+// @version      2.23.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -4180,12 +4180,12 @@
                 for (const inq of inquiries) {
                     if (!inq) continue;
                     const subscriber = inq.subscriber || {};
-                    // Soft inquiries use 'inquiryDates' field (can be comma-separated)
-                    const dateStr = inq.inquiryDates || inq.combinedDates || '';
+                    // Promotional inquiries use 'inquiryDates', account review uses 'requestedOnDates'
+                    const dateStr = inq.inquiryDates || inq.requestedOnDates || inq.combinedDates || '';
                     const dates = dateStr.split(',').map(d => parseTransUnionDate(d.trim())).filter(Boolean);
                     
                     if (dates.length === 0) {
-                        const singleDate = parseTransUnionDate(inq.inquiryDate || inq.date?.value || inq.dateOfInquiry);
+                        const singleDate = parseTransUnionDate(inq.inquiryDate || inq.requestedOn || inq.date?.value || inq.dateOfInquiry);
                         if (singleDate) dates.push(singleDate);
                     }
                     
