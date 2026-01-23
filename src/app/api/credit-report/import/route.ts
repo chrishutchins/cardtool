@@ -136,12 +136,20 @@ export async function POST(request: Request) {
 
     // 2. Insert scores
     // Valid score types in the database enum
-    const validScoreTypes = ['fico_8', 'fico_9', 'vantage_3', 'vantage_4', 'fico_bankcard_8', 'other'] as const;
+    const validScoreTypes = [
+      'fico_8', 'fico_9', 'fico_2', 'fico_4', 'fico_5', 'fico_10', 'fico_10t',
+      'fico_auto_2', 'fico_auto_4', 'fico_auto_5', 'fico_auto_8', 'fico_auto_9', 'fico_auto_10',
+      'fico_bankcard_2', 'fico_bankcard_3', 'fico_bankcard_4', 'fico_bankcard_5', 
+      'fico_bankcard_8', 'fico_bankcard_9', 'fico_bankcard_10',
+      'vantage_3', 'vantage_4', 'other'
+    ] as const;
     type ValidScoreType = typeof validScoreTypes[number];
     
     const mapScoreType = (type: string): ValidScoreType => {
-      if (validScoreTypes.includes(type as ValidScoreType)) {
-        return type as ValidScoreType;
+      // Normalize the type (lowercase, handle 10T variant)
+      const normalized = type.toLowerCase().replace('10t', '10t');
+      if (validScoreTypes.includes(normalized as ValidScoreType)) {
+        return normalized as ValidScoreType;
       }
       return 'other';
     };

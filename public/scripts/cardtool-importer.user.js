@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.34.0
+// @version      2.40.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -1377,8 +1377,9 @@
             domain: 'myfico.com',
             apiPatterns: [
                 /\/v4\/users\/products/i,
-                /\/v4\/users\/reports\/1b\//i,  // Full credit report with accounts
-                /\/v4\/users\/reports/i,
+                /\/v4\/users\/reports\/1b\//i,  // 1-bureau full credit report
+                /\/v4\/users\/reports\/3b\//i,  // 3-bureau full credit report
+                /\/v4\/users\/reports/i,        // Reports list (score-only)
                 /\/v2\/users\/reports/i
             ],
             parseResponse: parseMyFicoResponse
@@ -2692,8 +2693,26 @@
                 if (parsed.multiBureau) {
                     creditReportData.multiBureau = true;
                 }
-                if (parsed.bureauData) {
-                    creditReportData.bureauData = parsed.bureauData;
+                // Only update bureauData if it has actual data (not empty object)
+                // This prevents score-only requests from wiping out account data
+                if (parsed.bureauData && Object.keys(parsed.bureauData).length > 0) {
+                    // Merge with existing bureauData instead of overwriting
+                    creditReportData.bureauData = creditReportData.bureauData || {};
+                    for (const [bureau, data] of Object.entries(parsed.bureauData)) {
+                        if (!creditReportData.bureauData[bureau]) {
+                            creditReportData.bureauData[bureau] = data;
+                        } else {
+                            // Merge accounts and inquiries
+                            creditReportData.bureauData[bureau].accounts = [
+                                ...(creditReportData.bureauData[bureau].accounts || []),
+                                ...(data.accounts || [])
+                            ];
+                            creditReportData.bureauData[bureau].inquiries = [
+                                ...(creditReportData.bureauData[bureau].inquiries || []),
+                                ...(data.inquiries || [])
+                            ];
+                        }
+                    }
                 }
                 
                 // Store raw data for debugging (but not the full raw data which may contain PII)
@@ -3389,14 +3408,15 @@
             // Helper to map myFICO score type to our internal type
             const mapScoreType = (scoreType, scoreVersion) => {
                 const type = (scoreType || '').toUpperCase();
-                const version = (scoreVersion || '8').toString();
+                // Lowercase version for consistency (10T -> 10t)
+                const version = (scoreVersion || '8').toString().toLowerCase();
                 
                 if (type === 'AUTO') {
                     return `fico_auto_${version}`;
                 } else if (type === 'BANKCARD') {
                     return `fico_bankcard_${version}`;
                 } else if (type === 'MORTGAGE') {
-                    // Mortgage scores use base FICO versions (2, 4, 5, 9, 10, 10T)
+                    // Mortgage scores use base FICO versions (2, 4, 5, 9, 10, 10t)
                     return `fico_${version}`;
                 } else {
                     // Default FICO 8
@@ -4952,8 +4972,13 @@
         if (creditReportData.bureauData) {
             accountCount = Object.values(creditReportData.bureauData)
                 .reduce((sum, bd) => sum + (bd.accounts?.length || 0), 0);
-            inquiryCount = Object.values(creditReportData.bureauData)
-                .reduce((sum, bd) => sum + (bd.inquiries?.length || 0), 0);
+            // Skip inquiry count for myFICO since we don't import them
+            if (currentBureau !== 'myfico') {
+                inquiryCount = Object.values(creditReportData.bureauData)
+                    .reduce((sum, bd) => sum + (bd.inquiries?.length || 0), 0);
+            } else {
+                inquiryCount = 0; // myFICO inquiries not imported
+            }
         }
         
         // Count total scores for display
@@ -4972,6 +4997,8 @@
         
         // Check if we have meaningful data to sync
         const hasData = allScores.length > 0 || accountCount > 0 || inquiryCount > 0;
+        // Check if we have scores but missing accounts (user needs to navigate to full report)
+        const hasScoresButNoAccounts = allScores.length > 0 && accountCount === 0;
         
         if (creditReportData.status === 'scanning') {
             // Show site-specific instructions while waiting for data
@@ -4982,6 +5009,11 @@
                 statusMessage = 'Scanning page for credit data...';
             }
             showSyncButton = false;
+        } else if (hasScoresButNoAccounts && siteInstructions[currentBureau]) {
+            // Has scores but no accounts - prompt user to navigate to full report
+            statusMessage = `Scores captured. ${siteInstructions[currentBureau]}`;
+            // Still allow sync for scores-only
+            showSyncButton = true;
         } else if (creditReportData.status === 'no_data' || creditReportData.status === 'no_credit_data') {
             // Show site-specific instructions
             const instructions = siteInstructions[currentBureau];
@@ -5045,7 +5077,9 @@
                 <div class="cardtool-credit-logo">C</div>
                 <span class="cardtool-credit-mini-summary">${miniSummaryText}</span>
                 <span class="cardtool-credit-title">CardTool • ${bureauName}</span>
+                <!-- Debug button hidden for now
                 <button class="cardtool-credit-debug" title="Export debug data" style="margin-left: auto; background: none; border: none; color: #71717a; cursor: pointer; font-size: 12px; padding: 4px;">🔍</button>
+                -->
                 <button class="cardtool-credit-minimize" title="Minimize">&#8722;</button>
                 <button class="cardtool-credit-close" title="Close">&times;</button>
             </div>
@@ -5217,6 +5251,14 @@
             let totalScores = 0;
             let hasError = false;
             
+            // Skip inquiries for myFICO - it doesn't have complete inquiry history
+            // and we don't want it to mark bureau inquiries as "dropped"
+            const skipInquiries = currentBureau === 'myfico';
+            if (skipInquiries) {
+                console.log('CardTool Credit: Skipping inquiries for myFICO (use direct bureau imports for inquiries)');
+                updateCreditStatus('Note: Inquiries not imported from myFICO (use bureau sites for inquiries)');
+            }
+            
             console.log('CardTool Credit: Syncing multi-bureau full report to', bureaus.length, 'bureaus:', bureaus);
             
             for (const bureau of bureaus) {
@@ -5239,7 +5281,7 @@
                         reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
                         scores: bureauScores,
                         accounts: bureauData.accounts || [],
-                        inquiries: bureauData.inquiries || []
+                        inquiries: skipInquiries ? [] : (bureauData.inquiries || [])
                     }),
                     onload: function(response) {
                         completedCount++;

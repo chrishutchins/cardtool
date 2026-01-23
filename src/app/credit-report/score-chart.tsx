@@ -14,7 +14,12 @@ import {
 } from "recharts";
 
 type CreditBureau = "equifax" | "experian" | "transunion";
-type ScoreType = "fico_8" | "fico_9" | "fico_bankcard_8" | "vantage_3" | "vantage_4" | "other";
+type ScoreType = 
+  | "fico_8" | "fico_9" | "fico_2" | "fico_4" | "fico_5" | "fico_10" | "fico_10t"
+  | "fico_auto_2" | "fico_auto_4" | "fico_auto_5" | "fico_auto_8" | "fico_auto_9" | "fico_auto_10"
+  | "fico_bankcard_2" | "fico_bankcard_3" | "fico_bankcard_4" | "fico_bankcard_5" 
+  | "fico_bankcard_8" | "fico_bankcard_9" | "fico_bankcard_10"
+  | "vantage_3" | "vantage_4" | "other";
 
 interface CreditScore {
   id: string;
@@ -42,10 +47,61 @@ const BUREAU_LABELS: Record<CreditBureau, string> = {
   transunion: "TransUnion",
 };
 
-const SCORE_TYPE_LABELS: Record<ScoreType, string> = {
+// Score display configuration
+// For "5, 2 & 4" style rows, we combine bureau-specific versions into one display row
+interface ScoreDisplayConfig {
+  label: string;
+  // Map of bureau -> score_type for this row
+  // If all bureaus use the same type, just use that type for all
+  bureauTypes: Record<CreditBureau, ScoreType>;
+  category: "base" | "mortgage" | "auto" | "bankcard" | "vantage" | "other";
+}
+
+const SCORE_DISPLAY_CONFIG: ScoreDisplayConfig[] = [
+  // Base FICO scores
+  { label: "FICO 8", bureauTypes: { equifax: "fico_8", experian: "fico_8", transunion: "fico_8" }, category: "base" },
+  { label: "FICO 9", bureauTypes: { equifax: "fico_9", experian: "fico_9", transunion: "fico_9" }, category: "base" },
+  { label: "FICO 10", bureauTypes: { equifax: "fico_10", experian: "fico_10", transunion: "fico_10" }, category: "base" },
+  { label: "FICO 10T", bureauTypes: { equifax: "fico_10t", experian: "fico_10t", transunion: "fico_10t" }, category: "base" },
+  // Mortgage - combined 5, 2 & 4 (bureau-specific versions)
+  { label: "FICO 5, 2 & 4", bureauTypes: { equifax: "fico_5", experian: "fico_2", transunion: "fico_4" }, category: "mortgage" },
+  // Auto scores
+  { label: "FICO Auto 8", bureauTypes: { equifax: "fico_auto_8", experian: "fico_auto_8", transunion: "fico_auto_8" }, category: "auto" },
+  { label: "FICO Auto 5, 2 & 4", bureauTypes: { equifax: "fico_auto_5", experian: "fico_auto_2", transunion: "fico_auto_4" }, category: "auto" },
+  { label: "FICO Auto 9", bureauTypes: { equifax: "fico_auto_9", experian: "fico_auto_9", transunion: "fico_auto_9" }, category: "auto" },
+  { label: "FICO Auto 10", bureauTypes: { equifax: "fico_auto_10", experian: "fico_auto_10", transunion: "fico_auto_10" }, category: "auto" },
+  // Bankcard scores
+  { label: "FICO Bankcard 8", bureauTypes: { equifax: "fico_bankcard_8", experian: "fico_bankcard_8", transunion: "fico_bankcard_8" }, category: "bankcard" },
+  { label: "FICO Bankcard 5, 2, 3 & 4", bureauTypes: { equifax: "fico_bankcard_5", experian: "fico_bankcard_2", transunion: "fico_bankcard_4" }, category: "bankcard" },
+  { label: "FICO Bankcard 9", bureauTypes: { equifax: "fico_bankcard_9", experian: "fico_bankcard_9", transunion: "fico_bankcard_9" }, category: "bankcard" },
+  { label: "FICO Bankcard 10", bureauTypes: { equifax: "fico_bankcard_10", experian: "fico_bankcard_10", transunion: "fico_bankcard_10" }, category: "bankcard" },
+  // VantageScore
+  { label: "VantageScore 3", bureauTypes: { equifax: "vantage_3", experian: "vantage_3", transunion: "vantage_3" }, category: "vantage" },
+  { label: "VantageScore 4", bureauTypes: { equifax: "vantage_4", experian: "vantage_4", transunion: "vantage_4" }, category: "vantage" },
+];
+
+// Legacy labels for backward compatibility
+const SCORE_TYPE_LABELS: Record<string, string> = {
   fico_8: "FICO 8",
   fico_9: "FICO 9",
+  fico_2: "FICO 2",
+  fico_4: "FICO 4",
+  fico_5: "FICO 5",
+  fico_10: "FICO 10",
+  fico_10t: "FICO 10T",
+  fico_auto_2: "FICO Auto 2",
+  fico_auto_4: "FICO Auto 4",
+  fico_auto_5: "FICO Auto 5",
+  fico_auto_8: "FICO Auto 8",
+  fico_auto_9: "FICO Auto 9",
+  fico_auto_10: "FICO Auto 10",
+  fico_bankcard_2: "FICO Bankcard 2",
+  fico_bankcard_3: "FICO Bankcard 3",
+  fico_bankcard_4: "FICO Bankcard 4",
+  fico_bankcard_5: "FICO Bankcard 5",
   fico_bankcard_8: "FICO Bankcard 8",
+  fico_bankcard_9: "FICO Bankcard 9",
+  fico_bankcard_10: "FICO Bankcard 10",
   vantage_3: "VantageScore 3",
   vantage_4: "VantageScore 4",
   other: "Other",
@@ -53,7 +109,7 @@ const SCORE_TYPE_LABELS: Record<ScoreType, string> = {
 
 // Primary scores always shown
 const PRIMARY_SCORE_TYPES: ScoreType[] = ["fico_8"];
-// Other scores hidden by default
+// Other scores hidden by default (legacy - now we use SCORE_DISPLAY_CONFIG)
 const OTHER_SCORE_TYPES: ScoreType[] = ["fico_9", "fico_bankcard_8", "vantage_3"];
 const BUREAUS: CreditBureau[] = ["equifax", "experian", "transunion"];
 
@@ -247,11 +303,11 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
     return bureaus;
   }, [filteredScores]);
 
-  // Render a score row
+  // Render a score row (legacy - single score type)
   const renderScoreRow = (scoreType: ScoreType) => (
     <tr key={scoreType} className="border-t border-zinc-800">
       <td className="py-2 pr-4 text-sm text-zinc-300">
-        {SCORE_TYPE_LABELS[scoreType]}
+        {SCORE_TYPE_LABELS[scoreType] || scoreType}
       </td>
       {BUREAUS.map((bureau) => {
         const key = `${bureau}-${scoreType}`;
@@ -274,6 +330,70 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
         );
       })}
     </tr>
+  );
+
+  // Render a score row using display config (handles combined bureau types like "FICO 5, 2 & 4")
+  const renderConfigScoreRow = (config: ScoreDisplayConfig) => {
+    // Check if any bureau has this score
+    const hasAnyScore = BUREAUS.some((bureau) => {
+      const scoreType = config.bureauTypes[bureau];
+      const key = `${bureau}-${scoreType}`;
+      return !!latestScores[key];
+    });
+    
+    if (!hasAnyScore) return null;
+    
+    return (
+      <tr key={config.label} className="border-t border-zinc-800">
+        <td className="py-2 pr-4 text-sm text-zinc-300">
+          {config.label}
+        </td>
+        {BUREAUS.map((bureau) => {
+          const scoreType = config.bureauTypes[bureau];
+          const key = `${bureau}-${scoreType}`;
+          const score = latestScores[key];
+          return (
+            <td key={bureau} className="py-2 px-3 text-center">
+              {score ? (
+                <div>
+                  <span className={`text-xl font-bold ${getScoreColor(score.score)}`}>
+                    {score.score}
+                  </span>
+                  <span className="block text-xs text-zinc-500">
+                    {getScoreLabel(score.score)}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-zinc-600">—</span>
+              )}
+            </td>
+          );
+        })}
+      </tr>
+    );
+  };
+
+  // Filter configs to only show rows with data
+  const availableConfigRows = useMemo(() => {
+    return SCORE_DISPLAY_CONFIG.filter((config) => {
+      return BUREAUS.some((bureau) => {
+        const scoreType = config.bureauTypes[bureau];
+        const key = `${bureau}-${scoreType}`;
+        return !!latestScores[key];
+      });
+    });
+  }, [latestScores]);
+
+  // Primary configs (FICO 8 only)
+  const primaryConfigs = useMemo(() => 
+    availableConfigRows.filter((c) => c.label === "FICO 8"),
+    [availableConfigRows]
+  );
+
+  // Other configs (everything else)
+  const otherConfigs = useMemo(() => 
+    availableConfigRows.filter((c) => c.label !== "FICO 8"),
+    [availableConfigRows]
   );
 
   return (
@@ -304,61 +424,61 @@ export function ScoreChart({ scores, latestScores }: ScoreChartProps) {
                   </th>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {availablePrimaryTypes.map(renderScoreRow)}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Other Scores - Collapsible */}
-        {availableOtherTypes.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-zinc-800">
-            <button
-              onClick={() => setShowOtherScores(!showOtherScores)}
-              className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mb-2"
-            >
-              {showOtherScores ? (
-                <ChevronUp className="h-3 w-3" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-              {showOtherScores ? "Hide Other Scores" : "Show Other Scores"}
-            </button>
-
-            {showOtherScores && (
-              <div className="overflow-x-auto">
-                <table className="w-full table-fixed">
-                  <colgroup>
-                    <col style={{ width: "25%" }} />
-                    <col style={{ width: "25%" }} />
-                    <col style={{ width: "25%" }} />
-                    <col style={{ width: "25%" }} />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider pb-2 pr-4">
-                        Score Type
-                      </th>
-                      {BUREAUS.map((bureau) => (
-                        <th
-                          key={bureau}
-                          className="text-center text-xs font-medium text-zinc-500 uppercase tracking-wider pb-2 px-3"
-                        >
-                          {BUREAU_LABELS[bureau]}
-                        </th>
-                      ))}
-                    </tr>
                   </thead>
                   <tbody>
-                    {availableOtherTypes.map(renderScoreRow)}
+                    {primaryConfigs.map(renderConfigScoreRow)}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+
+              {/* Other Scores - Collapsible */}
+              {otherConfigs.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-zinc-800">
+                  <button
+                    onClick={() => setShowOtherScores(!showOtherScores)}
+                    className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mb-2"
+                  >
+                    {showOtherScores ? (
+                      <ChevronUp className="h-3 w-3" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" />
+                    )}
+                    {showOtherScores ? "Hide Other Scores" : `Show ${otherConfigs.length} Other Score Types`}
+                  </button>
+
+                  {showOtherScores && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full table-fixed">
+                        <colgroup>
+                          <col style={{ width: "25%" }} />
+                          <col style={{ width: "25%" }} />
+                          <col style={{ width: "25%" }} />
+                          <col style={{ width: "25%" }} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider pb-2 pr-4">
+                              Score Type
+                            </th>
+                            {BUREAUS.map((bureau) => (
+                              <th
+                                key={bureau}
+                                className="text-center text-xs font-medium text-zinc-500 uppercase tracking-wider pb-2 px-3"
+                              >
+                                {BUREAU_LABELS[bureau]}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {otherConfigs.map(renderConfigScoreRow)}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
       {/* Import Sources - Collapsible */}
       <div className="mt-3 pt-3 border-t border-zinc-800">

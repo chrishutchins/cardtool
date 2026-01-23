@@ -3636,10 +3636,27 @@ export type Database = {
       credit_score_type:
         | "fico_8"
         | "fico_9"
+        | "fico_2"
+        | "fico_4"
+        | "fico_5"
+        | "fico_10"
+        | "fico_10t"
+        | "fico_auto_2"
+        | "fico_auto_4"
+        | "fico_auto_5"
+        | "fico_auto_8"
+        | "fico_auto_9"
+        | "fico_auto_10"
+        | "fico_bankcard_2"
+        | "fico_bankcard_3"
+        | "fico_bankcard_4"
+        | "fico_bankcard_5"
+        | "fico_bankcard_8"
+        | "fico_bankcard_9"
+        | "fico_bankcard_10"
         | "vantage_3"
         | "vantage_4"
         | "other"
-        | "fico_bankcard_8"
       inventory_tracking_type: "quantity" | "dollar_value" | "single_use"
       reward_currency_type:
         | "points"
@@ -3834,10 +3851,27 @@ export const Constants = {
       credit_score_type: [
         "fico_8",
         "fico_9",
+        "fico_2",
+        "fico_4",
+        "fico_5",
+        "fico_10",
+        "fico_10t",
+        "fico_auto_2",
+        "fico_auto_4",
+        "fico_auto_5",
+        "fico_auto_8",
+        "fico_auto_9",
+        "fico_auto_10",
+        "fico_bankcard_2",
+        "fico_bankcard_3",
+        "fico_bankcard_4",
+        "fico_bankcard_5",
+        "fico_bankcard_8",
+        "fico_bankcard_9",
+        "fico_bankcard_10",
         "vantage_3",
         "vantage_4",
         "other",
-        "fico_bankcard_8",
       ],
       inventory_tracking_type: ["quantity", "dollar_value", "single_use"],
       reward_currency_type: [
