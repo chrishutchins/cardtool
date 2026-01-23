@@ -4180,11 +4180,12 @@
                 for (const inq of inquiries) {
                     if (!inq) continue;
                     const subscriber = inq.subscriber || {};
-                    const dateStr = inq.combinedDates || '';
+                    // Soft inquiries use 'inquiryDates' field (can be comma-separated)
+                    const dateStr = inq.inquiryDates || inq.combinedDates || '';
                     const dates = dateStr.split(',').map(d => parseTransUnionDate(d.trim())).filter(Boolean);
                     
                     if (dates.length === 0) {
-                        const singleDate = parseTransUnionDate(inq.date?.value || inq.dateOfInquiry);
+                        const singleDate = parseTransUnionDate(inq.inquiryDate || inq.date?.value || inq.dateOfInquiry);
                         if (singleDate) dates.push(singleDate);
                     }
                     
