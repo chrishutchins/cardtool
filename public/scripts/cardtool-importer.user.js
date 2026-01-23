@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.46.0
+// @version      2.48.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -4399,7 +4399,7 @@
                     name: subscriber.name?.unparsed || 'Unknown',
                     numberMasked: trade.accountNumber || null,
                     creditorName: subscriber.name?.unparsed || null,
-                    status: mapTransUnionStatus(trade.portfolioType, trade.accountRatingDescription, ecoaValue),
+                    status: mapTransUnionStatus(trade.portfolioType, trade.accountRatingDescription, ecoaValue, dateClosed),
                     dateOpened: dateOpened,
                     dateUpdated: dateUpdated,
                     dateClosed: dateClosed,
@@ -4541,8 +4541,12 @@
     }
 
     // Valid enums: open, closed, paid, unknown
-    function mapTransUnionStatus(portfolioType, ratingDesc, ecoadesignator) {
-        // Check ecoadesignator first - "Relationship Terminated" means account is closed
+    function mapTransUnionStatus(portfolioType, ratingDesc, ecoadesignator, dateClosed) {
+        // If dateClosed is set, the account is definitely closed
+        // This is the most reliable indicator
+        if (dateClosed) return 'closed';
+        
+        // Check ecoadesignator - "Relationship Terminated" means account is closed
         if (ecoadesignator) {
             const ecoa = ecoadesignator.toUpperCase();
             if (ecoa.includes('TERMINATED') || ecoa === 'T') return 'closed';
@@ -5343,6 +5347,7 @@
                     },
                     data: JSON.stringify({
                         bureau: bureau,
+                        source: currentBureau,
                         playerNumber: playerNumber,
                         reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
                         scores: bureauScores,
@@ -5437,6 +5442,7 @@
                     },
                     data: JSON.stringify({
                         bureau: bureau,
+                        source: currentBureau,
                         playerNumber: playerNumber,
                         reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
                         scores: bureauScores,
@@ -5504,6 +5510,7 @@
             },
             data: JSON.stringify({
                 bureau: currentBureau,
+                source: currentBureau,
                 playerNumber: playerNumber,
                 reportDate: creditReportData.reportDate || new Date().toISOString().split('T')[0],
                 scores: scoresWithoutBureau.length > 0 ? scoresWithoutBureau : creditReportData.scores,

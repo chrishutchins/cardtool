@@ -4,6 +4,7 @@ import logger from "@/lib/logger";
 import crypto from "crypto";
 
 type CreditBureau = "equifax" | "experian" | "transunion";
+type CreditReportSource = "myfico" | "equifax" | "experian" | "transunion" | "credit_karma" | "annual_credit_report";
 type ScoreType = "fico_8" | "fico_9" | "vantage_3" | "vantage_4" | "other";
 type AccountStatus = "open" | "closed" | "paid" | "unknown";
 type AccountType = "revolving" | "installment" | "mortgage" | "collection" | "other";
@@ -43,6 +44,7 @@ interface CreditInquiryInput {
 
 interface CreditReportImportRequest {
   bureau: CreditBureau;
+  source?: CreditReportSource;
   playerNumber?: number;
   reportDate?: string;
   scores?: CreditScoreInput[];
@@ -94,6 +96,7 @@ export async function POST(request: Request) {
     const body: CreditReportImportRequest = await request.json();
     const { 
       bureau, 
+      source,
       playerNumber = 1, 
       reportDate, 
       scores = [], 
@@ -111,6 +114,10 @@ export async function POST(request: Request) {
 
     const supabase = createClient();
 
+    // Determine the source - use provided source or infer from bureau
+    const validSources: CreditReportSource[] = ["myfico", "equifax", "experian", "transunion", "credit_karma", "annual_credit_report"];
+    const resolvedSource = source && validSources.includes(source) ? source : bureau;
+
     // 1. Create snapshot record
     const { data: snapshot, error: snapshotError } = await supabase
       .from("credit_report_snapshots")
@@ -118,6 +125,7 @@ export async function POST(request: Request) {
         user_id: userId,
         player_number: playerNumber,
         bureau,
+        source: resolvedSource,
         report_date: reportDate || null,
         fetched_at: new Date().toISOString(),
       })

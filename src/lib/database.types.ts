@@ -1140,6 +1140,7 @@ export type Database = {
           id: string
           player_number: number
           report_date: string | null
+          source: Database["public"]["Enums"]["credit_report_source"] | null
           user_id: string
         }
         Insert: {
@@ -1149,6 +1150,7 @@ export type Database = {
           id?: string
           player_number?: number
           report_date?: string | null
+          source?: Database["public"]["Enums"]["credit_report_source"] | null
           user_id: string
         }
         Update: {
@@ -1158,6 +1160,7 @@ export type Database = {
           id?: string
           player_number?: number
           report_date?: string | null
+          source?: Database["public"]["Enums"]["credit_report_source"] | null
           user_id?: string
         }
         Relationships: []
@@ -3614,6 +3617,13 @@ export type Database = {
         | "collection"
         | "other"
       credit_bureau: "equifax" | "experian" | "transunion"
+      credit_report_source:
+        | "myfico"
+        | "equifax"
+        | "experian"
+        | "transunion"
+        | "credit_karma"
+        | "annual_credit_report"
       credit_loan_type:
         | "credit_card"
         | "flexible_credit_card"
@@ -3826,6 +3836,14 @@ export const Constants = {
         "other",
       ],
       credit_bureau: ["equifax", "experian", "transunion"],
+      credit_report_source: [
+        "myfico",
+        "equifax",
+        "experian",
+        "transunion",
+        "credit_karma",
+        "annual_credit_report",
+      ],
       credit_loan_type: [
         "credit_card",
         "flexible_credit_card",
