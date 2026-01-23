@@ -50,6 +50,8 @@ interface CreditAccount {
   terms: string | null;
   payment_status: string | null;
   player_number: number;
+  // Direct bureau account number (when source is myFICO, this holds the direct bureau's version)
+  direct_account_number_masked?: string | null;
 }
 
 interface CreditInquiry {
@@ -126,6 +128,7 @@ export default async function CreditReportPage() {
     accountLinksResult,
     inquiryGroupsResult,
     playersResult,
+    directSnapshotsResult,
   ] = await Promise.all([
     // All credit scores (historical) - order descending to ensure newest within limit
     // Limit increased to 5000 to accommodate users with extensive score history
@@ -137,6 +140,7 @@ export default async function CreditReportPage() {
       .limit(5000),
 
     // Latest accounts from each bureau (get from most recent snapshot per bureau)
+    // Include source to distinguish direct bureau data from myFICO
     supabase
       .from("credit_accounts")
       .select(`
@@ -145,7 +149,7 @@ export default async function CreditReportPage() {
         credit_limit_cents, high_balance_cents, balance_cents, monthly_payment_cents,
         account_type, loan_type, responsibility, terms, payment_status,
         snapshot_id, player_number,
-        credit_report_snapshots!inner(fetched_at)
+        credit_report_snapshots!inner(fetched_at, source)
       `)
       .eq("user_id", effectiveUserId)
       .order("credit_report_snapshots(fetched_at)", { ascending: false }),
@@ -194,10 +198,22 @@ export default async function CreditReportPage() {
       .select("player_number, description")
       .eq("user_id", effectiveUserId)
       .order("player_number"),
+
+    // Latest DIRECT bureau snapshots (excluding myFICO) for inquiry dropped tracking
+    // myFICO doesn't import inquiries, so we shouldn't compare against myFICO snapshots
+    supabase
+      .from("credit_report_snapshots")
+      .select("id, bureau, player_number, fetched_at, source")
+      .eq("user_id", effectiveUserId)
+      .neq("source", "myfico")
+      .order("fetched_at", { ascending: false }),
   ]);
 
   const scores = (scoresResult.data ?? []) as CreditScore[];
-  const allAccounts = (accountsResult.data ?? []) as (CreditAccount & { snapshot_id: string })[];
+  const allAccounts = (accountsResult.data ?? []) as (CreditAccount & { 
+    snapshot_id: string;
+    credit_report_snapshots: { fetched_at: string; source: string | null };
+  })[];
   const inquiries = (inquiriesResult.data ?? []) as CreditInquiry[];
   const walletCards = (walletResult.data ?? []) as unknown as WalletCard[];
   const linkedAccounts = (linkedAccountsResult.data ?? []) as LinkedAccount[];
@@ -214,9 +230,65 @@ export default async function CreditReportPage() {
     }
   });
 
-  const accounts = allAccounts.filter((account) => {
+  const latestAccounts = allAccounts.filter((account) => {
     const key = `${account.bureau}-${account.player_number}`;
     return latestSnapshotByBureauAndPlayer.get(key) === account.snapshot_id;
+  });
+
+  // Build map of direct bureau account data (non-myFICO) for enrichment
+  // Key: bureau-player-dateOpened-creditorName (normalized)
+  // This allows us to carry over account numbers AND wallet links from direct bureau accounts to myFICO accounts
+  const directBureauAccountNumbers = new Map<string, string>();
+  const directBureauAccountIds = new Map<string, string>(); // Maps matching key -> direct bureau account ID
+  
+  allAccounts.forEach((account) => {
+    const source = account.credit_report_snapshots?.source;
+    // Only consider non-myFICO sources
+    if (source === "myfico" || !source) return;
+    
+    // Create a key that can match across sources
+    const creditorKey = (account.creditor_name || account.account_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const key = `${account.bureau}-${account.player_number}-${account.date_opened || ""}-${creditorKey}`;
+    
+    // Store the direct bureau account ID for link inheritance
+    if (!directBureauAccountIds.has(key)) {
+      directBureauAccountIds.set(key, account.id);
+    }
+    
+    // Keep the account number with more digits visible (less masking)
+    if (account.account_number_masked) {
+      const existing = directBureauAccountNumbers.get(key);
+      if (!existing || (account.account_number_masked.replace(/[X*]/gi, "").length > existing.replace(/[X*]/gi, "").length)) {
+        directBureauAccountNumbers.set(key, account.account_number_masked);
+      }
+    }
+  });
+
+  // Enrich accounts with direct bureau data when source is myFICO
+  // This includes: account numbers (less masked) and the direct bureau account ID (for link inheritance)
+  const myFicoToDirectIdMap = new Map<string, string>(); // myFICO account ID -> direct bureau account ID
+  
+  const accounts = latestAccounts.map((account) => {
+    const source = account.credit_report_snapshots?.source;
+    
+    if (source === "myfico") {
+      // Look up corresponding direct bureau account
+      const creditorKey = (account.creditor_name || account.account_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const key = `${account.bureau}-${account.player_number}-${account.date_opened || ""}-${creditorKey}`;
+      const directNumber = directBureauAccountNumbers.get(key);
+      const directId = directBureauAccountIds.get(key);
+      
+      // Store mapping for link inheritance
+      if (directId) {
+        myFicoToDirectIdMap.set(account.id, directId);
+      }
+      
+      if (directNumber) {
+        return { ...account, direct_account_number_masked: directNumber };
+      }
+    }
+    
+    return account;
   });
 
   // Build linked accounts map
@@ -228,12 +300,26 @@ export default async function CreditReportPage() {
   });
 
   // Build account links map
+  // Also inherit links from direct bureau accounts to their corresponding myFICO accounts
   const accountLinksMap = new Map<string, string | null>();
   const displayNamesMap = new Map<string, string>();
   accountLinks.forEach((link) => {
     accountLinksMap.set(link.credit_account_id, link.wallet_card_id);
     if (link.display_name) {
       displayNamesMap.set(link.credit_account_id, link.display_name);
+    }
+  });
+  
+  // Inherit links from direct bureau accounts to myFICO accounts
+  // This ensures links persist when myFICO becomes the latest data source
+  myFicoToDirectIdMap.forEach((directId, myFicoId) => {
+    // If there's a link for the direct bureau account, inherit it for the myFICO account
+    if (accountLinksMap.has(directId) && !accountLinksMap.has(myFicoId)) {
+      accountLinksMap.set(myFicoId, accountLinksMap.get(directId)!);
+    }
+    // Also inherit display names
+    if (displayNamesMap.has(directId) && !displayNamesMap.has(myFicoId)) {
+      displayNamesMap.set(myFicoId, displayNamesMap.get(directId)!);
     }
   });
 
@@ -558,16 +644,23 @@ export default async function CreditReportPage() {
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
   
-  // Get latest snapshot ID per bureau per player (for inquiry tracking)
-  // This map uses just bureau as key since the client filters by player
+  // Get latest DIRECT bureau snapshot ID per bureau per player (for inquiry tracking)
+  // We use direct bureau snapshots only (not myFICO) because myFICO doesn't import inquiries
+  // If we compared against myFICO snapshots, all inquiries would appear "dropped"
+  const directSnapshots = (directSnapshotsResult.data ?? []) as {
+    id: string;
+    bureau: CreditBureau;
+    player_number: number;
+    fetched_at: string;
+    source: string | null;
+  }[];
+  
   const latestSnapshotIds = new Map<string, string>();
-  accounts.forEach((account) => {
-    const snapshotId = (account as unknown as { snapshot_id: string }).snapshot_id;
-    // For each bureau, we keep track of all latest snapshots (may have multiple per player)
-    // The client will filter by player, so we need to include all
-    const key = `${account.bureau}-${account.player_number}`;
+  directSnapshots.forEach((snapshot) => {
+    const key = `${snapshot.bureau}-${snapshot.player_number}`;
+    // Only set if not already present (results are ordered by fetched_at DESC)
     if (!latestSnapshotIds.has(key)) {
-      latestSnapshotIds.set(key, snapshotId);
+      latestSnapshotIds.set(key, snapshot.id);
     }
   });
 

@@ -28,6 +28,8 @@ export interface CreditAccount {
   responsibility: string;
   terms: string | null;
   payment_status: string | null;
+  // Direct bureau account number (when source is myFICO, this holds the direct bureau's version)
+  direct_account_number_masked?: string | null;
 }
 
 export interface AccountGroup {

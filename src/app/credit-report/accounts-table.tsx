@@ -1001,10 +1001,13 @@ export function AccountsTable({
                                   <span className="text-zinc-500">Type:</span>
                                   <span className="text-zinc-300">{formatResponsibility(acct.responsibility)}</span>
                                 </div>
-                                {acct.account_number_masked && (
+                                {(acct.direct_account_number_masked || acct.account_number_masked) && (
                                   <div className="flex justify-between">
                                     <span className="text-zinc-500">#:</span>
-                                    <span className="text-zinc-300 truncate">{acct.account_number_masked}</span>
+                                    <span className="text-zinc-300 truncate">
+                                      {/* Prefer direct bureau account number (less masking) over myFICO's */}
+                                      {acct.direct_account_number_masked || acct.account_number_masked}
+                                    </span>
                                   </div>
                                 )}
                               </div>

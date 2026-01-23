@@ -180,8 +180,10 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
           success: true,
+          currencyName: currency.name,
+          currencyCode: currency.code,
           balance: finalBalance,
-          currency: currencyCode,
+          added: additive ? inputBalance : undefined,
           playerNumber,
         });
       }
