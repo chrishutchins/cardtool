@@ -6,6 +6,7 @@ import { CardForm } from "../card-form";
 import { EarningRulesEditor } from "./earning-rules-editor";
 import { CapsEditor } from "./caps-editor";
 import { OfferEditor } from "./offer-editor";
+import { CardCreditsSection } from "./card-credits-section";
 import Link from "next/link";
 import { Enums } from "@/lib/database.types";
 import { invalidateCardCaches, invalidateEarningRuleCaches, invalidateCardCapCaches } from "@/lib/cache-invalidation";
@@ -41,6 +42,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     userWalletResult,
     activeOfferResult,
     archivedOffersResult,
+    creditsResult,
   ] = await Promise.all([
     supabase.from("cards").select("*").eq("id", id).single(),
     supabase.from("issuers").select("*").order("name"),
@@ -74,6 +76,11 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
       .eq("card_id", id)
       .eq("is_archived", true)
       .order("archived_at", { ascending: false }),
+    // Fetch credits for this card
+    supabase.from("card_credits")
+      .select("id, name, brand_name, credit_count, reset_cycle, renewal_period_months, default_value_cents, default_quantity, unit_name, is_active, notes, must_be_earned")
+      .eq("card_id", id)
+      .order("name"),
   ]);
 
   if (cardResult.error || !cardResult.data) {
@@ -97,6 +104,12 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;
     const default_perks_value = parseFloat(formData.get("default_perks_value") as string) || 0;
     const no_foreign_transaction_fees = formData.get("no_foreign_transaction_fees") === "on";
+    const networkValue = formData.get("network") as string;
+    const network = networkValue ? (networkValue as "visa" | "mastercard" | "amex" | "discover") : null;
+    const searchAliasesRaw = formData.get("search_aliases") as string;
+    const search_aliases = searchAliasesRaw 
+      ? searchAliasesRaw.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+      : null;
 
     await supabase
       .from("cards")
@@ -112,6 +125,8 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
         default_earn_rate,
         default_perks_value,
         no_foreign_transaction_fees,
+        network,
+        search_aliases,
       })
       .eq("id", id);
 
@@ -553,6 +568,68 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
 
   // ========== END OFFER SERVER ACTIONS ==========
 
+  // ========== CREDIT SERVER ACTIONS ==========
+
+  async function addCredit(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+
+    const name = formData.get("name") as string;
+    const brandNameRaw = formData.get("brand_name") as string;
+    const brandName = brandNameRaw?.trim() || null;
+    const creditCountStr = formData.get("credit_count") as string;
+    const creditCount = creditCountStr ? parseInt(creditCountStr) : 1;
+    const resetCycle = formData.get("reset_cycle") as string;
+    const renewalPeriodStr = formData.get("renewal_period_months") as string;
+    const defaultValueStr = formData.get("default_value") as string;
+    const defaultQuantityStr = formData.get("default_quantity") as string;
+    const unitNameRaw = formData.get("unit_name") as string;
+    const unitName = unitNameRaw?.trim() || null;
+    const notesRaw = formData.get("notes") as string;
+    const notes = notesRaw?.trim() || null;
+    const mustBeEarned = formData.get("must_be_earned") === "true";
+
+    const defaultValueCents = defaultValueStr ? Math.round(parseFloat(defaultValueStr) * 100) : null;
+    const defaultQuantity = defaultQuantityStr ? parseInt(defaultQuantityStr) : null;
+    const renewalPeriodMonths = renewalPeriodStr ? parseInt(renewalPeriodStr) : null;
+
+    await supabase.from("card_credits").insert({
+      card_id: id,
+      name,
+      brand_name: brandName,
+      credit_count: creditCount,
+      reset_cycle: resetCycle as "monthly" | "quarterly" | "semiannual" | "annual" | "cardmember_year" | "usage_based",
+      renewal_period_months: renewalPeriodMonths,
+      default_value_cents: defaultValueCents,
+      default_quantity: defaultQuantity,
+      unit_name: unitName,
+      notes,
+      is_active: true,
+      must_be_earned: mustBeEarned,
+    });
+
+    revalidatePath(`/admin/cards/${id}`);
+    revalidatePath("/admin/credits");
+  }
+
+  async function toggleCreditActive(creditId: string, isActive: boolean) {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("card_credits").update({ is_active: isActive }).eq("id", creditId);
+    revalidatePath(`/admin/cards/${id}`);
+    revalidatePath("/admin/credits");
+  }
+
+  async function deleteCredit(creditId: string) {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("card_credits").delete().eq("id", creditId);
+    revalidatePath(`/admin/cards/${id}`);
+    revalidatePath("/admin/credits");
+  }
+
+  // ========== END CREDIT SERVER ACTIONS ==========
+
   // Spend Bonuses and Welcome Bonuses have been moved to user-managed in the wallet page
 
   // Pass all categories - cards can have multiple rules per category (e.g., direct vs portal booking)
@@ -608,6 +685,8 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
             default_earn_rate: card.default_earn_rate,
             default_perks_value: card.default_perks_value,
             no_foreign_transaction_fees: card.no_foreign_transaction_fees,
+            search_aliases: card.search_aliases,
+            network: card.network,
           }}
         />
       </div>
@@ -646,6 +725,14 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
                 currencyType={cardCurrency?.currency_type}
               />
             </div>
+
+            {/* Card Credits */}
+            <CardCreditsSection
+              credits={(creditsResult.data ?? []) as { id: string; name: string; brand_name: string | null; credit_count: number; reset_cycle: string; renewal_period_months: number | null; default_value_cents: number | null; default_quantity: number | null; unit_name: string | null; is_active: boolean; notes: string | null; must_be_earned: boolean }[]}
+              onAddCredit={addCredit}
+              onToggleActive={toggleCreditActive}
+              onDelete={deleteCredit}
+            />
 
             {/* Active Offers */}
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">

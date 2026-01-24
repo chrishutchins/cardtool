@@ -17,6 +17,9 @@ export default async function CardsPage() {
     return <div className="text-red-400">Error loading cards: {error.message}</div>;
   }
 
+  // Count pending user-submitted cards
+  const pendingCount = cards?.filter(c => c.created_by_user_id && !c.is_approved).length ?? 0;
+
   async function deleteCard(id: string) {
     "use server";
     const supabase = createClient();
@@ -47,10 +50,33 @@ export default async function CardsPage() {
     revalidatePath("/admin/cards");
   }
 
+  async function approveCard(id: string, currentName: string) {
+    "use server";
+    const supabase = createClient();
+    // When approving, save the current name as original_name so if admin changes it,
+    // users who had the card keep their custom name
+    await supabase
+      .from("cards")
+      .update({ 
+        is_approved: true,
+        original_name: currentName,
+      })
+      .eq("id", id);
+    invalidateCardCaches();
+    revalidatePath("/admin/cards");
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-white">Cards</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold text-white">Cards</h1>
+          {pendingCount > 0 && (
+            <span className="px-2.5 py-1 text-xs font-medium bg-amber-500/20 text-amber-400 rounded-full">
+              {pendingCount} pending approval
+            </span>
+          )}
+        </div>
         <div className="flex gap-3">
           <Link
             href="/admin/cards/import-bonuses"
@@ -72,6 +98,7 @@ export default async function CardsPage() {
         onDelete={deleteCard}
         onUpdatePerksValue={updatePerksValue}
         onToggleExcludeRecommendations={toggleExcludeRecommendations}
+        onApproveCard={approveCard}
       />
     </div>
   );

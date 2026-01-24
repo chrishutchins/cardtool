@@ -27,6 +27,10 @@ export interface WalletCardData {
   payment_due_day?: number | null;
   manual_balance_cents?: number | null;
   manual_credit_limit_cents?: number | null;
+  // New fields for wallet enhancements
+  annual_fee_override?: number | null;
+  notes?: string | null;
+  network_override?: "visa" | "mastercard" | "amex" | "discover" | null;
   cards: {
     id: string;
     name: string;
@@ -38,6 +42,7 @@ export interface WalletCardData {
     issuer_id: string;
     product_type?: "personal" | "business";
     card_charge_type?: "credit" | "charge" | null;
+    network?: "visa" | "mastercard" | "amex" | "discover" | null;
     issuers: { id: string; name: string; billing_cycle_formula?: string | null } | null;
     primary_currency: { id: string; name: string; code: string; currency_type: string } | null;
     secondary_currency: { id: string; name: string; code: string; currency_type: string } | null;
@@ -79,6 +84,10 @@ interface WalletCardTableProps {
     manual_balance_cents: number | null;
     manual_credit_limit_cents: number | null;
   }) => Promise<void>;
+  // Wallet enhancement fields
+  onUpdateAnnualFeeOverride?: (walletId: string, feeOverride: number | null) => Promise<void>;
+  onUpdateNotes?: (walletId: string, notes: string | null) => Promise<void>;
+  onUpdateNetworkOverride?: (walletId: string, network: "visa" | "mastercard" | "amex" | "discover" | null) => Promise<void>;
   // Payment settings
   bankAccounts?: BankAccountForSettings[];
   paymentSettingsMap?: Map<string, PaymentSettingsForCard>;
@@ -96,6 +105,60 @@ interface WalletCardTableProps {
   }) => Promise<void>;
   onCloseCard: (walletId: string, closedDate: string) => Promise<void>;
   onDeleteCard: (walletId: string) => Promise<void>;
+  // Category selection for cards with user-selectable categories
+  categorySelectionCapsMap?: Map<string, {
+    id: string;
+    cap_type: string;
+    cap_amount: number | null;
+    categories: { id: number; name: string }[];
+  }[]>;
+  categorySelections?: { cap_id: string; selected_category_id: number; wallet_card_id?: string | null }[];
+  onSelectCategory?: (capId: string, categoryId: number, walletCardId?: string) => Promise<void>;
+  // Currencies for bonus forms
+  currencies?: { id: string; name: string; code: string; currency_type: string }[];
+  // User bonuses per wallet card
+  welcomeBonusesMap?: Map<string, {
+    id: string;
+    is_active: boolean;
+    component_type: "points" | "cash" | "benefit";
+    spend_requirement_cents: number;
+    time_period_months: number;
+    points_amount: number | null;
+    cash_amount_cents: number | null;
+    benefit_description: string | null;
+    value_cents: number | null;
+    currency_id?: string | null;
+    currency_name?: string | null;
+  }[]>;
+  spendBonusesMap?: Map<string, {
+    id: string;
+    is_active: boolean;
+    name: string;
+    bonus_type: "threshold" | "elite_earning";
+    spend_threshold_cents: number | null;
+    reward_type: "points" | "cash" | "benefit" | null;
+    points_amount: number | null;
+    cash_amount_cents: number | null;
+    benefit_description: string | null;
+    value_cents: number | null;
+    period: "year" | "calendar_year" | "lifetime" | null;
+    per_spend_cents: number | null;
+    elite_unit_name: string | null;
+    unit_value_cents: number | null;
+    currency_id?: string | null;
+    currency_name?: string | null;
+    cap_amount?: number | null;
+    cap_period?: "year" | "calendar_year" | null;
+  }[]>;
+  onToggleWelcomeBonusActive?: (bonusId: string, isActive: boolean) => Promise<void>;
+  onToggleSpendBonusActive?: (bonusId: string, isActive: boolean) => Promise<void>;
+  // Full CRUD for bonuses
+  onAddWelcomeBonus?: (walletCardId: string, formData: FormData) => Promise<void>;
+  onUpdateWelcomeBonus?: (bonusId: string, formData: FormData) => Promise<void>;
+  onDeleteWelcomeBonus?: (bonusId: string) => Promise<void>;
+  onAddSpendBonus?: (walletCardId: string, formData: FormData) => Promise<void>;
+  onUpdateSpendBonus?: (bonusId: string, formData: FormData) => Promise<void>;
+  onDeleteSpendBonus?: (bonusId: string) => Promise<void>;
 }
 
 // ============================================================================
@@ -207,10 +270,27 @@ export function WalletCardTable({
   onUpdateApprovalDate,
   onUpdatePlayerNumber,
   onUpdateStatementFields,
+  onUpdateAnnualFeeOverride,
+  onUpdateNotes,
+  onUpdateNetworkOverride,
   onUpdatePaymentSettings,
   onProductChange,
   onCloseCard,
   onDeleteCard,
+  categorySelectionCapsMap = new Map(),
+  categorySelections = [],
+  onSelectCategory,
+  currencies = [],
+  welcomeBonusesMap = new Map(),
+  spendBonusesMap = new Map(),
+  onToggleWelcomeBonusActive,
+  onToggleSpendBonusActive,
+  onAddWelcomeBonus,
+  onUpdateWelcomeBonus,
+  onDeleteWelcomeBonus,
+  onAddSpendBonus,
+  onUpdateSpendBonus,
+  onDeleteSpendBonus,
 }: WalletCardTableProps) {
   // Define row type for use in state (see rows computation below)
   type ProcessedRow = WalletCardData & {
@@ -242,7 +322,7 @@ export function WalletCardTable({
 
   // Modal state
   const [settingsCard, setSettingsCard] = useState<ProcessedRow | null>(null);
-  const [settingsFocusField, setSettingsFocusField] = useState<"customName" | "approvalDate" | "playerNumber" | "perks" | "debitPay" | "statementCloseDay" | "paymentDueDay" | "manualBalance" | "manualCreditLimit" | "payFrom" | undefined>(undefined);
+  const [settingsFocusField, setSettingsFocusField] = useState<"customName" | "approvalDate" | "playerNumber" | "perks" | "debitPay" | "statementCloseDay" | "paymentDueDay" | "manualBalance" | "manualCreditLimit" | "payFrom" | "annualFee" | "notes" | "network" | undefined>(undefined);
   const [creditsCard, setCreditsCard] = useState<{ name: string; credits: CardCredit[] } | null>(null);
   const [previewCard, setPreviewCard] = useState<CardPreviewData | null>(null);
   const [productChangeCard, setProductChangeCard] = useState<ProcessedRow | null>(null);
@@ -280,9 +360,16 @@ export function WalletCardTable({
       
       const perksValue = perksMap.get(wc.id) ?? 0;
       const debitPayValue = debitPayMap.get(wc.id) ?? 0;
-      const netFee = card.annual_fee - perksValue;
+      // Use annual fee override if set, otherwise use card's default fee
+      const effectiveAnnualFee = wc.annual_fee_override ?? card.annual_fee;
+      const hasAnnualFeeOverride = wc.annual_fee_override !== null && wc.annual_fee_override !== undefined;
+      const netFee = effectiveAnnualFee - perksValue;
       const displayName = wc.custom_name ?? card.name;
       const playerNum = Math.min(Math.max(1, wc.player_number ?? 1), playerCount);
+      // Network: use override if set, otherwise use card's default
+      const effectiveNetwork = wc.network_override ?? card.network ?? null;
+      const hasNetworkOverride = wc.network_override !== null && wc.network_override !== undefined;
+      const notes = wc.notes ?? null;
       
       // Find which card upgrades this one (same player, has secondary currency as primary)
       let upgradedByCardName: string | null = null;
@@ -380,6 +467,8 @@ export function WalletCardTable({
         activeCurrency,
         perksValue,
         debitPayValue,
+        effectiveAnnualFee,
+        hasAnnualFeeOverride,
         netFee,
         displayName,
         playerNum,
@@ -400,6 +489,9 @@ export function WalletCardTable({
         payFromAccountId,
         payFromAccountName,
         payFromShortDisplay,
+        effectiveNetwork,
+        hasNetworkOverride,
+        notes,
       };
     });
   }, [walletCards, enabledSecondaryCards, perksMap, debitPayMap, playerCount, linkedAccountsMap, statementEstimatesMap, creditsPerCard, earningRulesPerCard, categoryBonusesPerCard, paymentSettingsMap, bankAccounts]);
@@ -450,6 +542,16 @@ export function WalletCardTable({
 
   // Check if any filters are active
   const hasActiveFilters = productTypeFilter || issuerFilter || currencyFilter || playerFilter !== "";
+
+  // Calculate summary stats from filtered rows
+  const summaryStats = useMemo(() => {
+    const cardCount = filteredRows.length;
+    const totalAnnualFees = filteredRows.reduce((sum, row) => sum + row.effectiveAnnualFee, 0);
+    const totalCreditLimit = filteredRows.reduce((sum, row) => {
+      return sum + (row.effectiveCreditLimitCents ?? 0);
+    }, 0);
+    return { cardCount, totalAnnualFees, totalCreditLimit };
+  }, [filteredRows]);
 
   // Filter controls component
   const filterControls = (
@@ -691,17 +793,102 @@ export function WalletCardTable({
           )
         ),
       },
-      // Annual Fee (read-only)
+      // Annual Fee (can be overridden in settings)
       {
         id: "annual_fee",
         label: "Fee",
         align: "right" as const,
         minWidth: "70px",
-        accessor: (row) => row.card.annual_fee,
-        sortAccessor: (row) => row.card.annual_fee,
+        accessor: (row) => row.effectiveAnnualFee,
+        sortAccessor: (row) => row.effectiveAnnualFee,
         render: (row) => (
-          <span className="text-zinc-400">{formatDollars(row.card.annual_fee)}</span>
+          <Tooltip text={row.hasAnnualFeeOverride ? `Default: $${row.card.annual_fee}` : "Click card name to edit"}>
+            <span className={row.hasAnnualFeeOverride ? "text-amber-400" : "text-zinc-400"}>
+              {formatDollars(row.effectiveAnnualFee)}
+            </span>
+          </Tooltip>
         ),
+      },
+      // Notes (icon shows note, tooltip shows content)
+      {
+        id: "notes",
+        label: "Notes",
+        align: "center" as const,
+        minWidth: "50px",
+        hidden: true,
+        accessor: (row) => row.notes,
+        sortAccessor: (row) => row.notes ?? "",
+        render: (row) => (
+          row.notes ? (
+            <Tooltip wide text={row.notes}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openSettingsWithFocus(row, "notes");
+                }}
+                className="text-blue-400 hover:text-blue-300 transition-colors"
+                title="View/edit note"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" />
+                </svg>
+              </button>
+            </Tooltip>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openSettingsWithFocus(row, "notes");
+              }}
+              className="text-zinc-600 hover:text-zinc-400 transition-colors"
+              title="Add note"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </button>
+          )
+        ),
+      },
+      // Network
+      {
+        id: "network",
+        label: "Network",
+        align: "center" as const,
+        minWidth: "80px",
+        hidden: true,
+        accessor: (row) => row.effectiveNetwork,
+        sortAccessor: (row) => row.effectiveNetwork ?? "",
+        render: (row) => {
+          if (!row.effectiveNetwork) {
+            // No network set - show clickable "Set"
+            return (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openSettingsWithFocus(row, "network");
+                }}
+                className={STYLES.editableEmpty}
+                title="Click to set network"
+              >
+                Set
+              </button>
+            );
+          }
+          const networkLabels: Record<string, string> = {
+            visa: "Visa",
+            mastercard: "MC",
+            amex: "Amex",
+            discover: "Disc",
+          };
+          return (
+            <Tooltip text={row.hasNetworkOverride ? `Default: ${row.card.network ?? "Not set"}` : ""}>
+              <span className={row.hasNetworkOverride ? "text-amber-400" : "text-zinc-400"}>
+                {networkLabels[row.effectiveNetwork] ?? row.effectiveNetwork}
+              </span>
+            </Tooltip>
+          );
+        },
       },
       // Perks Value (user-entered, dashed underline)
       {
@@ -905,6 +1092,57 @@ export function WalletCardTable({
                 <span className={`${colorClass} italic`}>{formatted}</span>
               </Tooltip>
             );
+          }
+          return <span className={colorClass}>{formatted}</span>;
+        },
+      },
+      // Credit Limit Utilization (Balance / Limit as percentage)
+      {
+        id: "cl_used",
+        label: "CL Utilization",
+        headerLabel: "CL Used",
+        headerIcon: "link", // Show link icon in header for Plaid-synced column
+        align: "right" as const,
+        minWidth: "70px",
+        hidden: true,
+        hideFromPicker: !accountLinkingEnabled, // Only show in picker when Plaid is enabled
+        accessor: (row) => {
+          if (row.effectiveBalanceCents === null || row.effectiveCreditLimitCents === null || row.effectiveCreditLimitCents === 0) {
+            return null;
+          }
+          return Math.round((row.effectiveBalanceCents / row.effectiveCreditLimitCents) * 100);
+        },
+        sortAccessor: (row) => {
+          if (row.effectiveBalanceCents === null || row.effectiveCreditLimitCents === null || row.effectiveCreditLimitCents === 0) {
+            return 0;
+          }
+          return (row.effectiveBalanceCents / row.effectiveCreditLimitCents) * 100;
+        },
+        render: (row) => {
+          // Show dash when missing data OR when balance is 0 (nothing to show)
+          if (row.effectiveBalanceCents === null || row.effectiveCreditLimitCents === null || row.effectiveCreditLimitCents === 0 || row.effectiveBalanceCents === 0) {
+            return <span className={STYLES.empty}>—</span>;
+          }
+          const utilization = (row.effectiveBalanceCents / row.effectiveCreditLimitCents) * 100;
+          const isHigh = utilization > 75;
+          const isLinked = row.linkedAccount != null;
+          const formatted = `${Math.round(utilization)}%`;
+          
+          // Warning state: red if >75% utilization
+          const colorClass = isHigh ? "text-red-400" : "text-zinc-400";
+          
+          if (isLinked) {
+            const lastSync = row.linkedAccount?.last_balance_update;
+            // Only show tooltip if we have sync info
+            if (lastSync) {
+              const syncText = `Last synced: ${new Date(lastSync).toLocaleDateString()} ${new Date(lastSync).toLocaleTimeString()}`;
+              return (
+                <Tooltip text={syncText}>
+                  <span className={`${colorClass} italic`}>{formatted}</span>
+                </Tooltip>
+              );
+            }
+            return <span className={`${colorClass} italic`}>{formatted}</span>;
           }
           return <span className={colorClass}>{formatted}</span>;
         },
@@ -1144,6 +1382,27 @@ export function WalletCardTable({
 
   return (
     <>
+      {/* Summary Stats */}
+      <div className="flex items-center gap-6 mb-4 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-500">Cards:</span>
+          <span className="text-white font-medium">{summaryStats.cardCount}</span>
+          {hasActiveFilters && rows.length !== filteredRows.length && (
+            <span className="text-zinc-500">of {rows.length}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-500">Annual Fees:</span>
+          <span className="text-white font-medium">${summaryStats.totalAnnualFees.toLocaleString()}</span>
+        </div>
+        {summaryStats.totalCreditLimit > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-zinc-500">Total Credit:</span>
+            <span className="text-white font-medium">${(summaryStats.totalCreditLimit / 100).toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+
       <DataTable
         data={filteredRows}
         columns={columns}
@@ -1183,8 +1442,25 @@ export function WalletCardTable({
           onUpdatePerks={onUpdatePerks}
           onUpdateDebitPay={onUpdateDebitPay}
           onUpdateStatementFields={onUpdateStatementFields}
+          onUpdateAnnualFeeOverride={onUpdateAnnualFeeOverride}
+          onUpdateNotes={onUpdateNotes}
+          onUpdateNetworkOverride={onUpdateNetworkOverride}
           onUpdatePaymentSettings={onUpdatePaymentSettings}
           onRemove={onRemove}
+          categorySelectionCaps={categorySelectionCapsMap.get(settingsCard.card_id) ?? []}
+          categorySelections={categorySelections}
+          onSelectCategory={onSelectCategory}
+          currencies={currencies}
+          welcomeBonuses={welcomeBonusesMap.get(settingsCard.id) ?? []}
+          spendBonuses={spendBonusesMap.get(settingsCard.id) ?? []}
+          onToggleWelcomeBonusActive={onToggleWelcomeBonusActive}
+          onToggleSpendBonusActive={onToggleSpendBonusActive}
+          onAddWelcomeBonus={onAddWelcomeBonus}
+          onUpdateWelcomeBonus={onUpdateWelcomeBonus}
+          onDeleteWelcomeBonus={onDeleteWelcomeBonus}
+          onAddSpendBonus={onAddSpendBonus}
+          onUpdateSpendBonus={onUpdateSpendBonus}
+          onDeleteSpendBonus={onDeleteSpendBonus}
           onProductChange={() => {
             setProductChangeCard(settingsCard);
             setSettingsCard(null);

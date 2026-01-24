@@ -2,8 +2,10 @@ import { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { UserHeader } from "@/components/user-header";
 import { ReturnsDisplay } from "./returns-display";
+import { BonusCalculationToggles } from "./bonus-calculation-toggles";
 import { isAdminEmail } from "@/lib/admin";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import {
@@ -89,6 +91,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
     userWelcomeBonusesResult,
     userSpendBonusesResult,
     userBonusDisplaySettingsResult,
+    userFeatureFlagsResult,
   ] = await Promise.all([
     // Cached data (hits cache, not DB on subsequent requests)
     getCachedEarningRules(),
@@ -115,6 +118,7 @@ export default async function ReturnsPage({ searchParams }: Props) {
           primary_currency_id,
           secondary_currency_id,
           issuer_id,
+          network,
           primary_currency:reward_currencies!cards_primary_currency_id_fkey (
             id, name, code, currency_type, base_value_cents
           ),
@@ -203,6 +207,13 @@ export default async function ReturnsPage({ searchParams }: Props) {
     supabase
       .from("user_bonus_display_settings")
       .select("include_welcome_bonuses, include_spend_bonuses")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle(),
+    
+    // User's feature flags (for wholesale club network restrictions)
+    supabase
+      .from("user_feature_flags")
+      .select("wholesale_club_networks")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
   ]);
@@ -580,9 +591,33 @@ export default async function ReturnsPage({ searchParams }: Props) {
   }));
 
   // Bonus display settings
-  const includeBonusesInCalculation = 
-    (userBonusDisplaySettingsResult.data?.include_welcome_bonuses ?? false) ||
-    (userBonusDisplaySettingsResult.data?.include_spend_bonuses ?? false);
+  const includeWelcomeBonuses = userBonusDisplaySettingsResult.data?.include_welcome_bonuses ?? false;
+  const includeSpendBonuses = userBonusDisplaySettingsResult.data?.include_spend_bonuses ?? false;
+  const includeBonusesInCalculation = includeWelcomeBonuses || includeSpendBonuses;
+
+  // Server action to update bonus display settings
+  async function updateBonusDisplaySettings(includeWelcome: boolean, includeSpend: boolean) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    await supabase
+      .from("user_bonus_display_settings")
+      .upsert(
+        {
+          user_id: userId,
+          include_welcome_bonuses: includeWelcome,
+          include_spend_bonuses: includeSpend,
+        },
+        { onConflict: "user_id" }
+      );
+
+    revalidatePath("/spend-optimizer");
+  }
+
+  // Get wholesale club network restrictions
+  const wholesaleClubNetworks = userFeatureFlagsResult.data?.wholesale_club_networks ?? null;
 
   // Calculate returns
   const calculatorInput = {
@@ -613,6 +648,8 @@ export default async function ReturnsPage({ searchParams }: Props) {
     cardInstanceCounts,
     // Base card info for split instances (enables aggregation in display)
     cardBaseInfo,
+    // Wholesale club network restrictions (null = all networks allowed)
+    wholesaleClubNetworks,
   };
   
   const returns = calculatePortfolioReturns(calculatorInput);
@@ -677,16 +714,12 @@ export default async function ReturnsPage({ searchParams }: Props) {
 
         <ReturnsDisplay returns={returns} earningsGoal={earningsGoal} recommendations={recommendations} />
         
-        {/* Bonus Settings Note */}
-        {includeBonusesInCalculation && (
-          <div className="mt-6 p-4 rounded-lg bg-blue-900/20 border border-blue-700/50">
-            <p className="text-sm text-blue-300">
-              <span className="font-medium">Bonus calculations included.</span>{" "}
-              Manage your welcome bonus and spend bonus settings in{" "}
-              <a href="/wallet" className="underline hover:text-blue-200">My Wallet</a>.
-            </p>
-          </div>
-        )}
+        {/* Bonus Calculation Settings */}
+        <BonusCalculationToggles
+          includeWelcomeBonuses={includeWelcomeBonuses}
+          includeSpendBonuses={includeSpendBonuses}
+          onUpdateSettings={updateBonusDisplaySettings}
+        />
       </div>
     </div>
   );

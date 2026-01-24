@@ -17,6 +17,9 @@ interface Card {
   default_earn_rate: number | null;
   default_perks_value: number | null;
   exclude_from_recommendations: boolean | null;
+  created_by_user_id: string | null;
+  is_approved: boolean | null;
+  network: string | null;
 }
 
 interface CardsTableProps {
@@ -24,9 +27,10 @@ interface CardsTableProps {
   onDelete: (id: string) => Promise<void>;
   onUpdatePerksValue: (id: string, value: number | null) => Promise<void>;
   onToggleExcludeRecommendations: (id: string, exclude: boolean) => Promise<void>;
+  onApproveCard?: (id: string, currentName: string) => Promise<void>;
 }
 
-export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExcludeRecommendations }: CardsTableProps) {
+export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExcludeRecommendations, onApproveCard }: CardsTableProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -36,6 +40,8 @@ export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExclud
   const [issuerFilter, setIssuerFilter] = useState<string>(searchParams.get("issuer") ?? "");
   const [typeFilter, setTypeFilter] = useState<string>(searchParams.get("type") ?? "");
   const [currencyFilter, setCurrencyFilter] = useState<string>(searchParams.get("currency") ?? "");
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "");
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   
   // Track which cells are being edited
   const [editingPerks, setEditingPerks] = useState<string | null>(null);
@@ -93,8 +99,16 @@ export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExclud
       result = result.filter((c) => c.primary_currency_name === currencyFilter);
     }
 
+    if (statusFilter === "pending") {
+      result = result.filter((c) => c.created_by_user_id && !c.is_approved);
+    } else if (statusFilter === "user-submitted") {
+      result = result.filter((c) => c.created_by_user_id);
+    } else if (statusFilter === "system") {
+      result = result.filter((c) => !c.created_by_user_id);
+    }
+
     return result;
-  }, [cards, issuerFilter, typeFilter, currencyFilter]);
+  }, [cards, issuerFilter, typeFilter, currencyFilter, statusFilter]);
 
   const productTypeColors: Record<string, "info" | "warning"> = {
     personal: "info",
@@ -129,7 +143,18 @@ export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExclud
     setIssuerFilter("");
     setTypeFilter("");
     setCurrencyFilter("");
+    setStatusFilter("");
     router.replace(pathname, { scroll: false });
+  };
+
+  const handleApprove = async (card: Card) => {
+    if (!card.id || !card.name || !onApproveCard) return;
+    setApprovingId(card.id);
+    try {
+      await onApproveCard(card.id, card.name);
+    } finally {
+      setApprovingId(null);
+    }
   };
 
   const columns: DataTableColumn<Card>[] = [
@@ -168,6 +193,33 @@ export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExclud
           {row.product_type}
         </Badge>
       ),
+    },
+    {
+      id: "status",
+      label: "Status",
+      accessor: "is_approved",
+      render: (row) => {
+        if (!row.created_by_user_id) {
+          return <span className="text-zinc-500 text-xs">System</span>;
+        }
+        if (!row.is_approved) {
+          return (
+            <div className="flex items-center gap-2">
+              <Badge variant="warning">Pending</Badge>
+              {onApproveCard && (
+                <button
+                  onClick={() => handleApprove(row)}
+                  disabled={approvingId === row.id}
+                  className="text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+                >
+                  {approvingId === row.id ? "..." : "Approve"}
+                </button>
+              )}
+            </div>
+          );
+        }
+        return <Badge variant="success">User</Badge>;
+      },
     },
     {
       id: "default_perks_value",
@@ -300,6 +352,19 @@ export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExclud
         {productTypes.map((type) => (
           <option key={type} value={type}>{type}</option>
         ))}
+      </select>
+      <select
+        value={statusFilter}
+        onChange={(e) => {
+          setStatusFilter(e.target.value);
+          updateUrl({ status: e.target.value });
+        }}
+        className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-blue-500 focus:outline-none"
+      >
+        <option value="">Status</option>
+        <option value="pending">Pending Approval</option>
+        <option value="user-submitted">User Submitted</option>
+        <option value="system">System</option>
       </select>
       <select
         value={currencyFilter}

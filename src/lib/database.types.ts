@@ -746,18 +746,23 @@ export type Database = {
             | Database["public"]["Enums"]["card_charge_type"]
             | null
           created_at: string | null
+          created_by_user_id: string | null
           default_earn_rate: number
           default_perks_value: number | null
           exclude_from_recommendations: boolean
           id: string
           image_url: string | null
           is_active: boolean
+          is_approved: boolean
           issuer_id: string
           name: string
+          network: Database["public"]["Enums"]["card_network"] | null
           no_foreign_transaction_fees: boolean | null
           official_name: string | null
+          original_name: string | null
           primary_currency_id: string
           product_type: Database["public"]["Enums"]["card_product_type"]
+          search_aliases: string[] | null
           secondary_currency_id: string | null
           slug: string
           updated_at: string | null
@@ -768,18 +773,23 @@ export type Database = {
             | Database["public"]["Enums"]["card_charge_type"]
             | null
           created_at?: string | null
+          created_by_user_id?: string | null
           default_earn_rate?: number
           default_perks_value?: number | null
           exclude_from_recommendations?: boolean
           id?: string
           image_url?: string | null
           is_active?: boolean
+          is_approved?: boolean
           issuer_id: string
           name: string
+          network?: Database["public"]["Enums"]["card_network"] | null
           no_foreign_transaction_fees?: boolean | null
           official_name?: string | null
+          original_name?: string | null
           primary_currency_id: string
           product_type: Database["public"]["Enums"]["card_product_type"]
+          search_aliases?: string[] | null
           secondary_currency_id?: string | null
           slug: string
           updated_at?: string | null
@@ -790,18 +800,23 @@ export type Database = {
             | Database["public"]["Enums"]["card_charge_type"]
             | null
           created_at?: string | null
+          created_by_user_id?: string | null
           default_earn_rate?: number
           default_perks_value?: number | null
           exclude_from_recommendations?: boolean
           id?: string
           image_url?: string | null
           is_active?: boolean
+          is_approved?: boolean
           issuer_id?: string
           name?: string
+          network?: Database["public"]["Enums"]["card_network"] | null
           no_foreign_transaction_fees?: boolean | null
           official_name?: string | null
+          original_name?: string | null
           primary_currency_id?: string
           product_type?: Database["public"]["Enums"]["card_product_type"]
+          search_aliases?: string[] | null
           secondary_currency_id?: string | null
           slug?: string
           updated_at?: string | null
@@ -2061,6 +2076,7 @@ export type Database = {
           selected_category_id: number
           updated_at: string | null
           user_id: string
+          wallet_card_id: string | null
         }
         Insert: {
           cap_id: string
@@ -2069,6 +2085,7 @@ export type Database = {
           selected_category_id: number
           updated_at?: string | null
           user_id: string
+          wallet_card_id?: string | null
         }
         Update: {
           cap_id?: string
@@ -2077,6 +2094,7 @@ export type Database = {
           selected_category_id?: number
           updated_at?: string | null
           user_id?: string
+          wallet_card_id?: string | null
         }
         Relationships: [
           {
@@ -2430,6 +2448,7 @@ export type Database = {
           plaid_transactions_enabled: boolean | null
           updated_at: string | null
           user_id: string
+          wholesale_club_networks: string[] | null
         }
         Insert: {
           account_linking_enabled?: boolean | null
@@ -2443,6 +2462,7 @@ export type Database = {
           plaid_transactions_enabled?: boolean | null
           updated_at?: string | null
           user_id: string
+          wholesale_club_networks?: string[] | null
         }
         Update: {
           account_linking_enabled?: boolean | null
@@ -2453,6 +2473,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           plaid_liabilities_enabled?: boolean | null
           plaid_on_demand_refresh_enabled?: boolean | null
+          wholesale_club_networks?: string[] | null
           plaid_transactions_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
@@ -3428,6 +3449,7 @@ export type Database = {
       user_wallets: {
         Row: {
           added_at: string | null
+          annual_fee_override: number | null
           approval_date: string | null
           card_id: string
           closed_date: string | null
@@ -3436,6 +3458,8 @@ export type Database = {
           id: string
           manual_balance_cents: number | null
           manual_credit_limit_cents: number | null
+          network_override: Database["public"]["Enums"]["card_network"] | null
+          notes: string | null
           payment_due_day: number | null
           player_number: number | null
           product_changed_to_id: string | null
@@ -3444,6 +3468,7 @@ export type Database = {
         }
         Insert: {
           added_at?: string | null
+          annual_fee_override?: number | null
           approval_date?: string | null
           card_id: string
           closed_date?: string | null
@@ -3452,6 +3477,8 @@ export type Database = {
           id?: string
           manual_balance_cents?: number | null
           manual_credit_limit_cents?: number | null
+          network_override?: Database["public"]["Enums"]["card_network"] | null
+          notes?: string | null
           payment_due_day?: number | null
           player_number?: number | null
           product_changed_to_id?: string | null
@@ -3460,6 +3487,7 @@ export type Database = {
         }
         Update: {
           added_at?: string | null
+          annual_fee_override?: number | null
           approval_date?: string | null
           card_id?: string
           closed_date?: string | null
@@ -3468,6 +3496,8 @@ export type Database = {
           id?: string
           manual_balance_cents?: number | null
           manual_credit_limit_cents?: number | null
+          network_override?: Database["public"]["Enums"]["card_network"] | null
+          notes?: string | null
           payment_due_day?: number | null
           player_number?: number | null
           product_changed_to_id?: string | null
@@ -3659,13 +3689,17 @@ export type Database = {
       card_with_currency: {
         Row: {
           annual_fee: number | null
+          created_by_user_id: string | null
           default_earn_rate: number | null
           default_perks_value: number | null
           exclude_from_recommendations: boolean | null
           id: string | null
           is_active: boolean | null
+          is_approved: boolean | null
           issuer_name: string | null
           name: string | null
+          network: Database["public"]["Enums"]["card_network"] | null
+          original_name: string | null
           primary_currency_name: string | null
           product_type: Database["public"]["Enums"]["card_product_type"] | null
           secondary_currency_name: string | null
@@ -3826,6 +3860,7 @@ export type Database = {
         | "all_categories"
       cap_unit: "spend" | "rewards"
       card_charge_type: "credit" | "charge" | "debit"
+      card_network: "visa" | "mastercard" | "amex" | "discover"
       card_product_type: "personal" | "business"
       credit_account_status: "open" | "closed" | "paid" | "unknown"
       credit_account_type:
@@ -4044,6 +4079,7 @@ export const Constants = {
       ],
       cap_unit: ["spend", "rewards"],
       card_charge_type: ["credit", "charge", "debit"],
+      card_network: ["visa", "mastercard", "amex", "discover"],
       card_product_type: ["personal", "business"],
       credit_account_status: ["open", "closed", "paid", "unknown"],
       credit_account_type: [

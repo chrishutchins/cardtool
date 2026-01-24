@@ -31,6 +31,8 @@ export interface CardInput {
     currency_type: string;
     base_value_cents: number | null;
   } | null;
+  // Card network (visa, mastercard, amex, discover) - used for wholesale club filtering
+  network?: string | null;
 }
 
 export interface CategorySpending {
@@ -558,6 +560,9 @@ export interface CalculatorInput {
   // Base card info for split instances: maps cardId (wallet_id) -> { baseCardId, baseCardName }
   // Used for aggregating multiple instances of the same card type in display
   cardBaseInfo?: Map<string, { baseCardId: string; baseCardName: string }>;
+  // Wholesale club network restrictions: null means all networks allowed
+  // If set, only cards with matching network will be recommended for wholesale-clubs category
+  wholesaleClubNetworks?: string[] | null;
 }
 
 export function calculatePortfolioReturns(input: CalculatorInput): PortfolioReturns {
@@ -587,11 +592,37 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     includeBonusesInCalculation = false,
     cardInstanceCounts = new Map(),
     cardBaseInfo = new Map(),
+    // Wholesale club network restrictions
+    wholesaleClubNetworks = null,
   } = input;
 
   // Expand spending to handle >$5k tracking
   // Categories with large_purchase_spend_cents are split into <$5k and >$5k portions
   const spending = expandSpendingForLargePurchases(rawSpending, largePurchaseCategoryId);
+
+  // Helper function to filter cards for wholesale clubs based on network restrictions
+  const filterCardsForWholesaleClubs = (allCards: CardInput[], categorySlug: string): CardInput[] => {
+    // Only filter for wholesale-clubs category
+    if (categorySlug !== "wholesale-clubs" && categorySlug !== "wholesale-clubs-large-purchases") {
+      return allCards;
+    }
+    
+    // If no network restrictions or empty array, allow all cards
+    if (!wholesaleClubNetworks || wholesaleClubNetworks.length === 0) {
+      return allCards;
+    }
+    
+    // Filter to only cards with allowed networks
+    // Cards without a network specified are excluded (since they can't be confirmed to work)
+    return allCards.filter(card => {
+      const cardNetwork = card.network;
+      if (!cardNetwork) {
+        // Unspecified network - exclude from wholesale clubs when restrictions are set
+        return false;
+      }
+      return wholesaleClubNetworks.includes(cardNetwork);
+    });
+  };
 
   // Calculate bonus info for each card (if bonuses are enabled)
   // We store:
@@ -819,8 +850,10 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     .map(categorySpend => {
       // Get ranked cards for this category to calculate marginal benefit
       // For initial ranking, use empty maps (no spend has occurred yet)
+      // Filter cards for wholesale clubs based on network restrictions
+      const eligibleCards = filterCardsForWholesaleClubs(cards, categorySpend.category_slug);
       const rankedCards = rankCardsForCategory(
-        cards,
+        eligibleCards,
         categorySpend.category_id,
         earningRateMap,
         new Map(), // Empty cap usage for initial ranking
@@ -861,8 +894,10 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     
     while (remainingSpend > 0 && iterations++ < MAX_ITERATIONS) {
       // Rank cards by effective value for this category (with current cap/spend state)
+      // Filter cards for wholesale clubs based on network restrictions
+      const eligibleCards = filterCardsForWholesaleClubs(cards, categorySpend.category_slug);
       const rankedCards = rankCardsForCategory(
-        cards,
+        eligibleCards,
         categorySpend.category_id,
         earningRateMap,
         capUsage,
@@ -1020,11 +1055,13 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     // BUT: Skip this for excluded_by_default categories (like Rent/Mortgage) - 
     // cards without explicit earning rules should NOT earn on these categories
     const isCategoryExcluded = categorySpend.excluded_by_default ?? false;
-    if (remainingSpend > 0 && cards.length > 0 && !isCategoryExcluded) {
+    // Filter cards for wholesale clubs based on network restrictions
+    const fallbackEligibleCards = filterCardsForWholesaleClubs(cards, categorySpend.category_slug);
+    if (remainingSpend > 0 && fallbackEligibleCards.length > 0 && !isCategoryExcluded) {
       let bestCard: CardInput | null = null;
       let bestValue = -1;
       
-      for (const card of cards) {
+      for (const card of fallbackEligibleCards) {
         const currencyInfo = getCardCurrencyInfo(card);
         // Skip excluded cards
         if (currencyInfo.excluded) continue;

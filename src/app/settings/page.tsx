@@ -11,6 +11,7 @@ import { TravelPreferences } from "@/app/wallet/travel-preferences";
 import { MobilePayCategories } from "@/app/wallet/mobile-pay-categories";
 import { PaypalCategories } from "@/app/wallet/paypal-categories";
 import { LargePurchaseCategories } from "./large-purchase-categories";
+import { WholesaleClubNetworks } from "./wholesale-club-networks";
 import { LinkedAccounts } from "@/app/wallet/linked-accounts";
 import { PlayerSettings } from "./player-settings";
 import { SyncTokenSettings } from "./sync-token-settings";
@@ -105,7 +106,7 @@ export default async function SettingsPage() {
       .eq("user_id", effectiveUserId),
     supabase
       .from("user_feature_flags")
-      .select("debit_pay_enabled, account_linking_enabled, plaid_liabilities_enabled")
+      .select("debit_pay_enabled, account_linking_enabled, plaid_liabilities_enabled, wholesale_club_networks")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
     supabase
@@ -172,6 +173,7 @@ export default async function SettingsPage() {
   const debitPayEnabled = featureFlagsResult.data?.debit_pay_enabled ?? false;
   const accountLinkingEnabled = featureFlagsResult.data?.account_linking_enabled ?? false;
   const plaidLiabilitiesEnabled = featureFlagsResult.data?.plaid_liabilities_enabled ?? false;
+  const wholesaleClubNetworks = featureFlagsResult.data?.wholesale_club_networks ?? null;
   const largePurchaseCategories = largePurchaseCategoriesResult.data;
   const everythingElseCategoryId = everythingElseCategoryResult.data?.id ?? null;
   const linkedAccounts = linkedAccountsResult.data;
@@ -291,21 +293,52 @@ export default async function SettingsPage() {
   const userMultiplierSelections = userMultiplierSelectionsResult.data;
 
   // Server actions
-  async function selectCategory(capId: string, categoryId: number) {
+  async function selectCategory(capId: string, categoryId: number, walletCardId?: string) {
     "use server";
     const userId = await getEffectiveUserId();
     if (!userId) return;
 
     const supabase = createAdminClient();
-    await supabase.from("user_card_selections").upsert(
-      {
-        user_id: userId,
-        cap_id: capId,
-        selected_category_id: categoryId,
-      },
-      { onConflict: "user_id,cap_id" }
-    );
+    
+    // Handle NULL wallet_card_id separately since PostgreSQL treats NULLs as distinct in unique constraints
+    if (walletCardId) {
+      // With a specific wallet_card_id, upsert works correctly
+      await supabase.from("user_card_selections").upsert(
+        {
+          user_id: userId,
+          cap_id: capId,
+          selected_category_id: categoryId,
+          wallet_card_id: walletCardId,
+        },
+        { onConflict: "user_id,cap_id,wallet_card_id" }
+      );
+    } else {
+      // For NULL wallet_card_id, manually check and update/insert
+      const { data: existing } = await supabase
+        .from("user_card_selections")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("cap_id", capId)
+        .is("wallet_card_id", null)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("user_card_selections")
+          .update({ selected_category_id: categoryId })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("user_card_selections").insert({
+          user_id: userId,
+          cap_id: capId,
+          selected_category_id: categoryId,
+          wallet_card_id: null,
+        });
+      }
+    }
+    
     revalidatePath("/settings");
+    revalidatePath("/wallet");
   }
 
   async function selectMultiplierTier(programId: string, tierId: string | null) {
@@ -662,6 +695,26 @@ export default async function SettingsPage() {
     redirect("/dashboard");
   }
 
+  async function updateWholesaleClubNetworks(networks: string[] | null) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createAdminClient();
+    await supabase
+      .from("user_feature_flags")
+      .upsert(
+        {
+          user_id: userId,
+          wholesale_club_networks: networks,
+        },
+        { onConflict: "user_id" }
+      );
+
+    revalidatePath("/settings");
+    revalidatePath("/spend-optimizer");
+  }
+
   // Cards that require category selection
   const cardsNeedingSelection = typedWalletCards.filter(
     (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
@@ -889,6 +942,17 @@ export default async function SettingsPage() {
                 />
               </div>
             )}
+
+            {/* Wholesale Club Network Restrictions */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+              <h2 className="text-lg font-semibold text-white mb-2">
+                Wholesale Club Networks
+              </h2>
+              <WholesaleClubNetworks
+                selectedNetworks={wholesaleClubNetworks}
+                onUpdateNetworks={updateWholesaleClubNetworks}
+              />
+            </div>
 
             {/* Reset Onboarding */}
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">

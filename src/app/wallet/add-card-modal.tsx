@@ -9,6 +9,17 @@ interface AvailableCard {
   annual_fee: number;
   issuer_name?: string;
   primary_currency_name?: string;
+  search_aliases?: string[] | null;
+}
+
+interface Issuer {
+  id: string;
+  name: string;
+}
+
+interface Currency {
+  id: string;
+  name: string;
 }
 
 interface AddCardModalProps {
@@ -17,12 +28,25 @@ interface AddCardModalProps {
   debitPayEnabled?: boolean;
   onEnableDebitPay?: () => Promise<void>;
   ownedCardIds?: string[];
+  issuers?: Issuer[];
+  currencies?: Currency[];
+  onSubmitNewCard?: (data: {
+    name: string;
+    issuer_id: string;
+    primary_currency_id: string;
+    secondary_currency_id: string | null;
+    product_type: "personal" | "business";
+    card_charge_type: "credit" | "charge" | "debit";
+    annual_fee: number;
+    default_earn_rate: number;
+    no_foreign_transaction_fees: boolean;
+    network: "visa" | "mastercard" | "amex" | "discover" | null;
+  }) => Promise<void>;
 }
 
 const SECRET_CODE = "secretdebitpay";
 
-// Keyword mappings for search aliases
-// Maps search terms to issuer names or currency names they should match
+// Issuer keyword mappings (keep hardcoded since these are standard abbreviations)
 const ISSUER_KEYWORDS: Record<string, string[]> = {
   "american express": ["amex", "americanexpress", "ae"],
   "bank of america": ["bofa", "boa", "bankofamerica"],
@@ -33,95 +57,8 @@ const ISSUER_KEYWORDS: Record<string, string[]> = {
   "discover": ["disc"],
 };
 
-// Card-specific abbreviations that map to card names
-// These are common abbreviations used in the points/miles community
-const CARD_ABBREVIATIONS: Record<string, string[]> = {
-  // Amex Charge Cards
-  "platinum": ["abp", "app", "plat"],
-  "business platinum": ["abp", "biz plat", "bizplat"],
-  "gold": ["abg", "apg"],
-  "business gold": ["abg", "biz gold", "bizgold"],
-  "green": ["ag", "agr", "amex green"],
-  "business green": ["abgr", "biz green", "bizgreen"],
-  // Amex Cash Back
-  "blue business plus": ["bbp"],
-  "blue cash preferred": ["bcp"],
-  "blue cash everyday": ["bce"],
-  "everyday preferred": ["edp", "ed pref"],
-  "everyday": ["ed"],
-  // Amex Delta
-  "delta gold": ["adg", "delta gold"],
-  "delta platinum": ["adp", "delta plat"],
-  "delta reserve": ["adr"],
-  // Amex Hilton
-  "hilton aspire": ["aspire", "hh aspire"],
-  "hilton surpass": ["surpass", "hh surpass"],
-  "hilton business": ["hh biz"],
-  // Amex Marriott
-  "bonvoy brilliant": ["brilliant", "mb brilliant"],
-  "bonvoy business": ["mb biz", "bonvoy biz"],
-  "bonvoy bevy": ["bevy"],
-  // Chase Sapphire
-  "sapphire reserve": ["csr", "reserve"],
-  "sapphire preferred": ["csp"],
-  "sapphire reserve business": ["csrb", "biz reserve"],
-  // Chase Ink
-  "ink business preferred": ["cip", "ink preferred", "ink pref"],
-  "ink business cash": ["cic", "ink cash"],
-  "ink business unlimited": ["ciu", "ink unlimited"],
-  "ink cash": ["cic"],
-  "ink unlimited": ["ciu"],
-  "ink premier": ["cip2", "ink prem"],
-  // Chase Freedom
-  "freedom": ["cf", "chase freedom"],
-  "freedom unlimited": ["cfu", "fu"],
-  "freedom flex": ["cff", "ff"],
-  // Chase United
-  "united explorer": ["ue", "mpx explorer"],
-  "united quest": ["uq", "mpx quest"],
-  "united club": ["uc", "mpx club"],
-  "united business": ["ub", "mpx biz"],
-  "united gateway": ["ug", "mpx gateway"],
-  // Chase Southwest
-  "sw priority": ["swp", "sw pri"],
-  "sw premier": ["sw prem"],
-  "sw plus": ["sw+"],
-  "sw performance business": ["sw perf", "sw biz"],
-  // Chase Hotel
-  "hyatt personal": ["woh card", "hyatt"],
-  "hyatt business": ["woh biz"],
-  "ihg premier": ["ihg"],
-  "ritz carlton": ["ritz", "rc"],
-  "bonvoy boundless": ["boundless"],
-  "bonvoy bountiful": ["bountiful"],
-  "bonvoy bold": ["bold"],
-  // Citi
-  "double cash": ["dc", "citi dc"],
-  "strata premier": ["cp", "citi premier", "premier"],
-  "strata elite": ["cse", "citi elite"],
-  "custom cash": ["ccc"],
-  "aa platinum": ["citi aa", "aa plat"],
-  "aa executive": ["aa exec", "citi exec"],
-  "aa business": ["aa biz"],
-  // Capital One
-  "venture x": ["vx", "c1vx", "cap1 vx"],
-  "venture x business": ["vxb", "c1vxb"],
-  "venture": ["c1v", "cap1 venture"],
-  "ventureone": ["v1", "c1v1"],
-  "quicksilver": ["qs", "c1qs"],
-  "savor": ["c1s", "cap1 savor"],
-  "spark cash plus": ["spark", "spark cash"],
-  "spark miles": ["spark miles"],
-  // US Bank
-  "altitude reserve": ["ar", "usb ar", "altitude"],
-  "altitude connect": ["ac", "usb ac"],
-  // Bilt
-  "bilt card": ["bilt"],
-  // Other
-  "amazon prime": ["amazon", "prime visa"],
-  "costco visa": ["costco"],
-  "apple card": ["apple"],
-};
+// Note: Card-specific abbreviations are now stored in the database (cards.search_aliases)
+// and passed via the availableCards prop
 
 const CURRENCY_KEYWORDS: Record<string, string[]> = {
   // Airlines (IATA codes)
@@ -199,7 +136,6 @@ function buildBidirectionalLookup(mapping: Record<string, string[]>): Map<string
 
 const issuerKeywordLookup = buildBidirectionalLookup(ISSUER_KEYWORDS);
 const currencyKeywordLookup = buildBidirectionalLookup(CURRENCY_KEYWORDS);
-const cardAbbreviationLookup = buildBidirectionalLookup(CARD_ABBREVIATIONS);
 
 export function AddCardModal({ 
   availableCards, 
@@ -207,6 +143,9 @@ export function AddCardModal({
   debitPayEnabled = false,
   onEnableDebitPay,
   ownedCardIds = [],
+  issuers = [],
+  currencies = [],
+  onSubmitNewCard,
 }: AddCardModalProps) {
   // Convert array to Set for efficient lookup
   const ownedCardIdsSet = new Set(ownedCardIds);
@@ -215,50 +154,25 @@ export function AddCardModal({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [showSecretUnlock, setShowSecretUnlock] = useState(false);
   const [isPending, startTransition] = useTransition();
+  
+  // New card submission form state
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [newCardName, setNewCardName] = useState("");
+  const [newCardIssuerId, setNewCardIssuerId] = useState("");
+  const [newCardPrimaryCurrencyId, setNewCardPrimaryCurrencyId] = useState("");
+  const [newCardSecondaryCurrencyId, setNewCardSecondaryCurrencyId] = useState("");
+  const [newCardProductType, setNewCardProductType] = useState<"personal" | "business">("personal");
+  const [newCardChargeType, setNewCardChargeType] = useState<"credit" | "charge" | "debit">("credit");
+  const [newCardAnnualFee, setNewCardAnnualFee] = useState(0);
+  const [newCardEarnRate, setNewCardEarnRate] = useState(1);
+  const [newCardNoFTF, setNewCardNoFTF] = useState(false);
+  const [newCardNetwork, setNewCardNetwork] = useState<"visa" | "mastercard" | "amex" | "discover" | "">("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Check if user typed the secret code
   const isSecretCode = search.toLowerCase() === SECRET_CODE;
 
-  // Helper function to check if a single search term matches a card
-  const termMatchesCard = (term: string, cardName: string, issuerName: string, currencyName: string): boolean => {
-    // Direct matches on name, issuer, or currency
-    if (cardName.includes(term)) return true;
-    if (issuerName.includes(term)) return true;
-    if (currencyName.includes(term)) return true;
-    
-    // Check if search term is a card abbreviation (e.g., "csr" -> "sapphire reserve")
-    const matchedCardNames = cardAbbreviationLookup.get(term) ?? [];
-    if (matchedCardNames.some(name => cardName.includes(name))) return true;
-    
-    // Check if search term is a keyword that maps to this card's issuer
-    const matchedIssuers = issuerKeywordLookup.get(term) ?? [];
-    if (matchedIssuers.some(issuer => issuerName.includes(issuer))) return true;
-    
-    // Check if search term is a keyword that maps to this card's currency
-    const matchedCurrencies = currencyKeywordLookup.get(term) ?? [];
-    if (matchedCurrencies.some(currency => currencyName.includes(currency))) return true;
-    
-    // Also check partial keyword matches (e.g., "amex" typed as "ame")
-    for (const [keyword, issuers] of issuerKeywordLookup.entries()) {
-      if (keyword.includes(term) || term.includes(keyword)) {
-        if (issuers.some(issuer => issuerName.includes(issuer))) return true;
-      }
-    }
-    for (const [keyword, currencies] of currencyKeywordLookup.entries()) {
-      if (keyword.includes(term) || term.includes(keyword)) {
-        if (currencies.some(currency => currencyName.includes(currency))) return true;
-      }
-    }
-    // Check card abbreviations with partial matching
-    for (const [keyword, cardNames] of cardAbbreviationLookup.entries()) {
-      if (keyword === term) {
-        if (cardNames.some(name => cardName.includes(name))) return true;
-      }
-    }
-    
-    return false;
-  };
-
+  // Improved search function using multiple strategies
   const filteredCards = availableCards.filter((card) => {
     const query = search.toLowerCase().trim();
     if (!query) return true;
@@ -266,24 +180,61 @@ export function AddCardModal({
     const cardName = card.name?.toLowerCase() ?? "";
     const issuerName = card.issuer_name?.toLowerCase() ?? "";
     const currencyName = card.primary_currency_name?.toLowerCase() ?? "";
+    const searchAliases = card.search_aliases?.map(a => a.toLowerCase()) ?? [];
     
     // Combine all searchable text for the card
     const allText = `${cardName} ${issuerName} ${currencyName}`;
     
-    // First try matching the full query as-is
-    if (termMatchesCard(query, cardName, issuerName, currencyName)) return true;
+    // Strategy 1: Exact phrase match in card name
+    if (cardName.includes(query)) return true;
     
-    // If query has multiple words, check if ALL words match something about the card
-    // This allows "chase preferred" to match Chase Sapphire Preferred
+    // Strategy 2: Query matches a database search alias exactly
+    if (searchAliases.includes(query)) return true;
+    
+    // Strategy 3: All query words exist in combined text (word order independent)
     const words = query.split(/\s+/).filter(w => w.length > 0);
-    if (words.length > 1) {
-      const allWordsMatch = words.every(word => {
-        // Check if this word matches directly in the combined text
-        if (allText.includes(word)) return true;
-        // Or if it matches via abbreviation/keyword lookup
-        return termMatchesCard(word, cardName, issuerName, currencyName);
-      });
-      if (allWordsMatch) return true;
+    if (words.length >= 1) {
+      const allWordsFound = words.every(word => allText.includes(word));
+      if (allWordsFound) return true;
+    }
+    
+    // Strategy 4: Query word matches a search alias
+    if (words.some(word => searchAliases.includes(word))) return true;
+    
+    // Strategy 5: Issuer keyword expansion (e.g., "amex" -> "american express")
+    for (const word of words) {
+      const matchedIssuers = issuerKeywordLookup.get(word) ?? [];
+      if (matchedIssuers.some(issuer => issuerName.includes(issuer))) {
+        // Check if other words also match
+        const otherWords = words.filter(w => w !== word);
+        if (otherWords.length === 0) return true;
+        if (otherWords.every(w => allText.includes(w) || searchAliases.includes(w))) return true;
+      }
+    }
+    
+    // Strategy 6: Currency keyword expansion (e.g., "ur" -> "ultimate rewards")
+    for (const word of words) {
+      const matchedCurrencies = currencyKeywordLookup.get(word) ?? [];
+      if (matchedCurrencies.some(currency => currencyName.includes(currency))) {
+        const otherWords = words.filter(w => w !== word);
+        if (otherWords.length === 0) return true;
+        if (otherWords.every(w => allText.includes(w) || searchAliases.includes(w))) return true;
+      }
+    }
+    
+    // Strategy 7: Prefix matching (3+ chars) - "sapp" matches "sapphire"
+    if (query.length >= 3) {
+      const prefixMatch = cardName.split(/\s+/).some(nameWord => nameWord.startsWith(query));
+      if (prefixMatch) return true;
+      
+      // Also check if each query word is a prefix of a card name word
+      if (words.length > 1) {
+        const cardWords = cardName.split(/\s+/);
+        const allPrefixMatch = words.every(qWord => 
+          qWord.length >= 3 && cardWords.some(cWord => cWord.startsWith(qWord))
+        );
+        if (allPrefixMatch) return true;
+      }
     }
     
     return false;
@@ -316,6 +267,55 @@ export function AddCardModal({
     setAddingId(cardId);
     await onAddCard(cardId);
     setAddingId(null);
+  };
+
+  const handleSubmitNewCard = async () => {
+    if (!onSubmitNewCard || !newCardName || !newCardIssuerId || !newCardPrimaryCurrencyId) return;
+    
+    setIsSubmitting(true);
+    try {
+      await onSubmitNewCard({
+        name: newCardName,
+        issuer_id: newCardIssuerId,
+        primary_currency_id: newCardPrimaryCurrencyId,
+        secondary_currency_id: newCardSecondaryCurrencyId || null,
+        product_type: newCardProductType,
+        card_charge_type: newCardChargeType,
+        annual_fee: newCardAnnualFee,
+        default_earn_rate: newCardEarnRate,
+        no_foreign_transaction_fees: newCardNoFTF,
+        network: newCardNetwork || null,
+      });
+      // Reset form
+      setNewCardName("");
+      setNewCardIssuerId("");
+      setNewCardPrimaryCurrencyId("");
+      setNewCardSecondaryCurrencyId("");
+      setNewCardProductType("personal");
+      setNewCardChargeType("credit");
+      setNewCardAnnualFee(0);
+      setNewCardEarnRate(1);
+      setNewCardNoFTF(false);
+      setNewCardNetwork("");
+      setShowSubmitForm(false);
+      setIsOpen(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetSubmitForm = () => {
+    setNewCardName("");
+    setNewCardIssuerId("");
+    setNewCardPrimaryCurrencyId("");
+    setNewCardSecondaryCurrencyId("");
+    setNewCardProductType("personal");
+    setNewCardChargeType("credit");
+    setNewCardAnnualFee(0);
+    setNewCardEarnRate(1);
+    setNewCardNoFTF(false);
+    setNewCardNetwork("");
+    setShowSubmitForm(false);
   };
 
   if (!isOpen) {
@@ -398,51 +398,201 @@ export function AddCardModal({
           )}
 
           {/* Normal Card List */}
-          {!isSecretCode && !showSecretUnlock && (
-            Object.entries(cardsByIssuer).length > 0 ? (
-              Object.entries(cardsByIssuer)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([issuer, cards]) => (
-                <div key={issuer}>
-                  <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase sticky top-0">
-                    {issuer}
-                  </div>
-                  {cards.map((card, index) => (
-                    <div
-                      key={card.id ?? `modal-card-${index}`}
-                      className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
-                    >
-                      <div>
-                        <p className="text-white font-medium">{card.name}</p>
-                        <p className="text-sm text-zinc-500">
-                          {card.primary_currency_name}
-                          {card.annual_fee
-                            ? ` • $${card.annual_fee}/yr`
-                            : " • No annual fee"}
-                        </p>
-                      </div>
-                      {card.id && (
-                        <button
-                          onClick={() => handleAdd(card.id!)}
-                          disabled={addingId === card.id}
-                          className="px-3 py-1 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                        >
-                          {addingId === card.id 
-                            ? "Adding..." 
-                            : ownedCardIdsSet.has(card.id) 
-                              ? "Add Another" 
-                              : "Add"}
-                        </button>
-                      )}
+          {!isSecretCode && !showSecretUnlock && !showSubmitForm && (
+            <>
+              {Object.entries(cardsByIssuer).length > 0 ? (
+                Object.entries(cardsByIssuer)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([issuer, cards]) => (
+                  <div key={issuer}>
+                    <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase sticky top-0">
+                      {issuer}
                     </div>
-                  ))}
+                    {cards.map((card, index) => (
+                      <div
+                        key={card.id ?? `modal-card-${index}`}
+                        className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
+                      >
+                        <div>
+                          <p className="text-white font-medium">{card.name}</p>
+                          <p className="text-sm text-zinc-500">
+                            {card.primary_currency_name}
+                            {card.annual_fee
+                              ? ` • $${card.annual_fee}/yr`
+                              : " • No annual fee"}
+                          </p>
+                        </div>
+                        {card.id && (
+                          <button
+                            onClick={() => handleAdd(card.id!)}
+                            disabled={addingId === card.id}
+                            className="px-3 py-1 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          >
+                            {addingId === card.id 
+                              ? "Adding..." 
+                              : ownedCardIdsSet.has(card.id) 
+                                ? "Add Another" 
+                                : "Add"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-zinc-500">
+                  {search ? "No cards found matching your search." : "No more cards available to add."}
                 </div>
-              ))
-            ) : (
-              <div className="p-8 text-center text-zinc-500">
-                {search ? "No cards found matching your search." : "No more cards available to add."}
+              )}
+              
+              {/* Submit New Card Option */}
+              {onSubmitNewCard && issuers.length > 0 && currencies.length > 0 && (
+                <div className="p-4 border-t border-zinc-700">
+                  <button
+                    onClick={() => setShowSubmitForm(true)}
+                    className="w-full text-center text-sm text-zinc-400 hover:text-blue-400 transition-colors py-2"
+                  >
+                    Can&apos;t find your card? Submit a new one →
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Submit New Card Form */}
+          {showSubmitForm && onSubmitNewCard && (
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-white">Submit New Card</h3>
+                <button
+                  onClick={resetSubmitForm}
+                  className="text-xs text-zinc-400 hover:text-white transition-colors"
+                >
+                  ← Back to search
+                </button>
               </div>
-            )
+              <p className="text-xs text-zinc-500 mb-4">
+                Submit a card we don&apos;t have. It will be added to your wallet and reviewed by our team.
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Card Name *</label>
+                  <input
+                    type="text"
+                    value={newCardName}
+                    onChange={(e) => setNewCardName(e.target.value)}
+                    placeholder="e.g., My Custom Card"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Issuer *</label>
+                    <select
+                      value={newCardIssuerId}
+                      onChange={(e) => setNewCardIssuerId(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">Select issuer</option>
+                      {issuers.map((issuer) => (
+                        <option key={issuer.id} value={issuer.id}>{issuer.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Primary Currency *</label>
+                    <select
+                      value={newCardPrimaryCurrencyId}
+                      onChange={(e) => setNewCardPrimaryCurrencyId(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">Select currency</option>
+                      {currencies.map((currency) => (
+                        <option key={currency.id} value={currency.id}>{currency.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Type</label>
+                    <select
+                      value={newCardProductType}
+                      onChange={(e) => setNewCardProductType(e.target.value as "personal" | "business")}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="personal">Personal</option>
+                      <option value="business">Business</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Card Type</label>
+                    <select
+                      value={newCardChargeType}
+                      onChange={(e) => setNewCardChargeType(e.target.value as "credit" | "charge" | "debit")}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="credit">Credit</option>
+                      <option value="charge">Charge</option>
+                      <option value="debit">Debit</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Annual Fee</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
+                      <input
+                        type="number"
+                        value={newCardAnnualFee}
+                        onChange={(e) => setNewCardAnnualFee(parseInt(e.target.value) || 0)}
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 pl-7 pr-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Network</label>
+                    <select
+                      value={newCardNetwork}
+                      onChange={(e) => setNewCardNetwork(e.target.value as typeof newCardNetwork)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">Not specified</option>
+                      <option value="visa">Visa</option>
+                      <option value="mastercard">Mastercard</option>
+                      <option value="amex">Amex</option>
+                      <option value="discover">Discover</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={newCardNoFTF}
+                      onChange={(e) => setNewCardNoFTF(e.target.checked)}
+                      className="rounded border-zinc-600 bg-zinc-700 text-blue-600 focus:ring-blue-500"
+                    />
+                    No foreign transaction fees
+                  </label>
+                </div>
+
+                <button
+                  onClick={handleSubmitNewCard}
+                  disabled={isSubmitting || !newCardName || !newCardIssuerId || !newCardPrimaryCurrencyId}
+                  className="w-full mt-4 px-4 py-2 rounded-lg bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSubmitting ? "Submitting..." : "Submit Card & Add to Wallet"}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -37,6 +37,8 @@ export const getCachedCards = unstable_cache(
         primary_currency_id,
         secondary_currency_id,
         issuer_id,
+        search_aliases,
+        network,
         primary_currency:reward_currencies!cards_primary_currency_id_fkey (
           id, name, code, currency_type, base_value_cents
         ),
@@ -157,6 +159,28 @@ export const getCachedCurrencies = unstable_cache(
   },
   ["all-currencies"],
   { revalidate: 3600, tags: ["currencies"] }
+);
+
+// ============================================================================
+// Issuers
+// ============================================================================
+
+export const getCachedIssuers = unstable_cache(
+  async () => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("issuers")
+      .select("id, name")
+      .order("name");
+    
+    if (error) {
+      console.error("Error fetching cached issuers:", error);
+      return [];
+    }
+    return data ?? [];
+  },
+  ["all-issuers"],
+  { revalidate: 3600, tags: ["issuers"] }
 );
 
 // ============================================================================

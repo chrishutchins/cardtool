@@ -20,6 +20,8 @@ interface CardFormProps {
     default_earn_rate: number;
     default_perks_value: number | null;
     no_foreign_transaction_fees: boolean | null;
+    search_aliases: string[] | null;
+    network: "visa" | "mastercard" | "amex" | "discover" | null;
   };
 }
 
@@ -35,6 +37,8 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
   const [defaultEarnRate, setDefaultEarnRate] = useState(defaultValues?.default_earn_rate ?? 1.0);
   const [defaultPerksValue, setDefaultPerksValue] = useState(defaultValues?.default_perks_value ?? 0);
   const [noForeignTransactionFees, setNoForeignTransactionFees] = useState(defaultValues?.no_foreign_transaction_fees ?? false);
+  const [searchAliases, setSearchAliases] = useState(defaultValues?.search_aliases?.join(", ") ?? "");
+  const [network, setNetwork] = useState<"visa" | "mastercard" | "amex" | "discover" | "">(defaultValues?.network ?? "");
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
 
@@ -52,6 +56,8 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
       setDefaultEarnRate(defaultValues.default_earn_rate ?? 1.0);
       setDefaultPerksValue(defaultValues.default_perks_value ?? 0);
       setNoForeignTransactionFees(defaultValues.no_foreign_transaction_fees ?? false);
+      setSearchAliases(defaultValues.search_aliases?.join(", ") ?? "");
+      setNetwork(defaultValues.network ?? "");
     }
   }, [defaultValues]);
 
@@ -238,6 +244,37 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <p className="mt-1 text-xs text-zinc-500">Rate for &quot;everything else&quot;</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Network</label>
+          <select
+            name="network"
+            value={network}
+            onChange={(e) => setNetwork(e.target.value as typeof network)}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">Not specified</option>
+            <option value="visa">Visa</option>
+            <option value="mastercard">Mastercard</option>
+            <option value="amex">Amex</option>
+            <option value="discover">Discover</option>
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">Leave blank for cards like Capital One where it varies</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Search Aliases</label>
+          <input
+            type="text"
+            name="search_aliases"
+            value={searchAliases}
+            onChange={(e) => setSearchAliases(e.target.value)}
+            placeholder="e.g., csr, reserve, sapphire res"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-zinc-500">Comma-separated terms users can search</p>
         </div>
       </div>
 

@@ -22,7 +22,9 @@ import {
   getCachedCurrencies,
   getCachedCards,
   getCachedCardCredits,
+  getCachedIssuers,
 } from "@/lib/cached-data";
+import { invalidateCardCaches } from "@/lib/cache-invalidation";
 import {
   CardInput,
   CategorySpending,
@@ -38,7 +40,7 @@ export const metadata: Metadata = {
   title: "My Wallet | CardTool",
   description: "Manage your credit cards and track rewards",
 };
-import { UserBonusSection, UserWelcomeBonus, UserSpendBonus } from "./user-bonus-section";
+import { UserWelcomeBonus, UserSpendBonus } from "./user-bonus-section";
 import { WalletClient } from "./wallet-client";
 
 export default async function WalletPage() {
@@ -70,6 +72,7 @@ export default async function WalletPage() {
     currenciesData,
     allCardsData,
     cardCreditsData,
+    issuersData,
     // User-specific data (must be fresh)
     walletResult,
     spendingResult,
@@ -101,6 +104,7 @@ export default async function WalletPage() {
     getCachedCurrencies(),
     getCachedCards(),
     getCachedCardCredits(),
+    getCachedIssuers(),
     // User-specific queries (always fresh)
     // User's wallet cards with full details (including closed cards)
     supabase
@@ -119,6 +123,9 @@ export default async function WalletPage() {
         payment_due_day,
         manual_balance_cents,
         manual_credit_limit_cents,
+        annual_fee_override,
+        notes,
+        network_override,
         cards:card_id (
           id,
           name,
@@ -130,6 +137,7 @@ export default async function WalletPage() {
           issuer_id,
           product_type,
           card_charge_type,
+          network,
           issuers:issuer_id (id, name, billing_cycle_formula),
           primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
           secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
@@ -303,6 +311,51 @@ export default async function WalletPage() {
       .eq("user_id", effectiveUserId),
   ]);
 
+  // Category selection data for cards with selectable categories
+  const capIds = bonusesData?.filter(b => b.cap_type === "selected_category").map((c) => c.id) ?? [];
+  const [capCategoriesResult, userCategorySelectionsResult] = capIds.length > 0
+    ? await Promise.all([
+        supabase
+          .from("card_cap_categories")
+          .select("cap_id, category_id, earning_categories(id, name)")
+          .in("cap_id", capIds),
+        supabase
+          .from("user_card_selections")
+          .select("cap_id, selected_category_id, wallet_card_id")
+          .eq("user_id", effectiveUserId)
+          .in("cap_id", capIds),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  // Build caps with categories structure
+  type CapCategoryData = { cap_id: string; earning_categories: { id: number; name: string } | null };
+  const cardCapsWithCategories = (bonusesData ?? [])
+    .filter(cap => cap.cap_type === "selected_category")
+    .map((cap) => ({
+      id: cap.id,
+      card_id: cap.card_id,
+      cap_type: cap.cap_type,
+      cap_amount: cap.cap_amount ? Number(cap.cap_amount) : null,
+      categories: ((capCategoriesResult.data ?? []) as unknown as CapCategoryData[])
+        .filter((cc) => cc.cap_id === cap.id)
+        .map((cc) => cc.earning_categories)
+        .filter((cat): cat is { id: number; name: string } => cat !== null),
+    }));
+
+  // Group caps by card_id
+  const categorySelectionCapsMap = new Map<string, typeof cardCapsWithCategories>();
+  for (const cap of cardCapsWithCategories) {
+    const existing = categorySelectionCapsMap.get(cap.card_id) ?? [];
+    existing.push(cap);
+    categorySelectionCapsMap.set(cap.card_id, existing);
+  }
+
+  const userCategorySelections = (userCategorySelectionsResult.data ?? []) as { 
+    cap_id: string; 
+    selected_category_id: number; 
+    wallet_card_id?: string | null;
+  }[];
+
   // Players data
   const players = (playersResult.data ?? []) as { player_number: number; description: string | null }[];
   const playerCount = players.length > 0 ? Math.max(...players.map(p => p.player_number)) : 1;
@@ -430,6 +483,8 @@ export default async function WalletPage() {
     primary_currency_id: string;
     secondary_currency_id: string | null;
     issuer_id: string;
+    search_aliases: string[] | null;
+    network: "visa" | "mastercard" | "amex" | "discover" | null;
     issuers: { id: string; name: string } | null;
     primary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
     secondary_currency: { id: string; name: string; code: string; currency_type: string; base_value_cents: number | null } | null;
@@ -861,6 +916,21 @@ export default async function WalletPage() {
     currency_name: sb.reward_currencies?.name ?? null,
   }));
 
+  // Build maps for per-card bonus display in settings modal
+  const welcomeBonusesMap = new Map<string, typeof userWelcomeBonuses>();
+  for (const wb of userWelcomeBonuses) {
+    const existing = welcomeBonusesMap.get(wb.wallet_card_id) ?? [];
+    existing.push(wb);
+    welcomeBonusesMap.set(wb.wallet_card_id, existing);
+  }
+
+  const spendBonusesMap = new Map<string, typeof userSpendBonuses>();
+  for (const sb of userSpendBonuses) {
+    const existing = spendBonusesMap.get(sb.wallet_card_id) ?? [];
+    existing.push(sb);
+    spendBonusesMap.set(sb.wallet_card_id, existing);
+  }
+
   // Convert user bonuses to calculator input format (with card_id for aggregation)
   const welcomeBonuses: WelcomeBonusInput[] = userWelcomeBonuses.map((wb) => ({
     id: wb.id,
@@ -1218,6 +1288,196 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
+  async function updateAnnualFeeOverride(walletId: string, feeOverride: number | null) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("[updateAnnualFeeOverride] No user ID");
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("user_wallets")
+      .update({ annual_fee_override: feeOverride })
+      .eq("id", walletId)
+      .eq("user_id", userId);
+    
+    if (error) {
+      console.error("[updateAnnualFeeOverride] Error:", error);
+      throw new Error(`Failed to update annual fee override: ${error.message}`);
+    }
+    
+    revalidatePath("/wallet");
+  }
+
+  async function updateNotes(walletId: string, notes: string | null) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("[updateNotes] No user ID");
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("user_wallets")
+      .update({ notes })
+      .eq("id", walletId)
+      .eq("user_id", userId);
+    
+    if (error) {
+      console.error("[updateNotes] Error:", error);
+      throw new Error(`Failed to update notes: ${error.message}`);
+    }
+    
+    revalidatePath("/wallet");
+  }
+
+  async function updateNetworkOverride(walletId: string, network: "visa" | "mastercard" | "amex" | "discover" | null) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("[updateNetworkOverride] No user ID");
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("user_wallets")
+      .update({ network_override: network })
+      .eq("id", walletId)
+      .eq("user_id", userId);
+    
+    if (error) {
+      console.error("[updateNetworkOverride] Error:", error);
+      throw new Error(`Failed to update network override: ${error.message}`);
+    }
+    
+    revalidatePath("/wallet");
+  }
+
+  async function submitNewCard(data: {
+    name: string;
+    issuer_id: string;
+    primary_currency_id: string;
+    secondary_currency_id: string | null;
+    product_type: "personal" | "business";
+    card_charge_type: "credit" | "charge" | "debit";
+    annual_fee: number;
+    default_earn_rate: number;
+    no_foreign_transaction_fees: boolean;
+    network: "visa" | "mastercard" | "amex" | "discover" | null;
+  }) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("[submitNewCard] No user ID");
+      throw new Error("Not authenticated");
+    }
+
+    const supabase = createClient();
+    
+    // Generate a slug from the name
+    const slug = data.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      + "-" + Date.now().toString(36);
+
+    // Insert the card with created_by_user_id set
+    const { data: newCard, error: insertError } = await supabase
+      .from("cards")
+      .insert({
+        name: data.name,
+        slug,
+        issuer_id: data.issuer_id,
+        primary_currency_id: data.primary_currency_id,
+        secondary_currency_id: data.secondary_currency_id,
+        product_type: data.product_type,
+        card_charge_type: data.card_charge_type,
+        annual_fee: data.annual_fee,
+        default_earn_rate: data.default_earn_rate,
+        no_foreign_transaction_fees: data.no_foreign_transaction_fees,
+        network: data.network,
+        created_by_user_id: userId,
+        is_approved: false, // Not approved by default
+        is_active: true,
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !newCard) {
+      console.error("[submitNewCard] Insert error:", insertError);
+      throw new Error(`Failed to create card: ${insertError?.message ?? "Unknown error"}`);
+    }
+
+    // Also add to user's wallet
+    const { error: walletError } = await supabase
+      .from("user_wallets")
+      .insert({
+        user_id: userId,
+        card_id: newCard.id,
+        added_at: new Date().toISOString(),
+      });
+
+    if (walletError) {
+      console.error("[submitNewCard] Wallet insert error:", walletError);
+      // Card was created, but couldn't add to wallet - don't throw
+    }
+
+    invalidateCardCaches();
+    revalidatePath("/wallet");
+  }
+
+  async function selectCategory(capId: string, categoryId: number, walletCardId?: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    
+    // Handle NULL wallet_card_id separately since PostgreSQL treats NULLs as distinct in unique constraints
+    if (walletCardId) {
+      // With a specific wallet_card_id, upsert works correctly
+      await supabase.from("user_card_selections").upsert(
+        {
+          user_id: userId,
+          cap_id: capId,
+          selected_category_id: categoryId,
+          wallet_card_id: walletCardId,
+        },
+        { onConflict: "user_id,cap_id,wallet_card_id" }
+      );
+    } else {
+      // For NULL wallet_card_id, manually check and update/insert
+      const { data: existing } = await supabase
+        .from("user_card_selections")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("cap_id", capId)
+        .is("wallet_card_id", null)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("user_card_selections")
+          .update({ selected_category_id: categoryId })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("user_card_selections").insert({
+          user_id: userId,
+          cap_id: capId,
+          selected_category_id: categoryId,
+          wallet_card_id: null,
+        });
+      }
+    }
+    
+    revalidatePath("/wallet");
+    revalidatePath("/settings");
+  }
+
   async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) {
     "use server";
     const userId = await getEffectiveUserId();
@@ -1236,7 +1496,7 @@ export default async function WalletPage() {
   }
 
   // User-defined Welcome Bonus CRUD
-  async function addUserWelcomeBonus(formData: FormData) {
+  async function addUserWelcomeBonusForCard(walletCardId: string, formData: FormData) {
     "use server";
     const userId = await getEffectiveUserId();
     if (!userId) return;
@@ -1246,7 +1506,7 @@ export default async function WalletPage() {
     
     await supabase.from("user_welcome_bonuses").insert({
       user_id: userId,
-      wallet_card_id: formData.get("wallet_card_id") as string,
+      wallet_card_id: walletCardId,
       component_type: componentType,
       spend_requirement_cents: parseInt(formData.get("spend_requirement_cents") as string) || 0,
       time_period_months: parseInt(formData.get("time_period_months") as string) || 3,
@@ -1301,7 +1561,7 @@ export default async function WalletPage() {
   }
 
   // User-defined Spend Bonus CRUD
-  async function addUserSpendBonus(formData: FormData) {
+  async function addUserSpendBonusForCard(walletCardId: string, formData: FormData) {
     "use server";
     const userId = await getEffectiveUserId();
     if (!userId) return;
@@ -1313,7 +1573,7 @@ export default async function WalletPage() {
     if (bonusType === "threshold") {
       await supabase.from("user_spend_bonuses").insert({
         user_id: userId,
-        wallet_card_id: formData.get("wallet_card_id") as string,
+        wallet_card_id: walletCardId,
         name: formData.get("name") as string,
         bonus_type: bonusType,
         spend_threshold_cents: parseInt(formData.get("spend_threshold_cents") as string) || null,
@@ -1329,7 +1589,7 @@ export default async function WalletPage() {
       const capAmount = formData.get("cap_amount") as string;
       await supabase.from("user_spend_bonuses").insert({
         user_id: userId,
-        wallet_card_id: formData.get("wallet_card_id") as string,
+        wallet_card_id: walletCardId,
         name: formData.get("name") as string,
         bonus_type: bonusType,
         per_spend_cents: parseInt(formData.get("per_spend_cents") as string) || null,
@@ -1749,9 +2009,6 @@ export default async function WalletPage() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-white">My Wallet</h1>
-              <p className="text-zinc-400 mt-1">
-                {walletCards.length} card{walletCards.length !== 1 ? "s" : ""} in your wallet
-              </p>
             </div>
             <div className="flex items-center gap-3">
               <RefreshBalancesButton hasLinkedAccounts={!!(linkedAccountsResult.data && linkedAccountsResult.data.length > 0)} />
@@ -1763,11 +2020,15 @@ export default async function WalletPage() {
                   annual_fee: c.annual_fee,
                   issuer_name: c.issuers?.name,
                   primary_currency_name: c.primary_currency?.name,
+                  search_aliases: c.search_aliases,
                 }))}
                 onAddCard={addToWallet}
                 debitPayEnabled={debitPayEnabled}
                 onEnableDebitPay={enableDebitPay}
                 ownedCardIds={userCardIds}
+                issuers={issuersData.map(i => ({ id: i.id, name: i.name }))}
+                currencies={currenciesData.map(c => ({ id: c.id, name: c.name }))}
+                onSubmitNewCard={submitNewCard}
               />
             </div>
           </div>
@@ -1796,12 +2057,29 @@ export default async function WalletPage() {
               onUpdateApprovalDate={updateApprovalDate}
               onUpdatePlayerNumber={updatePlayerNumber}
               onUpdateStatementFields={updateStatementFields}
+              onUpdateAnnualFeeOverride={updateAnnualFeeOverride}
+              onUpdateNotes={updateNotes}
+              onUpdateNetworkOverride={updateNetworkOverride}
               bankAccounts={bankAccountsForSettings}
               paymentSettingsMap={paymentSettingsMap}
               onUpdatePaymentSettings={updatePaymentSettings}
               onProductChange={productChangeCard}
               onCloseCard={closeCard}
               onDeleteCard={deleteCard}
+              categorySelectionCapsMap={categorySelectionCapsMap}
+              categorySelections={userCategorySelections}
+              onSelectCategory={selectCategory}
+              currencies={currenciesData.map(c => ({ id: c.id, name: c.name, code: c.code, currency_type: c.currency_type }))}
+              welcomeBonusesMap={welcomeBonusesMap}
+              spendBonusesMap={spendBonusesMap}
+              onToggleWelcomeBonusActive={toggleUserWelcomeBonusActive}
+              onToggleSpendBonusActive={toggleUserSpendBonusActive}
+              onAddWelcomeBonus={addUserWelcomeBonusForCard}
+              onUpdateWelcomeBonus={updateUserWelcomeBonus}
+              onDeleteWelcomeBonus={deleteUserWelcomeBonus}
+              onAddSpendBonus={addUserSpendBonusForCard}
+              onUpdateSpendBonus={updateUserSpendBonus}
+              onDeleteSpendBonus={deleteUserSpendBonus}
             />
           ) : (
             <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
@@ -1817,33 +2095,6 @@ export default async function WalletPage() {
             closedCards={closedCardsForDisplay}
             playerCount={playerCount}
           />
-
-          {/* User Bonus Section */}
-          {walletCards.length > 0 && (
-            <UserBonusSection
-              walletCards={walletCards.map(wc => ({
-                wallet_id: wc.id,
-                card_id: wc.card_id,
-                display_name: wc.custom_name ?? wc.cards?.name ?? "",
-                card_name: wc.cards?.name ?? "",
-                currency_name: wc.cards?.primary_currency?.name ?? null,
-                currency_id: wc.cards?.primary_currency_id ?? null,
-              }))}
-              currencies={currenciesData}
-              welcomeBonuses={userWelcomeBonuses}
-              spendBonuses={userSpendBonuses}
-              bonusDisplaySettings={bonusDisplaySettings}
-              onUpdateDisplaySettings={updateBonusDisplaySettings}
-              onAddWelcomeBonus={addUserWelcomeBonus}
-              onUpdateWelcomeBonus={updateUserWelcomeBonus}
-              onDeleteWelcomeBonus={deleteUserWelcomeBonus}
-              onToggleWelcomeBonusActive={toggleUserWelcomeBonusActive}
-              onAddSpendBonus={addUserSpendBonus}
-              onUpdateSpendBonus={updateUserSpendBonus}
-              onDeleteSpendBonus={deleteUserSpendBonus}
-              onToggleSpendBonusActive={toggleUserSpendBonusActive}
-            />
-          )}
 
         </div>
       </div>

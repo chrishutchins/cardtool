@@ -26,6 +26,12 @@ export default async function NewCardPage() {
     const annual_fee = parseFloat(formData.get("annual_fee") as string) || 0;
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;
     const default_perks_value = parseFloat(formData.get("default_perks_value") as string) || 0;
+    const networkValue = formData.get("network") as string;
+    const network = networkValue ? (networkValue as "visa" | "mastercard" | "amex" | "discover") : null;
+    const searchAliasesRaw = formData.get("search_aliases") as string;
+    const search_aliases = searchAliasesRaw 
+      ? searchAliasesRaw.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+      : null;
 
     const { data, error } = await supabase
       .from("cards")
@@ -40,6 +46,8 @@ export default async function NewCardPage() {
         annual_fee,
         default_earn_rate,
         default_perks_value,
+        network,
+        search_aliases,
       })
       .select()
       .single();

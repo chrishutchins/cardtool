@@ -7,35 +7,55 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 // ============================================================================
 
 export function Tooltip({ children, text, wide, multiline }: { children: React.ReactNode; text: string; wide?: boolean; multiline?: boolean }) {
-  const [position, setPosition] = useState<"above" | "below">("above");
+  const [isHovered, setIsHovered] = useState(false);
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
   const ref = useRef<HTMLSpanElement>(null);
 
-  const positionClasses = position === "above" 
-    ? "bottom-full mb-1" 
-    : "top-full mt-1";
+  // If no text, just render children without tooltip
+  if (!text) {
+    return <>{children}</>;
+  }
 
-  // Use fixed positioning to escape overflow containers
   const widthClass = wide 
     ? "min-w-[200px] max-w-sm" 
     : multiline 
       ? "whitespace-pre-line text-left" 
       : "whitespace-nowrap";
 
+  const handleMouseEnter = () => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      const showBelow = rect.top < 60;
+      
+      setTooltipStyle({
+        position: 'fixed',
+        left: rect.left + rect.width / 2,
+        transform: 'translateX(-50%)',
+        ...(showBelow 
+          ? { top: rect.bottom + 4 }
+          : { bottom: window.innerHeight - rect.top + 4 }
+        ),
+      });
+      setIsHovered(true);
+    }
+  };
+
   return (
     <span 
       ref={ref}
-      className="relative group/tooltip inline-flex"
-      onMouseEnter={() => {
-        if (ref.current) {
-          const rect = ref.current.getBoundingClientRect();
-          setPosition(rect.top < 60 ? "below" : "above");
-        }
-      }}
+      className="inline-flex"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {children}
-      <span className={`pointer-events-none absolute left-1/2 -translate-x-1/2 ${positionClasses} px-3 py-2 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg ${widthClass} z-[9999] transition-opacity duration-75 opacity-0 group-hover/tooltip:opacity-100`}>
-        {text}
-      </span>
+      {isHovered && (
+        <span 
+          style={tooltipStyle}
+          className={`pointer-events-none px-3 py-2 text-xs text-white bg-zinc-800 border border-zinc-600 rounded shadow-lg ${widthClass} z-[9999]`}
+        >
+          {text}
+        </span>
+      )}
     </span>
   );
 }
