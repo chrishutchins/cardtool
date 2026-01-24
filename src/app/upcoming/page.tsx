@@ -8,7 +8,9 @@ import { isAdminEmail } from "@/lib/admin";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import { parseLocalDate } from "@/lib/utils";
 import { getCachedCardCredits } from "@/lib/cached-data";
+import { calculateBillingDates, type BillingCycleFormula } from "@/lib/billing-cycle";
 import { UpcomingClient } from "./upcoming-client";
+import { UpcomingPayments, type UpcomingPayment, type BankAccount } from "./upcoming-payments";
 
 export const metadata: Metadata = {
   title: "Upcoming | CardTool",
@@ -46,6 +48,9 @@ export default async function UpcomingPage() {
     playersResult,
     currenciesResult,
     hiddenItemsResult,
+    linkedAccountsResult,
+    bankAccountsResult,
+    paymentSettingsResult,
   ] = await Promise.all([
     // User's wallet cards (including closed for context)
     supabase
@@ -57,11 +62,18 @@ export default async function UpcomingPage() {
         approval_date,
         closed_date,
         player_number,
+        statement_close_day,
+        payment_due_day,
         cards:card_id (
           id,
           name,
           slug,
-          annual_fee
+          annual_fee,
+          product_type,
+          issuers:issuer_id (
+            name,
+            billing_cycle_formula
+          )
         )
       `)
       .eq("user_id", effectiveUserId)
@@ -142,6 +154,40 @@ export default async function UpcomingPage() {
       .from("user_hidden_items")
       .select("item_type, item_key")
       .eq("user_id", effectiveUserId),
+    
+    // Linked accounts with liabilities data for upcoming payments
+    supabase
+      .from("user_linked_accounts")
+      .select(`
+        id,
+        wallet_card_id,
+        name,
+        mask,
+        current_balance,
+        last_statement_balance,
+        last_statement_date,
+        next_payment_due_date,
+        minimum_payment_amount,
+        is_overdue,
+        liabilities_updated_at,
+        user_plaid_items:plaid_item_id (
+          institution_name
+        )
+      `)
+      .eq("user_id", effectiveUserId)
+      .eq("type", "credit"),
+    
+    // Bank accounts for "Pay From" display
+    supabase
+      .from("user_bank_accounts")
+      .select("id, name, display_name, institution_name, available_balance, is_primary")
+      .eq("user_id", effectiveUserId),
+    
+    // Payment settings for each card
+    supabase
+      .from("user_card_payment_settings")
+      .select("wallet_card_id, pay_from_account_id, is_autopay, autopay_type")
+      .eq("user_id", effectiveUserId),
   ]);
 
   // Type definitions
@@ -152,11 +198,18 @@ export default async function UpcomingPage() {
     approval_date: string | null;
     closed_date: string | null;
     player_number: number | null;
+    statement_close_day: number | null;
+    payment_due_day: number | null;
     cards: {
       id: string;
       name: string;
       slug: string;
       annual_fee: number;
+      product_type: string | null;
+      issuers: {
+        name: string;
+        billing_cycle_formula: string | null;
+      } | null;
     } | null;
   };
 
@@ -220,6 +273,39 @@ export default async function UpcomingPage() {
     item_key: string;
   };
 
+  type LinkedAccount = {
+    id: string;
+    wallet_card_id: string | null;
+    name: string;
+    mask: string | null;
+    current_balance: number | null;
+    last_statement_balance: number | null;
+    last_statement_date: string | null;
+    next_payment_due_date: string | null;
+    minimum_payment_amount: number | null;
+    is_overdue: boolean | null;
+    liabilities_updated_at: string | null;
+    user_plaid_items: {
+      institution_name: string | null;
+    } | null;
+  };
+
+  type BankAccountData = {
+    id: string;
+    name: string;
+    display_name: string | null;
+    institution_name: string | null;
+    available_balance: number | null;
+    is_primary: boolean | null;
+  };
+
+  type PaymentSettings = {
+    wallet_card_id: string;
+    pay_from_account_id: string | null;
+    is_autopay: boolean | null;
+    autopay_type: string | null;
+  };
+
   const walletCards = (walletCardsResult.data ?? []) as unknown as WalletCard[];
   const creditUsage = (creditUsageResult.data ?? []) as CreditUsage[];
   const creditSettings = (creditSettingsResult.data ?? []) as CreditSettings[];
@@ -228,6 +314,9 @@ export default async function UpcomingPage() {
   const players = (playersResult.data ?? []) as Player[];
   const currencies = (currenciesResult.data ?? []) as Currency[];
   const hiddenItems = (hiddenItemsResult.data ?? []) as HiddenItem[];
+  const linkedAccounts = (linkedAccountsResult.data ?? []) as unknown as LinkedAccount[];
+  const bankAccountsData = (bankAccountsResult.data ?? []) as BankAccountData[];
+  const paymentSettingsData = (paymentSettingsResult.data ?? []) as PaymentSettings[];
 
   // Build hidden items lookup
   const hiddenItemKeys = new Set(hiddenItems.map(h => `${h.item_type}:${h.item_key}`));
@@ -485,6 +574,145 @@ export default async function UpcomingPage() {
 
   expiringPoints.sort((a, b) => a.expirationDate.getTime() - b.expirationDate.getTime());
 
+  // Build payment settings lookup
+  const paymentSettingsMap = new Map<string, PaymentSettings>();
+  paymentSettingsData.forEach(ps => {
+    paymentSettingsMap.set(ps.wallet_card_id, ps);
+  });
+
+  // Build bank accounts lookup
+  const bankAccountMap = new Map<string, BankAccountData>();
+  bankAccountsData.forEach(ba => {
+    bankAccountMap.set(ba.id, ba);
+  });
+
+  // Build linked accounts lookup by wallet_card_id
+  const linkedAccountByWalletCardId = new Map<string, LinkedAccount>();
+  linkedAccounts.forEach(la => {
+    if (la.wallet_card_id) {
+      linkedAccountByWalletCardId.set(la.wallet_card_id, la);
+    }
+  });
+
+  // Build upcoming payments from wallet cards (using calculated dates as fallback)
+  const upcomingPayments: UpcomingPayment[] = [];
+
+  for (const walletCard of walletCards) {
+    if (!walletCard.cards) continue;
+    
+    // Get linked Plaid account if exists
+    const linkedAccount = linkedAccountByWalletCardId.get(walletCard.id);
+    
+    // Get payment settings
+    const paymentSettings = paymentSettingsMap.get(walletCard.id);
+    const payFromAccount = paymentSettings?.pay_from_account_id 
+      ? bankAccountMap.get(paymentSettings.pay_from_account_id) 
+      : null;
+
+    // Calculate billing dates using the billing cycle calculator
+    let calculatedDueDate: Date | null = null;
+    let calculatedStatementClose: Date | null = null;
+    
+    if (walletCard.payment_due_day || walletCard.statement_close_day) {
+      let formula = (walletCard.cards.issuers?.billing_cycle_formula || null) as BillingCycleFormula | null;
+      // Apply product-type-specific formula adjustments
+      // BoA: business uses close_plus_27_skip_weekend, personal uses boa_personal_formula
+      if (formula === 'close_plus_27_skip_weekend' && walletCard.cards.product_type === 'personal') {
+        formula = 'boa_personal_formula';
+      }
+      const billingDates = calculateBillingDates(
+        formula,
+        walletCard.statement_close_day ?? null,
+        walletCard.payment_due_day ?? null
+      );
+      calculatedDueDate = billingDates.nextDueDate;
+      calculatedStatementClose = billingDates.lastCloseDate;
+    }
+
+    // Get Plaid data if available
+    const plaidDueDate = linkedAccount?.next_payment_due_date 
+      ? parseLocalDate(linkedAccount.next_payment_due_date) 
+      : null;
+    const plaidStatementBalance = linkedAccount?.last_statement_balance ?? null;
+    
+    // Determine effective due date (Plaid takes precedence)
+    const effectiveDueDate = plaidDueDate || calculatedDueDate;
+    
+    // Skip if no due date at all
+    if (!effectiveDueDate) continue;
+    
+    // Get balance - prefer Plaid statement balance, fallback to current balance
+    const effectiveBalance = plaidStatementBalance ?? linkedAccount?.current_balance ?? null;
+    
+    // Only include if there's a balance (or if we don't have balance data but have a due date)
+    // For cards without Plaid, we show them with null balance so users can see when payments are due
+    const hasBalance = effectiveBalance !== null && effectiveBalance > 0;
+    const hasPlaidData = linkedAccount !== undefined;
+    
+    // Show if: has positive balance OR no Plaid connection (show calculated dates even without balance info)
+    if (!hasBalance && hasPlaidData) continue;
+
+    upcomingPayments.push({
+      id: linkedAccount?.id || walletCard.id,
+      walletCardId: walletCard.id,
+      cardName: walletCard.custom_name || walletCard.cards.name,
+      cardMask: linkedAccount?.mask || null,
+      issuerName: walletCard.cards.issuers?.name || linkedAccount?.user_plaid_items?.institution_name || null,
+      playerNumber: walletCard.player_number,
+      
+      // Plaid liabilities data (if available)
+      statementBalance: plaidStatementBalance,
+      dueDate: plaidDueDate,
+      minimumPayment: linkedAccount?.minimum_payment_amount ?? null,
+      isOverdue: linkedAccount?.is_overdue ?? false,
+      statementDate: linkedAccount?.last_statement_date ?? null,
+      
+      // Partial payment info (calculated below if applicable)
+      partialPaymentAmount: null,
+      partialPaymentDate: null,
+      remainingBalance: null,
+      
+      // Calculated fallback data
+      calculatedDueDate,
+      currentBalance: linkedAccount?.current_balance ?? null,
+      
+      // Payment settings
+      payFromAccountId: paymentSettings?.pay_from_account_id || null,
+      payFromAccountName: payFromAccount?.display_name || payFromAccount?.name || null,
+      payFromInstitution: payFromAccount?.institution_name || null,
+      payFromBalance: payFromAccount?.available_balance || null,
+      isAutopay: paymentSettings?.is_autopay ?? false,
+      autopayType: paymentSettings?.autopay_type || null,
+    });
+  }
+
+  // Convert bank accounts to format expected by UpcomingPayments component
+  const bankAccounts: BankAccount[] = bankAccountsData.map(ba => ({
+    id: ba.id,
+    name: ba.name,
+    displayName: ba.display_name,
+    institution: ba.institution_name,
+    availableBalance: ba.available_balance,
+    isPrimary: ba.is_primary ?? false,
+  }));
+
+  // Server action for refreshing liabilities
+  async function refreshLiabilities() {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/plaid/refresh-liabilities`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    revalidatePath("/upcoming");
+    revalidatePath("/dashboard");
+  }
+
   // Server actions for credits
   async function markCreditUsed(formData: FormData) {
     "use server";
@@ -611,7 +839,7 @@ export default async function UpcomingPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Upcoming</h1>
           <p className="text-zinc-400 mt-1">
-            Track expiring credits, inventory, card renewals, and points
+            Track upcoming payments, expiring credits, inventory, card renewals, and points
           </p>
         </div>
 

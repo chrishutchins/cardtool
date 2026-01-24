@@ -36,11 +36,21 @@ interface ExpiringInventory {
   value: number; // in dollars
 }
 
+interface UpcomingPayment {
+  id: string;
+  cardName: string;
+  dueDate: Date | null;
+  amount: number;
+  isOverdue: boolean;
+  hasOverdraftRisk: boolean;
+}
+
 interface UpcomingUnifiedProps {
   expiringPoints: ExpiringPoint[];
   expiringCredits: ExpiringCredit[];
   upcomingFees: UpcomingFee[];
   expiringInventory: ExpiringInventory[];
+  upcomingPayments?: UpcomingPayment[];
 }
 
 function formatCurrency(value: number): string {
@@ -87,6 +97,12 @@ const PackageIcon = () => (
   </svg>
 );
 
+const DollarIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
 // Helper to truncate a list of names with "..."
 function truncateList(items: string[], maxLength: number = 35): string {
   if (items.length === 0) return "";
@@ -111,6 +127,7 @@ export function UpcomingUnified({
   expiringCredits, 
   upcomingFees,
   expiringInventory,
+  upcomingPayments = [],
 }: UpcomingUnifiedProps) {
   const router = useRouter();
   const [period, setPeriod] = useState<"30" | "60" | "90">("30");
@@ -126,12 +143,16 @@ export function UpcomingUnified({
   const activePoints = expiringPoints.filter(p => p.expirationDate <= cutoffDate);
   const activeFees = upcomingFees.filter(f => f.anniversaryDate <= cutoffDate);
   const activeInventory = expiringInventory.filter(i => i.expirationDate <= cutoffDate);
+  const activePayments = upcomingPayments.filter(p => p.dueDate && p.dueDate <= cutoffDate);
   
   // Calculate totals
   const totalCreditValue = activeCredits.reduce((sum, c) => sum + (c.isValueBased ? c.value : 0), 0);
   const totalInventoryValue = activeInventory.reduce((sum, i) => sum + i.value, 0);
   const totalFeeValue = activeFees.reduce((sum, f) => sum + f.annualFee, 0);
   const totalPointsExpiring = activePoints.reduce((sum, p) => sum + p.balance, 0);
+  const totalPaymentsDue = activePayments.reduce((sum, p) => sum + p.amount, 0);
+  const hasOverdraftRisk = activePayments.some(p => p.hasOverdraftRisk);
+  const hasOverduePayments = activePayments.some(p => p.isOverdue);
   
   // Get unique names for each category (deduplicate)
   const creditNames = [...new Set(activeCredits.map(c => c.creditName))];
@@ -140,8 +161,11 @@ export function UpcomingUnified({
     .sort((a, b) => a.anniversaryDate.getTime() - b.anniversaryDate.getTime())
     .map(f => f.cardName);
   const pointsNames = [...new Set(activePoints.map(p => p.currencyName))];
+  const paymentCardNames = activePayments
+    .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
+    .map(p => p.cardName);
   
-  const hasAnyItems = activeCredits.length > 0 || activeInventory.length > 0 || activeFees.length > 0 || activePoints.length > 0;
+  const hasAnyItems = activeCredits.length > 0 || activeInventory.length > 0 || activeFees.length > 0 || activePoints.length > 0 || activePayments.length > 0;
 
   const handleWidgetClick = (e: React.MouseEvent) => {
     // Only navigate if clicking on the widget background, not on interactive elements
@@ -202,6 +226,39 @@ export function UpcomingUnified({
         <p className="text-sm text-zinc-500">No items expiring in the next {period} days</p>
       ) : (
         <div className="space-y-2">
+          {/* Upcoming Payments */}
+          {activePayments.length > 0 && (
+            <Link
+              href="/payments"
+              className={`flex items-center gap-3 py-2 px-3 -mx-3 rounded-lg hover:bg-zinc-800/50 transition-colors ${
+                hasOverduePayments ? 'bg-red-500/10' : hasOverdraftRisk ? 'bg-amber-500/10' : ''
+              }`}
+            >
+              <div className={`p-1.5 rounded flex-shrink-0 ${
+                hasOverduePayments ? 'bg-red-500/20 text-red-400' : 
+                hasOverdraftRisk ? 'bg-amber-500/20 text-amber-400' : 
+                'bg-emerald-500/20 text-emerald-400'
+              }`}>
+                <DollarIcon />
+              </div>
+              <span className={`font-medium flex-shrink-0 ${
+                hasOverduePayments ? 'text-red-400' : 
+                hasOverdraftRisk ? 'text-amber-400' : 
+                'text-white'
+              }`}>
+                Payments Due
+                {hasOverduePayments && <span className="ml-1 text-xs">(overdue)</span>}
+                {!hasOverduePayments && hasOverdraftRisk && <span className="ml-1 text-xs">(overdraft risk)</span>}
+              </span>
+              <span className="text-sm text-zinc-500 truncate flex-1 min-w-0">{truncateList(paymentCardNames)}</span>
+              <span className={`font-medium flex-shrink-0 ${
+                hasOverduePayments ? 'text-red-400' : 
+                hasOverdraftRisk ? 'text-amber-400' : 
+                'text-white'
+              }`}>{formatCurrency(totalPaymentsDue)}</span>
+            </Link>
+          )}
+
           {/* Expiring Credits */}
           {activeCredits.length > 0 && (
             <Link

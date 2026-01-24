@@ -1,7 +1,36 @@
 import Link from "next/link";
 
-export function Footer() {
+interface FooterProps {
+  minimal?: boolean;
+}
+
+export function Footer({ minimal = false }: FooterProps) {
   const currentYear = new Date().getFullYear();
+
+  if (minimal) {
+    return (
+      <footer className="border-t border-zinc-800/50 mt-auto">
+        <div className="mx-auto max-w-7xl px-4 py-3">
+          <div className="flex items-center justify-center gap-4 text-xs text-zinc-500">
+            <span>© {currentYear} CardTool</span>
+            <span className="text-zinc-700">·</span>
+            <Link
+              href="/terms"
+              className="hover:text-zinc-300 transition-colors"
+            >
+              Terms
+            </Link>
+            <Link
+              href="/privacy"
+              className="hover:text-zinc-300 transition-colors"
+            >
+              Privacy
+            </Link>
+          </div>
+        </div>
+      </footer>
+    );
+  }
 
   return (
     <footer className="border-t border-zinc-800 bg-zinc-900 mt-auto">

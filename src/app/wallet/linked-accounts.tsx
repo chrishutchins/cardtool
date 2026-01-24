@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CreditCard, Building2, Link2, Unlink, Pencil, Check, X, AlertTriangle } from "lucide-react";
+import { RefreshCw, CreditCard, Building2, Link2, Unlink, Pencil, Check, X, AlertTriangle, FileText } from "lucide-react";
 import { PlaidLinkButton } from "./plaid-link-button";
 import { PlaidReauthButton } from "./plaid-reauth-button";
+import { PlaidLiabilitiesButton } from "./plaid-liabilities-button";
 
 interface LinkedAccount {
   id: string;
@@ -25,6 +26,7 @@ interface LinkedAccount {
     institution_name: string | null;
     requires_reauth: boolean;
     error_code: string | null;
+    consented_products: string[] | null;
   } | null;
   wallet_card_id: string | null;
 }
@@ -38,12 +40,13 @@ interface WalletCard {
 interface LinkedAccountsProps {
   initialAccounts: LinkedAccount[];
   walletCards?: WalletCard[];
+  plaidLiabilitiesEnabled?: boolean;
   onPairCard?: (linkedAccountId: string, walletCardId: string | null) => Promise<void>;
   onUnlinkCard?: (linkedAccountId: string) => Promise<void>;
   onUpdateCreditLimit?: (linkedAccountId: string, creditLimit: number | null) => Promise<void>;
 }
 
-export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, onUnlinkCard, onUpdateCreditLimit }: LinkedAccountsProps) {
+export function LinkedAccounts({ initialAccounts, walletCards = [], plaidLiabilitiesEnabled = false, onPairCard, onUnlinkCard, onUpdateCreditLimit }: LinkedAccountsProps) {
   const [accounts, setAccounts] = useState(initialAccounts);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -202,6 +205,15 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
         <div className="space-y-4">
           {accounts.map((account) => {
             const needsReauth = account.user_plaid_items?.requires_reauth ?? false;
+            const consentedProducts = account.user_plaid_items?.consented_products || [];
+            const hasLiabilitiesConsent = consentedProducts.includes('liabilities');
+            // Only show "Grant Statement Access" banner when:
+            // 1. User has liabilities tier enabled
+            // 2. Item doesn't need reauth
+            // 3. We have consent data (array is not empty) AND it doesn't include liabilities
+            // If array is empty, we haven't checked yet - don't show the banner
+            const hasConsentData = consentedProducts.length > 0;
+            const canGrantLiabilitiesConsent = plaidLiabilitiesEnabled && hasConsentData && !hasLiabilitiesConsent && !needsReauth;
             
             return (
             <div
@@ -222,6 +234,28 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], onPairCard, 
                       </div>
                     </div>
                     <PlaidReauthButton
+                      plaidItemId={account.user_plaid_items?.id || account.plaid_item_id}
+                      institutionName={account.user_plaid_items?.institution_name ?? null}
+                      onSuccess={() => window.location.reload()}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Liabilities Consent Banner - show when user has liabilities tier but item doesn't have consent */}
+              {canGrantLiabilitiesConsent && (
+                <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-2">
+                      <FileText className="h-5 w-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-emerald-200 font-medium">Statement Data Available</p>
+                        <p className="text-emerald-300/80 text-sm">
+                          Grant access to see statement balances and payment due dates from {account.user_plaid_items?.institution_name || "this institution"}.
+                        </p>
+                      </div>
+                    </div>
+                    <PlaidLiabilitiesButton
                       plaidItemId={account.user_plaid_items?.id || account.plaid_item_id}
                       institutionName={account.user_plaid_items?.institution_name ?? null}
                       onSuccess={() => window.location.reload()}

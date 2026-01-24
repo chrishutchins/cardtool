@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { FeedbackButton } from "@/components/feedback-button";
 import { EnvIndicator } from "@/components/env-indicator";
+import { Footer } from "@/components/footer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -42,10 +43,13 @@ export default async function RootLayout({
   return (
     <html lang="en" className="dark bg-zinc-950">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-950 min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-950 min-h-screen flex flex-col`}
       >
         <ClerkProvider>
-          {children}
+          <div className="flex-1 flex flex-col">
+            {children}
+          </div>
+          {userId && <Footer minimal />}
           {userId && <FeedbackButton />}
           <EnvIndicator />
         </ClerkProvider>

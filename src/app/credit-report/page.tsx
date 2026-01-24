@@ -342,7 +342,17 @@ export default async function CreditReportPage() {
   });
 
   // Server actions for mutations
-  async function linkAccountToWallet(creditAccountId: string, walletCardId: string | null) {
+  interface LinkResult {
+    success: boolean;
+    dateConflict?: {
+      walletCardId: string;
+      cardName: string;
+      manualDate: string;
+      creditReportDate: string;
+    };
+  }
+
+  async function linkAccountToWallet(creditAccountId: string, walletCardId: string | null): Promise<LinkResult> {
     "use server";
     const { createClient } = await import("@/lib/supabase/server");
     const { getEffectiveUserId } = await import("@/lib/emulation");
@@ -350,9 +360,10 @@ export default async function CreditReportPage() {
     
     const supabase = createClient();
     const userId = await getEffectiveUserId();
-    if (!userId) return;
+    if (!userId) return { success: false };
 
     if (walletCardId) {
+      // Create the link first
       await supabase.from("credit_account_wallet_links").upsert(
         {
           user_id: userId,
@@ -361,6 +372,65 @@ export default async function CreditReportPage() {
         },
         { onConflict: "user_id,credit_account_id" }
       );
+
+      // Fetch the credit account data
+      const { data: creditAccount } = await supabase
+        .from("credit_accounts")
+        .select("date_opened, credit_limit_cents")
+        .eq("id", creditAccountId)
+        .single();
+
+      // Fetch the wallet card data
+      const { data: walletCard } = await supabase
+        .from("user_wallets")
+        .select("id, approval_date, manual_credit_limit_cents, custom_name, cards:card_id (name)")
+        .eq("id", walletCardId)
+        .single();
+
+      if (creditAccount && walletCard) {
+        const updates: { approval_date?: string; manual_credit_limit_cents?: number } = {};
+        let dateConflict: LinkResult["dateConflict"] = undefined;
+
+        // Handle credit limit - auto-fill if wallet doesn't have one
+        if (creditAccount.credit_limit_cents && !walletCard.manual_credit_limit_cents) {
+          updates.manual_credit_limit_cents = creditAccount.credit_limit_cents;
+        }
+
+        // Handle opened date
+        if (creditAccount.date_opened) {
+          if (!walletCard.approval_date) {
+            // No existing date - auto-fill from credit report
+            updates.approval_date = creditAccount.date_opened;
+          } else {
+            // Check if dates are different
+            const walletDate = new Date(walletCard.approval_date).toISOString().split('T')[0];
+            const creditDate = new Date(creditAccount.date_opened).toISOString().split('T')[0];
+            
+            if (walletDate !== creditDate) {
+              // Dates are different - return conflict info
+              const cardName = walletCard.custom_name || (walletCard.cards as { name: string } | null)?.name || "Unknown Card";
+              dateConflict = {
+                walletCardId: walletCard.id,
+                cardName,
+                manualDate: walletCard.approval_date,
+                creditReportDate: creditAccount.date_opened,
+              };
+            }
+          }
+        }
+
+        // Apply updates if any
+        if (Object.keys(updates).length > 0) {
+          await supabase
+            .from("user_wallets")
+            .update(updates)
+            .eq("id", walletCardId);
+        }
+
+        revalidatePath("/credit-report");
+        revalidatePath("/wallet");
+        return { success: true, dateConflict };
+      }
     } else {
       await supabase
         .from("credit_account_wallet_links")
@@ -370,6 +440,27 @@ export default async function CreditReportPage() {
     }
 
     revalidatePath("/credit-report");
+    return { success: true };
+  }
+
+  async function updateWalletApprovalDate(walletCardId: string, newDate: string) {
+    "use server";
+    const { createClient } = await import("@/lib/supabase/server");
+    const { getEffectiveUserId } = await import("@/lib/emulation");
+    const { revalidatePath } = await import("next/cache");
+    
+    const supabase = createClient();
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    await supabase
+      .from("user_wallets")
+      .update({ approval_date: newDate })
+      .eq("id", walletCardId)
+      .eq("user_id", userId);
+
+    revalidatePath("/credit-report");
+    revalidatePath("/wallet");
   }
 
   async function setDisplayName(creditAccountId: string, displayName: string | null) {
@@ -710,6 +801,7 @@ export default async function CreditReportPage() {
           isAdmin={isAdmin}
           onLinkAccount={linkAccountToWallet}
           onSetDisplayName={setDisplayName}
+          onUpdateWalletApprovalDate={updateWalletApprovalDate}
             onCreateGroup={createInquiryGroup}
             onAddToGroup={addToInquiryGroup}
             onRemoveFromGroup={removeFromInquiryGroup}

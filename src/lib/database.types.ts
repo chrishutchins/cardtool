@@ -1819,6 +1819,80 @@ export type Database = {
         }
         Relationships: []
       }
+      user_bank_accounts: {
+        Row: {
+          available_balance: number | null
+          created_at: string | null
+          current_balance: number | null
+          display_name: string | null
+          id: string
+          institution_name: string | null
+          is_manual: boolean
+          is_primary: boolean | null
+          iso_currency_code: string | null
+          last_balance_update: string | null
+          mask: string | null
+          name: string
+          official_name: string | null
+          plaid_account_id: string
+          plaid_item_id: string | null
+          subtype: string | null
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          available_balance?: number | null
+          created_at?: string | null
+          current_balance?: number | null
+          display_name?: string | null
+          id?: string
+          institution_name?: string | null
+          is_manual?: boolean
+          is_primary?: boolean | null
+          iso_currency_code?: string | null
+          last_balance_update?: string | null
+          mask?: string | null
+          name: string
+          official_name?: string | null
+          plaid_account_id?: string
+          plaid_item_id?: string | null
+          subtype?: string | null
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          available_balance?: number | null
+          created_at?: string | null
+          current_balance?: number | null
+          display_name?: string | null
+          id?: string
+          institution_name?: string | null
+          is_manual?: boolean
+          is_primary?: boolean | null
+          iso_currency_code?: string | null
+          last_balance_update?: string | null
+          mask?: string | null
+          name?: string
+          official_name?: string | null
+          plaid_account_id?: string
+          plaid_item_id?: string | null
+          subtype?: string | null
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_bank_accounts_plaid_item_id_fkey"
+            columns: ["plaid_item_id"]
+            isOneToOne: false
+            referencedRelation: "user_plaid_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_bonus_display_settings: {
         Row: {
           created_at: string | null
@@ -1882,6 +1956,63 @@ export type Database = {
             foreignKeyName: "user_card_debit_pay_wallet_card_id_fkey"
             columns: ["wallet_card_id"]
             isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_card_payment_settings: {
+        Row: {
+          autopay_type: string | null
+          created_at: string | null
+          dismissed_statement_date: string | null
+          fixed_autopay_amount: number | null
+          id: string
+          is_autopay: boolean | null
+          pay_from_account_id: string | null
+          reminder_days_before: number | null
+          updated_at: string | null
+          user_id: string
+          wallet_card_id: string
+        }
+        Insert: {
+          autopay_type?: string | null
+          created_at?: string | null
+          dismissed_statement_date?: string | null
+          fixed_autopay_amount?: number | null
+          id?: string
+          is_autopay?: boolean | null
+          pay_from_account_id?: string | null
+          reminder_days_before?: number | null
+          updated_at?: string | null
+          user_id: string
+          wallet_card_id: string
+        }
+        Update: {
+          autopay_type?: string | null
+          created_at?: string | null
+          dismissed_statement_date?: string | null
+          fixed_autopay_amount?: number | null
+          id?: string
+          is_autopay?: boolean | null
+          pay_from_account_id?: string | null
+          reminder_days_before?: number | null
+          updated_at?: string | null
+          user_id?: string
+          wallet_card_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_card_payment_settings_pay_from_account_id_fkey"
+            columns: ["pay_from_account_id"]
+            isOneToOne: false
+            referencedRelation: "user_bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_card_payment_settings_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: true
             referencedRelation: "user_wallets"
             referencedColumns: ["id"]
           },
@@ -2294,6 +2425,9 @@ export type Database = {
           debit_pay_enabled: boolean | null
           id: string
           onboarding_completed: boolean | null
+          plaid_liabilities_enabled: boolean | null
+          plaid_on_demand_refresh_enabled: boolean | null
+          plaid_transactions_enabled: boolean | null
           updated_at: string | null
           user_id: string
         }
@@ -2304,6 +2438,9 @@ export type Database = {
           debit_pay_enabled?: boolean | null
           id?: string
           onboarding_completed?: boolean | null
+          plaid_liabilities_enabled?: boolean | null
+          plaid_on_demand_refresh_enabled?: boolean | null
+          plaid_transactions_enabled?: boolean | null
           updated_at?: string | null
           user_id: string
         }
@@ -2314,6 +2451,9 @@ export type Database = {
           debit_pay_enabled?: boolean | null
           id?: string
           onboarding_completed?: boolean | null
+          plaid_liabilities_enabled?: boolean | null
+          plaid_on_demand_refresh_enabled?: boolean | null
+          plaid_transactions_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
         }
@@ -2516,11 +2656,20 @@ export type Database = {
           credit_limit: number | null
           current_balance: number | null
           id: string
+          is_overdue: boolean | null
           iso_currency_code: string | null
           last_balance_update: string | null
+          last_payment_amount: number | null
+          last_payment_date: string | null
+          last_statement_balance: number | null
+          last_statement_date: string | null
+          last_statement_issue_date: string | null
+          liabilities_updated_at: string | null
           manual_credit_limit: number | null
           mask: string | null
+          minimum_payment_amount: number | null
           name: string
+          next_payment_due_date: string | null
           official_name: string | null
           plaid_account_id: string
           plaid_item_id: string
@@ -2536,11 +2685,20 @@ export type Database = {
           credit_limit?: number | null
           current_balance?: number | null
           id?: string
+          is_overdue?: boolean | null
           iso_currency_code?: string | null
           last_balance_update?: string | null
+          last_payment_amount?: number | null
+          last_payment_date?: string | null
+          last_statement_balance?: number | null
+          last_statement_date?: string | null
+          last_statement_issue_date?: string | null
+          liabilities_updated_at?: string | null
           manual_credit_limit?: number | null
           mask?: string | null
+          minimum_payment_amount?: number | null
           name: string
+          next_payment_due_date?: string | null
           official_name?: string | null
           plaid_account_id: string
           plaid_item_id: string
@@ -2556,11 +2714,20 @@ export type Database = {
           credit_limit?: number | null
           current_balance?: number | null
           id?: string
+          is_overdue?: boolean | null
           iso_currency_code?: string | null
           last_balance_update?: string | null
+          last_payment_amount?: number | null
+          last_payment_date?: string | null
+          last_statement_balance?: number | null
+          last_statement_date?: string | null
+          last_statement_issue_date?: string | null
+          liabilities_updated_at?: string | null
           manual_credit_limit?: number | null
           mask?: string | null
+          minimum_payment_amount?: number | null
           name?: string
+          next_payment_due_date?: string | null
           official_name?: string | null
           plaid_account_id?: string
           plaid_item_id?: string
@@ -2704,6 +2871,7 @@ export type Database = {
       user_plaid_items: {
         Row: {
           access_token: string
+          consented_products: string[] | null
           created_at: string | null
           error_code: string | null
           id: string
@@ -2716,6 +2884,7 @@ export type Database = {
         }
         Insert: {
           access_token: string
+          consented_products?: string[] | null
           created_at?: string | null
           error_code?: string | null
           id?: string
@@ -2728,6 +2897,7 @@ export type Database = {
         }
         Update: {
           access_token?: string
+          consented_products?: string[] | null
           created_at?: string | null
           error_code?: string | null
           id?: string
@@ -2843,6 +3013,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_linked_accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_plaid_transactions_linked_account_id_fkey"
+            columns: ["linked_account_id"]
+            isOneToOne: false
+            referencedRelation: "user_upcoming_payments"
+            referencedColumns: ["linked_account_id"]
           },
           {
             foreignKeyName: "user_plaid_transactions_matched_credit_id_fkey"
@@ -3522,6 +3699,47 @@ export type Database = {
         }
         Relationships: []
       }
+      user_upcoming_payments: {
+        Row: {
+          autopay_type: string | null
+          card_image: string | null
+          card_name: string | null
+          current_balance: number | null
+          custom_name: string | null
+          is_autopay: boolean | null
+          is_overdue: boolean | null
+          issuer_name: string | null
+          last_statement_balance: number | null
+          last_statement_date: string | null
+          linked_account_id: string | null
+          mask: string | null
+          minimum_payment_amount: number | null
+          next_payment_due_date: string | null
+          pay_from_account_id: string | null
+          pay_from_account_name: string | null
+          pay_from_available_balance: number | null
+          pay_from_current_balance: number | null
+          pay_from_institution: string | null
+          user_id: string | null
+          wallet_card_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_card_payment_settings_pay_from_account_id_fkey"
+            columns: ["pay_from_account_id"]
+            isOneToOne: false
+            referencedRelation: "user_bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_linked_accounts_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       add_card_rules: {
@@ -3617,13 +3835,6 @@ export type Database = {
         | "collection"
         | "other"
       credit_bureau: "equifax" | "experian" | "transunion"
-      credit_report_source:
-        | "myfico"
-        | "equifax"
-        | "experian"
-        | "transunion"
-        | "credit_karma"
-        | "annual_credit_report"
       credit_loan_type:
         | "credit_card"
         | "flexible_credit_card"
@@ -3635,6 +3846,13 @@ export type Database = {
         | "home_equity"
         | "retail"
         | "other"
+      credit_report_source:
+        | "myfico"
+        | "equifax"
+        | "experian"
+        | "transunion"
+        | "credit_karma"
+        | "annual_credit_report"
       credit_reset_cycle:
         | "monthly"
         | "quarterly"
@@ -3836,14 +4054,6 @@ export const Constants = {
         "other",
       ],
       credit_bureau: ["equifax", "experian", "transunion"],
-      credit_report_source: [
-        "myfico",
-        "equifax",
-        "experian",
-        "transunion",
-        "credit_karma",
-        "annual_credit_report",
-      ],
       credit_loan_type: [
         "credit_card",
         "flexible_credit_card",
@@ -3855,6 +4065,14 @@ export const Constants = {
         "home_equity",
         "retail",
         "other",
+      ],
+      credit_report_source: [
+        "myfico",
+        "equifax",
+        "experian",
+        "transunion",
+        "credit_karma",
+        "annual_credit_report",
       ],
       credit_reset_cycle: [
         "monthly",
@@ -3913,3 +4131,4 @@ export const Constants = {
     },
   },
 } as const
+

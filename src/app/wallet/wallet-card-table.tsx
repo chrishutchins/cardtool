@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { DataTable, DataTableColumn, formatDate, Badge, Tooltip } from "@/components/data-table";
 import { BonusCategoriesPopup, EarningRule, CategoryBonus } from "@/components/bonus-categories-popup";
-import { CardSettingsModal, WalletCardForSettings, LinkedAccountInfo } from "./card-settings-modal";
+import { CardSettingsModal, WalletCardForSettings, LinkedAccountInfo, BankAccountForSettings, PaymentSettingsForCard } from "./card-settings-modal";
 import { ProductChangeModal, CardForProductChange, ClosedWalletCard } from "./product-change-modal";
 import { CloseCardModal } from "./close-card-modal";
 import { CreditsPopup, CardCredit, CardPreviewModal, CardPreviewData, CardEarningRule, CardCategoryBonus } from "@/components/card-preview-modal";
@@ -78,6 +78,14 @@ interface WalletCardTableProps {
     payment_due_day: number | null;
     manual_balance_cents: number | null;
     manual_credit_limit_cents: number | null;
+  }) => Promise<void>;
+  // Payment settings
+  bankAccounts?: BankAccountForSettings[];
+  paymentSettingsMap?: Map<string, PaymentSettingsForCard>;
+  onUpdatePaymentSettings?: (walletId: string, settings: {
+    pay_from_account_id: string | null;
+    is_autopay: boolean;
+    autopay_type: string | null;
   }) => Promise<void>;
   onProductChange: (data: {
     currentWalletId: string;
@@ -190,6 +198,8 @@ export function WalletCardTable({
   statementEstimatesMap = new Map(),
   allCardsForProductChange,
   closedCardsForReactivation,
+  bankAccounts = [],
+  paymentSettingsMap = new Map(),
   onRemove,
   onUpdatePerks,
   onUpdateDebitPay,
@@ -197,6 +207,7 @@ export function WalletCardTable({
   onUpdateApprovalDate,
   onUpdatePlayerNumber,
   onUpdateStatementFields,
+  onUpdatePaymentSettings,
   onProductChange,
   onCloseCard,
   onDeleteCard,
@@ -224,11 +235,14 @@ export function WalletCardTable({
     upgradedByCardName: string | null;
     billingDates: BillingDates;
     billingFormula: string | null;
+    payFromAccountId: string | null;
+    payFromAccountName: string | null;
+    payFromShortDisplay: string | null;
   };
 
   // Modal state
   const [settingsCard, setSettingsCard] = useState<ProcessedRow | null>(null);
-  const [settingsFocusField, setSettingsFocusField] = useState<"customName" | "approvalDate" | "playerNumber" | "perks" | "debitPay" | "statementCloseDay" | "paymentDueDay" | "manualBalance" | "manualCreditLimit" | undefined>(undefined);
+  const [settingsFocusField, setSettingsFocusField] = useState<"customName" | "approvalDate" | "playerNumber" | "perks" | "debitPay" | "statementCloseDay" | "paymentDueDay" | "manualBalance" | "manualCreditLimit" | "payFrom" | undefined>(undefined);
   const [creditsCard, setCreditsCard] = useState<{ name: string; credits: CardCredit[] } | null>(null);
   const [previewCard, setPreviewCard] = useState<CardPreviewData | null>(null);
   const [productChangeCard, setProductChangeCard] = useState<ProcessedRow | null>(null);
@@ -336,11 +350,29 @@ export function WalletCardTable({
           billingFormula = 'due_plus_6';
         }
       }
+      // For BoA: business uses +27 with Fri/Sat adjustment, personal uses close-3
+      if (billingFormula === 'close_plus_27_skip_weekend') {
+        if (card.product_type === 'personal') {
+          billingFormula = 'boa_personal_formula';
+        }
+      }
       const billingDates = calculateBillingDates(
         billingFormula,
         wc.statement_close_day ?? null,
         wc.payment_due_day ?? null
       );
+
+      // Get payment settings for this card
+      const paymentSettings = paymentSettingsMap.get(wc.id);
+      const payFromAccountId = paymentSettings?.pay_from_account_id ?? null;
+      const payFromAccount = payFromAccountId ? bankAccounts.find(ba => ba.id === payFromAccountId) : null;
+      const payFromAccountName = payFromAccount 
+        ? (payFromAccount.display_name || payFromAccount.name) 
+        : null;
+      // Create short display: "Bank Last4" e.g., "Mercury 7508"
+      const payFromShortDisplay = payFromAccount
+        ? `${payFromAccount.institution_name || ''} ${payFromAccount.mask || ''}`.trim() || payFromAccountName
+        : null;
 
       return {
         ...wc,
@@ -365,9 +397,12 @@ export function WalletCardTable({
         upgradedByCardName,
         billingDates,
         billingFormula,
+        payFromAccountId,
+        payFromAccountName,
+        payFromShortDisplay,
       };
     });
-  }, [walletCards, enabledSecondaryCards, perksMap, debitPayMap, playerCount, linkedAccountsMap, statementEstimatesMap, creditsPerCard, earningRulesPerCard, categoryBonusesPerCard]);
+  }, [walletCards, enabledSecondaryCards, perksMap, debitPayMap, playerCount, linkedAccountsMap, statementEstimatesMap, creditsPerCard, earningRulesPerCard, categoryBonusesPerCard, paymentSettingsMap, bankAccounts]);
 
   type RowType = typeof rows[number];
 
@@ -459,7 +494,7 @@ export function WalletCardTable({
         >
           <option value="">All Players</option>
           {Array.from({ length: playerCount }, (_, i) => i + 1).map((num) => (
-            <option key={num} value={num}>Player {num}</option>
+            <option key={num} value={num}>{playerDescriptions.get(num) ?? `Player ${num}`}</option>
           ))}
         </select>
       )}
@@ -1024,6 +1059,28 @@ export function WalletCardTable({
           );
         },
       },
+      // Pay From Account (user-selected, dashed underline)
+      {
+        id: "pay_from",
+        label: "Pay From",
+        align: "left" as const,
+        minWidth: "100px",
+        hidden: true, // Hidden by default
+        accessor: (row) => row.payFromShortDisplay,
+        sortAccessor: (row) => row.payFromShortDisplay?.toLowerCase() ?? "",
+        render: (row) => (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openSettingsWithFocus(row, "payFrom");
+            }}
+            className={row.payFromShortDisplay ? STYLES.editable : STYLES.editableEmpty}
+            title={row.payFromAccountName ? `Paid from: ${row.payFromAccountName}` : "Click to set pay from account"}
+          >
+            {row.payFromShortDisplay || "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0"}
+          </button>
+        ),
+      },
       // Opened Date (user-entered, dashed underline)
       {
         id: "opened",
@@ -1118,12 +1175,15 @@ export function WalletCardTable({
           debitPayEnabled={debitPayEnabled}
           players={players}
           playerCount={playerCount}
+          bankAccounts={bankAccounts}
+          paymentSettings={paymentSettingsMap.get(settingsCard.id) ?? null}
           onUpdateCustomName={onUpdateCustomName}
           onUpdateApprovalDate={onUpdateApprovalDate}
           onUpdatePlayerNumber={onUpdatePlayerNumber}
           onUpdatePerks={onUpdatePerks}
           onUpdateDebitPay={onUpdateDebitPay}
           onUpdateStatementFields={onUpdateStatementFields}
+          onUpdatePaymentSettings={onUpdatePaymentSettings}
           onRemove={onRemove}
           onProductChange={() => {
             setProductChangeCard(settingsCard);

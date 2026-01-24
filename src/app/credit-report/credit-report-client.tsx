@@ -78,6 +78,16 @@ interface WalletCardForInquiries {
   issuer_name: string | null;
 }
 
+interface LinkResult {
+  success: boolean;
+  dateConflict?: {
+    walletCardId: string;
+    cardName: string;
+    manualDate: string;
+    creditReportDate: string;
+  };
+}
+
 interface CreditReportClientProps {
   scores: CreditScore[];
   accounts: CreditAccount[];
@@ -92,8 +102,9 @@ interface CreditReportClientProps {
   groupNamesMap: Map<string, string | null>;
   groupDataMap: Map<string, { groupId: string; relatedCardId: string | null; relatedNote: string | null }>;
   isAdmin: boolean;
-  onLinkAccount: (creditAccountId: string, walletCardId: string | null) => Promise<void>;
+  onLinkAccount: (creditAccountId: string, walletCardId: string | null) => Promise<LinkResult>;
   onSetDisplayName: (creditAccountId: string, displayName: string | null) => Promise<void>;
+  onUpdateWalletApprovalDate: (walletCardId: string, newDate: string) => Promise<void>;
   onCreateGroup: (inquiryIds: string[], groupName: string | null) => Promise<void>;
   onAddToGroup: (groupId: string, inquiryId: string) => Promise<void>;
   onRemoveFromGroup: (inquiryId: string) => Promise<void>;
@@ -118,6 +129,7 @@ export function CreditReportClient({
   isAdmin,
   onLinkAccount,
   onSetDisplayName,
+  onUpdateWalletApprovalDate,
   onCreateGroup,
   onAddToGroup,
   onRemoveFromGroup,
@@ -358,6 +370,7 @@ export function CreditReportClient({
           displayNames={displayNamesMap}
           onLinkAccount={onLinkAccount}
           onSetDisplayName={onSetDisplayName}
+          onUpdateWalletApprovalDate={onUpdateWalletApprovalDate}
         />
       </div>
 

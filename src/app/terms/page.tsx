@@ -47,7 +47,7 @@ export default function TermsPage() {
                 </li>
                 <li>
                   <strong>Bank account linking:</strong> Optionally connect accounts via Plaid to
-                  sync balances and transactions for automatic credit detection
+                  sync balances, transactions, and statement information for automatic credit detection
                 </li>
                 <li>
                   <strong>Points balance tracking:</strong> Track loyalty program balances across
@@ -62,7 +62,7 @@ export default function TermsPage() {
                   certificates, and other card benefits
                 </li>
                 <li>
-                  <strong>Browser extension:</strong> Optional Tampermonkey script to import
+                  <strong>Tampermonkey script:</strong> Optional userscript to import
                   loyalty balances and credit report data from program websites
                 </li>
               </ul>
@@ -70,27 +70,36 @@ export default function TermsPage() {
 
             <section className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6">
               <h2 className="text-2xl font-semibold text-amber-300 mb-4">
-                2. Financial Disclaimer
+                2. Financial &amp; Credit Report Disclaimer
               </h2>
               <p className="text-zinc-300 leading-relaxed mb-4">
                 CardTool provides information about credit card rewards programs. This
                 information is for educational and informational purposes only and should
                 not be construed as financial advice.
               </p>
-              <p className="text-zinc-300 leading-relaxed mb-4 font-medium">
-                CardTool is not a credit reporting agency. Any credit scores or report data
-                displayed are for your convenience only and are retrieved via third-party
-                sources (such as the browser extension or connected accounts). We do not
-                guarantee that this data is the same as the data used by lenders or that it
-                is complete, accurate, or up-to-date. We are not responsible for any
-                inaccuracies in data imported via Plaid or the Browser Extension.
-              </p>
-              <p className="text-zinc-300 leading-relaxed mb-4 font-medium">
-                Credit report data displayed in CardTool is not intended to be used to make
-                decisions about eligibility for credit, employment, housing, insurance, or
-                other purposes covered by the Fair Credit Reporting Act (FCRA). Do not rely
-                on CardTool as your official credit report.
-              </p>
+              
+              <div className="bg-zinc-800/50 rounded-lg p-4 mb-4">
+                <h3 className="text-lg font-medium text-amber-300 mb-2">
+                  Not a Credit Reporting Agency
+                </h3>
+                <p className="text-zinc-300 leading-relaxed mb-2 text-sm">
+                  CardTool is <strong>not a consumer reporting agency</strong> as defined by the 
+                  Fair Credit Reporting Act (FCRA). Any credit scores or report data displayed are 
+                  for your convenience only and are retrieved via third-party sources (such as 
+                  the Tampermonkey script or connected accounts).
+                </p>
+                <p className="text-zinc-300 leading-relaxed mb-2 text-sm font-medium">
+                  Credit report data displayed in CardTool is <strong>not intended to be used</strong> to 
+                  make decisions about eligibility for credit, employment, housing, insurance, or 
+                  other purposes covered by the FCRA.
+                </p>
+                <p className="text-zinc-300 leading-relaxed text-sm">
+                  <strong>Do not rely on CardTool as your official credit report.</strong> Data may 
+                  be incomplete, delayed, or differ from official bureau reports. We are not 
+                  responsible for any inaccuracies in data imported via Plaid or the Tampermonkey script.
+                </p>
+              </div>
+
               <ul className="list-disc list-inside text-zinc-300 space-y-2">
                 <li>
                   Reward values and calculations are estimates and may not reflect actual earnings
@@ -106,10 +115,6 @@ export default function TermsPage() {
                 </li>
                 <li>
                   Credit card applications and approvals are subject to issuer requirements
-                </li>
-                <li>
-                  Credit report data synced via our tools may be incomplete, delayed, or
-                  differ from official bureau reports
                 </li>
               </ul>
             </section>
@@ -132,19 +137,27 @@ export default function TermsPage() {
                 We reserve the right to suspend or terminate accounts that violate these
                 terms or for any other reason at our sole discretion.
               </p>
-              <h3 className="text-lg font-medium text-zinc-200 mt-6 mb-3">
-                Beta Service
-              </h3>
-              <p className="text-zinc-300 leading-relaxed mb-4">
-                CardTool is currently in beta. This means:
-              </p>
-              <ul className="list-disc list-inside text-zinc-300 space-y-2 mb-4">
-                <li>Features may change, be modified, or be discontinued without notice</li>
-                <li>The service may experience downtime or interruptions</li>
-                <li>We may modify data schemas or storage methods</li>
-                <li>We are not responsible for data loss resulting from service changes,
-                  bugs, or discontinuation</li>
-              </ul>
+
+              <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 mt-6">
+                <h3 className="text-lg font-medium text-zinc-200 mb-3">
+                  Beta Service
+                </h3>
+                <p className="text-zinc-300 leading-relaxed mb-4 text-sm">
+                  CardTool is currently in beta. This means:
+                </p>
+                <ul className="list-disc list-inside text-zinc-300 space-y-2 text-sm mb-4">
+                  <li>Features may change, be modified, or be discontinued without notice</li>
+                  <li>The service may experience downtime or interruptions</li>
+                  <li>We may modify data schemas or storage methods</li>
+                  <li>Bugs or errors may occur that affect your data</li>
+                </ul>
+                <p className="text-zinc-300 leading-relaxed text-sm font-medium">
+                  We are not responsible for data loss resulting from service changes, bugs, 
+                  system failures, or discontinuation of the service. We recommend maintaining 
+                  your own records of important information.
+                </p>
+              </div>
+
               <h3 className="text-lg font-medium text-zinc-200 mt-6 mb-3">
                 Multi-Player / Household Data
               </h3>
@@ -200,6 +213,9 @@ export default function TermsPage() {
                   We are not liable for indirect, incidental, special, consequential, or
                   punitive damages
                 </li>
+                <li>
+                  We are not liable for data loss, data corruption, or service interruptions
+                </li>
               </ul>
             </section>
 
@@ -240,8 +256,8 @@ export default function TermsPage() {
                   You authorize Plaid Inc. to access your financial accounts on your behalf
                 </li>
                 <li>
-                  You authorize CardTool to retrieve account balances, credit limits, and
-                  transaction history from your linked accounts
+                  You authorize CardTool to retrieve account balances, credit limits, statement
+                  information, and transaction history from your linked accounts
                 </li>
                 <li>
                   Transaction data is used to automatically detect credit card benefit usage
@@ -281,12 +297,12 @@ export default function TermsPage() {
 
             <section className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-6">
               <h2 className="text-2xl font-semibold text-purple-300 mb-4">
-                8. Browser Extension (Tampermonkey Script)
+                8. Tampermonkey Script
               </h2>
               <p className="text-zinc-300 leading-relaxed mb-4">
-                CardTool offers an optional browser extension (Tampermonkey userscript) that
-                allows you to import loyalty program balances and credit report data directly
-                from program websites.
+                CardTool offers an optional Tampermonkey userscript that allows you to import 
+                loyalty program balances and credit report data directly from program websites.
+                Tampermonkey is a popular browser add-on that runs user scripts on web pages.
               </p>
 
               <h3 className="text-lg font-medium text-zinc-200 mb-3">
@@ -309,26 +325,26 @@ export default function TermsPage() {
               <h3 className="text-lg font-medium text-zinc-200 mb-3">
                 Technical Access
               </h3>
-              <p className="text-zinc-300 leading-relaxed mb-4">
-                The browser extension requires broad website access permissions to function
-                across different loyalty program sites. While the extension technically has
+              <p className="text-zinc-300 leading-relaxed mb-4 text-sm">
+                The script requires broad website access permissions 
+                (<code className="bg-zinc-800 px-1 rounded">@match *://*/*</code>) to function
+                across different loyalty program sites. While the script technically has
                 access to page content on websites you visit, it only reads data from
-                recognized loyalty program and credit bureau sites, and only transmits data
-                when you initiate a sync.
+                recognized sites and only transmits data when you initiate a sync.
               </p>
 
               <h3 className="text-lg font-medium text-zinc-200 mb-3">
                 Your Responsibilities
               </h3>
               <p className="text-zinc-300 leading-relaxed mb-4">
-                By using the Browser Extension, you acknowledge that you are manually
+                By using the Tampermonkey script, you acknowledge that you are manually
                 initiating a transfer of data from your loyalty program or credit provider
                 to CardTool. You are responsible for ensuring that this action does not
                 violate the terms of service of those third-party websites.
               </p>
               <ul className="list-disc list-inside text-zinc-300 space-y-2">
                 <li>
-                  You are responsible for ensuring your use of the extension complies with
+                  You are responsible for ensuring your use of the script complies with
                   the terms of service of the websites you access
                 </li>
                 <li>
@@ -337,15 +353,15 @@ export default function TermsPage() {
                 </li>
                 <li>
                   CardTool is not responsible for any consequences arising from your use
-                  of the extension on third-party websites, including account suspension
+                  of the script on third-party websites, including account suspension
                   or termination by those services
                 </li>
                 <li>
-                  We do not guarantee that the extension will work on any particular site;
-                  websites may change and break compatibility at any time
+                  <strong>We do not guarantee that the script will work on any particular site;</strong>{" "}
+                  websites may change their structure and break compatibility at any time
                 </li>
                 <li>
-                  CardTool is not affiliated with the loyalty programs, banks, or credit
+                  CardTool is <strong>not affiliated with</strong> the loyalty programs, banks, or credit
                   bureaus whose websites you access unless explicitly stated
                 </li>
               </ul>
@@ -457,11 +473,20 @@ export default function TermsPage() {
                 codes, access keys, or other sensitive credentials, you do so at your own
                 risk.
               </p>
-              <p className="text-zinc-300 leading-relaxed mb-4 font-medium">
-                Do not store Social Security numbers, full account numbers, bank passwords,
-                or other highly sensitive credentials in CardTool. We may remove content
-                that appears to include such information.
-              </p>
+              <div className="bg-zinc-800/50 rounded-lg p-4 mb-4">
+                <p className="text-zinc-300 leading-relaxed text-sm font-medium mb-2">
+                  <strong className="text-red-300">Do not store:</strong>
+                </p>
+                <ul className="list-disc list-inside text-zinc-300 space-y-1 text-sm">
+                  <li>Social Security numbers</li>
+                  <li>Full credit card or bank account numbers</li>
+                  <li>Bank passwords or login credentials</li>
+                  <li>Other highly sensitive personal identifiers</li>
+                </ul>
+                <p className="text-zinc-300 leading-relaxed text-sm mt-3">
+                  We may remove content that appears to include such information.
+                </p>
+              </div>
               <ul className="list-disc list-inside text-zinc-300 space-y-2">
                 <li>
                   CardTool is not responsible for the loss, theft, or unauthorized access
@@ -506,4 +531,3 @@ export default function TermsPage() {
     </div>
   );
 }
-

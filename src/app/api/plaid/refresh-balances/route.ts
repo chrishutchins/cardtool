@@ -5,6 +5,11 @@ import { getEffectiveUserId } from '@/lib/emulation';
 import { plaidClient } from '@/lib/plaid';
 import logger from '@/lib/logger';
 
+/**
+ * Refresh balances using the free accountsGet endpoint (cached balances).
+ * This is suitable for UI display purposes where real-time balance isn't required.
+ * For real-time balance, use the paid Balance product via accountsBalanceGet.
+ */
 export async function POST() {
   try {
     const user = await currentUser();
@@ -41,24 +46,19 @@ export async function POST() {
 
     let totalUpdated = 0;
 
-    // Refresh balances for each Plaid item
+    // Refresh balances for each Plaid item using free accountsGet (cached balances)
     for (const item of plaidItems) {
       try {
         logger.debug({ plaidItemId: item.id, userId: effectiveUserId }, 'Refreshing balances for item');
         
-        // Set min_last_updated_datetime to 24 hours ago
-        const minLastUpdated = new Date();
-        minLastUpdated.setHours(minLastUpdated.getHours() - 24);
-        
-        const balanceResponse = await plaidClient.accountsBalanceGet({
+        // Use accountsGet (free, cached) instead of accountsBalanceGet (paid, real-time)
+        // Cached balances are updated 1-4x daily by Plaid automatically
+        const accountsResponse = await plaidClient.accountsGet({
           access_token: item.access_token,
-          options: {
-            min_last_updated_datetime: minLastUpdated.toISOString(),
-          },
         });
 
         // Update each account's balance
-        for (const account of balanceResponse.data.accounts) {
+        for (const account of accountsResponse.data.accounts) {
           if (account.type === 'credit' || account.subtype === 'credit card') {
             const { data: updatedRows, error: updateError } = await supabase
               .from('user_linked_accounts')

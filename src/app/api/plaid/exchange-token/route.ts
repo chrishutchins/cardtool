@@ -58,32 +58,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logger.debug({ plaidItemId: plaidItem.id, userId: effectiveUserId }, 'Fetching balances for item');
+    logger.debug({ plaidItemId: plaidItem.id, userId: effectiveUserId }, 'Fetching accounts for item');
     
-    // Helper function to fetch balances with retries
-    async function fetchBalancesWithRetry(token: string, maxRetries = 3, delayMs = 1000) {
+    // Helper function to fetch accounts with retries
+    // Uses accountsGet (free, cached balances) instead of accountsBalanceGet (paid, real-time)
+    async function fetchAccountsWithRetry(token: string, maxRetries = 3, delayMs = 1000) {
       let lastError: unknown;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          logger.debug({ attempt, maxRetries }, 'Balance fetch attempt');
+          logger.debug({ attempt, maxRetries }, 'Account fetch attempt');
           
-          // Set min_last_updated_datetime to 24 hours ago
-          const minLastUpdated = new Date();
-          minLastUpdated.setHours(minLastUpdated.getHours() - 24);
-          
-          const response = await plaidClient.accountsBalanceGet({
+          // Use accountsGet (free) instead of accountsBalanceGet (paid)
+          // This returns cached balances which is sufficient for initial link
+          const response = await plaidClient.accountsGet({
             access_token: token,
-            options: {
-              min_last_updated_datetime: minLastUpdated.toISOString(),
-            },
           });
-          logger.debug({ attempt }, 'Balance fetch successful');
+          logger.debug({ attempt }, 'Account fetch successful');
           return response;
         } catch (err) {
           lastError = err;
           logger.debug(
             { attempt, err: err instanceof Error ? err.message : 'Unknown error' },
-            'Balance fetch attempt failed'
+            'Account fetch attempt failed'
           );
           if (attempt < maxRetries) {
             await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -94,14 +90,14 @@ export async function POST(request: NextRequest) {
       throw lastError;
     }
     
-    let balanceResponse;
+    let accountsResponse;
     try {
-      balanceResponse = await fetchBalancesWithRetry(accessToken);
-    } catch (balanceError: unknown) {
-      const errorMessage = balanceError instanceof Error ? balanceError.message : 'Unknown error';
+      accountsResponse = await fetchAccountsWithRetry(accessToken);
+    } catch (accountsError: unknown) {
+      const errorMessage = accountsError instanceof Error ? accountsError.message : 'Unknown error';
       logger.error(
-        { err: balanceError, userId: effectiveUserId, institution: metadata?.institution?.name },
-        'Failed to fetch balances from Plaid'
+        { err: accountsError, userId: effectiveUserId, institution: metadata?.institution?.name },
+        'Failed to fetch accounts from Plaid'
       );
       
       // Try to use accounts from metadata if balance fetch fails
@@ -162,7 +158,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Store linked accounts - include both type=credit AND subtype=credit card
-    const creditAccounts = balanceResponse.data.accounts.filter(
+    const creditAccounts = accountsResponse.data.accounts.filter(
       (account) => account.type === 'credit' || account.subtype === 'credit card'
     );
 

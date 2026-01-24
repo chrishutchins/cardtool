@@ -78,9 +78,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (typeof balance !== "number" || isNaN(balance) || balance < 0) {
+    if (typeof balance !== "number" || isNaN(balance) || !isFinite(balance) || balance < 0) {
       return NextResponse.json(
-        { error: "Invalid balance: must be a non-negative number" },
+        { error: "Invalid balance: must be a non-negative finite number" },
         { status: 400 }
       );
     }
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
             { status: 500 }
           );
         }
-      } else if (result !== null) {
+      } else if (result !== null && typeof result === 'number') {
         // RPC returns the new balance
         finalBalance = result;
         
@@ -186,6 +186,20 @@ export async function POST(request: Request) {
           added: additive ? inputBalance : undefined,
           playerNumber,
         });
+      } else {
+        // RPC succeeded but returned null/invalid - use fallback additive logic
+        logger.warn({ userId, currencyCode, result }, "Atomic upsert returned null, using fallback");
+        const { data: existing } = await supabase
+          .from("user_point_balances")
+          .select("balance")
+          .eq("user_id", userId)
+          .eq("currency_id", currency.id)
+          .eq("player_number", playerNumber)
+          .maybeSingle();
+        
+        if (existing) {
+          finalBalance = existing.balance + inputBalance;
+        }
       }
     }
 

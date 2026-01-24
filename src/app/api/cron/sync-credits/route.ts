@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { plaidClient } from '@/lib/plaid';
 import { matchTransactionsToCredits } from '@/lib/credit-matcher';
-import { Transaction } from 'plaid';
+import { Transaction, Products } from 'plaid';
 import logger from '@/lib/logger';
+import { FORMULA_INFO, BillingCycleFormula } from '@/lib/billing-cycle';
 
 // Extended transaction type that includes original_description when requested
 type TransactionWithDescription = Transaction & { original_description?: string | null };
@@ -216,6 +217,124 @@ export async function GET(request: NextRequest) {
         if (unmatchedTxns && unmatchedTxns.length > 0) {
           const matchResult = await matchTransactionsToCredits(supabase, userId, unmatchedTxns);
           totalCreditsMatched += matchResult.matched;
+        }
+
+        // Refresh liabilities for users who have it enabled
+        const { data: featureFlags } = await supabase
+          .from('user_feature_flags')
+          .select('plaid_liabilities_enabled')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (featureFlags?.plaid_liabilities_enabled) {
+          for (const plaidItem of items) {
+            try {
+              // Check if this item has liabilities consent
+              const itemResponse = await plaidClient.itemGet({
+                access_token: plaidItem.access_token,
+              });
+              
+              const consentedProducts = itemResponse.data.item.consented_products || [];
+              const hasLiabilitiesConsent = consentedProducts.includes(Products.Liabilities);
+              
+              if (!hasLiabilitiesConsent) continue;
+
+              // Get liabilities data
+              const liabilitiesResponse = await plaidClient.liabilitiesGet({
+                access_token: plaidItem.access_token,
+              });
+
+              const creditLiabilities = liabilitiesResponse.data.liabilities.credit || [];
+
+              // Update each account's liability data
+              for (const liability of creditLiabilities) {
+                if (!liability.account_id) continue;
+                
+                const { data: updatedRows, error: updateError } = await supabase
+                  .from('user_linked_accounts')
+                  .update({
+                    last_statement_balance: liability.last_statement_balance,
+                    last_statement_date: liability.last_statement_issue_date,
+                    last_statement_issue_date: liability.last_statement_issue_date,
+                    next_payment_due_date: liability.next_payment_due_date,
+                    minimum_payment_amount: liability.minimum_payment_amount,
+                    is_overdue: liability.is_overdue ?? false,
+                    last_payment_amount: liability.last_payment_amount,
+                    last_payment_date: liability.last_payment_date,
+                    liabilities_updated_at: new Date().toISOString(),
+                  })
+                  .eq('plaid_item_id', plaidItem.id)
+                  .eq('plaid_account_id', liability.account_id)
+                  .select('id, wallet_card_id');
+                
+                if (updateError) {
+                  logger.warn({ 
+                    err: updateError, 
+                    userId, 
+                    plaidItemId: plaidItem.id, 
+                    accountId: liability.account_id 
+                  }, 'Failed to update liability data in cron');
+                } else if (updatedRows) {
+                  // Auto-populate wallet billing fields from liabilities data
+                  // Only populate the PRIMARY field based on the card's billing formula
+                  for (const linkedAccount of updatedRows) {
+                    if (!linkedAccount.wallet_card_id) continue;
+                    
+                    // Get wallet card with card and issuer info to determine billing formula
+                    const { data: walletCard } = await supabase
+                      .from('user_wallets')
+                      .select(`
+                        id, 
+                        statement_close_day, 
+                        payment_due_day,
+                        cards:card_id (
+                          issuers:issuer_id (
+                            billing_cycle_formula
+                          )
+                        )
+                      `)
+                      .eq('id', linkedAccount.wallet_card_id)
+                      .single();
+                    
+                    if (!walletCard) continue;
+                    
+                    // Determine which field is primary based on the billing formula
+                    const formula = (walletCard.cards as { issuers?: { billing_cycle_formula?: string } })?.issuers?.billing_cycle_formula as BillingCycleFormula | null;
+                    const formulaInfo = formula ? FORMULA_INFO[formula] : null;
+                    const primaryInput = formulaInfo?.primaryInput ?? 'due'; // Default to 'due' if no formula
+                    
+                    const updates: { statement_close_day?: number; payment_due_day?: number } = {};
+                    
+                    // Only populate the PRIMARY field
+                    if (primaryInput === 'close') {
+                      // Close-primary formulas (BoA): populate statement_close_day
+                      if (walletCard.statement_close_day === null && liability.last_statement_issue_date) {
+                        const closeDate = new Date(liability.last_statement_issue_date + 'T12:00:00');
+                        updates.statement_close_day = closeDate.getDate();
+                      }
+                    } else {
+                      // Due-primary formulas (Amex, Chase, etc.): populate payment_due_day
+                      if (walletCard.payment_due_day === null && liability.next_payment_due_date) {
+                        const dueDate = new Date(liability.next_payment_due_date + 'T12:00:00');
+                        updates.payment_due_day = dueDate.getDate();
+                      }
+                    }
+                    
+                    // Update wallet if we have changes
+                    if (Object.keys(updates).length > 0) {
+                      await supabase
+                        .from('user_wallets')
+                        .update(updates)
+                        .eq('id', linkedAccount.wallet_card_id);
+                    }
+                  }
+                }
+              }
+            } catch (liabErr) {
+              // Don't fail the whole sync for liabilities errors
+              logger.warn({ err: liabErr, userId, plaidItemId: plaidItem.id }, 'Failed to refresh liabilities in cron');
+            }
+          }
         }
 
         usersProcessed++;

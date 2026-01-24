@@ -89,6 +89,8 @@ export default async function WalletPage() {
     playersResult,
     linkedAccountsResult,
     transactionsResult,
+    bankAccountsResult,
+    paymentSettingsResult,
   ] = await Promise.all([
     // Cached data (hits cache, not DB on subsequent requests)
     getCachedEarningRules(),
@@ -247,7 +249,13 @@ export default async function WalletPage() {
         credit_limit,
         manual_credit_limit,
         available_balance,
-        last_balance_update
+        last_balance_update,
+        last_statement_balance,
+        last_statement_issue_date,
+        next_payment_due_date,
+        last_payment_amount,
+        last_payment_date,
+        is_overdue
       `)
       .eq("user_id", effectiveUserId),
     
@@ -263,7 +271,36 @@ export default async function WalletPage() {
       `)
       .eq("user_id", effectiveUserId)
       .eq("pending", false)
-      .gte("date", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]),
+      .gte("date", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+      .order("date", { ascending: false }),
+    
+    // User's linked bank accounts for "Pay From" feature
+    supabase
+      .from("user_bank_accounts")
+      .select(`
+        id,
+        name,
+        official_name,
+        display_name,
+        type,
+        subtype,
+        mask,
+        institution_name,
+        current_balance,
+        available_balance,
+        iso_currency_code,
+        last_balance_update,
+        is_primary,
+        is_manual
+      `)
+      .eq("user_id", effectiveUserId)
+      .order("is_primary", { ascending: false })
+      .order("institution_name", { ascending: true }),
+    // User's card payment settings
+    supabase
+      .from("user_card_payment_settings")
+      .select("wallet_card_id, pay_from_account_id, is_autopay, autopay_type")
+      .eq("user_id", effectiveUserId),
   ]);
 
   // Players data
@@ -562,6 +599,12 @@ export default async function WalletPage() {
     manual_credit_limit: number | null;
     available_balance: number | null;
     last_balance_update: string | null;
+    last_statement_balance: number | null;
+    last_statement_issue_date: string | null;
+    next_payment_due_date: string | null;
+    last_payment_amount: number | null;
+    last_payment_date: string | null;
+    is_overdue: boolean;
   };
   const linkedAccountsMap = new Map<string, LinkedAccountData>();
   // Also build reverse map: linked_account_id -> wallet_card_id
@@ -1144,6 +1187,37 @@ export default async function WalletPage() {
     revalidatePath("/wallet");
   }
 
+  async function updatePaymentSettings(walletCardId: string, settings: {
+    pay_from_account_id: string | null;
+    is_autopay: boolean;
+    autopay_type: string | null;
+  }) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("[updatePaymentSettings] No user ID");
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("user_card_payment_settings")
+      .upsert({
+        user_id: userId,
+        wallet_card_id: walletCardId,
+        pay_from_account_id: settings.pay_from_account_id,
+        is_autopay: settings.is_autopay,
+        autopay_type: settings.autopay_type,
+      }, { onConflict: "wallet_card_id" });
+    
+    if (error) {
+      console.error("[updatePaymentSettings] Error:", error);
+      throw new Error(`Failed to update payment settings: ${error.message}`);
+    }
+    
+    revalidatePath("/wallet");
+  }
+
   async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) {
     "use server";
     const userId = await getEffectiveUserId();
@@ -1544,6 +1618,126 @@ export default async function WalletPage() {
 
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
+  // Bank account server actions
+  async function deleteBankAccount(accountId: string) {
+    "use server";
+    const supabase = createClient();
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    // Get the plaid_item_id before deleting
+    const { data: account } = await supabase
+      .from("user_bank_accounts")
+      .select("plaid_item_id, is_manual")
+      .eq("id", accountId)
+      .eq("user_id", userId)
+      .single();
+
+    if (!account) return;
+
+    // Delete the bank account
+    await supabase
+      .from("user_bank_accounts")
+      .delete()
+      .eq("id", accountId)
+      .eq("user_id", userId);
+
+    // If this was a Plaid-linked account, check if we need to clean up the Plaid item
+    if (!account.is_manual && account.plaid_item_id) {
+      // Check if there are any other accounts from this Plaid item
+      const { count } = await supabase
+        .from("user_bank_accounts")
+        .select("id", { count: "exact", head: true })
+        .eq("plaid_item_id", account.plaid_item_id);
+
+      // If no more accounts from this item, delete the Plaid item too
+      if (count === 0) {
+        await supabase
+          .from("user_plaid_items")
+          .delete()
+          .eq("id", account.plaid_item_id);
+      }
+    }
+
+    revalidatePath("/wallet");
+  }
+
+  async function setBankAccountPrimary(accountId: string) {
+    "use server";
+    const supabase = createClient();
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    await supabase
+      .from("user_bank_accounts")
+      .update({ is_primary: true })
+      .eq("id", accountId)
+      .eq("user_id", userId);
+
+    revalidatePath("/wallet");
+  }
+
+  async function updateBankAccountDisplayName(accountId: string, displayName: string | null) {
+    "use server";
+    const supabase = createClient();
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    await supabase
+      .from("user_bank_accounts")
+      .update({ display_name: displayName })
+      .eq("id", accountId)
+      .eq("user_id", userId);
+
+    revalidatePath("/wallet");
+  }
+
+  // Bank accounts data
+  const bankAccounts = (bankAccountsResult.data ?? []) as {
+    id: string;
+    name: string;
+    official_name: string | null;
+    display_name: string | null;
+    type: string;
+    subtype: string | null;
+    mask: string | null;
+    institution_name: string | null;
+    current_balance: number | null;
+    available_balance: number | null;
+    iso_currency_code: string | null;
+    last_balance_update: string | null;
+    is_primary: boolean | null;
+    is_manual: boolean;
+  }[];
+
+  // Payment settings data and map
+  type PaymentSettings = {
+    wallet_card_id: string;
+    pay_from_account_id: string | null;
+    is_autopay: boolean;
+    autopay_type: string | null;
+  };
+  const paymentSettingsData = (paymentSettingsResult.data ?? []) as PaymentSettings[];
+  const paymentSettingsMap = new Map<string, { pay_from_account_id: string | null; is_autopay: boolean; autopay_type: string | null }>();
+  paymentSettingsData.forEach(ps => {
+    paymentSettingsMap.set(ps.wallet_card_id, {
+      pay_from_account_id: ps.pay_from_account_id,
+      is_autopay: ps.is_autopay,
+      autopay_type: ps.autopay_type,
+    });
+  });
+
+  // Bank accounts for card settings (simplified type for the modal)
+  const bankAccountsForSettings = bankAccounts.map(ba => ({
+    id: ba.id,
+    name: ba.name,
+    display_name: ba.display_name,
+    institution_name: ba.institution_name,
+    mask: ba.mask,
+    available_balance: ba.available_balance,
+    is_primary: ba.is_primary,
+  }));
+
   return (
     <WalletClient>
       <div className="min-h-screen bg-zinc-950">
@@ -1602,6 +1796,9 @@ export default async function WalletPage() {
               onUpdateApprovalDate={updateApprovalDate}
               onUpdatePlayerNumber={updatePlayerNumber}
               onUpdateStatementFields={updateStatementFields}
+              bankAccounts={bankAccountsForSettings}
+              paymentSettingsMap={paymentSettingsMap}
+              onUpdatePaymentSettings={updatePaymentSettings}
               onProductChange={productChangeCard}
               onCloseCard={closeCard}
               onDeleteCard={deleteCard}
@@ -1647,6 +1844,7 @@ export default async function WalletPage() {
               onToggleSpendBonusActive={toggleUserSpendBonusActive}
             />
           )}
+
         </div>
       </div>
     </WalletClient>

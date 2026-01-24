@@ -54,6 +54,7 @@ const baseNavGroups: NavEntry[] = [
       { href: "/compare", label: "Compare", onboardingId: "compare" },
       { href: "/credits", label: "Credits", onboardingId: "credits" },
       { href: "/offers", label: "Offers", onboardingId: "offers" },
+      { href: "/payments", label: "Payments", onboardingId: "payments" },
     ],
   },
   {

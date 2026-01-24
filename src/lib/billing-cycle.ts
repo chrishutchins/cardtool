@@ -17,7 +17,8 @@ export type BillingCycleFormula =
   | 'bilt_formula'              // Bilt: Same as Amex/Wells Fargo
   | 'due_plus_3'                // Chase cobrand + personal UR: Close = Due day + 3
   | 'due_plus_6'                // Chase business UR: Close = Due day + 6
-  | 'close_plus_27_skip_weekend' // BoA: Due = 27 days after close (adjust for Fri/Sat)
+  | 'close_plus_27_skip_weekend' // BoA Business: Due = 27 days after close (Fri → 26, Sat → 25)
+  | 'boa_personal_formula'      // BoA Personal: Due day = Close day - 3 (fixed, no adjustment)
   | 'citi_formula'              // Citi: Complex formula with month boundary handling
   | 'usbank_formula';           // US Bank: Close = (due - 3)th weekday of month
 
@@ -69,8 +70,13 @@ export const FORMULA_INFO: Record<BillingCycleFormula, FormulaInfo> = {
   },
   'close_plus_27_skip_weekend': {
     primaryInput: 'close',
-    description: 'Payment due 27 days after statement close (26 if Friday, 25 if Saturday)',
-    shortDescription: 'Due = Close + 27 days (skip weekend)',
+    description: 'Payment due 27 days after statement close (Fri → 26, Sat → 25) - BoA Business',
+    shortDescription: 'Due = Close + 27 days (Fri/Sat adj)',
+  },
+  'boa_personal_formula': {
+    primaryInput: 'close',
+    description: 'Payment due day = Statement close day - 3 (fixed day-of-month, no weekend adjustment) - BoA Personal',
+    shortDescription: 'Due Day = Close Day - 3',
   },
   'citi_formula': {
     primaryInput: 'due',
@@ -227,29 +233,34 @@ function getDayOfMonthOffset(baseDayOfMonth: number, offset: number, referenceDa
  * Capital One: Close = 25 days before due
  * 
  * For formulas where close < due:
- * - lastClose = close for the PREVIOUS due (most recent due that passed)
- * - nextClose = close for the UPCOMING due (nextDue)
- * - If nextClose is in the past (close already happened for upcoming due), advance one cycle
+ * - If the close for the upcoming due has already passed, THAT is the lastClose
+ * - Otherwise, lastClose is from the previous due cycle
  */
 function calculateDueMinus25(dueDay: number, referenceDate: Date): { closeDay: number; nextClose: Date; nextDue: Date; lastClose: Date } {
   const today = new Date(referenceDate);
   today.setHours(0, 0, 0, 0);
   
-  // Previous due = most recent due date (including today if it's due day)
-  const prevDue = getPreviousOccurrenceOfDay(dueDay, referenceDate, true);
-  // Last close = 25 days before the most recent due
-  const lastClose = subDays(prevDue, 25);
-  
   // Next due = upcoming payment due date
   const nextDue = getNextOccurrenceOfDay(dueDay, referenceDate, true);
-  // Next close = 25 days before upcoming due
-  let nextClose = subDays(nextDue, 25);
+  // Close for next due = 25 days before
+  let closeForNextDue = subDays(nextDue, 25);
   
-  // If nextClose is in the past (close already happened), advance to next cycle
-  if (nextClose < today) {
+  let lastClose: Date;
+  let nextClose: Date;
+  
+  if (closeForNextDue < today) {
+    // The close for the upcoming due has already happened
+    // So lastClose = that close, and nextClose = close for the following cycle
+    lastClose = closeForNextDue;
     const futureDue = new Date(nextDue);
     futureDue.setMonth(futureDue.getMonth() + 1);
     nextClose = subDays(futureDue, 25);
+  } else {
+    // The close for the upcoming due hasn't happened yet
+    // nextClose = that close, lastClose = close from previous due
+    nextClose = closeForNextDue;
+    const prevDue = getPreviousOccurrenceOfDay(dueDay, referenceDate, true);
+    lastClose = subDays(prevDue, 25);
   }
   
   return {
@@ -264,9 +275,8 @@ function calculateDueMinus25(dueDay: number, referenceDate: Date): { closeDay: n
  * Amex/Wells Fargo: Close = 25 days before due, or 26 if that falls on Saturday
  * 
  * For formulas where close < due:
- * - lastClose = close for the PREVIOUS due (most recent due that passed)
- * - nextClose = close for the UPCOMING due (nextDue)
- * - If nextClose is in the past (close already happened for upcoming due), advance one cycle
+ * - If the close for the upcoming due has already passed, THAT is the lastClose
+ * - Otherwise, lastClose is from the previous due cycle
  */
 function calculateDueMinus25SkipSat(dueDay: number, referenceDate: Date): { closeDay: number; nextClose: Date; nextDue: Date; lastClose: Date } {
   const today = new Date(referenceDate);
@@ -281,21 +291,27 @@ function calculateDueMinus25SkipSat(dueDay: number, referenceDate: Date): { clos
     return close;
   };
   
-  // Previous due = most recent due date (including today if it's due day)
-  const prevDue = getPreviousOccurrenceOfDay(dueDay, referenceDate, true);
-  // Last close = 25 days before the most recent due
-  const lastClose = calculateClose(prevDue);
-  
   // Next due = upcoming payment due date
   const nextDue = getNextOccurrenceOfDay(dueDay, referenceDate, true);
-  // Next close = 25 days before upcoming due
-  let nextClose = calculateClose(nextDue);
+  // Close for next due
+  let closeForNextDue = calculateClose(nextDue);
   
-  // If nextClose is in the past (close already happened), advance to next cycle
-  if (nextClose < today) {
+  let lastClose: Date;
+  let nextClose: Date;
+  
+  if (closeForNextDue < today) {
+    // The close for the upcoming due has already happened
+    // So lastClose = that close, and nextClose = close for the following cycle
+    lastClose = closeForNextDue;
     const futureDue = new Date(nextDue);
     futureDue.setMonth(futureDue.getMonth() + 1);
     nextClose = calculateClose(futureDue);
+  } else {
+    // The close for the upcoming due hasn't happened yet
+    // nextClose = that close, lastClose = close from previous due
+    nextClose = closeForNextDue;
+    const prevDue = getPreviousOccurrenceOfDay(dueDay, referenceDate, true);
+    lastClose = calculateClose(prevDue);
   }
   
   return {
@@ -375,9 +391,9 @@ function calculateDuePlus6(dueDay: number, referenceDate: Date): { closeDay: num
 }
 
 /**
- * Bank of America: Due = 27 days after close
- * If 27 days lands on Friday -> 26 days
- * If 27 days lands on Saturday -> 25 days
+ * Bank of America Business: Due = 27 days after close
+ * If 27 days lands on Friday -> 26 days (Thursday)
+ * If 27 days lands on Saturday -> 25 days (Thursday)
  * 
  * NOTE: nextDue returns the NEXT payment due date (must be today or in the future).
  * If the due date for lastClose has passed, we calculate due date for nextClose instead.
@@ -391,11 +407,11 @@ function calculateClosePlus27SkipWeekend(closeDay: number, referenceDate: Date):
   // Helper to calculate due date with weekend adjustment
   const calculateDueFromClose = (closeDate: Date): Date => {
     let due = addDays(closeDate, 27);
-    // Adjust for weekends - BoA pushes EARLIER to avoid Friday/Saturday
+    // Adjust for Fri/Sat - BoA business pushes EARLIER
     if (isFriday(due)) {
-      due = addDays(closeDate, 26);
+      due = addDays(closeDate, 26); // Move to Thursday
     } else if (isSaturday(due)) {
-      due = addDays(closeDate, 25);
+      due = addDays(closeDate, 25); // Move to Thursday
     }
     return due;
   };
@@ -419,6 +435,48 @@ function calculateClosePlus27SkipWeekend(closeDay: number, referenceDate: Date):
 }
 
 /**
+ * Bank of America Personal: Due day = Close day - 3
+ * Fixed day-of-month relationship, no weekend adjustment.
+ * E.g., Close on 16th → Due on 13th (of next month)
+ * E.g., Close on 26th → Due on 23rd (of next month)
+ */
+function calculateBoaPersonalFormula(closeDay: number, referenceDate: Date): { dueDay: number; nextClose: Date; nextDue: Date; lastClose: Date } {
+  // Due day is always close day - 3
+  let dueDay = closeDay - 3;
+  if (dueDay <= 0) {
+    // Handle wrap-around (e.g., close on 2nd → due on 30th/29th of previous month concept)
+    // But in practice, BoA close days are typically mid-month, so this is unlikely
+    dueDay = dueDay + 28; // Approximate, but close day 1-3 would be rare
+  }
+  
+  // For close-primary: DON'T include today for close dates
+  const nextClose = getNextOccurrenceOfDay(closeDay, referenceDate, false);
+  const lastClose = getPreviousOccurrenceOfDay(closeDay, referenceDate);
+  
+  // Due date is the next occurrence of dueDay after the close
+  // For lastClose, find the next due after that close
+  // For nextClose, find the next due after that close
+  
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  
+  // Calculate due date for lastClose (should be after lastClose)
+  let nextDue = getNextOccurrenceOfDay(dueDay, lastClose, false);
+  
+  // If that due date is in the past, calculate due date for nextClose instead
+  if (nextDue < today) {
+    nextDue = getNextOccurrenceOfDay(dueDay, nextClose, false);
+  }
+  
+  return {
+    dueDay,
+    nextClose,
+    nextDue,
+    lastClose,
+  };
+}
+
+/**
  * Citi: Complex formula
  * - If due date is 27th or 28th: Close = 26 days before due (close < due)
  * - Otherwise: Close day = Due day + 4 (close > due)
@@ -435,20 +493,23 @@ function calculateCitiFormula(dueDay: number, referenceDate: Date): { closeDay: 
   
   if (dueDay === 27 || dueDay === 28) {
     // Close = 26 days before due (close < due, like Amex)
-    // lastClose = close for the most recent due (prevDue)
-    lastClose = subDays(prevDue, 26);
-    lastClose = adjustCitiWeekend(lastClose, prevDue);
+    // Calculate close for nextDue first
+    let closeForNextDue = subDays(nextDue, 26);
+    closeForNextDue = adjustCitiWeekend(closeForNextDue, nextDue);
     
-    // nextClose = close for upcoming due (nextDue)
-    nextClose = subDays(nextDue, 26);
-    nextClose = adjustCitiWeekend(nextClose, nextDue);
-    
-    // If nextClose is in the past, advance one cycle
-    if (nextClose < today) {
+    if (closeForNextDue < today) {
+      // The close for the upcoming due has already happened
+      // So lastClose = that close, and nextClose = close for the following cycle
+      lastClose = closeForNextDue;
       const futureDue = new Date(nextDue);
       futureDue.setMonth(futureDue.getMonth() + 1);
       nextClose = subDays(futureDue, 26);
       nextClose = adjustCitiWeekend(nextClose, futureDue);
+    } else {
+      // The close for the upcoming due hasn't happened yet
+      nextClose = closeForNextDue;
+      lastClose = subDays(prevDue, 26);
+      lastClose = adjustCitiWeekend(lastClose, prevDue);
     }
   } else {
     // Close day = Due day + 4 (close > due, like Chase)
@@ -515,21 +576,27 @@ function calculateUSBankFormula(dueDay: number, referenceDate: Date): { closeDay
     return result;
   };
   
-  // Get previous due and next due
-  const prevDue = getPreviousOccurrenceOfDay(dueDay, referenceDate, true);
+  // Get next due
   const nextDue = getNextOccurrenceOfDay(dueDay, referenceDate, true);
   
-  // Calculate last close (Nth weekday of the month containing prevDue)
-  const lastClose = getNthWeekdayOfMonth(prevDue.getFullYear(), prevDue.getMonth(), weekdayNumber);
+  // Calculate close for nextDue (Nth weekday of the month containing nextDue)
+  let closeForNextDue = getNthWeekdayOfMonth(nextDue.getFullYear(), nextDue.getMonth(), weekdayNumber);
   
-  // Calculate next close (Nth weekday of the month containing nextDue)
-  let nextClose = getNthWeekdayOfMonth(nextDue.getFullYear(), nextDue.getMonth(), weekdayNumber);
+  let lastClose: Date;
+  let nextClose: Date;
   
-  // If nextClose is in the past, advance to next month
-  if (nextClose < today) {
+  if (closeForNextDue < today) {
+    // The close for the upcoming due has already happened
+    // So lastClose = that close, and nextClose = close for the following cycle
+    lastClose = closeForNextDue;
     const futureMonth = new Date(nextDue);
     futureMonth.setMonth(futureMonth.getMonth() + 1);
     nextClose = getNthWeekdayOfMonth(futureMonth.getFullYear(), futureMonth.getMonth(), weekdayNumber);
+  } else {
+    // The close for the upcoming due hasn't happened yet
+    nextClose = closeForNextDue;
+    const prevDue = getPreviousOccurrenceOfDay(dueDay, referenceDate, true);
+    lastClose = getNthWeekdayOfMonth(prevDue.getFullYear(), prevDue.getMonth(), weekdayNumber);
   }
   
   return {
@@ -709,7 +776,7 @@ export function calculateBillingDates(
     };
     
   } else {
-    // Primary input is close day (BoA)
+    // Primary input is close day (BoA formulas)
     if (statementCloseDay === null) {
       // Need close day but don't have it
       if (paymentDueDay !== null) {
@@ -730,8 +797,19 @@ export function calculateBillingDates(
       };
     }
     
-    // Calculate based on close day (BoA formula)
-    const result = calculateClosePlus27SkipWeekend(statementCloseDay, refDate);
+    // Calculate based on close day
+    let result: { dueDay: number; nextClose: Date; nextDue: Date; lastClose: Date };
+    
+    switch (validFormula) {
+      case 'close_plus_27_skip_weekend':
+        result = calculateClosePlus27SkipWeekend(statementCloseDay, refDate);
+        break;
+      case 'boa_personal_formula':
+        result = calculateBoaPersonalFormula(statementCloseDay, refDate);
+        break;
+      default:
+        result = calculateClosePlus27SkipWeekend(statementCloseDay, refDate);
+    }
     
     return {
       lastCloseDate: result.lastClose,

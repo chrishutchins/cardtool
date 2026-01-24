@@ -57,6 +57,22 @@ interface Player {
   description: string | null;
 }
 
+export interface BankAccountForSettings {
+  id: string;
+  name: string;
+  display_name: string | null;
+  institution_name: string | null;
+  mask: string | null;
+  available_balance: number | null;
+  is_primary: boolean | null;
+}
+
+export interface PaymentSettingsForCard {
+  pay_from_account_id: string | null;
+  is_autopay: boolean;
+  autopay_type: string | null;
+}
+
 interface CardSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -67,6 +83,8 @@ interface CardSettingsModalProps {
   debitPayEnabled: boolean;
   players: Player[];
   playerCount: number;
+  bankAccounts?: BankAccountForSettings[];
+  paymentSettings?: PaymentSettingsForCard | null;
   onUpdateCustomName: (walletId: string, customName: string | null) => Promise<void>;
   onUpdateApprovalDate: (walletId: string, date: string | null) => Promise<void>;
   onUpdatePlayerNumber: (walletId: string, playerNumber: number) => Promise<void>;
@@ -78,11 +96,16 @@ interface CardSettingsModalProps {
     manual_balance_cents: number | null;
     manual_credit_limit_cents: number | null;
   }) => Promise<void>;
+  onUpdatePaymentSettings?: (walletId: string, settings: {
+    pay_from_account_id: string | null;
+    is_autopay: boolean;
+    autopay_type: string | null;
+  }) => Promise<void>;
   onRemove: (walletId: string) => Promise<void>;
   onProductChange?: () => void;
   onCloseCard?: () => void;
   onViewPerks?: () => void;
-  focusField?: "customName" | "approvalDate" | "playerNumber" | "perks" | "debitPay" | "statementCloseDay" | "paymentDueDay" | "manualBalance" | "manualCreditLimit";
+  focusField?: "customName" | "approvalDate" | "playerNumber" | "perks" | "debitPay" | "statementCloseDay" | "paymentDueDay" | "manualBalance" | "manualCreditLimit" | "payFrom";
 }
 
 // ============================================================================
@@ -115,12 +138,15 @@ export function CardSettingsModal({
   debitPayEnabled,
   players,
   playerCount,
+  bankAccounts = [],
+  paymentSettings,
   onUpdateCustomName,
   onUpdateApprovalDate,
   onUpdatePlayerNumber,
   onUpdatePerks,
   onUpdateDebitPay,
   onUpdateStatementFields,
+  onUpdatePaymentSettings,
   onRemove: _onRemove, // Keep for API compatibility but unused in UI
   onProductChange,
   onCloseCard,
@@ -139,6 +165,7 @@ export function CardSettingsModal({
   const paymentDueDayRef = useRef<HTMLInputElement>(null);
   const manualBalanceRef = useRef<HTMLInputElement>(null);
   const manualCreditLimitRef = useRef<HTMLInputElement>(null);
+  const payFromRef = useRef<HTMLSelectElement>(null);
   
   // Form state
   const [customName, setCustomName] = useState(walletCard.custom_name ?? "");
@@ -150,6 +177,11 @@ export function CardSettingsModal({
   const [paymentDueDay, setPaymentDueDay] = useState(walletCard.payment_due_day?.toString() ?? "");
   const [manualBalance, setManualBalance] = useState(formatCurrency(walletCard.manual_balance_cents));
   const [manualCreditLimit, setManualCreditLimit] = useState(formatCurrency(walletCard.manual_credit_limit_cents));
+  
+  // Payment settings state
+  const [payFromAccountId, setPayFromAccountId] = useState<string | null>(paymentSettings?.pay_from_account_id ?? null);
+  const [isAutopay, setIsAutopay] = useState(paymentSettings?.is_autopay ?? false);
+  const [autopayType, setAutopayType] = useState<string | null>(paymentSettings?.autopay_type ?? null);
 
   // Focus on the specified field when modal opens
   useEffect(() => {
@@ -169,6 +201,7 @@ export function CardSettingsModal({
         case "paymentDueDay": element = paymentDueDayRef.current; break;
         case "manualBalance": element = manualBalanceRef.current; break;
         case "manualCreditLimit": element = manualCreditLimitRef.current; break;
+        case "payFrom": element = payFromRef.current; break;
       }
       
       if (element) {
@@ -200,6 +233,12 @@ export function CardSettingsModal({
       // Only use +6 for non-cobrand business cards (Chase Business UR)
       if (!isCobrand && card.product_type === 'business') {
         return 'due_plus_6' as BillingCycleFormula;
+      }
+    }
+    // For BoA: business uses +27 with Fri/Sat adjustment, personal uses close-3
+    if (baseBillingFormula === 'close_plus_27_skip_weekend') {
+      if (card.product_type === 'personal') {
+        return 'boa_personal_formula' as BillingCycleFormula;
       }
     }
     return baseBillingFormula ?? null;
@@ -630,6 +669,83 @@ export function CardSettingsModal({
                 </div>
               )}
             </div>
+
+          {/* Payment Settings */}
+          {bankAccounts.length > 0 && onUpdatePaymentSettings && (
+            <div className="space-y-3 pt-4 border-t border-zinc-800">
+              <h3 className="text-sm font-medium text-zinc-300">Payment Settings</h3>
+              
+              {/* Pay From Account */}
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Pay From Account</label>
+                <select
+                  ref={payFromRef}
+                  value={payFromAccountId ?? ""}
+                  onChange={(e) => {
+                    const newValue = e.target.value || null;
+                    setPayFromAccountId(newValue);
+                    startTransition(() => {
+                      onUpdatePaymentSettings(walletCard.id, {
+                        pay_from_account_id: newValue,
+                        is_autopay: isAutopay,
+                        autopay_type: autopayType,
+                      });
+                    });
+                  }}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Not set</option>
+                  {bankAccounts.map((account) => {
+                    // Format: "Bank Account (Last4)" e.g., "Mercury Personal Savings (7508)"
+                    const accountName = account.display_name || account.name;
+                    const parts = [];
+                    if (account.institution_name) parts.push(account.institution_name);
+                    parts.push(accountName);
+                    let label = parts.join(' ');
+                    if (account.mask) label += ` (${account.mask})`;
+                    if (account.is_primary) label += " ★";
+                    if (account.available_balance != null) label += ` - $${account.available_balance.toLocaleString()}`;
+                    return (
+                      <option key={account.id} value={account.id}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Auto-pay Toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs text-zinc-400">Auto-pay</label>
+                  <p className="text-xs text-zinc-500">Statement balance will be paid automatically on the due date</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newValue = !isAutopay;
+                    setIsAutopay(newValue);
+                    startTransition(() => {
+                      onUpdatePaymentSettings(walletCard.id, {
+                        pay_from_account_id: payFromAccountId,
+                        is_autopay: newValue,
+                        autopay_type: "statement_balance",
+                      });
+                    });
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                    isAutopay ? "bg-blue-600" : "bg-zinc-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isAutopay ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Actions - all buttons equally spaced */}
           <div className="flex gap-2 pt-4 border-t border-zinc-800">

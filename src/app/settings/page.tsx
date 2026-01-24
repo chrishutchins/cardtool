@@ -105,7 +105,7 @@ export default async function SettingsPage() {
       .eq("user_id", effectiveUserId),
     supabase
       .from("user_feature_flags")
-      .select("debit_pay_enabled, account_linking_enabled")
+      .select("debit_pay_enabled, account_linking_enabled, plaid_liabilities_enabled")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
     supabase
@@ -138,7 +138,8 @@ export default async function SettingsPage() {
           id,
           institution_name,
           requires_reauth,
-          error_code
+          error_code,
+          consented_products
         )
       `)
       .eq("user_id", effectiveUserId)
@@ -170,6 +171,7 @@ export default async function SettingsPage() {
   const paypalCategories = paypalCategoriesResult.data;
   const debitPayEnabled = featureFlagsResult.data?.debit_pay_enabled ?? false;
   const accountLinkingEnabled = featureFlagsResult.data?.account_linking_enabled ?? false;
+  const plaidLiabilitiesEnabled = featureFlagsResult.data?.plaid_liabilities_enabled ?? false;
   const largePurchaseCategories = largePurchaseCategoriesResult.data;
   const everythingElseCategoryId = everythingElseCategoryResult.data?.id ?? null;
   const linkedAccounts = linkedAccountsResult.data;
@@ -962,6 +964,7 @@ export default async function SettingsPage() {
                     institution_name: string | null;
                     requires_reauth: boolean;
                     error_code: string | null;
+                    consented_products: string[] | null;
                   } | null,
                 }))}
                 walletCards={
@@ -977,6 +980,7 @@ export default async function SettingsPage() {
                     }))
                     .sort((a, b) => a.name.localeCompare(b.name))
                 }
+                plaidLiabilitiesEnabled={plaidLiabilitiesEnabled}
                 onPairCard={pairLinkedAccount}
                 onUnlinkCard={unlinkLinkedAccount}
                 onUpdateCreditLimit={updateLinkedAccountCreditLimit}

@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId } from '@/lib/emulation';
 import { plaidClient } from '@/lib/plaid';
-import { Products, CountryCode } from 'plaid';
+import { Products, CountryCode, DepositoryAccountSubtype } from 'plaid';
 import { checkRateLimit, ratelimit } from '@/lib/rate-limit';
 import logger from '@/lib/logger';
 
+/**
+ * Creates a Plaid Link token specifically for linking depository (bank) accounts.
+ * These accounts are used as "Pay From" accounts for credit card payments.
+ */
 export async function POST() {
   try {
     const user = await currentUser();
@@ -22,63 +25,41 @@ export async function POST() {
     }
 
     // Rate limit: 5 link token requests per minute per user
-    const { success } = await checkRateLimit(ratelimit, `plaid-link:${user.id}`);
+    const { success } = await checkRateLimit(ratelimit, `plaid-bank-link:${user.id}`);
     if (!success) {
-      logger.warn({ userId: effectiveUserId }, 'Plaid link token rate limited');
+      logger.warn({ userId: effectiveUserId }, 'Plaid bank link token rate limited');
       return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
-    }
-
-    // Check user's feature flags to determine which products to request
-    const supabase = createClient();
-    const { data: featureFlags } = await supabase
-      .from('user_feature_flags')
-      .select('plaid_liabilities_enabled')
-      .eq('user_id', effectiveUserId)
-      .maybeSingle();
-
-    // Build products array based on feature flags
-    // Transactions is always included (base tier)
-    // Liabilities is only included if user has the flag enabled (prevents extra cost)
-    const products: Products[] = [Products.Transactions];
-    
-    if (featureFlags?.plaid_liabilities_enabled) {
-      products.push(Products.Liabilities);
     }
 
     // Log environment for debugging
     const plaidEnv = process.env.PLAID_ENV || 'sandbox';
     logger.info({ 
       plaidEnv,
-      hasClientId: !!process.env.PLAID_CLIENT_ID,
-      hasSecret: !!process.env.PLAID_SECRET,
       userId: effectiveUserId,
-      products: products.map(p => p.toString()),
-      liabilitiesEnabled: featureFlags?.plaid_liabilities_enabled ?? false,
-    }, 'Creating Plaid link token');
-
-    // Configure webhook URL for automatic transaction sync
-    // In production, use NEXT_PUBLIC_BASE_URL or the production domain
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://cardtool.app';
-    const webhookUrl = `${baseUrl}/api/plaid/webhook`;
+    }, 'Creating Plaid bank link token');
 
     const response = await plaidClient.linkTokenCreate({
       user: {
         client_user_id: effectiveUserId,
       },
       client_name: 'CardTool',
-      products,
+      // Auth only - we just need account info and balances, not transaction history
+      // This is cheaper and avoids duplicate charges if user already has transactions for credit cards
+      products: [Products.Auth],
       country_codes: [CountryCode.Us],
       language: 'en',
-      webhook: webhookUrl,
-      transactions: {
-        days_requested: 730, // Request 24 months of transaction history
+      // Only allow depository accounts (checking/savings)
+      account_filters: {
+        depository: {
+          account_subtypes: [DepositoryAccountSubtype.Checking, DepositoryAccountSubtype.Savings],
+        },
       },
     });
 
     logger.info({ 
       hasLinkToken: !!response.data.link_token,
       expiration: response.data.expiration,
-    }, 'Plaid link token created successfully');
+    }, 'Plaid bank link token created successfully');
 
     return NextResponse.json({ link_token: response.data.link_token });
   } catch (error) {
@@ -87,7 +68,7 @@ export async function POST() {
       err: error,
       plaidErrorData: plaidError.response?.data,
       plaidEnv: process.env.PLAID_ENV,
-    }, 'Failed to create Plaid link token');
+    }, 'Failed to create Plaid bank link token');
     return NextResponse.json(
       { error: 'Failed to create link token' },
       { status: 500 }

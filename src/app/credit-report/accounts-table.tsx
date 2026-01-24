@@ -20,13 +20,24 @@ interface WalletCard {
   credit_limit_cents?: number | null;
 }
 
+interface LinkResult {
+  success: boolean;
+  dateConflict?: {
+    walletCardId: string;
+    cardName: string;
+    manualDate: string;
+    creditReportDate: string;
+  };
+}
+
 interface AccountsTableProps {
   accounts: CreditAccount[];
   walletCards: WalletCard[];
   accountLinks: Map<string, string | null>;
   displayNames: Map<string, string>;
-  onLinkAccount: (creditAccountId: string, walletCardId: string | null) => Promise<void>;
+  onLinkAccount: (creditAccountId: string, walletCardId: string | null) => Promise<LinkResult>;
   onSetDisplayName: (creditAccountId: string, displayName: string | null) => Promise<void>;
+  onUpdateWalletApprovalDate: (walletCardId: string, newDate: string) => Promise<void>;
 }
 
 const BUREAUS: CreditBureau[] = ["equifax", "experian", "transunion"];
@@ -546,6 +557,7 @@ export function AccountsTable({
   displayNames,
   onLinkAccount,
   onSetDisplayName,
+  onUpdateWalletApprovalDate,
 }: AccountsTableProps) {
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [linkPopupGroupId, setLinkPopupGroupId] = useState<string | null>(null);
@@ -559,6 +571,14 @@ export function AccountsTable({
 
   const [localLinks, setLocalLinks] = useState<Map<string, string | null>>(accountLinks);
   const [localDisplayNames, setLocalDisplayNames] = useState<Map<string, string>>(displayNames);
+  
+  // Date conflict dialog state
+  const [dateConflict, setDateConflict] = useState<{
+    walletCardId: string;
+    cardName: string;
+    manualDate: string;
+    creditReportDate: string;
+  } | null>(null);
 
   const accountGroups = useMemo(() => {
     return groupAccountsAcrossBureaus(accounts);
@@ -666,9 +686,23 @@ export function AccountsTable({
     });
     startTransition(async () => {
       for (const accountId of accountIds) {
-        await onLinkAccount(accountId, walletCardId);
+        const result = await onLinkAccount(accountId, walletCardId);
+        // Check for date conflict on the first result (all accounts link to same card)
+        if (result.dateConflict) {
+          setDateConflict(result.dateConflict);
+          break; // Only show one dialog per link action
+        }
       }
     });
+  };
+
+  const handleDateConflictConfirm = (update: boolean) => {
+    if (update && dateConflict) {
+      startTransition(async () => {
+        await onUpdateWalletApprovalDate(dateConflict.walletCardId, dateConflict.creditReportDate);
+      });
+    }
+    setDateConflict(null);
   };
 
   const handleDisplayNameChange = (group: AccountGroup, displayName: string | null) => {
@@ -1024,6 +1058,38 @@ export function AccountsTable({
           </tbody>
         </table>
       </div>
+
+      {/* Date Conflict Confirmation Dialog */}
+      {dateConflict && createPortal(
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-zinc-800 rounded-xl border border-zinc-700 p-6 max-w-md mx-4 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white mb-3">Update Opened Date?</h3>
+            <p className="text-zinc-300 text-sm mb-4">
+              Opened date for <span className="font-medium text-white">{dateConflict.cardName}</span> was manually entered as{" "}
+              <span className="font-medium text-white">{formatDate(dateConflict.manualDate)}</span>.
+            </p>
+            <p className="text-zinc-300 text-sm mb-6">
+              Would you like to update it to{" "}
+              <span className="font-medium text-emerald-400">{formatDate(dateConflict.creditReportDate)}</span> from the credit report?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => handleDateConflictConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors"
+              >
+                Keep Current
+              </button>
+              <button
+                onClick={() => handleDateConflictConfirm(true)}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors"
+              >
+                Update Date
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
