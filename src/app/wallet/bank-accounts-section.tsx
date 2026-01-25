@@ -180,6 +180,12 @@ export function BankAccountsSection({
           return; // Skip this card - no payment due and no unbilled balance
         }
       }
+      
+      // Also skip if no Plaid data AND no statement balance AND no unbilled balance
+      // (handles demo accounts and cards without linked account data)
+      if (!hasPlaidLiabilitiesData && statementBalance === null && !unbilledBalance) {
+        return; // Skip - nothing to show
+      }
 
       const accountId = settings.pay_from_account_id;
       if (!map.has(accountId)) {
@@ -724,7 +730,7 @@ export function BankAccountsSection({
                         <span className="text-zinc-400">
                           Balance:{' '}
                           <span className={`font-semibold ${
-                            (account.available_balance ?? 0) < totalPayments ? 'text-amber-400' : 'text-emerald-400'
+                            (account.available_balance ?? 0) < totalPayments ? 'text-red-400' : 'text-emerald-400'
                           }`}>
                             {formatCurrency(account.available_balance, account.iso_currency_code)}
                           </span>
@@ -747,9 +753,9 @@ export function BankAccountsSection({
                         <span className="text-zinc-400">
                           Payments:{' '}
                           <span className={`font-semibold ${
-                            totalPayments > (account.available_balance ?? 0) ? 'text-red-400' : 'text-zinc-300'
+                            totalPayments > (account.available_balance ?? 0) ? 'text-red-400' : 'text-emerald-400'
                           }`}>
-                            {totalPayments > 0 ? '-' : ''}{formatCurrency(totalPayments)}
+                            {formatCurrency(totalPayments)}
                           </span>
                         </span>
                       ) : (
@@ -827,19 +833,19 @@ export function BankAccountsSection({
                         <div 
                           key={card.walletId} 
                           className={`flex items-center gap-4 px-4 py-2 text-sm border-t border-zinc-700/50 ${
-                            isOverdraft ? 'bg-red-500/5' : ''
+                            isOverdraft ? 'bg-amber-500/5' : ''
                           }`}
                         >
                           <div className="flex-1 pl-8 truncate">
                             <span className="text-white">{card.cardName}</span>
                             <span className="text-zinc-500 ml-2">{card.issuerName}</span>
                           </div>
-                          <div className="w-20 text-right text-zinc-300">
-                            {cardPayment > 0 ? `-${formatCurrency(cardPayment)}` : '—'}
+                          <div className={`w-20 text-right ${isOverdraft ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {cardPayment > 0 ? formatCurrency(cardPayment) : '—'}
                           </div>
                           {includeUnbilled && (
-                            <div className="w-20 text-right text-blue-400">
-                              {cardUnbilled > 0 ? `-${formatCurrency(cardUnbilled)}` : '—'}
+                            <div className="w-20 text-right text-blue-400 italic">
+                              {cardUnbilled > 0 ? formatCurrency(cardUnbilled) : '—'}
                             </div>
                           )}
                           <div className="w-16 text-center text-zinc-400">
@@ -862,7 +868,7 @@ export function BankAccountsSection({
                     <div className="flex items-center gap-4 px-4 py-2 text-sm border-t border-zinc-600 bg-zinc-800/50">
                       <div className="flex-1 pl-8 text-zinc-400 font-medium">Total</div>
                       <div className="w-20 text-right font-semibold text-white">
-                        {totalPayments > 0 ? '-' : ''}{formatCurrency(totalPayments)}
+                        {formatCurrency(totalPayments)}
                       </div>
                       {includeUnbilled && <div className="w-20" />}
                       <div className="w-16" />

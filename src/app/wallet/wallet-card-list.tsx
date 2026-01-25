@@ -132,7 +132,7 @@ export function WalletCardList({
   const playerDescriptions = useMemo(() => {
     const map = new Map<number, string>();
     players.forEach(p => {
-      map.set(p.player_number, p.description || `Player ${p.player_number}`);
+      map.set(p.player_number, p.description || `P${p.player_number}`);
     });
     return map;
   }, [players]);
@@ -606,7 +606,7 @@ export function WalletCardList({
                           >
                             {Array.from({ length: playerCount }, (_, i) => i + 1).map(num => (
                               <option key={num} value={num}>
-                                P{num}: {playerDescriptions.get(num) || `Player ${num}`}
+                                P{num}: {playerDescriptions.get(num) || `P${num}`}
                               </option>
                             ))}
                           </select>

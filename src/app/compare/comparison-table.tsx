@@ -272,6 +272,7 @@ interface ComparisonTableProps {
   creditLimits: Record<string, number>;
   accountLinkingEnabled: boolean;
   playerCount: number;
+  players: { player_number: number; description: string }[];
   onSaveCategories?: (categoryIds: number[]) => Promise<void>;
   onSaveEvalCards?: (cardIds: string[]) => Promise<void>;
   onUpdateBonusSettings?: (includeWelcomeBonuses: boolean, includeSpendBonuses: boolean, includeDebitPay: boolean, showAvailableCredit: boolean) => Promise<void>;
@@ -362,6 +363,7 @@ export function ComparisonTable({
   creditLimits,
   accountLinkingEnabled,
   playerCount,
+  players,
   onSaveCategories,
   onSaveEvalCards,
   onUpdateBonusSettings,
@@ -1184,9 +1186,12 @@ export function ComparisonTable({
             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
           >
             <option value="">All Players</option>
-            {Array.from({ length: playerCount }, (_, i) => i + 1).map((num) => (
-              <option key={num} value={num}>Player {num}</option>
-            ))}
+            {Array.from({ length: playerCount }, (_, i) => i + 1).map((num) => {
+              const player = players.find(p => p.player_number === num);
+              return (
+                <option key={num} value={num}>{player?.description ?? `P${num}`}</option>
+              );
+            })}
           </select>
         )}
 

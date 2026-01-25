@@ -78,7 +78,7 @@ export function PlayerSettings({ players, onSavePlayers }: PlayerSettingsProps) 
         {playerCount > 1 && (
           <div className="space-y-3 pt-2">
             <p className="text-sm text-zinc-500">
-              Add a description for each player (e.g., name or relationship)
+              Add a 2-3 character label for each player
             </p>
             <div className="grid gap-3 md:grid-cols-2">
               {Array.from({ length: playerCount }, (_, i) => i + 1).map(num => (

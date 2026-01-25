@@ -583,7 +583,7 @@ export function CardSettingsModal({
                   >
                     {Array.from({ length: playerCount }, (_, i) => i + 1).map(num => {
                       const player = players.find(p => p.player_number === num);
-                      const label = player?.description || `Player ${num}`;
+                      const label = player?.description || `P${num}`;
                       return (
                         <option key={num} value={num}>
                           P{num}: {label}

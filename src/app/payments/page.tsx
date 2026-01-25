@@ -402,14 +402,22 @@ export default async function PaymentsPage() {
       wc.payment_due_day
     );
     
-    // Calculate projected due date (next close date + typical billing gap)
+    // Calculate projected due date for the FUTURE statement (not the current one)
+    // nextDueDate is for the current cycle; we need the due date for nextCloseDate's cycle
     let projectedDueDate: Date | null = null;
-    if (billingDates.nextCloseDate && billingDates.nextDueDate) {
-      projectedDueDate = billingDates.nextDueDate;
-    } else if (billingDates.nextCloseDate) {
-      // Approximate: due ~25 days after close
-      projectedDueDate = new Date(billingDates.nextCloseDate);
-      projectedDueDate.setDate(projectedDueDate.getDate() + 25);
+    if (billingDates.nextCloseDate) {
+      if (billingDates.lastCloseDate && billingDates.nextDueDate) {
+        // Calculate the gap between close and due, then apply to nextCloseDate
+        const closeTodueDays = Math.round(
+          (billingDates.nextDueDate.getTime() - billingDates.lastCloseDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        projectedDueDate = new Date(billingDates.nextCloseDate);
+        projectedDueDate.setDate(projectedDueDate.getDate() + closeTodueDays);
+      } else {
+        // Approximate: due ~25 days after close
+        projectedDueDate = new Date(billingDates.nextCloseDate);
+        projectedDueDate.setDate(projectedDueDate.getDate() + 25);
+      }
     }
     
     unbilledBalances.push({

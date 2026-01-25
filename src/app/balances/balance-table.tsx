@@ -310,7 +310,7 @@ export function BalanceTable({
                 <th 
                   key={player.player_number} 
                   className="sticky top-0 z-20 bg-zinc-900 px-3 py-3 font-medium text-center cursor-pointer hover:text-white transition-colors min-w-[90px]"
-                  title={player.description || `Player ${player.player_number}`}
+                  title={player.description || `P${player.player_number}`}
                   onClick={() => handleSort(player.player_number)}
                 >
                   <span className="inline-flex items-center justify-center">

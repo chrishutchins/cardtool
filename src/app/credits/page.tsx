@@ -670,6 +670,89 @@ export default async function CreditsPage() {
     revalidatePath("/inventory");
   }
 
+  async function runRematchForUser(forceRematch: boolean = false) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return { success: false, error: "No user" };
+
+    const { createAdminClient } = await import("@/lib/supabase/server");
+    const { matchTransactionsToCredits } = await import("@/lib/credit-matcher");
+    
+    const supabase = createAdminClient();
+
+    // If force rematch, clear matched_credit_id on all transactions first
+    if (forceRematch) {
+      const { error: clearError } = await supabase
+        .from("user_plaid_transactions")
+        .update({ matched_credit_id: null, matched_rule_id: null })
+        .eq("user_id", userId)
+        .not("matched_credit_id", "is", null);
+      
+      if (clearError) {
+        console.error("Failed to clear matched credits:", clearError);
+        return { success: false, error: "Failed to clear existing matches" };
+      }
+    }
+
+    // Get stats on transaction state
+    const { count: totalTxns } = await supabase
+      .from("user_plaid_transactions")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
+    
+    const { count: alreadyMatched } = await supabase
+      .from("user_plaid_transactions")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .not("matched_credit_id", "is", null);
+
+    // Fetch ALL unmatched transactions using pagination (Supabase defaults to 1000)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allUnmatchedTxns: any[] = [];
+    let offset = 0;
+    const pageSize = 1000;
+    
+    while (true) {
+      const { data: page, error: pageError } = await supabase
+        .from("user_plaid_transactions")
+        .select("*")
+        .eq("user_id", userId)
+        .is("matched_credit_id", null)
+        .eq("dismissed", false)
+        .eq("pending", false)
+        .range(offset, offset + pageSize - 1);
+      
+      if (pageError) {
+        console.error("Failed to fetch unmatched transactions:", pageError);
+        return { success: false, error: "Failed to fetch transactions" };
+      }
+      
+      if (!page || page.length === 0) break;
+      allUnmatchedTxns.push(...page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    if (allUnmatchedTxns.length === 0) {
+      return { 
+        success: true, 
+        matched: 0, 
+        clawbacks: 0, 
+        message: `No unmatched transactions. Stats: ${totalTxns} total, ${alreadyMatched} already matched. Try Force Rematch to clear and re-match.` 
+      };
+    }
+
+    const result = await matchTransactionsToCredits(supabase, userId, allUnmatchedTxns);
+
+    revalidatePath("/credits");
+    return {
+      success: true,
+      matched: result.matched,
+      clawbacks: result.clawbacks,
+      errors: result.errors.length > 0 ? result.errors : undefined,
+    };
+  }
+
   // Transform data for client component
   type WalletCardData = {
     id: string;
@@ -721,6 +804,7 @@ export default async function CreditsPage() {
           onUpdateUsagePeriod={updateCreditUsagePeriod}
           onMoveTransaction={moveTransactionToPeriod}
           onAddInventoryItem={addInventoryItem}
+          onRematch={runRematchForUser}
         />
       </div>
     </div>

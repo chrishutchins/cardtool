@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import { plaidClient } from "@/lib/plaid";
 import logger from "@/lib/logger";
 import { UserHeader } from "@/components/user-header";
-import { CardCategorySelector } from "@/app/wallet/card-category-selector";
 import { MultiplierSelector } from "@/app/wallet/multiplier-selector";
 import { TravelPreferences } from "@/app/wallet/travel-preferences";
 import { MobilePayCategories } from "@/app/wallet/mobile-pay-categories";
@@ -203,14 +202,10 @@ export default async function SettingsPage() {
   );
 
   // ============ BATCH 2: Queries that depend on wallet cards ============
-  const [cardCapsResult, portalEarningRulesResult, programsByCurrencyResult, programsByCardResult] = 
+  // Note: Card category selection queries removed - now handled in wallet per-card settings
+  const [portalEarningRulesResult, programsByCurrencyResult, programsByCardResult] = 
     userCardIds.length > 0
       ? await Promise.all([
-          supabase
-            .from("card_caps")
-            .select("id, card_id, cap_type, cap_amount")
-            .eq("cap_type", "selected_category")
-            .in("card_id", userCardIds),
           supabase
             .from("card_earning_rules")
             .select("card_id, booking_method, cards:card_id(issuer_id)")
@@ -225,50 +220,13 @@ export default async function SettingsPage() {
             .select("program_id")
             .in("card_id", userCardIds),
         ])
-      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+      : [{ data: [] }, { data: [] }, { data: [] }];
 
-  const cardCaps = cardCapsResult.data ?? [];
   const portalEarningRules = portalEarningRulesResult.data;
   const programsByCurrency = programsByCurrencyResult.data;
   const programsByCard = programsByCardResult.data;
 
-  // ============ BATCH 3: Queries that depend on caps ============
-  const capIds = cardCaps?.map((c) => c.id) ?? [];
-  const [capCategoriesResult, userSelectionsResult] = capIds.length > 0
-    ? await Promise.all([
-        supabase
-          .from("card_cap_categories")
-          .select("cap_id, category_id, earning_categories(id, name)")
-          .in("cap_id", capIds),
-        supabase
-          .from("user_card_selections")
-          .select("cap_id, selected_category_id")
-          .eq("user_id", effectiveUserId)
-          .in("cap_id", capIds),
-      ])
-    : [{ data: [] }, { data: [] }];
-
-  const capCategories = capCategoriesResult.data;
-  const userSelections = userSelectionsResult.data;
-
-  // Build caps data structure
-  type CapCategoryData = { cap_id: string; earning_categories: { id: number; name: string } | null };
-  const cardCapsWithCategories = (cardCaps ?? []).map((cap) => ({
-    ...cap,
-    categories: ((capCategories ?? []) as unknown as CapCategoryData[])
-      .filter((cc) => cc.cap_id === cap.id)
-      .map((cc) => cc.earning_categories)
-      .filter((cat): cat is { id: number; name: string } => cat !== null),
-  }));
-
-  // Group caps by card
-  const capsByCard = cardCapsWithCategories.reduce((acc, cap) => {
-    if (!acc[cap.card_id]) acc[cap.card_id] = [];
-    acc[cap.card_id].push(cap);
-    return acc;
-  }, {} as Record<string, typeof cardCapsWithCategories>);
-
-  // ============ BATCH 4: Multiplier programs ============
+  // ============ BATCH 3: Multiplier programs ============
   const applicableProgramIds = new Set([
     ...(programsByCurrency?.map((p) => p.program_id) ?? []),
     ...(programsByCard?.map((p) => p.program_id) ?? []),
@@ -293,53 +251,6 @@ export default async function SettingsPage() {
   const userMultiplierSelections = userMultiplierSelectionsResult.data;
 
   // Server actions
-  async function selectCategory(capId: string, categoryId: number, walletCardId?: string) {
-    "use server";
-    const userId = await getEffectiveUserId();
-    if (!userId) return;
-
-    const supabase = createAdminClient();
-    
-    // Handle NULL wallet_card_id separately since PostgreSQL treats NULLs as distinct in unique constraints
-    if (walletCardId) {
-      // With a specific wallet_card_id, upsert works correctly
-      await supabase.from("user_card_selections").upsert(
-        {
-          user_id: userId,
-          cap_id: capId,
-          selected_category_id: categoryId,
-          wallet_card_id: walletCardId,
-        },
-        { onConflict: "user_id,cap_id,wallet_card_id" }
-      );
-    } else {
-      // For NULL wallet_card_id, manually check and update/insert
-      const { data: existing } = await supabase
-        .from("user_card_selections")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("cap_id", capId)
-        .is("wallet_card_id", null)
-        .maybeSingle();
-
-      if (existing) {
-        await supabase
-          .from("user_card_selections")
-          .update({ selected_category_id: categoryId })
-          .eq("id", existing.id);
-      } else {
-        await supabase.from("user_card_selections").insert({
-          user_id: userId,
-          cap_id: capId,
-          selected_category_id: categoryId,
-          wallet_card_id: null,
-        });
-      }
-    }
-    
-    revalidatePath("/settings");
-    revalidatePath("/wallet");
-  }
 
   async function selectMultiplierTier(programId: string, tierId: string | null) {
     "use server";
@@ -715,10 +626,7 @@ export default async function SettingsPage() {
     revalidatePath("/spend-optimizer");
   }
 
-  // Cards that require category selection
-  const cardsNeedingSelection = typedWalletCards.filter(
-    (wc) => wc.cards && capsByCard[wc.cards.id]?.length > 0
-  );
+  // Note: Card category selections moved to per-card settings in My Wallet
 
   // Build airline brands from user's cards with airline_miles currency
   const airlineBrands = typedWalletCards
@@ -781,7 +689,7 @@ export default async function SettingsPage() {
   // Check if user has any cards with mobile pay earning rules
   const hasMobilePayCards = userCardIds.length > 0;
   
-  const hasAnySettings = cardsNeedingSelection.length > 0 || programsWithTiers.length > 0 || 
+  const hasAnySettings = programsWithTiers.length > 0 || 
     (travelSubcategories.length > 0 && (airlineBrands.length > 0 || hotelBrands.length > 0 || portalIssuers.length > 0)) ||
     (hasMobilePayCards && (allCategories ?? []).length > 0);
 
@@ -818,32 +726,7 @@ export default async function SettingsPage() {
 
         {hasAnySettings ? (
           <div className="space-y-8 mt-8">
-            {/* Card Category Selections */}
-            {cardsNeedingSelection.length > 0 && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-                <h2 className="text-lg font-semibold text-white mb-2">
-                  Bonus Category Selections
-                </h2>
-                <p className="text-sm text-zinc-400 mb-4">
-                  Some cards let you choose which category earns a bonus. Select your preferred category for each card.
-                </p>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {cardsNeedingSelection.map((wc) => {
-                    if (!wc.cards) return null;
-                    return (
-                      <CardCategorySelector
-                        key={wc.id}
-                        cardId={wc.cards.id}
-                        cardName={wc.cards.name}
-                        caps={capsByCard[wc.cards.id]}
-                        userSelections={userSelections ?? []}
-                        onSelectCategory={selectCategory}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Note: Card Category Selections moved to per-card settings in My Wallet */}
 
             {/* Earning Multiplier Programs */}
             {programsWithTiers.length > 0 && (

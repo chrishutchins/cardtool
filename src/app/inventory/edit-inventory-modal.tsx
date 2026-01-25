@@ -145,7 +145,7 @@ export function EditInventoryModal({
                 <option value="">No player assigned</option>
                 {players.map((p) => (
                   <option key={p.player_number} value={p.player_number}>
-                    {p.description || `Player ${p.player_number}`}
+                    {p.description || `P${p.player_number}`}
                   </option>
                 ))}
               </select>

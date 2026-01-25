@@ -350,10 +350,11 @@ export function PointsClient({
     return a.name.localeCompare(b.name);
   });
 
-  // Currencies available to add (not already visible and not archived)
+  // Currencies available to add (not already visible)
+  // Include archived currencies so users can un-archive them
   const addableCurrencies = useMemo(() => {
-    return currencies.filter(c => !shouldShowCurrency(c) && !archivedCurrencySet.has(c.id));
-  }, [currencies, shouldShowCurrency, archivedCurrencySet]);
+    return currencies.filter(c => !shouldShowCurrency(c));
+  }, [currencies, shouldShowCurrency]);
 
   // Helper function to check if a single search term matches a currency
   const termMatchesCurrency = (term: string, name: string, code: string, programName: string): boolean => {
@@ -464,22 +465,28 @@ export function PointsClient({
                 </p>
               ) : (
                 <div className="space-y-1">
-                  {filteredAddable.map(currency => (
-                    <button
-                      key={currency.id}
-                      onClick={() => handleTrackCurrency(currency.id)}
-                      disabled={isPending}
-                      className="w-full px-3 py-2 rounded-lg text-left hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center justify-between"
-                    >
-                      <div>
-                        <span className="text-white font-medium">{currency.name}</span>
-                        {currency.program_name && (
-                          <span className="text-zinc-500 text-sm ml-2">{currency.program_name}</span>
-                        )}
-                      </div>
-                      <span className="text-xs text-zinc-500 uppercase">{currency.currency_type.replace("_", " ")}</span>
-                    </button>
-                  ))}
+                  {filteredAddable.map(currency => {
+                    const isArchived = archivedCurrencySet.has(currency.id);
+                    return (
+                      <button
+                        key={currency.id}
+                        onClick={() => handleTrackCurrency(currency.id)}
+                        disabled={isPending}
+                        className="w-full px-3 py-2 rounded-lg text-left hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-medium">{currency.name}</span>
+                          {currency.program_name && (
+                            <span className="text-zinc-500 text-sm">{currency.program_name}</span>
+                          )}
+                          {isArchived && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-400">hidden</span>
+                          )}
+                        </div>
+                        <span className="text-xs text-zinc-500 uppercase">{currency.currency_type.replace("_", " ")}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

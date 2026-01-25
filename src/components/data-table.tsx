@@ -172,6 +172,8 @@ export interface DataTableProps<T> {
   visibleColumnIds?: string[];
   onColumnVisibilityChange?: (columnIds: string[]) => void;
   showColumnSelector?: boolean;
+  // Column ordering
+  defaultColumnOrder?: string[]; // Default column order (if not persisted)
   // Sorting
   defaultSortColumn?: string;
   defaultSortDirection?: "asc" | "desc";
@@ -258,6 +260,7 @@ export function DataTable<T>({
   visibleColumnIds,
   onColumnVisibilityChange,
   showColumnSelector = true,
+  defaultColumnOrder,
   defaultSortColumn,
   defaultSortDirection = "asc",
   rowClassName,
@@ -312,6 +315,13 @@ export function DataTable<T>({
       const allColumnIds = columns.map(c => c.id);
       const newColumns = allColumnIds.filter(id => !persistedSet.has(id));
       return [...persisted.columnOrder.filter(id => allColumnIds.includes(id)), ...newColumns];
+    }
+    // Use defaultColumnOrder if provided, otherwise use columns array order
+    if (defaultColumnOrder && defaultColumnOrder.length > 0) {
+      const defaultSet = new Set(defaultColumnOrder);
+      const allColumnIds = columns.map(c => c.id);
+      const newColumns = allColumnIds.filter(id => !defaultSet.has(id));
+      return [...defaultColumnOrder.filter(id => allColumnIds.includes(id)), ...newColumns];
     }
     return columns.map(c => c.id);
   });
@@ -570,7 +580,7 @@ export function DataTable<T>({
                       setLocalVisibleColumns(new Set(defaults));
                       onColumnVisibilityChange?.(defaults);
                       // Reset order to default
-                      setColumnOrder(columns.map(c => c.id));
+                      setColumnOrder(defaultColumnOrder ?? columns.map(c => c.id));
                     }}
                     className="px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                   >

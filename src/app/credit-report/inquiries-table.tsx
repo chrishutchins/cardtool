@@ -501,14 +501,16 @@ export function InquiriesTable({
   }, [groupedInquiries, showDropped, sortColumn, sortDirection, inquiryTypeFilter]);
 
   // Filter groups by inquiry type for counts
+  // Use same logic as hardCount/softCount: groups that have at least one inquiry of that type
   const typeFilteredGroups = useMemo(() => {
     if (inquiryTypeFilter === "all") return groupedInquiries;
     return groupedInquiries.filter((g) => {
-      const isSoft = g.inquiries.some((inq) => isSoftInquiry(inq.inquiry_type));
       if (inquiryTypeFilter === "hard") {
-        return !isSoft;
+        // Include groups that have at least one hard inquiry
+        return g.inquiries.some((inq) => !isSoftInquiry(inq.inquiry_type));
       } else {
-        return isSoft;
+        // Include groups that have at least one soft inquiry
+        return g.inquiries.some((inq) => isSoftInquiry(inq.inquiry_type));
       }
     });
   }, [groupedInquiries, inquiryTypeFilter]);
@@ -622,12 +624,12 @@ export function InquiriesTable({
     );
   }
 
-  // Count soft inquiries
+  // Count soft/hard inquiries - only count ACTIVE (non-dropped) groups to match header
   const softCount = groupedInquiries.filter((g) => 
-    g.inquiries.some((inq) => isSoftInquiry(inq.inquiry_type))
+    !g.isDropped && g.inquiries.some((inq) => isSoftInquiry(inq.inquiry_type))
   ).length;
   const hardCount = groupedInquiries.filter((g) => 
-    g.inquiries.some((inq) => !isSoftInquiry(inq.inquiry_type))
+    !g.isDropped && g.inquiries.some((inq) => !isSoftInquiry(inq.inquiry_type))
   ).length;
 
   return (

@@ -209,6 +209,15 @@ export interface CreditSettings {
   is_auto_repeat?: boolean | null;
 }
 
+interface RematchResult {
+  success: boolean;
+  matched?: number;
+  clawbacks?: number;
+  message?: string;
+  error?: string;
+  errors?: string[];
+}
+
 interface CreditsClientProps {
   walletCards: WalletCard[];
   credits: Credit[];
@@ -225,6 +234,7 @@ interface CreditsClientProps {
   onUpdateUsagePeriod?: (usageId: string, newDate: string) => Promise<void>;
   onMoveTransaction?: (transactionId: string, newDate: string) => Promise<void>;
   onAddInventoryItem: (formData: FormData) => Promise<void>;
+  onRematch?: (forceRematch?: boolean) => Promise<RematchResult>;
 }
 
 type SortMode = "card" | "brand" | "expiration";
@@ -304,6 +314,7 @@ export function CreditsClient({
   onUpdateUsagePeriod,
   onMoveTransaction,
   onAddInventoryItem,
+  onRematch,
 }: CreditsClientProps) {
   const [sortMode, setSortMode] = useState<SortMode>("expiration");
   const [viewMode, setViewMode] = useState<ViewMode>("current");
@@ -325,9 +336,33 @@ export function CreditsClient({
   } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRematching, setIsRematching] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   
   const hasMultiplePlayers = players.length > 1;
+  
+  // Rematch credits (admin only)
+  const handleRematch = async (force: boolean = false) => {
+    if (!onRematch) return;
+    setIsRematching(true);
+    setSyncMessage(null);
+    try {
+      const result = await onRematch(force);
+      if (result.success) {
+        if (result.matched === 0 && result.clawbacks === 0) {
+          setSyncMessage(result.message || "No transactions to match");
+        } else {
+          setSyncMessage(`Matched ${result.matched} credits, ${result.clawbacks} clawbacks`);
+        }
+      } else {
+        setSyncMessage(result.error || "Rematch failed");
+      }
+    } catch (err) {
+      setSyncMessage("Rematch failed");
+    } finally {
+      setIsRematching(false);
+    }
+  };
 
   // Sync transactions from Plaid (what they already have)
   const handleSync = async () => {
@@ -840,7 +875,7 @@ export function CreditsClient({
                 <option value="all">All Players</option>
                 {players.map(p => (
                   <option key={p.player_number} value={p.player_number}>
-                    {p.description || `Player ${p.player_number}`}
+                    {p.description || `P${p.player_number}`}
                   </option>
                 ))}
               </select>
@@ -958,6 +993,53 @@ export function CreditsClient({
                   </svg>
                   {isRefreshing ? "Refreshing..." : "Refresh Banks"}
                 </button>
+              )}
+              
+              {isAdmin && onRematch && (
+                <>
+                  <button
+                    onClick={() => handleRematch(false)}
+                    disabled={isSyncing || isRefreshing || isRematching}
+                    className="flex items-center gap-1.5 rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-3 py-1.5 text-sm text-emerald-400 hover:bg-emerald-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Re-run credit matching on unmatched transactions (admin only)"
+                  >
+                    <svg
+                      className={`w-4 h-4 ${isRematching ? "animate-spin" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                      />
+                    </svg>
+                    {isRematching ? "Matching..." : "Rematch"}
+                  </button>
+                  <button
+                    onClick={() => handleRematch(true)}
+                    disabled={isSyncing || isRefreshing || isRematching}
+                    className="flex items-center gap-1.5 rounded-lg border border-amber-700/50 bg-amber-900/20 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Clear all existing matches and re-run matching (admin only)"
+                  >
+                    <svg
+                      className={`w-4 h-4 ${isRematching ? "animate-spin" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Force Rematch
+                  </button>
+                </>
               )}
             </div>
           )}

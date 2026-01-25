@@ -1566,7 +1566,21 @@ function buildEarningRateMap(
         break;
       
       case "selected_category": {
-        const selectedId = userSelections.get(bonus.id);
+        // For split cards, bonus.id is "capId_walletId" (both UUIDs joined with underscore)
+        // Try exact match first (handles per-wallet selections)
+        let selectedId = userSelections.get(bonus.id);
+        
+        // Fall back to base cap_id for legacy/global selections
+        // UUIDs are 36 chars (8-4-4-4-12 with dashes), so split format is "uuid_uuid" = 73 chars
+        if (!selectedId && bonus.id.length > 36 && bonus.id.includes('_')) {
+          const underscorePos = bonus.id.indexOf('_');
+          if (underscorePos === 36) {
+            // Looks like "uuid_uuid" format - extract base cap_id
+            const baseCapId = bonus.id.substring(0, 36);
+            selectedId = userSelections.get(baseCapId);
+          }
+        }
+        
         if (selectedId && bonus.category_ids.includes(selectedId)) {
           targetCategories = [selectedId];
         }

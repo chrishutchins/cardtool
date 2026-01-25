@@ -156,7 +156,7 @@ export function UpcomingPayments({
   // Calculate total due and overdraft warnings (use remaining balance if partial payment)
   const totalDue = sortedPayments.reduce((sum, p) => sum + (p.remainingBalance ?? p.statementBalance ?? p.currentBalance ?? 0), 0);
   
-  // Check for overdraft risks: group payments by pay-from account and sum balances
+  // Check for overdraft risks: group payments by pay-from account and calculate running balance
   const paymentsByAccount = new Map<string | null, UpcomingPayment[]>();
   sortedPayments.forEach(p => {
     const accountId = p.payFromAccountId;
@@ -166,6 +166,8 @@ export function UpcomingPayments({
     paymentsByAccount.get(accountId)!.push(p);
   });
 
+  // Calculate which specific payments would cause overdraft (running balance calculation)
+  const overdraftPaymentIds = new Set<string>();
   const overdraftWarnings: { 
     accountName: string; 
     institution: string | null;
@@ -174,28 +176,41 @@ export function UpcomingPayments({
     earliestDueDate: Date | null;
     daysUntil: number | null;
   }[] = [];
+  
   paymentsByAccount.forEach((accountPayments, accountId) => {
     if (!accountId) return;
     const account = bankAccounts.find(a => a.id === accountId);
-    if (!account) return;
+    if (!account || account.availableBalance === null) return;
     
     const totalFromAccount = accountPayments.reduce((sum, p) => sum + (p.remainingBalance ?? p.statementBalance ?? p.currentBalance ?? 0), 0);
-    if (account.availableBalance !== null && totalFromAccount > account.availableBalance) {
-      // Find earliest due date for this account's payments
-      const earliestDueDate = accountPayments.reduce((earliest, p) => {
-        const dueDate = p.dueDate || p.calculatedDueDate;
-        if (!dueDate) return earliest;
-        if (!earliest) return dueDate;
-        return dueDate < earliest ? dueDate : earliest;
-      }, null as Date | null);
+    
+    // Calculate running balance to find which payments actually overdraft
+    let runningBalance = account.availableBalance;
+    let overdraftStarted = false;
+    let earliestOverdraftDate: Date | null = null;
+    
+    accountPayments.forEach(p => {
+      const paymentAmount = p.remainingBalance ?? p.statementBalance ?? p.currentBalance ?? 0;
+      runningBalance -= paymentAmount;
       
+      if (runningBalance < 0) {
+        overdraftPaymentIds.add(p.id);
+        if (!overdraftStarted) {
+          overdraftStarted = true;
+          earliestOverdraftDate = p.dueDate || p.calculatedDueDate;
+        }
+      }
+    });
+    
+    // Only add warning if there's an actual overdraft risk
+    if (totalFromAccount > account.availableBalance) {
       overdraftWarnings.push({
         accountName: account.displayName || account.name,
         institution: account.institution,
         totalDue: totalFromAccount,
         balance: account.availableBalance,
-        earliestDueDate,
-        daysUntil: getDaysUntil(earliestDueDate),
+        earliestDueDate: earliestOverdraftDate,
+        daysUntil: getDaysUntil(earliestOverdraftDate),
       });
     }
   });
@@ -299,11 +314,8 @@ export function UpcomingPayments({
               const daysUntil = getDaysUntil(effectiveDueDate);
               const overdue = daysUntil !== null && daysUntil < 0;
 
-              // Check if this payment contributes to an overdraft
-              const isOverdraftContributor = payment.payFromAccountId && overdraftWarnings.some(
-                w => bankAccounts.find(a => a.id === payment.payFromAccountId)?.name === w.accountName ||
-                     bankAccounts.find(a => a.id === payment.payFromAccountId)?.displayName === w.accountName
-              );
+              // Check if this specific payment would cause or be affected by an overdraft
+              const isOverdraftContributor = overdraftPaymentIds.has(payment.id);
 
               // Build pay from display name with institution
               const payFromDisplay = payment.payFromInstitution && payment.payFromAccountName
@@ -371,7 +383,10 @@ export function UpcomingPayments({
 
                     {/* Amount */}
                     <div className="w-24 text-right flex-shrink-0">
-                      <p className={`text-sm font-semibold ${displayBalance && displayBalance > 0 ? 'text-red-400' : 'text-zinc-400'}`}>
+                      <p className={`text-sm font-semibold ${
+                        isOverdraftContributor ? 'text-red-400' : 
+                        displayBalance && displayBalance > 0 ? 'text-emerald-400' : 'text-zinc-400'
+                      }`}>
                         {formatCurrency(displayBalance)}
                       </p>
                       {payment.partialPaymentAmount && (
@@ -476,7 +491,7 @@ export function UpcomingPayments({
 
                       {/* Unbilled Amount */}
                       <div className="w-20 text-right flex-shrink-0">
-                        <p className="text-sm text-blue-400">
+                        <p className="text-sm text-blue-400 italic">
                           {formatCurrency(balance.unbilledAmount)}
                         </p>
                       </div>

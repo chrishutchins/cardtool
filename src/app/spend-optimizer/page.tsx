@@ -155,9 +155,10 @@ export default async function ReturnsPage({ searchParams }: Props) {
       .eq("user_id", effectiveUserId),
     
     // User's category selections for "selected_category" bonuses
+    // Include wallet_card_id for per-card selections (used when same card appears multiple times)
     supabase
       .from("user_card_selections")
-      .select("cap_id, selected_category_id")
+      .select("cap_id, selected_category_id, wallet_card_id")
       .eq("user_id", effectiveUserId),
     
     // User's travel booking preferences
@@ -479,9 +480,17 @@ export default async function ReturnsPage({ searchParams }: Props) {
   });
 
   // Build user selections map
+  // For split cards, bonus.id becomes "cap_id_wallet_id", so we need both keys:
+  // - cap_id (for legacy/global selections and non-split cards)
+  // - cap_id_wallet_id (for per-wallet selections with split cards)
   const userSelections = new Map<string, number>();
   selectionsResult.data?.forEach((s) => {
+    // Always set the base cap_id (used as fallback and for non-split cards)
     userSelections.set(s.cap_id, s.selected_category_id);
+    // If there's a wallet_card_id, also set the wallet-specific key for split cards
+    if (s.wallet_card_id) {
+      userSelections.set(`${s.cap_id}_${s.wallet_card_id}`, s.selected_category_id);
+    }
   });
 
   // Build travel preferences

@@ -344,7 +344,7 @@ export function WalletCardTable({
   const playerDescriptions = useMemo(() => {
     const map = new Map<number, string>();
     players.forEach(p => {
-      map.set(p.player_number, p.description || `Player ${p.player_number}`);
+      map.set(p.player_number, p.description || `P${p.player_number}`);
     });
     return map;
   }, [players]);
@@ -596,7 +596,7 @@ export function WalletCardTable({
         >
           <option value="">All Players</option>
           {Array.from({ length: playerCount }, (_, i) => i + 1).map((num) => (
-            <option key={num} value={num}>{playerDescriptions.get(num) ?? `Player ${num}`}</option>
+            <option key={num} value={num}>{playerDescriptions.get(num) ?? `P${num}`}</option>
           ))}
         </select>
       )}
@@ -647,10 +647,10 @@ export function WalletCardTable({
       // Player (if multi-player, user-editable)
       ...(playerCount > 1 ? [{
         id: "player",
-        label: "Player #",
+        label: "Player",
         align: "center" as const,
-        minWidth: "50px",
-        accessor: (row: RowType) => row.playerNum,
+        minWidth: "70px",
+        accessor: (row: RowType) => playerDescriptions.get(row.playerNum) ?? `P${row.playerNum}`,
         sortAccessor: (row: RowType) => row.playerNum,
         render: (row: RowType) => (
           <button
@@ -659,9 +659,9 @@ export function WalletCardTable({
               openSettingsWithFocus(row, "playerNumber");
             }}
             className={STYLES.editable}
-            title={playerDescriptions.get(row.playerNum) ?? `Player ${row.playerNum}`}
+            title="Click to change player"
           >
-            P{row.playerNum}
+            {playerDescriptions.get(row.playerNum) ?? `P${row.playerNum}`}
           </button>
         ),
       }] : []),
@@ -1349,26 +1349,65 @@ export function WalletCardTable({
     return cols;
   }, [playerCount, playerDescriptions, debitPayEnabled, accountLinkingEnabled]);
 
-  // Default visible columns - show all except card_type, limit_type, currency, and Plaid columns
+  // Default visible columns - show all columns
   const defaultVisibleColumns = useMemo(() => {
     const visible = [
       "name",
+      "player",
       "issuer",
+      "type",
+      "network",
       "earns",
+      "currency",
       "bonuses",
       "credits",
       "annual_fee",
       "perks",
       "net_fee",
+      "balance",
+      "credit_limit",
+      "limit",
+      "available_credit",
+      "cl_used",
       "last_close",
-      "next_close",
       "payment_due",
+      "next_close",
+      "pay_from",
       "opened",
+      "notes",
     ];
-    if (playerCount > 1) visible.splice(1, 0, "player");
+    // Add conditional columns
     if (debitPayEnabled) visible.push("debit_pay");
     return visible;
-  }, [playerCount, debitPayEnabled]);
+  }, [debitPayEnabled]);
+
+  // Default column order
+  const defaultColumnOrder = useMemo(() => [
+    "name",
+    "player",
+    "issuer",
+    "type",
+    "network",
+    "earns",
+    "currency",
+    "bonuses",
+    "credits",
+    "annual_fee",
+    "perks",
+    "net_fee",
+    "balance",
+    "credit_limit",
+    "limit",
+    "available_credit",
+    "cl_used",
+    "last_close",
+    "payment_due",
+    "next_close",
+    "pay_from",
+    "opened",
+    "notes",
+    "debit_pay",
+  ], []);
 
   // Search filter
   const searchFilter = useCallback((row: RowType, query: string) => {
@@ -1410,6 +1449,7 @@ export function WalletCardTable({
         searchPlaceholder="Search cards..."
         searchFilter={searchFilter}
         visibleColumnIds={defaultVisibleColumns}
+        defaultColumnOrder={defaultColumnOrder}
         showColumnSelector={true}
         defaultSortColumn="name"
         defaultSortDirection="asc"

@@ -55,6 +55,7 @@ const navGroups: (NavItem | NavGroup)[] = [
     ],
   },
   { href: "/admin/inventory", label: "Inventory" },
+  { href: "/admin/demo", label: "Demo" },
 ];
 
 function isNavGroup(item: NavItem | NavGroup): item is NavGroup {

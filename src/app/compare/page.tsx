@@ -575,13 +575,18 @@ export default async function ComparePage() {
       .eq("user_id", effectiveUserId),
     supabase
       .from("user_players")
-      .select("player_number")
-      .eq("user_id", effectiveUserId),
+      .select("player_number, description")
+      .eq("user_id", effectiveUserId)
+      .order("player_number"),
   ]);
 
   const savedCategoryIds = savedCategories?.map((c) => c.category_id) ?? [];
   const savedEvalCardIds = savedEvalCards?.map((c) => c.card_id) ?? [];
   const playerCount = Math.max(1, userPlayers?.length ?? 1);
+  const players = (userPlayers ?? []).map(p => ({
+    player_number: p.player_number,
+    description: p.description || `P${p.player_number}`,
+  }));
 
   // Get all categories
   const { data: allCategories } = await supabase
@@ -1157,6 +1162,7 @@ export default async function ComparePage() {
           creditLimits={creditLimitMap}
           accountLinkingEnabled={accountLinkingEnabled}
           playerCount={playerCount}
+          players={players}
           onSaveCategories={saveCompareCategories}
           onSaveEvalCards={saveCompareEvalCards}
           onUpdateBonusSettings={updateBonusDisplaySettings}

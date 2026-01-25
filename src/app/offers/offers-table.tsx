@@ -780,7 +780,7 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
               <option value="">All Cards</option>
               {players.map((p) => (
                 <option key={p.playerNumber} value={p.playerNumber}>
-                  P{p.playerNumber}: {p.description} doesn&apos;t have
+                  {p.description} doesn&apos;t have
                 </option>
               ))}
             </select>
@@ -795,7 +795,7 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
               <option value="">Card Rules</option>
               {players.map((p) => (
                 <option key={p.playerNumber} value={p.playerNumber}>
-                  P{p.playerNumber}: {p.description} is eligible
+                  {p.description} is eligible
                 </option>
               ))}
             </select>
@@ -891,7 +891,7 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
                           {card.players.length > 0 && (
                             card.players.map((p) => (
                               <span key={p.playerNumber} className="px-1.5 py-0.5 text-xs bg-blue-700/50 text-blue-300 rounded">
-                                P{p.playerNumber}: {p.playerName}
+                                {p.playerName}
                               </span>
                             ))
                           )}

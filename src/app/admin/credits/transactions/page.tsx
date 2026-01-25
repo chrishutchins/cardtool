@@ -166,8 +166,8 @@ export default async function AdminTransactionsPage({
     query = query.gt("amount_cents", 0);
   }
 
-  // Limit results
-  query = query.limit(500);
+  // Limit results (increased from 500 to get more transactions)
+  query = query.limit(2000);
 
   const { data: transactions, error } = await query;
 
