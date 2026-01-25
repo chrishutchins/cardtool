@@ -292,7 +292,7 @@ export function BalanceTable({
       </button>
       
       {!isCollapsed && (
-      <div className="overflow-auto max-h-[calc(100vh-300px)]">
+      <div className="overflow-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">

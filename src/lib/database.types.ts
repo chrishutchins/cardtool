@@ -754,6 +754,7 @@ export type Database = {
           image_url: string | null
           is_active: boolean
           is_approved: boolean
+          is_no_longer_available: boolean
           issuer_id: string
           name: string
           network: Database["public"]["Enums"]["card_network"] | null
@@ -781,6 +782,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           is_approved?: boolean
+          is_no_longer_available?: boolean
           issuer_id: string
           name: string
           network?: Database["public"]["Enums"]["card_network"] | null
@@ -808,6 +810,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           is_approved?: boolean
+          is_no_longer_available?: boolean
           issuer_id?: string
           name?: string
           network?: Database["public"]["Enums"]["card_network"] | null

@@ -22,6 +22,7 @@ interface CardFormProps {
     no_foreign_transaction_fees: boolean | null;
     search_aliases: string[] | null;
     network: "visa" | "mastercard" | "amex" | "discover" | null;
+    is_no_longer_available: boolean | null;
   };
 }
 
@@ -39,6 +40,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
   const [noForeignTransactionFees, setNoForeignTransactionFees] = useState(defaultValues?.no_foreign_transaction_fees ?? false);
   const [searchAliases, setSearchAliases] = useState(defaultValues?.search_aliases?.join(", ") ?? "");
   const [network, setNetwork] = useState<"visa" | "mastercard" | "amex" | "discover" | "">(defaultValues?.network ?? "");
+  const [isNoLongerAvailable, setIsNoLongerAvailable] = useState(defaultValues?.is_no_longer_available ?? false);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
 
@@ -58,6 +60,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
       setNoForeignTransactionFees(defaultValues.no_foreign_transaction_fees ?? false);
       setSearchAliases(defaultValues.search_aliases?.join(", ") ?? "");
       setNetwork(defaultValues.network ?? "");
+      setIsNoLongerAvailable(defaultValues.is_no_longer_available ?? false);
     }
   }, [defaultValues]);
 
@@ -278,7 +281,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
         </div>
       </div>
 
-      <div>
+      <div className="space-y-3">
         <label className="flex items-center gap-2 text-sm text-zinc-300">
           <input
             type="checkbox"
@@ -288,6 +291,19 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
             className="rounded border-zinc-600 bg-zinc-700 text-blue-600 focus:ring-blue-500"
           />
           No Foreign Transaction Fees
+        </label>
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            name="is_no_longer_available"
+            checked={isNoLongerAvailable}
+            onChange={(e) => setIsNoLongerAvailable(e.target.checked)}
+            className="rounded border-zinc-600 bg-zinc-700 text-amber-600 focus:ring-amber-500"
+          />
+          <span>
+            No Longer Available
+            <span className="text-zinc-500 ml-1 text-xs">(excludes from recommendations &amp; all cards listings)</span>
+          </span>
         </label>
       </div>
 

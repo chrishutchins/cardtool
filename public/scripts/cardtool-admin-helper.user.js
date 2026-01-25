@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Admin Helper
 // @namespace    https://cardtool.app
-// @version      1.6.6
+// @version      1.6.8
 // @description  Admin tool to discover balance selectors on loyalty program sites
 // @author       CardTool
 // @match        *://*/*
@@ -21,6 +21,11 @@
 
 (function() {
     'use strict';
+
+    // Don't run in iframes (like CAPTCHAs, ads, etc.)
+    if (window.self !== window.top) {
+        return;
+    }
 
     const CARDTOOL_URL = 'https://cardtool.app';
 
@@ -421,21 +426,29 @@
     }
 
     function loadCurrencies() {
+        console.log('CardTool Admin: Loading currencies from', `${CARDTOOL_URL}/api/points/currencies`);
+        
         // Use GM_xmlhttpRequest to bypass CORS and send cookies cross-origin
         GM_xmlhttpRequest({
             method: 'GET',
             url: `${CARDTOOL_URL}/api/points/currencies`,
-            withCredentials: true,
+            timeout: 10000, // 10 second timeout
             onload: function(response) {
+                console.log('CardTool Admin: Currencies response status:', response.status);
                 try {
                     if (response.status !== 200) {
-                        throw new Error(`HTTP ${response.status}`);
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
 
                     const data = JSON.parse(response.responseText);
                     currencies = data.currencies || [];
+                    console.log('CardTool Admin: Loaded', currencies.length, 'currencies');
 
                     const select = document.getElementById('cardtool-currency');
+                    if (!select) {
+                        console.error('CardTool Admin: Currency select element not found');
+                        return;
+                    }
                     select.innerHTML = '<option value="">Select a currency...</option>';
 
                     // Group by type
@@ -467,15 +480,26 @@
                     });
 
                 } catch (error) {
-                    console.error('Failed to parse currencies:', error);
-                    document.getElementById('cardtool-currency').innerHTML =
-                        '<option value="">Error loading - enter code manually</option>';
+                    console.error('CardTool Admin: Failed to parse currencies:', error);
+                    const select = document.getElementById('cardtool-currency');
+                    if (select) {
+                        select.innerHTML = '<option value="">Error loading - check console</option>';
+                    }
                 }
             },
             onerror: function(error) {
-                console.error('Failed to load currencies:', error);
-                document.getElementById('cardtool-currency').innerHTML =
-                    '<option value="">Error loading - enter code manually</option>';
+                console.error('CardTool Admin: Network error loading currencies:', error);
+                const select = document.getElementById('cardtool-currency');
+                if (select) {
+                    select.innerHTML = '<option value="">Network error - check console</option>';
+                }
+            },
+            ontimeout: function() {
+                console.error('CardTool Admin: Timeout loading currencies');
+                const select = document.getElementById('cardtool-currency');
+                if (select) {
+                    select.innerHTML = '<option value="">Timeout - try refreshing</option>';
+                }
             }
         });
     }

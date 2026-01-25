@@ -1915,7 +1915,7 @@ export interface CardRecommendation {
 }
 
 export interface RecommendationsInput extends CalculatorInput {
-  allCards: (CardInput & { default_perks_value: number | null; exclude_from_recommendations?: boolean })[]; // All available cards with default perks
+  allCards: (CardInput & { default_perks_value: number | null; exclude_from_recommendations?: boolean; is_no_longer_available?: boolean })[]; // All available cards with default perks
   allEarningRules: EarningRuleInput[]; // ALL earning rules (not filtered to user's cards)
   allCategoryBonuses: CategoryBonusInput[]; // ALL category bonuses (not filtered to user's cards)
 }
@@ -1983,9 +1983,9 @@ export function calculateCardRecommendations(
   // Get IDs of cards already in wallet
   const userCardIds = new Set(userCards.map(c => c.id));
   
-  // Filter to cards not in wallet and not excluded from recommendations
+  // Filter to cards not in wallet, not excluded from recommendations, and still available
   const candidateCards = allCards.filter(c => 
-    !userCardIds.has(c.id) && !c.exclude_from_recommendations
+    !userCardIds.has(c.id) && !c.exclude_from_recommendations && !c.is_no_longer_available
   );
   
   const currentNetEarnings = currentReturns.netValueEarned;

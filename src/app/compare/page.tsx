@@ -101,6 +101,7 @@ export default async function ComparePage() {
   const supabase = createClient();
 
   // Get all active cards with their details (including secondary currency for UR pooling, etc.)
+  // Exclude cards that are no longer available (unless user already has them in wallet)
   const { data: allCards } = await supabase
     .from("cards")
     .select(`
@@ -113,6 +114,7 @@ export default async function ComparePage() {
       secondary_currency_id,
       product_type,
       card_charge_type,
+      is_no_longer_available,
       issuers:issuer_id (id, name),
       primary_currency:reward_currencies!cards_primary_currency_id_fkey (
         id, name, code, base_value_cents, currency_type
@@ -944,6 +946,7 @@ export default async function ComparePage() {
     secondary_currency_id: string | null;
     product_type: "personal" | "business";
     card_charge_type: "credit" | "charge" | null;
+    is_no_longer_available: boolean;
     issuers: { id: string; name: string } | null;
     primary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
     secondary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
@@ -1017,6 +1020,12 @@ export default async function ComparePage() {
     }
 
     const walletEntries = walletEntriesByCardId.get(card.id);
+    
+    // Skip unavailable cards that the user doesn't already own
+    // Users can still see their owned unavailable cards in their wallet
+    if (card.is_no_longer_available && !walletEntries) {
+      continue;
+    }
     
     if (walletEntries && walletEntries.length > 0) {
       // Card is owned - create one row per wallet instance with instance-specific currency

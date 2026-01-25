@@ -104,6 +104,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     const default_earn_rate = parseFloat(formData.get("default_earn_rate") as string) || 1.0;
     const default_perks_value = parseFloat(formData.get("default_perks_value") as string) || 0;
     const no_foreign_transaction_fees = formData.get("no_foreign_transaction_fees") === "on";
+    const is_no_longer_available = formData.get("is_no_longer_available") === "on";
     const networkValue = formData.get("network") as string;
     const network = networkValue ? (networkValue as "visa" | "mastercard" | "amex" | "discover") : null;
     const searchAliasesRaw = formData.get("search_aliases") as string;
@@ -125,6 +126,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
         default_earn_rate,
         default_perks_value,
         no_foreign_transaction_fees,
+        is_no_longer_available,
         network,
         search_aliases,
       })
@@ -687,6 +689,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
             no_foreign_transaction_fees: card.no_foreign_transaction_fees,
             search_aliases: card.search_aliases,
             network: card.network,
+            is_no_longer_available: card.is_no_longer_available,
           }}
         />
       </div>

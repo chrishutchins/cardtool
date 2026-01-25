@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CardTool Points Importer
 // @namespace    https://cardtool.app
-// @version      2.48.0
+// @version      2.51.0
 // @description  Sync loyalty program balances and credit report data to CardTool
 // @author       CardTool
 // @match        *://*/*
@@ -734,11 +734,40 @@
         // Refresh button - re-scan page for balance
         badgeElement.querySelector('.cardtool-badge-refresh').addEventListener('click', (e) => {
             e.stopPropagation();
+            
+            // Save API-captured data before resetting (API data can't be re-captured without page reload)
+            const savedMultiBalanceData = hasMultiBalanceData;
+            const savedApiBalances = specialApiBalances;
+            const savedInventoryItems = inventoryItems;
+            
             extractedBalance = null;
             lastDisplayedBalance = null;
             currentConfig = null;
             updateBadgeContent('<div class="cardtool-badge-status">Scanning...</div>');
-            setTimeout(tryExtractBalance, 500);
+            
+            setTimeout(() => {
+                // Try DOM extraction first
+                tryExtractBalance();
+                
+                // If DOM didn't find anything and we have API data, restore it
+                if (extractedBalance === null && savedMultiBalanceData && savedApiBalances && savedApiBalances.length > 0) {
+                    console.log('CardTool: Restoring API-captured balance data');
+                    specialApiBalances = savedApiBalances;
+                    showMultipleBalancesFound(savedApiBalances);
+                }
+                
+                // If we have inventory items, re-show them
+                if (savedInventoryItems && savedInventoryItems.length > 0) {
+                    console.log('CardTool: Restoring inventory items');
+                    inventoryItems = savedInventoryItems;
+                    showInventoryFound(savedInventoryItems);
+                }
+                
+                // Also try DOM inventory extraction
+                if (inventoryDomConfig) {
+                    extractInventoryFromDom();
+                }
+            }, 500);
         });
 
         // Close button
@@ -1073,10 +1102,12 @@
 
                     const data = JSON.parse(response.responseText);
                     players = data.players || [{ player_number: 1, description: 'Me' }];
+                    console.log('CardTool: Loaded', players.length, 'player(s)');
 
                     // Only show player selector if multiple players
                     if (players.length > 1) {
                         const container = document.getElementById('cardtool-player-container');
+                        console.log('CardTool: Player container found:', !!container);
                         if (container) {
                             const lastPlayer = GM_getValue('lastPlayerNumber', 1);
                             container.innerHTML = `
@@ -1514,6 +1545,63 @@
                 
                 return results.length > 0 ? results : null;
             }
+        },
+        ihgBalance: {
+            domain: 'ihg.com',
+            pathPattern: /\/rewardsclub\/.*\/account-mgmt/i,
+            apiPattern: /\/members\/v2\/profiles\/me/i,
+            name: 'IHG',
+            currencyCode: 'IHG',
+            parseResponse: (data) => {
+                const results = [];
+                const programs = data?.programs || [];
+                
+                // Find the PC (Priority Club / One Rewards) program with points balance
+                for (const program of programs) {
+                    if (program.programCode === 'PC' && program.currentPointsBalance !== undefined) {
+                        results.push({
+                            currencyCode: 'IHG',
+                            name: 'IHG One Rewards',
+                            balance: program.currentPointsBalance,
+                            format: 'points',
+                            expiration: null
+                        });
+                        break;
+                    }
+                }
+                
+                return results.length > 0 ? results : null;
+            }
+        },
+        alaskaWallet: {
+            domain: 'alaskaair.com',
+            pathPattern: /\/atmosrewards\/account/i,
+            apiPattern: /\/loyaltymanagement\/wallet\/certificates/i,
+            name: 'Alaska Wallet',
+            currencyCode: 'ASWLT',
+            parseResponse: (data) => {
+                // Data is an array of certificates
+                if (!Array.isArray(data)) return null;
+                
+                // Sum up all available balances
+                let totalBalance = 0;
+                for (const cert of data) {
+                    if (cert.availableBalance) {
+                        totalBalance += cert.availableBalance;
+                    }
+                }
+                
+                if (totalBalance > 0) {
+                    return [{
+                        currencyCode: 'ASWLT',
+                        name: 'Alaska Wallet',
+                        balance: totalBalance,
+                        format: 'dollars',
+                        expiration: null
+                    }];
+                }
+                return null;
+            }
         }
     };
 
@@ -1610,6 +1698,45 @@
 
                 return items;
             }
+        },
+        ihgVouchers: {
+            domain: 'ihg.com',
+            pathPattern: /\/rewardsclub\/.*\/account-mgmt\/wallet/i,
+            apiPattern: /\/members\/benefits\/v2\/vouchers/i,
+            name: 'IHG',
+            brand: 'IHG',
+            parseResponse: (data) => {
+                const items = [];
+                const vouchers = data?.vouchers || [];
+                
+                for (const voucher of vouchers) {
+                    // Only include "Issued" status vouchers
+                    if (voucher.status?.status !== 'Issued') continue;
+                    
+                    // Skip point deposits (PTS-DPST) - these are just bonus points, not redeemable items
+                    if (voucher.typeId === 'PTS-DPST') continue;
+                    
+                    // Determine type - IHG doesn't have free night vouchers in this API
+                    const typeSlug = 'coupon';
+                    
+                    // Build notes with code and value
+                    let notes = voucher.code ? `Code: ${voucher.code}` : null;
+                    if (voucher.value?.amount) {
+                        notes = (notes ? notes + ', ' : '') + `$${voucher.value.amount} ${voucher.value.unitCurrency || 'USD'}`;
+                    }
+                    
+                    items.push({
+                        external_id: voucher.id,
+                        type_slug: typeSlug,
+                        name: voucher.name,
+                        brand: 'IHG',
+                        expiration_date: voucher.usage?.expiryDate ? voucher.usage.expiryDate.split('T')[0] : null,
+                        notes: notes
+                    });
+                }
+                
+                return items;
+            }
         }
     };
 
@@ -1666,6 +1793,39 @@
                 }
                 return items;
             }
+        },
+        ihgAmbassador: {
+            domain: 'ihg.com',
+            pathPattern: /\/rewardsclub\/.*\/account-mgmt\/wallet/i,
+            name: 'IHG',
+            brand: 'IHG',
+            selector: '[data-slnm-ihg="AmbassadorWeekendNightsCardSID"]',
+            parseElement: (el) => {
+                // Get title
+                const titleEl = el.querySelector('[data-slnm-ihg="AmbassadorWeekendNightsCardTitleSID"]');
+                const name = titleEl ? titleEl.textContent.trim() : 'Ambassador Complimentary Weekend Night';
+                
+                // Get expiration date
+                const dateEl = el.querySelector('[data-slnm-ihg="AmbassadorWeekendNightsWalletCardLink"]');
+                let expirationDate = null;
+                if (dateEl) {
+                    // Parse "02/01/2026" format to "2026-02-01"
+                    const dateText = dateEl.textContent.trim();
+                    const match = dateText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+                    if (match) {
+                        expirationDate = `${match[3]}-${match[1]}-${match[2]}`;
+                    }
+                }
+                
+                return {
+                    external_id: `IHG-AMB-WEEKEND-${expirationDate || 'unknown'}`,
+                    type_slug: 'free_night',
+                    name: name,
+                    brand: 'IHG',
+                    expiration_date: expirationDate,
+                    notes: 'Ambassador membership benefit'
+                };
+            }
         }
     };
 
@@ -1673,6 +1833,23 @@
     let inventoryItems = null; // Array of parsed inventory items
     let inventoryConfig = null;
     let inventoryDomConfig = null; // For DOM-based inventory
+
+    // Helper to merge inventory items (for sites with multiple sources like IHG)
+    function mergeInventoryItems(newItems) {
+        if (!inventoryItems) {
+            inventoryItems = newItems;
+        } else {
+            // Merge, deduping by external_id
+            const existingIds = new Set(inventoryItems.map(i => i.external_id));
+            for (const item of newItems) {
+                if (!existingIds.has(item.external_id)) {
+                    inventoryItems.push(item);
+                    existingIds.add(item.external_id);
+                }
+            }
+        }
+        return inventoryItems;
+    }
 
     function setupSpecialApiInterceptors() {
         const hostname = window.location.hostname.toLowerCase();
@@ -1783,8 +1960,13 @@
         const hostname = window.location.hostname.toLowerCase();
         const pathname = window.location.pathname.toLowerCase();
         
+        console.log('CardTool Inventory: Checking API interceptors for', hostname, pathname);
+        
         for (const [key, config] of Object.entries(INVENTORY_API_CONFIGS)) {
-            if (hostname.includes(config.domain) && config.pathPattern.test(pathname)) {
+            const domainMatch = hostname.includes(config.domain);
+            const pathMatch = config.pathPattern.test(pathname);
+            console.log('CardTool Inventory: Config', key, '- domain:', domainMatch, 'path:', pathMatch);
+            if (domainMatch && pathMatch) {
                 console.log('CardTool Inventory: Setting up interceptor for', config.name);
                 inventoryConfig = config;
                 interceptInventoryApi(config);
@@ -1838,8 +2020,8 @@
                             const items = config.parseResponse(data);
                             if (items && items.length > 0) {
                                 console.log('CardTool Inventory: Found', items.length, 'item(s)');
-                                inventoryItems = items;
-                                showInventoryFound(items);
+                                const merged = mergeInventoryItems(items);
+                                showInventoryFound(merged);
                             }
                         } catch (e) {
                             console.warn('CardTool Inventory: Failed to parse response', e);
@@ -1867,8 +2049,8 @@
                     const items = config.parseResponse(data);
                     if (items && items.length > 0) {
                         console.log('CardTool Inventory: Found', items.length, 'item(s) from Fetch');
-                        inventoryItems = items;
-                        showInventoryFound(items);
+                        const merged = mergeInventoryItems(items);
+                        showInventoryFound(merged);
                     }
                 } catch (e) {
                     console.warn('CardTool Inventory: Failed to parse Fetch response', e);
@@ -1892,8 +2074,13 @@
         const hostname = window.location.hostname.toLowerCase();
         const pathname = window.location.pathname.toLowerCase();
         
+        console.log('CardTool Inventory DOM: Checking configs for', hostname, pathname);
+        
         for (const [key, config] of Object.entries(INVENTORY_DOM_CONFIGS)) {
-            if (hostname.includes(config.domain) && config.pathPattern.test(pathname)) {
+            const domainMatch = hostname.includes(config.domain);
+            const pathMatch = config.pathPattern.test(pathname);
+            console.log('CardTool Inventory DOM: Config', key, '- domain:', domainMatch, 'path:', pathMatch);
+            if (domainMatch && pathMatch) {
                 console.log('CardTool Inventory DOM: Found matching config for', config.name);
                 inventoryDomConfig = config;
                 return config;
@@ -1953,9 +2140,9 @@
 
         if (items.length > 0) {
             console.log('CardTool Inventory DOM: Extracted', items.length, 'item(s)');
-            inventoryItems = items;
+            const merged = mergeInventoryItems(items);
             inventoryConfig = inventoryDomConfig; // Use DOM config as inventory config
-            showInventoryFound(items);
+            showInventoryFound(merged);
         } else {
             console.log('CardTool Inventory DOM: No items found');
         }

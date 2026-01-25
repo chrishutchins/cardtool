@@ -34,6 +34,7 @@ export const getCachedCards = unstable_cache(
         default_earn_rate,
         default_perks_value,
         exclude_from_recommendations,
+        is_no_longer_available,
         primary_currency_id,
         secondary_currency_id,
         issuer_id,

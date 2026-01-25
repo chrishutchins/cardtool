@@ -458,6 +458,7 @@ export default async function DashboardPage() {
     default_earn_rate: number;
     default_perks_value: number | null;
     exclude_from_recommendations: boolean;
+    is_no_longer_available: boolean;
     primary_currency_id: string;
     secondary_currency_id: string | null;
     issuer_id: string;

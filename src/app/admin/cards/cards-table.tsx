@@ -24,13 +24,14 @@ interface Card {
 
 interface CardsTableProps {
   cards: Card[];
+  submitterEmails?: Record<string, string>; // user_id -> email for user-submitted cards
   onDelete: (id: string) => Promise<void>;
   onUpdatePerksValue: (id: string, value: number | null) => Promise<void>;
   onToggleExcludeRecommendations: (id: string, exclude: boolean) => Promise<void>;
   onApproveCard?: (id: string, currentName: string) => Promise<void>;
 }
 
-export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExcludeRecommendations, onApproveCard }: CardsTableProps) {
+export function CardsTable({ cards, submitterEmails = {}, onDelete, onUpdatePerksValue, onToggleExcludeRecommendations, onApproveCard }: CardsTableProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -202,23 +203,48 @@ export function CardsTable({ cards, onDelete, onUpdatePerksValue, onToggleExclud
         if (!row.created_by_user_id) {
           return <span className="text-zinc-500 text-xs">System</span>;
         }
+        const email = submitterEmails[row.created_by_user_id];
         if (!row.is_approved) {
           return (
-            <div className="flex items-center gap-2">
-              <Badge variant="warning">Pending</Badge>
-              {onApproveCard && (
-                <button
-                  onClick={() => handleApprove(row)}
-                  disabled={approvingId === row.id}
-                  className="text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <Badge variant="warning">Pending</Badge>
+                {onApproveCard && (
+                  <button
+                    onClick={() => handleApprove(row)}
+                    disabled={approvingId === row.id}
+                    className="text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+                  >
+                    {approvingId === row.id ? "..." : "Approve"}
+                  </button>
+                )}
+              </div>
+              {email && (
+                <a 
+                  href={`mailto:${email}`} 
+                  className="text-xs text-blue-400 hover:text-blue-300 truncate max-w-[150px]"
+                  title={email}
                 >
-                  {approvingId === row.id ? "..." : "Approve"}
-                </button>
+                  {email}
+                </a>
               )}
             </div>
           );
         }
-        return <Badge variant="success">User</Badge>;
+        return (
+          <div className="flex flex-col gap-1">
+            <Badge variant="success">User</Badge>
+            {email && (
+              <a 
+                href={`mailto:${email}`} 
+                className="text-xs text-blue-400 hover:text-blue-300 truncate max-w-[150px]"
+                title={email}
+              >
+                {email}
+              </a>
+            )}
+          </div>
+        );
       },
     },
     {

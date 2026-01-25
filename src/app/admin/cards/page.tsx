@@ -1,8 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { createClerkClient } from "@clerk/backend";
 import { CardsTable } from "./cards-table";
 import { invalidateCardCaches } from "@/lib/cache-invalidation";
+
+// Get Clerk client for looking up user emails
+function getClerkClient() {
+  const key = process.env.CLERK_SECRET_KEY_PROD || process.env.CLERK_SECRET_KEY;
+  return createClerkClient({ secretKey: key });
+}
 
 export default async function CardsPage() {
   const supabase = createClient();
@@ -19,6 +26,33 @@ export default async function CardsPage() {
 
   // Count pending user-submitted cards
   const pendingCount = cards?.filter(c => c.created_by_user_id && !c.is_approved).length ?? 0;
+
+  // Get unique user IDs for user-submitted cards
+  const userSubmittedUserIds = [...new Set(
+    (cards ?? [])
+      .filter(c => c.created_by_user_id)
+      .map(c => c.created_by_user_id as string)
+  )];
+
+  // Fetch emails from Clerk for user-submitted cards
+  const submitterEmails: Record<string, string> = {};
+  if (userSubmittedUserIds.length > 0) {
+    try {
+      const clerk = getClerkClient();
+      const users = await clerk.users.getUserList({ 
+        userId: userSubmittedUserIds,
+        limit: 100 
+      });
+      for (const user of users.data) {
+        const email = user.emailAddresses.find(e => e.id === user.primaryEmailAddressId)?.emailAddress;
+        if (email) {
+          submitterEmails[user.id] = email;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch user emails from Clerk:", err);
+    }
+  }
 
   async function deleteCard(id: string) {
     "use server";
@@ -95,6 +129,7 @@ export default async function CardsPage() {
 
       <CardsTable 
         cards={cards ?? []} 
+        submitterEmails={submitterEmails}
         onDelete={deleteCard}
         onUpdatePerksValue={updatePerksValue}
         onToggleExcludeRecommendations={toggleExcludeRecommendations}
