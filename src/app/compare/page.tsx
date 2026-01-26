@@ -116,6 +116,7 @@ export default async function ComparePage() {
       card_charge_type,
       is_no_longer_available,
       issuers:issuer_id (id, name),
+      brands:brand_id (id, name),
       primary_currency:reward_currencies!cards_primary_currency_id_fkey (
         id, name, code, base_value_cents, currency_type
       ),
@@ -185,6 +186,50 @@ export default async function ComparePage() {
     .is("closed_date", null);
 
   const userCardIds = new Set(userWallet?.map((w) => w.card_id) ?? []);
+  const userWalletIds = new Set(userWallet?.map((w) => w.id) ?? []);
+  
+  // Get user's Bilt settings for housing tier
+  const { data: userBiltSettings } = await supabase
+    .from("user_bilt_settings")
+    .select("wallet_card_id, bilt_option, housing_tier, monthly_bilt_spend_cents")
+    .eq("user_id", effectiveUserId);
+  
+  // Build map of wallet_card_id -> bilt settings
+  const biltSettingsByWalletId = new Map<string, { bilt_option: number; housing_tier: string; monthly_bilt_spend_cents: number | null }>();
+  for (const setting of userBiltSettings ?? []) {
+    biltSettingsByWalletId.set(setting.wallet_card_id, {
+      bilt_option: setting.bilt_option,
+      housing_tier: setting.housing_tier,
+      monthly_bilt_spend_cents: setting.monthly_bilt_spend_cents,
+    });
+  }
+  
+  // Build map of card_id -> bilt settings (for cards user owns with Bilt settings)
+  // Uses first wallet entry's settings if multiple wallet instances exist
+  const biltSettingsByCardId = new Map<string, { bilt_option: number; housing_tier: string }>();
+  for (const wallet of userWallet ?? []) {
+    const settings = biltSettingsByWalletId.get(wallet.id);
+    if (settings && !biltSettingsByCardId.has(wallet.card_id)) {
+      biltSettingsByCardId.set(wallet.card_id, {
+        bilt_option: settings.bilt_option,
+        housing_tier: settings.housing_tier,
+      });
+    }
+  }
+  
+  // Housing category IDs (Rent and Mortgage)
+  const HOUSING_CATEGORY_IDS = [37, 59];
+  
+  // Convert Bilt housing tier string to rate
+  const getBiltHousingTierRate = (tier: string): number => {
+    switch (tier) {
+      case "0.5x": return 0.5;
+      case "0.75x": return 0.75;
+      case "1x": return 1;
+      case "1.25x": return 1.25;
+      default: return 1;
+    }
+  };
   
   // Build a map of card_id to wallet entries for multi-instance support
   const walletEntriesByCardId = new Map<string, { walletId: string; customName: string | null; playerNumber: number | null }[]>();
@@ -565,6 +610,36 @@ export default async function ComparePage() {
     userSpending[over5kCategory.id] = over5kTotal;
   }
 
+  // Calculate total housing spend (Rent + Mortgage) for Bilt Housing Points cap
+  const totalHousingSpendCents = (userSpending[37] ?? 0) + (userSpending[59] ?? 0); // Rent=37, Mortgage=59
+  
+  // Build biltHousingInfo for each Bilt card the user owns
+  // This is passed to the comparison table for breakdown tooltips
+  type BiltHousingInfo = {
+    option: 1 | 2;
+    tierRate: number;  // For Option 1: 0.5-1.25, For Option 2: 4/3
+    housingSpendCents: number;  // Total housing spend (determines cap)
+    capSpendCents: number;  // Cap on everyday spend for Housing Points (Option 1: housing spend, Option 2: 75%)
+  };
+  const biltHousingInfo: Record<string, BiltHousingInfo> = {};
+  for (const [cardId, settings] of biltSettingsByCardId.entries()) {
+    if (settings.bilt_option === 1) {
+      biltHousingInfo[cardId] = {
+        option: 1,
+        tierRate: getBiltHousingTierRate(settings.housing_tier),
+        housingSpendCents: totalHousingSpendCents,
+        capSpendCents: totalHousingSpendCents, // Option 1: cap equals housing spend
+      };
+    } else {
+      biltHousingInfo[cardId] = {
+        option: 2,
+        tierRate: 4 / 3, // 1.33x
+        housingSpendCents: totalHousingSpendCents,
+        capSpendCents: Math.round(totalHousingSpendCents * 0.75), // Option 2: 75% of housing
+      };
+    }
+  }
+
   // Get user's saved compare preferences and player count
   const [{ data: savedCategories }, { data: savedEvalCards }, { data: userPlayers }] = await Promise.all([
     supabase
@@ -637,6 +712,20 @@ export default async function ComparePage() {
       const bestRate = Math.max(bonus.elevated_rate ?? 0, bonus.post_cap_rate ?? 0);
       if (bestRate > (allCategoriesBonusMap[bonus.card_id] ?? 0)) {
         allCategoriesBonusMap[bonus.card_id] = bestRate;
+      }
+      // Store cap info for all_categories under category ID 0 (special marker)
+      // This will be used as a fallback when looking up cap info for any category
+      if (bonus.cap_amount) {
+        if (!capInfoMap[bonus.card_id]) {
+          capInfoMap[bonus.card_id] = {};
+        }
+        capInfoMap[bonus.card_id][0] = {
+          capAmount: bonus.cap_amount,
+          capPeriod: bonus.cap_period,
+          capType: bonus.cap_type,
+          postCapRate: bonus.post_cap_rate,
+          elevatedRate: bonus.elevated_rate ?? 0,
+        };
       }
     } else {
       // For specific category bonuses, map to each category
@@ -760,6 +849,13 @@ export default async function ComparePage() {
   // Helper: Get the best rate for a card + category using "highest rate wins"
   // Applies multiplier if available
   const getBestRate = (cardId: string, categoryId: number, defaultRate: number): number => {
+    // Bilt cards earn 0 on housing categories (Rent/Mortgage)
+    // Housing Points are earned as a bonus on OTHER categories instead
+    const biltSettings = biltSettingsByCardId.get(cardId);
+    if (biltSettings && HOUSING_CATEGORY_IDS.includes(categoryId)) {
+      return 0; // Bilt cards earn 0 directly on housing
+    }
+    
     const rates: number[] = [defaultRate];
     
     // 1. Check direct earning rule for this category
@@ -948,6 +1044,7 @@ export default async function ComparePage() {
     card_charge_type: "credit" | "charge" | null;
     is_no_longer_available: boolean;
     issuers: { id: string; name: string } | null;
+    brands: { id: string; name: string } | null;
     primary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
     secondary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
   };
@@ -960,6 +1057,7 @@ export default async function ComparePage() {
     annualFee: number;
     defaultEarnRate: number;
     issuerName: string;
+    brandName: string | null;
     currencyCode: string;
     currencyName: string;
     currencyType: string;
@@ -1042,6 +1140,7 @@ export default async function ComparePage() {
           annualFee: card.annual_fee,
           defaultEarnRate: (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1),
           issuerName: card.issuers?.name ?? "Unknown",
+          brandName: card.brands?.name ?? null,
           // Show the effective currency (may be secondary if player has access)
           currencyCode: isSecondary ? `↑ ${currency?.code ?? "???"}` : (currency?.code ?? "???"),
           currencyName: currency?.name ?? "Unknown",
@@ -1066,7 +1165,7 @@ export default async function ComparePage() {
             name: card.primary_currency.name,
             code: card.primary_currency.code,
             currency_type: card.primary_currency.currency_type,
-            base_value_cents: card.primary_currency.base_value_cents,
+            base_value_cents: pointValue, // Use resolved value (user override or template)
           } : null,
         });
       }
@@ -1083,6 +1182,7 @@ export default async function ComparePage() {
         annualFee: card.annual_fee,
         defaultEarnRate: (card.default_earn_rate ?? 1) * (cardMultipliers[card.id] ?? 1),
         issuerName: card.issuers?.name ?? "Unknown",
+        brandName: card.brands?.name ?? null,
         currencyCode: currency?.code ?? "???",
         currencyName: currency?.name ?? "Unknown",
         currencyType: currency?.currency_type ?? "other",
@@ -1106,7 +1206,7 @@ export default async function ComparePage() {
           name: card.primary_currency.name,
           code: card.primary_currency.code,
           currency_type: card.primary_currency.currency_type,
-          base_value_cents: card.primary_currency.base_value_cents,
+          base_value_cents: pointValue, // Use resolved value (user override or template)
         } : null,
       });
     }
@@ -1166,6 +1266,7 @@ export default async function ComparePage() {
           debitPayValues={debitPayMap}
           userSpending={userSpending}
           capInfo={capInfoMap}
+          biltHousingInfo={biltHousingInfo}
           bonusDisplaySettings={bonusDisplaySettings}
           availableCredit={availableCreditMap}
           creditLimits={creditLimitMap}

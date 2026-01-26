@@ -27,6 +27,7 @@ const navGroups: (NavItem | NavGroup)[] = [
       { href: "/admin/cards", label: "Cards", exact: true },
       { href: "/admin/cards/rules", label: "Application Rules" },
       { href: "/admin/issuers", label: "Issuers" },
+      { href: "/admin/brands", label: "Brands" },
       { href: "/admin/multipliers", label: "Multipliers" },
     ],
   },

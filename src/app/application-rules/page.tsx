@@ -24,9 +24,11 @@ interface WalletCard {
     id: string;
     name: string;
     issuer_id: string;
+    brand_id: string | null;
     product_type: "personal" | "business";
     card_charge_type: "credit" | "charge" | null;
     issuers: { id: string; name: string } | null;
+    brands: { id: string; name: string } | null;
   } | null;
 }
 
@@ -83,9 +85,11 @@ export default async function RulesPage() {
           id,
           name,
           issuer_id,
+          brand_id,
           product_type,
           card_charge_type,
-          issuers:issuer_id (id, name)
+          issuers:issuer_id (id, name),
+          brands:brand_id (id, name)
         )
       `)
       .eq("user_id", effectiveUserId)

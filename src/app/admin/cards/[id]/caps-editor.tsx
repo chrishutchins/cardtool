@@ -12,7 +12,7 @@ interface Cap {
   elevated_rate: number;
   post_cap_rate: number | null;
   notes: string | null;
-  categories: { id: number; name: string }[];
+  categories: { id: number; name: string; cap_amount?: number | null }[];
 }
 
 interface CapsEditorProps {
@@ -337,6 +337,11 @@ export function CapsEditor({
                                 className="px-2 py-0.5 text-xs rounded bg-zinc-700 text-zinc-300"
                               >
                                 {cat.name}
+                                {cat.cap_amount && cat.cap_amount > 0 && (
+                                  <span className="ml-1 text-amber-400">
+                                    (${cat.cap_amount.toLocaleString()})
+                                  </span>
+                                )}
                               </span>
                             ))}
                             {cap.categories.length === 0 && (

@@ -40,6 +40,7 @@ export default async function OffersPage() {
     defaultTemplateResult,
     allCurrenciesResult,
     allIssuersResult,
+    allBrandsResult,
     allCategoriesResult,
   ] = await Promise.all([
     supabase.from("cards").select(`
@@ -55,6 +56,7 @@ export default async function OffersPage() {
       no_foreign_transaction_fees,
       secondary_currency_id,
       issuers:issuer_id (id, name),
+      brands:brand_id (id, name),
       primary_currency:reward_currencies!cards_primary_currency_id_fkey (
         id, name, code, base_value_cents, currency_type
       ),
@@ -114,8 +116,10 @@ export default async function OffersPage() {
           product_type,
           card_charge_type,
           issuer_id,
+          brand_id,
           primary_currency_id,
-          issuers!inner (id, name)
+          issuers!inner (id, name),
+          brands:brand_id (id, name)
         )
       `)
       .eq("user_id", effectiveUserId)
@@ -145,6 +149,10 @@ export default async function OffersPage() {
     supabase.from("issuers")
       .select("id, name")
       .order("name"),
+    // Get all brands for filtering
+    supabase.from("brands")
+      .select("id, name")
+      .order("name"),
     // Get all categories for elevated earnings display
     supabase.from("earning_categories")
       .select("id, name"),
@@ -166,6 +174,7 @@ export default async function OffersPage() {
 
   const allCurrencies = allCurrenciesResult.data;
   const allIssuers = allIssuersResult.data;
+  const allBrands = allBrandsResult.data;
   const allCategories = allCategoriesResult.data;
 
   // User overrides take precedence
@@ -218,13 +227,14 @@ export default async function OffersPage() {
     playerCurrencies.get(w.player_number)!.add(currencyId);
   });
 
-  // Build wallet cards for card rules (with issuer/product type info)
+  // Build wallet cards for card rules (with issuer/product type/brand info)
   type WalletCardForRules = {
     cardId: string;
     playerNumber: number;
     approvalDate: string | null;
     issuerId: string;
     issuerName: string;
+    brandName: string | null;
     productType: "personal" | "business";
     cardChargeType: "credit" | "charge" | null;
   };
@@ -238,6 +248,7 @@ export default async function OffersPage() {
         card_charge_type: "credit" | "charge" | null;
         issuer_id: string;
         issuers: { id: string; name: string };
+        brands: { id: string; name: string } | null;
       };
       return {
         cardId: cardData.id,
@@ -245,6 +256,7 @@ export default async function OffersPage() {
         approvalDate: w.approval_date,
         issuerId: cardData.issuer_id,
         issuerName: cardData.issuers?.name ?? "Unknown",
+        brandName: cardData.brands?.name ?? null,
         productType: cardData.product_type ?? "personal",
         cardChargeType: cardData.card_charge_type,
       };
@@ -276,6 +288,7 @@ export default async function OffersPage() {
     no_foreign_transaction_fees: boolean | null;
     secondary_currency_id: string | null;
     issuers: { id: string; name: string } | null;
+    brands: { id: string; name: string } | null;
     primary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
     secondary_currency: { id: string; name: string; code: string; base_value_cents: number | null; currency_type: string } | null;
     card_offers: Array<{
@@ -380,6 +393,8 @@ export default async function OffersPage() {
         productType: card.product_type,
         issuerName: card.issuers?.name ?? "Unknown",
         issuerId: card.issuers?.id ?? "",
+        brandName: card.brands?.name ?? null,
+        brandId: card.brands?.id ?? null,
         currencyCode: card.primary_currency?.code ?? "???",
         currencyName: card.primary_currency?.name ?? "Unknown",
         currencyType: card.primary_currency?.currency_type ?? "other",
@@ -450,7 +465,7 @@ export default async function OffersPage() {
 
         <OffersTable
           cards={cardsWithOffers}
-          issuers={allIssuers ?? []}
+          brands={allBrands ?? []}
           currencies={allCurrencies?.map((c) => ({ id: c.id, name: c.name, code: c.code })) ?? []}
           players={players}
           walletCardsForRules={walletCardsForRules}

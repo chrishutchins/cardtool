@@ -5,13 +5,31 @@ import { IssuersTable } from "./issuers-table";
 
 export default async function IssuersPage() {
   const supabase = createClient();
-  const { data: issuers, error } = await supabase
-    .from("issuers")
-    .select("*")
-    .order("name");
+  
+  // Fetch issuers and card counts in parallel
+  const [issuersResult, cardCountsResult] = await Promise.all([
+    supabase
+      .from("issuers")
+      .select("*")
+      .order("name"),
+    supabase
+      .from("cards")
+      .select("issuer_id")
+  ]);
 
-  if (error) {
-    return <div className="text-red-400">Error loading issuers: {error.message}</div>;
+  if (issuersResult.error) {
+    return <div className="text-red-400">Error loading issuers: {issuersResult.error.message}</div>;
+  }
+
+  const issuers = issuersResult.data;
+  
+  // Build card count map by issuer_id
+  const cardCountMap = new Map<string, number>();
+  if (cardCountsResult.data) {
+    for (const card of cardCountsResult.data) {
+      const count = cardCountMap.get(card.issuer_id) ?? 0;
+      cardCountMap.set(card.issuer_id, count + 1);
+    }
   }
 
   async function createIssuer(formData: FormData) {
@@ -56,6 +74,7 @@ export default async function IssuersPage() {
       {/* Issuers Table */}
       <IssuersTable
         issuers={issuers ?? []}
+        cardCounts={cardCountMap}
         onDelete={deleteIssuer}
         onUpdate={updateIssuer}
       />

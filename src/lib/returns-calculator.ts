@@ -72,6 +72,9 @@ export interface CategoryBonusInput {
   elevated_rate: number;
   post_cap_rate: number | null;
   category_ids: number[];
+  // Per-category cap overrides for selected_category bonuses
+  // Map of category_id -> cap_amount (null means no cap for that category)
+  category_cap_amounts?: Map<number, number | null>;
 }
 
 export interface UserSelection {
@@ -137,6 +140,29 @@ export interface SpendBonusInput {
   unit_value_cents: number | null;  // User's valuation per unit
   cap_amount: number | null;
   cap_period: "year" | "calendar_year" | null;
+}
+
+// Bilt Card Settings (per-wallet card)
+export interface BiltSettingsInput {
+  wallet_card_id: string;  // References user_wallets.id
+  card_id: string;         // The underlying card type (for lookup)
+  bilt_option: 1 | 2;      // Option 1: tiered housing, Option 2: Bilt Cash bonus
+  housing_tier: "0.5x" | "0.75x" | "1x" | "1.25x";  // For Option 1
+  monthly_bilt_spend_cents: number | null;  // For Option 2 calculation
+}
+
+// Housing category IDs (Rent and Mortgage)
+export const BILT_HOUSING_CATEGORY_IDS = [37, 59]; // Rent = 37, Mortgage = 59
+
+// Convert housing tier string to rate multiplier
+export function getBiltHousingTierRate(tier: string): number {
+  switch (tier) {
+    case "0.5x": return 0.5;
+    case "0.75x": return 0.75;
+    case "1x": return 1;
+    case "1.25x": return 1.25;
+    default: return 1;
+  }
 }
 
 // Output Types
@@ -563,6 +589,8 @@ export interface CalculatorInput {
   // Wholesale club network restrictions: null means all networks allowed
   // If set, only cards with matching network will be recommended for wholesale-clubs category
   wholesaleClubNetworks?: string[] | null;
+  // Bilt card settings for housing earning tiers
+  biltSettings?: BiltSettingsInput[];
 }
 
 export function calculatePortfolioReturns(input: CalculatorInput): PortfolioReturns {
@@ -594,6 +622,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     cardBaseInfo = new Map(),
     // Wholesale club network restrictions
     wholesaleClubNetworks = null,
+    // Bilt card settings
+    biltSettings = [],
   } = input;
 
   // Expand spending to handle >$5k tracking
@@ -729,7 +759,8 @@ export function calculatePortfolioReturns(input: CalculatorInput): PortfolioRetu
     mobilePayCategories,
     mobilePayCategoryId,
     paypalCategories,
-    paypalCategoryId
+    paypalCategoryId,
+    biltSettings
   );
 
   // Track cap usage per card per category (for rules with caps)
@@ -1427,7 +1458,8 @@ function buildEarningRateMap(
   mobilePayCategories: Set<number> = new Set(),
   mobilePayCategoryId?: number,
   paypalCategories: Set<number> = new Set(),
-  paypalCategoryId?: number
+  paypalCategoryId?: number,
+  biltSettings: BiltSettingsInput[] = []
 ): Map<string, Map<number, RateInfo[]>> {
   // card_id -> category_id -> array of RateInfo (multiple rates possible with different caps)
   const result = new Map<string, Map<number, RateInfo[]>>();
@@ -1620,12 +1652,101 @@ function buildEarningRateMap(
         ? baseCapKey 
         : `${baseCapKey}:${categoryId}`;
 
+      // For selected_category bonuses, check for per-category cap override
+      let effectiveAnnualCap = annualCap;
+      if (bonus.cap_type === "selected_category" && bonus.category_cap_amounts) {
+        const categoryCap = bonus.category_cap_amounts.get(categoryId);
+        if (categoryCap !== undefined) {
+          // categoryCap is the per-category cap amount (null = no cap, number = cap)
+          effectiveAnnualCap = categoryCap === null ? Infinity : annualizeCap(categoryCap, bonus.cap_period);
+        }
+      }
+
       cardMap.get(categoryId)!.push({
         rate: Number(bonus.elevated_rate),
-        annualCap,
+        annualCap: effectiveAnnualCap,
         postCapRate: bonus.post_cap_rate !== null ? Number(bonus.post_cap_rate) : null,
         capKey,
       });
+    }
+  }
+
+  // ============================================================================
+  // Apply Bilt Housing Points logic
+  // - Bilt cards earn 0 on housing categories (Rent=37, Mortgage=59)
+  // - Bilt cards get Housing Points bonus on ALL OTHER categories
+  // - The bonus is capped based on the user's housing spend
+  // ============================================================================
+  if (biltSettings.length > 0) {
+    // Calculate total housing spend from categoryMap
+    const rentSpend = categoryMap.get(37)?.annual_spend_cents ?? 0;
+    const mortgageSpend = categoryMap.get(59)?.annual_spend_cents ?? 0;
+    const totalHousingSpend = rentSpend + mortgageSpend;
+    
+    // Build map for quick lookup: card_id (wallet_card_id) -> settings
+    const biltSettingsMap = new Map<string, BiltSettingsInput>();
+    for (const settings of biltSettings) {
+      biltSettingsMap.set(settings.wallet_card_id, settings);
+    }
+
+    // Get all non-housing category IDs
+    const nonHousingCategoryIds: number[] = [];
+    for (const [catId] of categoryMap.entries()) {
+      if (!BILT_HOUSING_CATEGORY_IDS.includes(catId)) {
+        nonHousingCategoryIds.push(catId);
+      }
+    }
+
+    // For each card with Bilt settings, apply Housing Points logic
+    for (const card of cards) {
+      const settings = biltSettingsMap.get(card.id);
+      if (!settings) continue;
+
+      if (!result.has(card.id)) {
+        result.set(card.id, new Map());
+      }
+      const cardMap = result.get(card.id)!;
+
+      // 1. Set housing category rates to 0 (Bilt cards earn nothing on housing)
+      for (const housingCategoryId of BILT_HOUSING_CATEGORY_IDS) {
+        cardMap.set(housingCategoryId, [{
+          rate: 0,
+          annualCap: Infinity,
+          postCapRate: null,
+          capKey: `${card.id}:bilt-housing-zero:${housingCategoryId}`,
+        }]);
+      }
+
+      // 2. Add Housing Points bonus to all non-housing categories
+      if (totalHousingSpend > 0) {
+        // Calculate the Housing Points rate and cap based on option
+        let housingPointsRate: number;
+        let housingPointsCap: number;
+        
+        if (settings.bilt_option === 1) {
+          // Option 1: Use tier rate, cap = housing spend
+          housingPointsRate = getBiltHousingTierRate(settings.housing_tier);
+          housingPointsCap = totalHousingSpend;
+        } else {
+          // Option 2: Rate = 4/3 (1.33x), cap = 75% of housing spend
+          housingPointsRate = 4 / 3;
+          housingPointsCap = Math.round(totalHousingSpend * 0.75);
+        }
+
+        // Add Housing Points as an additional rate entry for each non-housing category
+        // This rate shares a cap across all categories (annualized)
+        for (const catId of nonHousingCategoryIds) {
+          if (!cardMap.has(catId)) {
+            cardMap.set(catId, []);
+          }
+          cardMap.get(catId)!.push({
+            rate: housingPointsRate,
+            annualCap: housingPointsCap, // Cap is on spend, not on earnings
+            postCapRate: 0, // After cap, Housing Points stops earning
+            capKey: `${card.id}:bilt-housing-points`, // Shared cap key across all categories
+          });
+        }
+      }
     }
   }
 

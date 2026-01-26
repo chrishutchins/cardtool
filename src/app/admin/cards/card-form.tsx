@@ -7,11 +7,13 @@ interface CardFormProps {
   action: (formData: FormData) => Promise<void>;
   issuers: Tables<"issuers">[];
   currencies: Tables<"reward_currencies">[];
+  brands: Tables<"brands">[];
   userPrimaryCurrencyIds?: string[];
   defaultValues?: {
     name: string;
     slug: string;
     issuer_id: string;
+    brand_id: string | null;
     primary_currency_id: string;
     secondary_currency_id: string | null;
     product_type: "personal" | "business";
@@ -26,10 +28,11 @@ interface CardFormProps {
   };
 }
 
-export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, defaultValues }: CardFormProps) {
+export function CardForm({ action, issuers, currencies, brands, userPrimaryCurrencyIds, defaultValues }: CardFormProps) {
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [slug, setSlug] = useState(defaultValues?.slug ?? "");
   const [issuerId, setIssuerId] = useState(defaultValues?.issuer_id ?? "");
+  const [brandId, setBrandId] = useState(defaultValues?.brand_id ?? "");
   const [primaryCurrencyId, setPrimaryCurrencyId] = useState(defaultValues?.primary_currency_id ?? "");
   const [secondaryCurrencyId, setSecondaryCurrencyId] = useState(defaultValues?.secondary_currency_id ?? "");
   const [productType, setProductType] = useState<"personal" | "business">(defaultValues?.product_type ?? "personal");
@@ -50,6 +53,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
       setName(defaultValues.name ?? "");
       setSlug(defaultValues.slug ?? "");
       setIssuerId(defaultValues.issuer_id ?? "");
+      setBrandId(defaultValues.brand_id ?? "");
       setPrimaryCurrencyId(defaultValues.primary_currency_id ?? "");
       setSecondaryCurrencyId(defaultValues.secondary_currency_id ?? "");
       setProductType(defaultValues.product_type ?? "personal");
@@ -114,7 +118,7 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">Issuer</label>
           <select
@@ -131,6 +135,23 @@ export function CardForm({ action, issuers, currencies, userPrimaryCurrencyIds, 
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Brand</label>
+          <select
+            name="brand_id"
+            value={brandId}
+            onChange={(e) => setBrandId(e.target.value)}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">Select a brand...</option>
+            {brands.map((brand) => (
+              <option key={brand.id} value={brand.id}>
+                {brand.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">The brand (e.g., Delta, Marriott)</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">Product Type</label>

@@ -203,6 +203,7 @@ interface Card {
   annualFee: number;
   defaultEarnRate: number;
   issuerName: string;
+  brandName: string | null;
   currencyCode: string;
   currencyName: string;
   currencyType: string;
@@ -258,6 +259,17 @@ interface BonusDisplaySettings {
   showAvailableCredit: boolean;
 }
 
+// Bilt Housing Points info for breakdown tooltips
+interface BiltHousingInfo {
+  option: 1 | 2;
+  tierRate: number;  // For Option 1: 0.5-1.25, For Option 2: 4/3
+  housingSpendCents: number;  // Total housing spend
+  capSpendCents: number;  // Cap on everyday spend for Housing Points
+}
+
+// Housing category IDs (Rent and Mortgage) - used for Bilt logic
+const HOUSING_CATEGORY_IDS = [37, 59];
+
 interface ComparisonTableProps {
   cards: Card[];
   categories: Category[];
@@ -267,6 +279,7 @@ interface ComparisonTableProps {
   debitPayValues: Record<string, number>;
   userSpending: Record<number, number>;
   capInfo: Record<string, Record<number, CapInfo>>;
+  biltHousingInfo?: Record<string, BiltHousingInfo>;
   bonusDisplaySettings: BonusDisplaySettings;
   availableCredit: Record<string, number>;
   creditLimits: Record<string, number>;
@@ -358,6 +371,7 @@ export function ComparisonTable({
   debitPayValues,
   userSpending,
   capInfo,
+  biltHousingInfo = {},
   bonusDisplaySettings,
   availableCredit,
   creditLimits,
@@ -390,7 +404,7 @@ export function ComparisonTable({
   
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [issuerFilter, setIssuerFilter] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
   const [productTypeFilter, setProductTypeFilter] = useState<"" | "personal" | "business">("");
   const [currencyTypeFilter, setCurrencyTypeFilter] = useState("");
   const [playerFilter, setPlayerFilter] = useState<number | "">("");
@@ -575,7 +589,8 @@ export function ComparisonTable({
   const calculateEarnings = (card: Card, categoryId: number, spendCents: number): { earnings: number; debitPayEarnings: number; subEarnings: number; spendBonusEarnings: number } => {
     const rate = card.earningRates[categoryId] ?? card.defaultEarnRate;
     const pointValue = card.pointValue;
-    const cap = capInfo[card.cardId]?.[categoryId];
+    // Check for category-specific cap, fall back to all_categories cap (stored under ID 0)
+    const cap = capInfo[card.cardId]?.[categoryId] ?? capInfo[card.cardId]?.[0];
     // Only include debit pay if toggle is on
     // Use card.id (wallet_id for owned cards) for debit pay lookup since it's now per-instance
     const debitPayPercent = includeDebitPay ? (debitPayValues[card.id] ?? 0) : 0;
@@ -674,15 +689,15 @@ export function ComparisonTable({
   };
 
   // Get unique filter options from all cards
-  const { uniqueIssuers, uniqueCurrencyTypes } = useMemo(() => {
-    const issuers = new Set<string>();
+  const { uniqueBrands, uniqueCurrencyTypes } = useMemo(() => {
+    const brands = new Set<string>();
     const currencyTypes = new Set<string>();
     cards.forEach((c) => {
-      if (c.issuerName) issuers.add(c.issuerName);
+      if (c.brandName) brands.add(c.brandName);
       if (c.currencyType) currencyTypes.add(c.currencyType);
     });
     return {
-      uniqueIssuers: Array.from(issuers).sort(),
+      uniqueBrands: Array.from(brands).sort(),
       uniqueCurrencyTypes: Array.from(currencyTypes).sort(),
     };
   }, [cards]);
@@ -733,9 +748,9 @@ export function ComparisonTable({
       );
     }
     
-    // Apply issuer filter
-    if (issuerFilter) {
-      filtered = filtered.filter((c) => c.issuerName === issuerFilter);
+    // Apply brand filter
+    if (brandFilter) {
+      filtered = filtered.filter((c) => c.brandName === brandFilter);
     }
     
     // Apply product type filter
@@ -759,17 +774,37 @@ export function ComparisonTable({
         return sortConfig.direction === "asc" ? cmp : -cmp;
       } else if (sortConfig.categoryId !== undefined) {
         const spendCents = userSpending[sortConfig.categoryId] ?? 0;
+        const isHousingCategory = HOUSING_CATEGORY_IDS.includes(sortConfig.categoryId);
+        
+        // Calculate Bilt Housing Points bonus for sorting
+        const getBiltSortBonus = (card: Card): number => {
+          const biltInfo = biltHousingInfo[card.cardId];
+          if (!biltInfo || isHousingCategory || biltInfo.housingSpendCents === 0) return 0;
+          return biltInfo.tierRate * card.pointValue;
+        };
+        
         // Only sort by earnings if there's actual spending; otherwise sort by rate
         let aVal: number;
         let bVal: number;
         if (showSpending && spendCents > 0) {
           const aEarnings = calculateEarnings(a, sortConfig.categoryId, spendCents);
           const bEarnings = calculateEarnings(b, sortConfig.categoryId, spendCents);
-          aVal = aEarnings.earnings + aEarnings.debitPayEarnings + aEarnings.subEarnings + aEarnings.spendBonusEarnings;
-          bVal = bEarnings.earnings + bEarnings.debitPayEarnings + bEarnings.subEarnings + bEarnings.spendBonusEarnings;
+          
+          // Add Bilt Housing Points earnings for spending view
+          const aBiltInfo = biltHousingInfo[a.cardId];
+          const bBiltInfo = biltHousingInfo[b.cardId];
+          const aBiltEarnings = (aBiltInfo && !isHousingCategory && aBiltInfo.housingSpendCents > 0)
+            ? (Math.min(spendCents, aBiltInfo.capSpendCents) / 100) * aBiltInfo.tierRate * a.pointValue
+            : 0;
+          const bBiltEarnings = (bBiltInfo && !isHousingCategory && bBiltInfo.housingSpendCents > 0)
+            ? (Math.min(spendCents, bBiltInfo.capSpendCents) / 100) * bBiltInfo.tierRate * b.pointValue
+            : 0;
+          
+          aVal = aEarnings.earnings + aEarnings.debitPayEarnings + aEarnings.subEarnings + aEarnings.spendBonusEarnings + aBiltEarnings;
+          bVal = bEarnings.earnings + bEarnings.debitPayEarnings + bEarnings.subEarnings + bEarnings.spendBonusEarnings + bBiltEarnings;
         } else {
-          aVal = getEffectiveValueWithDebit(a, sortConfig.categoryId);
-          bVal = getEffectiveValueWithDebit(b, sortConfig.categoryId);
+          aVal = getEffectiveValueWithDebit(a, sortConfig.categoryId) + getBiltSortBonus(a);
+          bVal = getEffectiveValueWithDebit(b, sortConfig.categoryId) + getBiltSortBonus(b);
         }
         const cmp = aVal - bVal;
         const primarySort = sortConfig.direction === "asc" ? cmp : -cmp;
@@ -787,7 +822,7 @@ export function ComparisonTable({
     });
 
     return filtered;
-  }, [cards, filterMode, sortConfig, evaluationCardIds, showSpending, userSpending, includeSpendBonuses, includeWelcomeBonuses, includeDebitPay, searchQuery, issuerFilter, productTypeFilter, currencyTypeFilter, playerFilter]);
+  }, [cards, filterMode, sortConfig, evaluationCardIds, showSpending, userSpending, includeSpendBonuses, includeWelcomeBonuses, includeDebitPay, searchQuery, brandFilter, productTypeFilter, currencyTypeFilter, playerFilter, biltHousingInfo]);
 
   // Handle sort click
   const handleSort = (type: "card" | "category", categoryId?: number) => {
@@ -887,7 +922,7 @@ export function ComparisonTable({
   };
 
   // Check if any filters are active
-  const hasActiveFilters = searchQuery || issuerFilter || productTypeFilter || currencyTypeFilter || playerFilter !== "";
+  const hasActiveFilters = searchQuery || brandFilter || productTypeFilter || currencyTypeFilter || playerFilter !== "";
 
   // Helper to open card preview modal
   const openCardPreview = useCallback((card: Card) => {
@@ -927,8 +962,8 @@ export function ComparisonTable({
     if (productTypeFilter) {
       filtered = filtered.filter((c) => c.productType === productTypeFilter);
     }
-    if (issuerFilter) {
-      filtered = filtered.filter((c) => c.issuerName === issuerFilter);
+    if (brandFilter) {
+      filtered = filtered.filter((c) => c.brandName === brandFilter);
     }
     if (currencyTypeFilter) {
       filtered = filtered.filter((c) => c.currencyType === currencyTypeFilter);
@@ -938,7 +973,7 @@ export function ComparisonTable({
     }
     
     return filtered;
-  }, [cards, searchQuery, productTypeFilter, issuerFilter, currencyTypeFilter, playerFilter]);
+  }, [cards, searchQuery, productTypeFilter, brandFilter, currencyTypeFilter, playerFilter]);
 
   const allCardsCount = filteredCardsBase.length;
   const myCardsCount = filteredCardsBase.filter((c) => c.isOwned).length;
@@ -1157,13 +1192,13 @@ export function ComparisonTable({
         </select>
 
         <select
-          value={issuerFilter}
-          onChange={(e) => setIssuerFilter(e.target.value)}
+          value={brandFilter}
+          onChange={(e) => setBrandFilter(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
         >
-          <option value="">All Issuers</option>
-          {uniqueIssuers.map((issuer) => (
-            <option key={issuer} value={issuer}>{issuer}</option>
+          <option value="">All Brands</option>
+          {uniqueBrands.map((brand) => (
+            <option key={brand} value={brand}>{brand}</option>
           ))}
         </select>
 
@@ -1200,7 +1235,7 @@ export function ComparisonTable({
           <button
             onClick={() => {
               setSearchQuery("");
-              setIssuerFilter("");
+              setBrandFilter("");
               setProductTypeFilter("");
               setCurrencyTypeFilter("");
               setPlayerFilter("");
@@ -1422,16 +1457,32 @@ export function ComparisonTable({
                       // Only show debit pay if toggle is on
                       // Use card.id (wallet_id for owned cards) for debit pay lookup since it's now per-instance
                       const debitPay = includeDebitPay ? (debitPayValues[card.id] ?? 0) : 0;
-                      const cap = capInfo[card.cardId]?.[cat.id];
+                      // Check for category-specific cap, fall back to all_categories cap (stored under ID 0)
+                      const cap = capInfo[card.cardId]?.[cat.id] ?? capInfo[card.cardId]?.[0];
                       const spendCents = userSpending[cat.id] ?? 0;
                       const { subCents, spendBonusCents } = getBonusValueCents(card);
                       
                       if (showSpending && spendCents > 0) {
                         // Show earnings in dollars
                         const { earnings, debitPayEarnings, subEarnings, spendBonusEarnings } = calculateEarnings(card, cat.id, spendCents);
-                        const totalEarnings = earnings + debitPayEarnings + subEarnings + spendBonusEarnings;
+                        
+                        // Check for Bilt Housing Points bonus (for non-housing categories on Bilt cards)
+                        const biltInfoSpend = biltHousingInfo[card.cardId];
+                        const isHousingCategorySpend = HOUSING_CATEGORY_IDS.includes(cat.id);
+                        const hasBiltHousingBonusSpend = biltInfoSpend && !isHousingCategorySpend && biltInfoSpend.housingSpendCents > 0;
+                        
+                        // Calculate Bilt Housing Points earnings (capped by the spending cap)
+                        let biltHousingEarnings = 0;
+                        if (hasBiltHousingBonusSpend) {
+                          // Housing Points are earned at tierRate on spend up to capSpendCents
+                          const cappedSpend = Math.min(spendCents, biltInfoSpend.capSpendCents);
+                          const biltPointsRate = biltInfoSpend.tierRate;
+                          biltHousingEarnings = (cappedSpend / 100) * biltPointsRate * card.pointValue;
+                        }
+                        
+                        const totalEarnings = earnings + debitPayEarnings + subEarnings + spendBonusEarnings + biltHousingEarnings;
                         const colorClass = getColorStyle(totalEarnings, cat.id, true);
-                        const hasBreakdown = subEarnings > 0 || spendBonusEarnings > 0 || debitPayEarnings > 0;
+                        const hasBreakdown = subEarnings > 0 || spendBonusEarnings > 0 || debitPayEarnings > 0 || biltHousingEarnings > 0;
                         
                         // Build individual bonus lines with names
                         const bonusLinesSpend: { name: string; value: number }[] = [];
@@ -1450,9 +1501,18 @@ export function ComparisonTable({
                           }
                         }
                         
+                        // Format cap amount for Bilt Housing Points tooltip
+                        const formatBiltCapSpend = (cents: number) => {
+                          const dollars = Math.round(cents / 100);
+                          return `$${dollars.toLocaleString()}`;
+                        };
+                        
                         const breakdownContent = hasBreakdown ? (
                           <div className="flex flex-col gap-0.5">
                             <span className="text-zinc-400">Base: ${Math.round(earnings).toLocaleString()}</span>
+                            {biltHousingEarnings > 0 && (
+                              <span className="text-zinc-400">Housing Points: +${Math.round(biltHousingEarnings).toLocaleString()}</span>
+                            )}
                             {bonusLinesSpend.map((line, idx) => (
                               <span key={idx} className="text-zinc-400">{line.name}: +${Math.round(line.value).toLocaleString()}</span>
                             ))}
@@ -1460,6 +1520,18 @@ export function ComparisonTable({
                             <span className="text-emerald-400 font-semibold border-t border-zinc-600 pt-0.5 mt-0.5">Total: ${Math.round(totalEarnings).toLocaleString()}</span>
                           </div>
                         ) : null;
+                        
+                        // Build tooltip text for amber cross
+                        const biltCapTextSpend = hasBiltHousingBonusSpend
+                          ? (biltInfoSpend.option === 1 
+                              ? `Housing Points only earned up to ${formatBiltCapSpend(biltInfoSpend.capSpendCents)} spend/year`
+                              : `Housing Points only earned on up to ${formatBiltCapSpend(biltInfoSpend.capSpendCents)} spend/year`)
+                          : null;
+                        const capTextSpend = cap 
+                          ? `${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`
+                          : null;
+                        const combinedCapTextSpend = [biltCapTextSpend, capTextSpend].filter(Boolean).join("\n");
+                        const showAmberCrossSpend = cap || hasBiltHousingBonusSpend;
                         
                         return (
                           <td
@@ -1474,8 +1546,8 @@ export function ComparisonTable({
                               ) : (
                                 <span>${Math.round(earnings).toLocaleString()}</span>
                               )}
-                              {cap && (
-                                <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
+                              {showAmberCrossSpend && (
+                                <Tooltip text={combinedCapTextSpend}>
                                   <span className="text-amber-500 cursor-help ml-0.5">†</span>
                                 </Tooltip>
                               )}
@@ -1487,9 +1559,17 @@ export function ComparisonTable({
                         // Get base value without bonuses for display
                         const rate = card.earningRates[cat.id] ?? card.defaultEarnRate;
                         const baseValue = rate * card.pointValue;
-                        const totalValue = getEffectiveValueWithDebit(card, cat.id);
+                        
+                        // Check for Bilt Housing Points bonus (for non-housing categories on Bilt cards)
+                        const biltInfo = biltHousingInfo[card.cardId];
+                        const isHousingCategory = HOUSING_CATEGORY_IDS.includes(cat.id);
+                        const hasBiltHousingBonus = biltInfo && !isHousingCategory && biltInfo.housingSpendCents > 0;
+                        const biltHousingValue = hasBiltHousingBonus ? biltInfo.tierRate * card.pointValue : 0;
+                        
+                        // Total value includes Bilt Housing Points if applicable
+                        const totalValue = getEffectiveValueWithDebit(card, cat.id) + biltHousingValue;
                         const colorClass = getColorStyle(totalValue, cat.id);
-                        const hasBreakdown = subCents > 0 || spendBonusCents > 0 || debitPay > 0;
+                        const hasBreakdown = subCents > 0 || spendBonusCents > 0 || debitPay > 0 || hasBiltHousingBonus;
                         
                         // Build individual bonus lines with names
                         const bonusLines: { name: string; value: number }[] = [];
@@ -1510,9 +1590,18 @@ export function ComparisonTable({
                           }
                         }
                         
+                        // Format cap amount for Bilt Housing Points tooltip
+                        const formatBiltCap = (cents: number) => {
+                          const dollars = Math.round(cents / 100);
+                          return `$${dollars.toLocaleString()}`;
+                        };
+                        
                         const breakdownContent = hasBreakdown ? (
                           <div className="flex flex-col gap-0.5">
                             <span className="text-zinc-400">Base: {baseValue.toFixed(2)}¢</span>
+                            {hasBiltHousingBonus && (
+                              <span className="text-zinc-400">Housing Points: +{biltHousingValue.toFixed(2)}¢</span>
+                            )}
                             {bonusLines.map((line, idx) => (
                               <span key={idx} className="text-zinc-400">{line.name}: +{line.value.toFixed(2)}¢</span>
                             ))}
@@ -1520,6 +1609,18 @@ export function ComparisonTable({
                             <span className="text-emerald-400 font-semibold border-t border-zinc-600 pt-0.5 mt-0.5">Total: {totalValue.toFixed(2)}¢</span>
                           </div>
                         ) : null;
+                        
+                        // Build tooltip text for amber cross
+                        const biltCapText = hasBiltHousingBonus
+                          ? (biltInfo.option === 1 
+                              ? `Housing Points only earned up to ${formatBiltCap(biltInfo.capSpendCents)} spend/year`
+                              : `Housing Points only earned on up to ${formatBiltCap(biltInfo.capSpendCents)} spend/year`)
+                          : null;
+                        const capText = cap 
+                          ? `${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`
+                          : null;
+                        const combinedCapText = [biltCapText, capText].filter(Boolean).join("\n");
+                        const showAmberCross = cap || hasBiltHousingBonus;
                         
                         return (
                           <td
@@ -1534,8 +1635,8 @@ export function ComparisonTable({
                               ) : (
                                 <span>{baseValue.toFixed(2)}¢</span>
                               )}
-                              {cap && (
-                                <Tooltip text={`${cap.capAmount ? `Capped at $${cap.capAmount.toLocaleString()}${formatCapPeriod(cap.capPeriod)}` : ""}${cap.capAmount && formatCapType(cap.capType) ? " • " : ""}${formatCapType(cap.capType)}`}>
+                              {showAmberCross && (
+                                <Tooltip text={combinedCapText}>
                                   <span className="text-amber-500 cursor-help ml-0.5">†</span>
                                 </Tooltip>
                               )}

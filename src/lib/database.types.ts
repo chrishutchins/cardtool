@@ -80,14 +80,17 @@ export type Database = {
         Row: {
           cap_id: string
           category_id: number
+          cap_amount: number | null
         }
         Insert: {
           cap_id: string
           category_id: number
+          cap_amount?: number | null
         }
         Update: {
           cap_id?: string
           category_id?: number
+          cap_amount?: number | null
         }
         Relationships: [
           {
@@ -742,6 +745,8 @@ export type Database = {
       cards: {
         Row: {
           annual_fee: number
+          brand: string | null
+          brand_id: string | null
           card_charge_type:
             | Database["public"]["Enums"]["card_charge_type"]
             | null
@@ -770,6 +775,8 @@ export type Database = {
         }
         Insert: {
           annual_fee?: number
+          brand?: string | null
+          brand_id?: string | null
           card_charge_type?:
             | Database["public"]["Enums"]["card_charge_type"]
             | null
@@ -798,6 +805,8 @@ export type Database = {
         }
         Update: {
           annual_fee?: number
+          brand?: string | null
+          brand_id?: string | null
           card_charge_type?:
             | Database["public"]["Enums"]["card_charge_type"]
             | null
@@ -1524,6 +1533,30 @@ export type Database = {
         }
         Relationships: []
       }
+      brands: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       issuers: {
         Row: {
           billing_cycle_formula: string | null
@@ -1907,6 +1940,47 @@ export type Database = {
             columns: ["plaid_item_id"]
             isOneToOne: false
             referencedRelation: "user_plaid_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_bilt_settings: {
+        Row: {
+          id: string
+          user_id: string
+          wallet_card_id: string
+          bilt_option: number
+          monthly_bilt_spend_cents: number | null
+          housing_tier: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          wallet_card_id: string
+          bilt_option?: number
+          monthly_bilt_spend_cents?: number | null
+          housing_tier?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          wallet_card_id?: string
+          bilt_option?: number
+          monthly_bilt_spend_cents?: number | null
+          housing_tier?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_bilt_settings_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
             referencedColumns: ["id"]
           },
         ]

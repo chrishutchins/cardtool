@@ -18,6 +18,7 @@ import {
   MultiplierProgram,
   WelcomeBonusInput,
   SpendBonusInput,
+  BiltSettingsInput,
 } from "@/lib/returns-calculator";
 import {
   getCachedCards,
@@ -93,6 +94,7 @@ export default async function DashboardPage() {
     paymentSettingsResult,
     allCurrenciesResult,
     inventoryResult,
+    userBiltSettingsResult,
   ] = await Promise.all([
     // Cached data (hits cache, not DB on subsequent requests)
     getCachedCards(),
@@ -178,6 +180,10 @@ export default async function DashboardPage() {
       .eq("user_id", effectiveUserId)
       .eq("is_used", false)
       .not("expiration_date", "is", null),
+    // User's Bilt settings (for Housing Points)
+    supabase.from("user_bilt_settings")
+      .select("wallet_card_id, bilt_option, housing_tier")
+      .eq("user_id", effectiveUserId),
   ]);
 
   // Process wallet cards
@@ -232,16 +238,29 @@ export default async function DashboardPage() {
   const earningRules = allEarningRules.filter((r) => userCardIds.has(r.card_id));
 
   // Process category bonuses from cached data
-  const allCategoryBonuses: CategoryBonusInput[] = cardCapsData.map((b) => ({
-    id: b.id,
-    card_id: b.card_id,
-    cap_type: b.cap_type,
-    cap_amount: b.cap_amount ? Number(b.cap_amount) : null,
-    cap_period: b.cap_period,
-    elevated_rate: Number(b.elevated_rate),
-    post_cap_rate: b.post_cap_rate ? Number(b.post_cap_rate) : null,
-    category_ids: ((b.card_cap_categories as unknown as { category_id: number }[]) ?? []).map(c => c.category_id),
-  }));
+  const allCategoryBonuses: CategoryBonusInput[] = cardCapsData.map((b) => {
+    const categories = (b.card_cap_categories as unknown as { category_id: number; cap_amount: number | null }[]) ?? [];
+    
+    // Build per-category cap amounts map for selected_category bonuses
+    const categoryCaps = new Map<number, number | null>();
+    if (b.cap_type === "selected_category") {
+      for (const cat of categories) {
+        categoryCaps.set(cat.category_id, cat.cap_amount);
+      }
+    }
+    
+    return {
+      id: b.id,
+      card_id: b.card_id,
+      cap_type: b.cap_type,
+      cap_amount: b.cap_amount ? Number(b.cap_amount) : null,
+      cap_period: b.cap_period,
+      elevated_rate: Number(b.elevated_rate),
+      post_cap_rate: b.post_cap_rate ? Number(b.post_cap_rate) : null,
+      category_ids: categories.map(c => c.category_id),
+      category_cap_amounts: categoryCaps.size > 0 ? categoryCaps : undefined,
+    };
+  });
 
   const categoryBonuses = allCategoryBonuses.filter((b) => userCardIds.has(b.card_id));
 
@@ -312,6 +331,21 @@ export default async function DashboardPage() {
       debitPayValues.set(cardId, Math.max(debitPayValues.get(cardId) ?? 0, Number(d.debit_pay_percent) ?? 0));
     }
   });
+
+  // Build Bilt settings array for Housing Points
+  const biltSettings: BiltSettingsInput[] = [];
+  for (const setting of userBiltSettingsResult.data ?? []) {
+    const cardId = walletCardIdToCardId.get(setting.wallet_card_id);
+    if (cardId) {
+      biltSettings.push({
+        wallet_card_id: cardId, // Use card_id for dashboard (no split cards)
+        card_id: cardId,
+        bilt_option: setting.bilt_option as 1 | 2,
+        housing_tier: setting.housing_tier as "0.5x" | "0.75x" | "1x" | "1.25x",
+        monthly_bilt_spend_cents: null, // Not used in new model
+      });
+    }
+  }
 
   // Build user selections map
   const userSelections = new Map<string, number>();
@@ -445,6 +479,7 @@ export default async function DashboardPage() {
     spendBonuses,
     includeBonusesInCalculation,
     cardInstanceCounts,
+    biltSettings,
   };
   
   const returns = cards.length > 0 ? calculatePortfolioReturns(calculatorInput) : null;

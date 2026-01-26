@@ -175,6 +175,17 @@ interface CardSettingsModalProps {
   onAddSpendBonus?: (walletCardId: string, formData: FormData) => Promise<void>;
   onUpdateSpendBonus?: (bonusId: string, formData: FormData) => Promise<void>;
   onDeleteSpendBonus?: (bonusId: string) => Promise<void>;
+  // Bilt housing settings
+  biltSettings?: {
+    biltOption: number;
+    housingTier: string;
+    monthlyBiltSpendCents: number | null;
+  } | null;
+  onSaveBiltSettings?: (
+    biltOption: number,
+    housingTier: string,
+    monthlyBiltSpendCents: number | null
+  ) => Promise<void>;
   focusField?: "customName" | "approvalDate" | "playerNumber" | "perks" | "debitPay" | "statementCloseDay" | "paymentDueDay" | "manualBalance" | "manualCreditLimit" | "payFrom" | "annualFee" | "notes" | "network";
 }
 
@@ -240,6 +251,8 @@ export function CardSettingsModal({
   onAddSpendBonus,
   onUpdateSpendBonus,
   onDeleteSpendBonus,
+  biltSettings,
+  onSaveBiltSettings,
   focusField,
 }: CardSettingsModalProps) {
   const [isPending, startTransition] = useTransition();
@@ -250,6 +263,16 @@ export function CardSettingsModal({
   const [showAddSpendBonus, setShowAddSpendBonus] = useState(false);
   const [editingWelcomeBonusId, setEditingWelcomeBonusId] = useState<string | null>(null);
   const [editingSpendBonusId, setEditingSpendBonusId] = useState<string | null>(null);
+  
+  // Bilt settings state
+  const [biltOption, setBiltOption] = useState(biltSettings?.biltOption ?? 1);
+  const [housingTier, setHousingTier] = useState(biltSettings?.housingTier ?? "1x");
+  
+  // Sync Bilt settings when switching between cards
+  useEffect(() => {
+    setBiltOption(biltSettings?.biltOption ?? 1);
+    setHousingTier(biltSettings?.housingTier ?? "1x");
+  }, [biltSettings?.biltOption, biltSettings?.housingTier]);
   
   // Refs for auto-focus
   const customNameRef = useRef<HTMLInputElement>(null);
@@ -516,9 +539,9 @@ export function CardSettingsModal({
             }`}
           >
             Bonuses
-            {(welcomeBonuses.length > 0 || spendBonuses.length > 0 || categorySelectionCaps.length > 0) && (
+            {(welcomeBonuses.length > 0 || spendBonuses.length > 0 || categorySelectionCaps.length > 0 || biltSettings) && (
               <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-zinc-700 text-zinc-400">
-                {welcomeBonuses.length + spendBonuses.length + (categorySelectionCaps.length > 0 ? 1 : 0)}
+                {welcomeBonuses.length + spendBonuses.length + (categorySelectionCaps.length > 0 ? 1 : 0) + (biltSettings ? 1 : 0)}
               </span>
             )}
             {activeTab === "bonuses" && (
@@ -1091,8 +1114,92 @@ export function CardSettingsModal({
             </div>
           )}
 
+          {/* Bilt Housing Bonus Settings */}
+          {biltSettings && onSaveBiltSettings && (
+            <div className={`space-y-3 ${categorySelectionCaps.length > 0 ? "pt-4 border-t border-zinc-800" : ""}`}>
+              <h3 className="text-sm font-medium text-zinc-300">Housing Bonus</h3>
+              <p className="text-xs text-zinc-500">
+                Your housing payments unlock bonus points on everyday spending.
+              </p>
+
+              {/* Option Selection */}
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="bilt-option"
+                    value={1}
+                    checked={biltOption === 1}
+                    disabled={isPending}
+                    onChange={() => {
+                      setBiltOption(1);
+                      startTransition(async () => {
+                        await onSaveBiltSettings(1, housingTier, null);
+                      });
+                    }}
+                    className="text-blue-600"
+                  />
+                  <span className="text-xs text-zinc-300">Option 1: Tiered Housing Points</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="bilt-option"
+                    value={2}
+                    checked={biltOption === 2}
+                    disabled={isPending}
+                    onChange={() => {
+                      setBiltOption(2);
+                      startTransition(async () => {
+                        await onSaveBiltSettings(2, housingTier, null);
+                      });
+                    }}
+                    className="text-blue-600"
+                  />
+                  <span className="text-xs text-zinc-300">Option 2: Bilt Cash + Housing</span>
+                </label>
+              </div>
+
+              {/* Option 1: Housing Tier Selection */}
+              {biltOption === 1 && (
+                <div className="space-y-2 pl-3 border-l-2 border-zinc-700">
+                  <label className="block text-xs text-zinc-400">Housing Points Tier</label>
+                  <select
+                    value={housingTier}
+                    disabled={isPending}
+                    onChange={(e) => {
+                      const newTier = e.target.value;
+                      setHousingTier(newTier);
+                      startTransition(async () => {
+                        await onSaveBiltSettings(biltOption, newTier, null);
+                      });
+                    }}
+                    className="w-full rounded border border-zinc-600 bg-zinc-700 px-2 py-1.5 text-white text-xs focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                  >
+                    <option value="0.5x">0.5x (spend 25% of housing)</option>
+                    <option value="0.75x">0.75x (spend 50% of housing)</option>
+                    <option value="1x">1x (spend 75% of housing)</option>
+                    <option value="1.25x">1.25x (spend 100% of housing)</option>
+                  </select>
+                  <p className="text-xs text-zinc-500">
+                    Rate based on everyday spending relative to your housing payment.
+                  </p>
+                </div>
+              )}
+
+              {/* Option 2: Description only (cap is derived from housing spend) */}
+              {biltOption === 2 && (
+                <div className="space-y-2 pl-3 border-l-2 border-zinc-700">
+                  <p className="text-xs text-zinc-500">
+                    Earns 1.33x Housing Points on everyday spending, capped at 75% of your housing payments.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* User Bonuses (Welcome & Spend) */}
-            <div className={`space-y-4 ${categorySelectionCaps.length > 0 ? "pt-4 border-t border-zinc-800" : ""}`}>
+            <div className={`space-y-4 ${(categorySelectionCaps.length > 0 || biltSettings) ? "pt-4 border-t border-zinc-800" : ""}`}>
               {/* Welcome Bonuses Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

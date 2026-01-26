@@ -245,6 +245,8 @@ interface CardWithOffer {
   productType: "personal" | "business";
   issuerName: string;
   issuerId: string;
+  brandName: string | null;
+  brandId: string | null;
   currencyCode: string;
   currencyName: string;
   currencyType: string;
@@ -274,13 +276,14 @@ interface WalletCardForRules {
   approvalDate: string | null;
   issuerId: string;
   issuerName: string;
+  brandName: string | null;
   productType: "personal" | "business";
   cardChargeType: "credit" | "charge" | null;
 }
 
 interface OffersTableProps {
   cards: CardWithOffer[];
-  issuers: { id: string; name: string }[];
+  brands: { id: string; name: string }[];
   currencies: { id: string; name: string; code: string }[];
   players: Player[];
   walletCardsForRules: WalletCardForRules[];
@@ -408,8 +411,19 @@ function checkCardRulesEligibility(
 
   // Capital One Rules
   if (issuer === "Capital One") {
-    // 1 Capital One card every 6 months (180 days)
-    if (countIssuerCardsInWindow("Capital One", 180) >= 1) {
+    // Count only Capital One branded cards (exclude co-brands like REI, Sam's Club)
+    const countCapOneBrandedCardsInWindow = (days: number) => {
+      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      return playerCards.filter((w) => 
+        w.issuerName === "Capital One" && 
+        w.brandName === "Capital One" &&
+        w.approvalDate && 
+        new Date(w.approvalDate) >= cutoff
+      ).length;
+    };
+    
+    // 1 Capital One card every 6 months (180 days) - excludes co-brands
+    if (countCapOneBrandedCardsInWindow(180) >= 1) {
       return "1 Cap1 per 6 months";
     }
     // 1 Capital One business charge card maximum (lifetime)
@@ -449,14 +463,14 @@ function checkCardRulesEligibility(
   return null; // Eligible
 }
 
-export function OffersTable({ cards, issuers, currencies, players, walletCardsForRules, playerCurrencies, isAdmin }: OffersTableProps) {
+export function OffersTable({ cards, brands, currencies, players, walletCardsForRules, playerCurrencies, isAdmin }: OffersTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("bonusValue");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [search, setSearch] = useState("");
 
   // Filter state - dropdown style like wallet table
   const [productTypeFilter, setProductTypeFilter] = useState<"" | "personal" | "business">("");
-  const [issuerFilter, setIssuerFilter] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
   const [currencyTypeFilter, setCurrencyTypeFilter] = useState("");
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [ownershipFilter, setOwnershipFilter] = useState<"" | number>(""); // "" = all, number = player doesn't have
@@ -516,8 +530,8 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
       // Product type filter
       if (productTypeFilter && card.productType !== productTypeFilter) return false;
 
-      // Issuer filter
-      if (issuerFilter && card.issuerId !== issuerFilter) return false;
+      // Brand filter
+      if (brandFilter && card.brandId !== brandFilter) return false;
 
       // Currency type filter
       if (currencyTypeFilter && card.currencyType !== currencyTypeFilter) return false;
@@ -561,7 +575,7 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
     });
 
     return result;
-  }, [cards, search, sortKey, sortDirection, productTypeFilter, issuerFilter, currencyTypeFilter, currencyFilter, ownershipFilter, eligibilityFilter, walletCardsForRules]);
+  }, [cards, search, sortKey, sortDirection, productTypeFilter, brandFilter, currencyTypeFilter, currencyFilter, ownershipFilter, eligibilityFilter, walletCardsForRules]);
 
   // Calculate min/max for spectrum coloring
   const valueStats = useMemo(() => {
@@ -589,14 +603,14 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
   const clearFilters = () => {
     setSearch("");
     setProductTypeFilter("");
-    setIssuerFilter("");
+    setBrandFilter("");
     setCurrencyTypeFilter("");
     setCurrencyFilter("");
     setOwnershipFilter("");
     setEligibilityFilter("");
   };
 
-  const hasActiveFilters = search || productTypeFilter || issuerFilter || currencyTypeFilter || currencyFilter || ownershipFilter !== "" || eligibilityFilter !== "";
+  const hasActiveFilters = search || productTypeFilter || brandFilter || currencyTypeFilter || currencyFilter || ownershipFilter !== "" || eligibilityFilter !== "";
 
   // Helper to check if P1 has access to a card's secondary currency
   // If so, their bonus should show as that secondary currency
@@ -739,13 +753,13 @@ export function OffersTable({ cards, issuers, currencies, players, walletCardsFo
           </select>
 
           <select
-            value={issuerFilter}
-            onChange={(e) => setIssuerFilter(e.target.value)}
+            value={brandFilter}
+            onChange={(e) => setBrandFilter(e.target.value)}
             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
           >
-            <option value="">All Issuers</option>
-            {issuers.map((issuer) => (
-              <option key={issuer.id} value={issuer.id}>{issuer.name}</option>
+            <option value="">All Brands</option>
+            {brands.map((brand) => (
+              <option key={brand.id} value={brand.id}>{brand.name}</option>
             ))}
           </select>
 

@@ -8,7 +8,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createClerkClient } from "@clerk/backend";
-import { UsersTable } from "./users-table";
+import { UsersTable, PlaidTier } from "./users-table";
 import { startEmulation } from "@/lib/emulation";
 
 // Always use Clerk Prod for admin user list
@@ -16,6 +16,60 @@ import { startEmulation } from "@/lib/emulation";
 function getProdClerkClient() {
   const prodKey = process.env.CLERK_SECRET_KEY_PROD || process.env.CLERK_SECRET_KEY;
   return createClerkClient({ secretKey: prodKey });
+}
+
+// Calculate Plaid tier from individual feature flags
+function calculatePlaidTier(flags: {
+  account_linking_enabled?: boolean | null;
+  plaid_transactions_enabled?: boolean | null;
+  plaid_liabilities_enabled?: boolean | null;
+  plaid_on_demand_refresh_enabled?: boolean | null;
+} | null): PlaidTier {
+  if (!flags?.account_linking_enabled) return "disabled";
+  if (flags.plaid_on_demand_refresh_enabled) return "full";
+  if (flags.plaid_liabilities_enabled) return "txns_liab";
+  if (flags.plaid_transactions_enabled) return "txns";
+  // account_linking enabled but no products = treat as txns (base tier)
+  return "txns";
+}
+
+// Convert tier back to individual flags
+function tierToFlags(tier: PlaidTier): {
+  account_linking_enabled: boolean;
+  plaid_transactions_enabled: boolean;
+  plaid_liabilities_enabled: boolean;
+  plaid_on_demand_refresh_enabled: boolean;
+} {
+  switch (tier) {
+    case "disabled":
+      return {
+        account_linking_enabled: false,
+        plaid_transactions_enabled: false,
+        plaid_liabilities_enabled: false,
+        plaid_on_demand_refresh_enabled: false,
+      };
+    case "txns":
+      return {
+        account_linking_enabled: true,
+        plaid_transactions_enabled: true,
+        plaid_liabilities_enabled: false,
+        plaid_on_demand_refresh_enabled: false,
+      };
+    case "txns_liab":
+      return {
+        account_linking_enabled: true,
+        plaid_transactions_enabled: true,
+        plaid_liabilities_enabled: true,
+        plaid_on_demand_refresh_enabled: false,
+      };
+    case "full":
+      return {
+        account_linking_enabled: true,
+        plaid_transactions_enabled: true,
+        plaid_liabilities_enabled: true,
+        plaid_on_demand_refresh_enabled: true,
+      };
+  }
 }
 
 interface UserStats {
@@ -26,7 +80,7 @@ interface UserStats {
   cardsAdded: number;
   spendingEdits: number;
   createdAt: string | null;
-  accountLinkingEnabled: boolean;
+  plaidTier: PlaidTier;
 }
 
 export default async function UsersPage() {
@@ -40,13 +94,13 @@ export default async function UsersPage() {
   const [walletResult, spendingResult, featureFlagsResult] = await Promise.all([
     supabase.from("user_wallets").select("user_id, added_at"),
     supabase.from("user_category_spend").select("user_id, created_at"),
-    supabase.from("user_feature_flags").select("user_id, account_linking_enabled"),
+    supabase.from("user_feature_flags").select("user_id, account_linking_enabled, plaid_transactions_enabled, plaid_liabilities_enabled, plaid_on_demand_refresh_enabled"),
   ]);
 
-  // Build feature flags map
-  const accountLinkingByUser: Record<string, boolean> = {};
+  // Build feature flags map with full Plaid tier
+  const plaidTierByUser: Record<string, PlaidTier> = {};
   for (const flag of featureFlagsResult.data ?? []) {
-    accountLinkingByUser[flag.user_id] = flag.account_linking_enabled ?? false;
+    plaidTierByUser[flag.user_id] = calculatePlaidTier(flag);
   }
 
   // Count cards per user
@@ -98,7 +152,7 @@ export default async function UsersPage() {
       cardsAdded: cardsByUser[userId] ?? 0,
       spendingEdits: spendingByUser[userId] ?? 0,
       createdAt: createdAt ?? (clerkUser ? new Date(clerkUser.createdAt).toISOString() : null),
-      accountLinkingEnabled: accountLinkingByUser[userId] ?? false,
+      plaidTier: plaidTierByUser[userId] ?? "disabled",
     };
   });
 
@@ -145,14 +199,15 @@ export default async function UsersPage() {
     revalidatePath("/admin/users");
   }
 
-  async function toggleAccountLinking(userId: string, enabled: boolean) {
+  async function setPlaidTier(userId: string, tier: PlaidTier) {
     "use server";
     const supabase = createServiceRoleClient();
+    const flags = tierToFlags(tier);
 
     await supabase.from("user_feature_flags").upsert(
       {
         user_id: userId,
-        account_linking_enabled: enabled,
+        ...flags,
       },
       { onConflict: "user_id" }
     );
@@ -175,7 +230,7 @@ export default async function UsersPage() {
       <UsersTable
         users={users}
         onDelete={deleteUser}
-        onToggleAccountLinking={toggleAccountLinking}
+        onSetPlaidTier={setPlaidTier}
         onEmulate={emulateUser}
       />
     </div>

@@ -35,6 +35,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     cardResult,
     issuersResult,
     currenciesResult,
+    brandsResult,
     categoriesResult,
     rulesResult,
     capsResult,
@@ -47,11 +48,12 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     supabase.from("cards").select("*").eq("id", id).single(),
     supabase.from("issuers").select("*").order("name"),
     supabase.from("reward_currencies").select("*").order("name"),
+    supabase.from("brands").select("*").order("name"),
     supabase.from("earning_categories").select("*").order("name"),
     supabase.from("card_earning_rules").select("id, card_id, category_id, rate, has_cap, cap_amount, cap_unit, cap_period, post_cap_rate, notes, booking_method, brand_name, created_at, updated_at, earning_categories(id, name, slug, parent_category_id)").eq("card_id", id),
     supabase.from("card_caps").select("*").eq("card_id", id),
     // Only fetch cap categories for this card's caps (join through card_caps)
-    supabase.from("card_cap_categories").select("cap_id, category_id, earning_categories(id, name), card_caps!inner(card_id)").eq("card_caps.card_id", id),
+    supabase.from("card_cap_categories").select("cap_id, category_id, cap_amount, earning_categories(id, name), card_caps!inner(card_id)").eq("card_caps.card_id", id),
     user ? supabase.from("user_wallets").select("cards(primary_currency_id)").eq("user_id", user.id) : Promise.resolve({ data: [] }),
     // Fetch all active offers with bonuses, elevated earnings, and intro APRs
     supabase.from("card_offers")
@@ -96,6 +98,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
     const issuer_id = formData.get("issuer_id") as string;
+    const brand_id = (formData.get("brand_id") as string | null) || null;
     const primary_currency_id = formData.get("primary_currency_id") as string;
     const secondary_currency_id = (formData.get("secondary_currency_id") as string | null) || null;
     const product_type = formData.get("product_type") as "personal" | "business";
@@ -118,6 +121,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
         name,
         slug,
         issuer_id,
+        brand_id,
         primary_currency_id,
         secondary_currency_id: secondary_currency_id || null,
         product_type,
@@ -643,7 +647,7 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     .filter((id): id is string => !!id);
 
   // Build caps with their categories
-  type CategoryAssoc = { cap_id: string; earning_categories: { id: number; name: string } | null };
+  type CategoryAssoc = { cap_id: string; cap_amount: number | null; earning_categories: { id: number; name: string } | null };
   const caps = (capsResult.data ?? []).map((cap) => {
     const categoryAssociations = ((capCategoriesResult.data ?? []) as unknown as CategoryAssoc[]).filter(
       (cc) => cc.cap_id === cap.id
@@ -651,8 +655,11 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
     return {
       ...cap,
       categories: categoryAssociations
-        .map((cc) => cc.earning_categories)
-        .filter((cat): cat is { id: number; name: string } => cat !== null),
+        .map((cc) => ({
+          ...cc.earning_categories!,
+          cap_amount: cc.cap_amount,
+        }))
+        .filter((cat): cat is { id: number; name: string; cap_amount: number | null } => cat.id !== undefined),
     };
   });
 
@@ -674,11 +681,13 @@ export default async function CardDetailPage({ params, searchParams }: PageProps
           action={updateCard}
           issuers={issuersResult.data ?? []}
           currencies={currenciesResult.data ?? []}
+          brands={brandsResult.data ?? []}
           userPrimaryCurrencyIds={userPrimaryCurrencyIds}
           defaultValues={{
             name: card.name,
             slug: card.slug,
             issuer_id: card.issuer_id,
+            brand_id: card.brand_id,
             primary_currency_id: card.primary_currency_id,
             secondary_currency_id: card.secondary_currency_id,
             product_type: card.product_type,

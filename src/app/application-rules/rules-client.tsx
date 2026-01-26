@@ -14,9 +14,11 @@ interface WalletCard {
     id: string;
     name: string;
     issuer_id: string;
+    brand_id: string | null;
     product_type: "personal" | "business";
     card_charge_type: "credit" | "charge" | null;
     issuers: { id: string; name: string } | null;
+    brands: { id: string; name: string } | null;
   } | null;
 }
 
@@ -199,6 +201,13 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
             return false;
           }
 
+          // For Capital One, exclude co-brand cards (where brand exists and is not "Capital One")
+          // Co-brand cards like REI and Sam's Club don't count toward Cap One velocity
+          // Cards with no brand set are regular Cap One cards and should count
+          if (rule.issuers?.name === "Capital One" && wc.cards.brands?.name && wc.cards.brands.name !== "Capital One") {
+            return false;
+          }
+
           // Check date is within window
           const approvalDate = parseLocalDate(wc.approval_date);
           return approvalDate >= cutoffDate;
@@ -210,6 +219,13 @@ export function RulesClient({ rules, walletCards, players = [], playerCount = 1 
 
           // Limits always apply to issuer only
           if (wc.cards.issuer_id !== rule.issuer_id) return false;
+
+          // For Capital One, exclude co-brand cards (where brand exists and is not "Capital One")
+          // Co-brand cards like REI and Sam's Club don't count toward Cap One limits
+          // Cards with no brand set are regular Cap One cards and should count
+          if (rule.issuers?.name === "Capital One" && wc.cards.brands?.name && wc.cards.brands.name !== "Capital One") {
+            return false;
+          }
 
           // Check card type filter
           if (

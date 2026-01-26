@@ -43,6 +43,7 @@ export interface WalletCardData {
     product_type?: "personal" | "business";
     card_charge_type?: "credit" | "charge" | null;
     network?: "visa" | "mastercard" | "amex" | "discover" | null;
+    brand?: string | null;
     issuers: { id: string; name: string; billing_cycle_formula?: string | null } | null;
     primary_currency: { id: string; name: string; code: string; currency_type: string } | null;
     secondary_currency: { id: string; name: string; code: string; currency_type: string } | null;
@@ -159,6 +160,18 @@ interface WalletCardTableProps {
   onAddSpendBonus?: (walletCardId: string, formData: FormData) => Promise<void>;
   onUpdateSpendBonus?: (bonusId: string, formData: FormData) => Promise<void>;
   onDeleteSpendBonus?: (bonusId: string) => Promise<void>;
+  // Bilt housing settings
+  biltSettingsMap?: Map<string, {
+    biltOption: number;
+    housingTier: string;
+    monthlyBiltSpendCents: number | null;
+  }>;
+  onSaveBiltSettings?: (
+    walletCardId: string,
+    biltOption: number,
+    housingTier: string,
+    monthlyBiltSpendCents: number | null
+  ) => Promise<void>;
 }
 
 // ============================================================================
@@ -291,6 +304,8 @@ export function WalletCardTable({
   onAddSpendBonus,
   onUpdateSpendBonus,
   onDeleteSpendBonus,
+  biltSettingsMap = new Map(),
+  onSaveBiltSettings,
 }: WalletCardTableProps) {
   // Define row type for use in state (see rows computation below)
   type ProcessedRow = WalletCardData & {
@@ -665,6 +680,16 @@ export function WalletCardTable({
           </button>
         ),
       }] : []),
+      // Brand
+      {
+        id: "brand",
+        label: "Brand",
+        accessor: (row) => row.card.brand ?? "",
+        sortAccessor: (row) => row.card.brand?.toLowerCase() ?? "",
+        render: (row) => (
+          <span className="text-zinc-400">{row.card.brand ?? "—"}</span>
+        ),
+      },
       // Issuer
       {
         id: "issuer",
@@ -1354,6 +1379,7 @@ export function WalletCardTable({
     const visible = [
       "name",
       "player",
+      "brand",
       "issuer",
       "type",
       "network",
@@ -1385,6 +1411,7 @@ export function WalletCardTable({
   const defaultColumnOrder = useMemo(() => [
     "name",
     "player",
+    "brand",
     "issuer",
     "type",
     "network",
@@ -1501,6 +1528,9 @@ export function WalletCardTable({
           onAddSpendBonus={onAddSpendBonus}
           onUpdateSpendBonus={onUpdateSpendBonus}
           onDeleteSpendBonus={onDeleteSpendBonus}
+          biltSettings={biltSettingsMap.get(settingsCard.id) ?? null}
+          onSaveBiltSettings={onSaveBiltSettings ? (biltOption, housingTier, monthlySpend) => 
+            onSaveBiltSettings(settingsCard.id, biltOption, housingTier, monthlySpend) : undefined}
           onProductChange={() => {
             setProductChangeCard(settingsCard);
             setSettingsCard(null);

@@ -222,7 +222,7 @@ export const getCachedCardCaps = unstable_cache(
         cap_period,
         elevated_rate,
         post_cap_rate,
-        card_cap_categories (category_id)
+        card_cap_categories (category_id, cap_amount)
       `);
     
     if (error) {

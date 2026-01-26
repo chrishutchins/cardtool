@@ -7,9 +7,10 @@ import { invalidateCardCaches } from "@/lib/cache-invalidation";
 export default async function NewCardPage() {
   const supabase = createClient();
 
-  const [issuersResult, currenciesResult] = await Promise.all([
+  const [issuersResult, currenciesResult, brandsResult] = await Promise.all([
     supabase.from("issuers").select("*").order("name"),
     supabase.from("reward_currencies").select("*").order("name"),
+    supabase.from("brands").select("*").order("name"),
   ]);
 
   async function createCard(formData: FormData) {
@@ -19,6 +20,7 @@ export default async function NewCardPage() {
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
     const issuer_id = formData.get("issuer_id") as string;
+    const brand_id = (formData.get("brand_id") as string | null) || null;
     const primary_currency_id = formData.get("primary_currency_id") as string;
     const secondary_currency_id = (formData.get("secondary_currency_id") as string | null) || null;
     const product_type = formData.get("product_type") as "personal" | "business";
@@ -39,6 +41,7 @@ export default async function NewCardPage() {
         name,
         slug,
         issuer_id,
+        brand_id,
         primary_currency_id,
         secondary_currency_id: secondary_currency_id || null,
         product_type,
@@ -71,6 +74,7 @@ export default async function NewCardPage() {
           action={createCard}
           issuers={issuersResult.data ?? []}
           currencies={currenciesResult.data ?? []}
+          brands={brandsResult.data ?? []}
         />
       </div>
     </div>

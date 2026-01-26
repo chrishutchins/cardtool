@@ -4,24 +4,24 @@ import { useState, useTransition } from "react";
 import { DataTable, DataTableColumn } from "@/components/data-table";
 import { Tables } from "@/lib/database.types";
 
-interface IssuersTableProps {
-  issuers: Tables<"issuers">[];
+interface BrandsTableProps {
+  brands: Tables<"brands">[];
   cardCounts: Map<string, number>;
   onDelete: (id: string) => Promise<void>;
   onUpdate: (id: string, formData: FormData) => Promise<void>;
 }
 
-export function IssuersTable({ issuers, cardCounts, onDelete, onUpdate }: IssuersTableProps) {
+export function BrandsTable({ brands, cardCounts, onDelete, onUpdate }: BrandsTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const startEdit = (issuer: Tables<"issuers">) => {
-    setEditingId(issuer.id);
-    setEditName(issuer.name);
-    setEditSlug(issuer.slug);
+  const startEdit = (brand: Tables<"brands">) => {
+    setEditingId(brand.id);
+    setEditName(brand.name);
+    setEditSlug(brand.slug);
   };
 
   const cancelEdit = () => {
@@ -50,7 +50,7 @@ export function IssuersTable({ issuers, cardCounts, onDelete, onUpdate }: Issuer
     });
   };
 
-  const columns: DataTableColumn<Tables<"issuers">>[] = [
+  const columns: DataTableColumn<Tables<"brands">>[] = [
     {
       id: "name",
       label: "Name",
@@ -174,17 +174,17 @@ export function IssuersTable({ issuers, cardCounts, onDelete, onUpdate }: Issuer
 
   return (
     <DataTable
-      data={issuers}
+      data={brands}
       columns={columns}
       keyAccessor={(row) => row.id}
-      searchPlaceholder="Search issuers..."
+      searchPlaceholder="Search brands..."
       searchFilter={(row, query) => {
         const q = query.toLowerCase();
         return row.name.toLowerCase().includes(q) || row.slug.toLowerCase().includes(q);
       }}
       showColumnSelector={false}
       defaultSortColumn="name"
-      emptyMessage="No issuers yet. Add one above."
+      emptyMessage="No brands yet. Add one above."
     />
   );
 }

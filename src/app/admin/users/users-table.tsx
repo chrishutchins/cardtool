@@ -3,6 +3,16 @@
 import { useState, useTransition } from "react";
 import { DataTable, DataTableColumn, Badge, formatDate } from "@/components/data-table";
 
+// Plaid access tiers
+export type PlaidTier = "disabled" | "txns" | "txns_liab" | "full";
+
+export const PLAID_TIERS: { value: PlaidTier; label: string; description: string }[] = [
+  { value: "disabled", label: "Disabled", description: "No account linking" },
+  { value: "txns", label: "Txns", description: "Transactions only" },
+  { value: "txns_liab", label: "Txns + Liab", description: "Transactions + Liabilities" },
+  { value: "full", label: "Full", description: "All features + on-demand refresh" },
+];
+
 interface UserStats {
   userId: string;
   email: string | null;
@@ -11,20 +21,20 @@ interface UserStats {
   cardsAdded: number;
   spendingEdits: number;
   createdAt: string | null;
-  accountLinkingEnabled: boolean;
+  plaidTier: PlaidTier;
 }
 
 interface UsersTableProps {
   users: UserStats[];
   onDelete: (userId: string) => Promise<void>;
-  onToggleAccountLinking: (userId: string, enabled: boolean) => Promise<void>;
+  onSetPlaidTier: (userId: string, tier: PlaidTier) => Promise<void>;
   onEmulate: (userId: string, email: string | null) => Promise<void>;
 }
 
 export function UsersTable({
   users,
   onDelete,
-  onToggleAccountLinking,
+  onSetPlaidTier,
   onEmulate,
 }: UsersTableProps) {
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
@@ -41,10 +51,10 @@ export function UsersTable({
     });
   };
 
-  const handleToggleAccountLinking = (user: UserStats) => {
+  const handleSetPlaidTier = (user: UserStats, tier: PlaidTier) => {
     setPendingUserId(user.userId);
     startTransition(async () => {
-      await onToggleAccountLinking(user.userId, !user.accountLinkingEnabled);
+      await onSetPlaidTier(user.userId, tier);
       setPendingUserId(null);
     });
   };
@@ -115,27 +125,36 @@ export function UsersTable({
       ),
     },
     {
-      id: "accountLinking",
-      label: "Account Linking",
-      accessor: "accountLinkingEnabled",
+      id: "plaidTier",
+      label: "Plaid Access",
+      accessor: "plaidTier",
       align: "center",
       render: (row) => {
         const isRowPending = pendingUserId === row.userId && isPending;
+        const tierConfig = PLAID_TIERS.find(t => t.value === row.plaidTier) ?? PLAID_TIERS[0];
+        const tierColors: Record<PlaidTier, string> = {
+          disabled: "bg-zinc-700 text-zinc-400 border-zinc-600",
+          txns: "bg-blue-500/20 text-blue-400 border-blue-500/50",
+          txns_liab: "bg-emerald-500/20 text-emerald-400 border-emerald-500/50",
+          full: "bg-amber-500/20 text-amber-400 border-amber-500/50",
+        };
         return (
-          <button
-            onClick={(e) => {
+          <select
+            value={row.plaidTier}
+            onChange={(e) => {
               e.stopPropagation();
-              handleToggleAccountLinking(row);
+              handleSetPlaidTier(row, e.target.value as PlaidTier);
             }}
             disabled={isRowPending}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
-              row.accountLinkingEnabled
-                ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-                : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
-            }`}
+            className={`px-2 py-1 rounded text-xs font-medium border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${tierColors[row.plaidTier]}`}
+            title={tierConfig.description}
           >
-            {row.accountLinkingEnabled ? "Enabled" : "Disabled"}
-          </button>
+            {PLAID_TIERS.map((tier) => (
+              <option key={tier.value} value={tier.value} className="bg-zinc-800 text-white">
+                {tier.label}
+              </option>
+            ))}
+          </select>
         );
       },
     },

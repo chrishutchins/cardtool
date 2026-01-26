@@ -10,6 +10,20 @@ When creating Supabase migrations that add or modify tables/columns:
 2. **ALWAYS update `src/lib/database.types.ts`** in the same commit to include the new types
 3. The types file must stay in sync with the database schema or builds will fail
 4. **ALWAYS enable RLS on new tables** - see RLS section below
+5. **ALWAYS run migrations using Supabase MCP tools** - see Running Migrations section below
+
+## Running Migrations
+Use the Supabase MCP tools to run migrations against the database. Do NOT tell the user to run SQL manually.
+
+- Use `CallMcpTool` with server `user-supabase` and tool `execute_sql` to run SQL queries
+- For DDL operations (CREATE TABLE, ALTER TABLE, etc.), you can also use `apply_migration`
+- If a migration is complex, break it into smaller `execute_sql` calls to avoid errors
+- Always verify the migration succeeded by querying the affected tables
+
+Example:
+```
+CallMcpTool(server: "user-supabase", toolName: "execute_sql", arguments: {"query": "ALTER TABLE cards ADD COLUMN brand text;"})
+```
 
 ## Row Level Security (RLS)
 All tables must have RLS enabled, even though the app primarily uses the service role key (which bypasses RLS). This provides defense-in-depth against direct database access via the anon key.

@@ -138,6 +138,7 @@ export default async function WalletPage() {
           product_type,
           card_charge_type,
           network,
+          brand,
           issuers:issuer_id (id, name, billing_cycle_formula),
           primary_currency:reward_currencies!cards_primary_currency_id_fkey (id, name, code, currency_type, base_value_cents),
           secondary_currency:reward_currencies!cards_secondary_currency_id_fkey (id, name, code, currency_type, base_value_cents)
@@ -356,6 +357,38 @@ export default async function WalletPage() {
     wallet_card_id?: string | null;
   }[];
 
+  // Bilt settings for housing bonus
+  const walletIds = walletResult.data?.map(wc => wc.id) ?? [];
+  const { data: userBiltSettingsData } = walletIds.length > 0
+    ? await supabase
+        .from("user_bilt_settings")
+        .select("wallet_card_id, bilt_option, housing_tier, monthly_bilt_spend_cents")
+        .eq("user_id", effectiveUserId)
+    : { data: [] };
+  
+  // Build map of wallet_card_id -> Bilt settings (only for Bilt cards)
+  const biltSettingsMap = new Map<string, { biltOption: number; housingTier: string; monthlyBiltSpendCents: number | null }>();
+  for (const setting of userBiltSettingsData ?? []) {
+    biltSettingsMap.set(setting.wallet_card_id, {
+      biltOption: setting.bilt_option,
+      housingTier: setting.housing_tier,
+      monthlyBiltSpendCents: setting.monthly_bilt_spend_cents,
+    });
+  }
+  
+  // Identify Bilt cards in user's wallet (cards with "bilt-" in slug, excluding legacy "bilt-card")
+  const biltCardWalletIds = new Set<string>();
+  for (const wc of walletResult.data ?? []) {
+    const cards = wc.cards as { slug: string } | null;
+    if (cards?.slug?.includes("bilt-") && cards.slug !== "bilt-card") {
+      biltCardWalletIds.add(wc.id);
+      // Initialize default settings for Bilt cards without settings
+      if (!biltSettingsMap.has(wc.id)) {
+        biltSettingsMap.set(wc.id, { biltOption: 1, housingTier: "1x", monthlyBiltSpendCents: null });
+      }
+    }
+  }
+
   // Players data
   const players = (playersResult.data ?? []) as { player_number: number; description: string | null }[];
   const playerCount = players.length > 0 ? Math.max(...players.map(p => p.player_number)) : 1;
@@ -538,16 +571,29 @@ export default async function WalletPage() {
 
   // Process ALL category bonuses (needed for recommendations)
   const allCategoryBonuses: CategoryBonusInput[] = bonusesData
-    .map((b) => ({
-      id: b.id,
-      card_id: b.card_id,
-      cap_type: b.cap_type,
-      cap_amount: b.cap_amount ? Number(b.cap_amount) : null,
-      cap_period: b.cap_period,
-      elevated_rate: Number(b.elevated_rate),
-      post_cap_rate: b.post_cap_rate ? Number(b.post_cap_rate) : null,
-      category_ids: ((b.card_cap_categories as unknown as { category_id: number }[]) ?? []).map(c => c.category_id),
-    }));
+    .map((b) => {
+      const categories = (b.card_cap_categories as unknown as { category_id: number; cap_amount: number | null }[]) ?? [];
+      
+      // Build per-category cap amounts map for selected_category bonuses
+      const categoryCaps = new Map<number, number | null>();
+      if (b.cap_type === "selected_category") {
+        for (const cat of categories) {
+          categoryCaps.set(cat.category_id, cat.cap_amount);
+        }
+      }
+      
+      return {
+        id: b.id,
+        card_id: b.card_id,
+        cap_type: b.cap_type,
+        cap_amount: b.cap_amount ? Number(b.cap_amount) : null,
+        cap_period: b.cap_period,
+        elevated_rate: Number(b.elevated_rate),
+        post_cap_rate: b.post_cap_rate ? Number(b.post_cap_rate) : null,
+        category_ids: categories.map(c => c.category_id),
+        category_cap_amounts: categoryCaps.size > 0 ? categoryCaps : undefined,
+      };
+    });
 
   // Filter category bonuses to only user's cards (for current returns calculation)
   const categoryBonuses = allCategoryBonuses.filter((b) => userCardIdsSet.has(b.card_id));
@@ -1478,6 +1524,36 @@ export default async function WalletPage() {
     revalidatePath("/settings");
   }
 
+  async function saveBiltSettings(
+    walletCardId: string,
+    biltOption: number,
+    housingTier: string,
+    monthlyBiltSpendCents: number | null
+  ) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    await supabase
+      .from("user_bilt_settings")
+      .upsert(
+        {
+          user_id: userId,
+          wallet_card_id: walletCardId,
+          bilt_option: biltOption,
+          housing_tier: housingTier,
+          monthly_bilt_spend_cents: monthlyBiltSpendCents,
+        },
+        { onConflict: "user_id,wallet_card_id" }
+      );
+
+    revalidatePath("/wallet");
+    revalidatePath("/spend-optimizer");
+    revalidatePath("/compare");
+    revalidatePath("/dashboard");
+  }
+
   async function updateBonusDisplaySettings(includeWelcomeBonuses: boolean, includeSpendBonuses: boolean) {
     "use server";
     const userId = await getEffectiveUserId();
@@ -2080,6 +2156,8 @@ export default async function WalletPage() {
               onAddSpendBonus={addUserSpendBonusForCard}
               onUpdateSpendBonus={updateUserSpendBonus}
               onDeleteSpendBonus={deleteUserSpendBonus}
+              biltSettingsMap={biltSettingsMap}
+              onSaveBiltSettings={saveBiltSettings}
             />
           ) : (
             <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-12 text-center">
