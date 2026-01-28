@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Building2, AlertTriangle, Calendar, ChevronDown, ChevronUp, DollarSign, Repeat, Check } from "lucide-react";
+import { CreditCard, Building2, AlertTriangle, Calendar, ChevronDown, ChevronUp, DollarSign, Repeat, Check, Settings, RefreshCw } from "lucide-react";
+import { PaymentSettingsModal, PaymentSettingsData, BankAccount as PaymentBankAccount } from "../wallet/payment-settings-modal";
 
 // ============================================================================
 // Types
@@ -66,11 +67,35 @@ interface Player {
   description: string | null;
 }
 
+interface PaymentDateOverride {
+  id: string;
+  wallet_card_id: string;
+  override_date: string;
+  original_due_date: string;
+}
+
+interface LinkedAccountInfo {
+  id: string;
+  wallet_card_id: string | null;
+}
+
+interface PaymentSettings {
+  pay_from_account_id: string | null;
+  is_autopay: boolean;
+}
+
 interface UpcomingPaymentsProps {
   payments: UpcomingPayment[];
   unbilledBalances: UnbilledBalance[];
   bankAccounts: BankAccount[];
   players: Player[];
+  paymentDateOverridesMap?: Map<string, PaymentDateOverride>;
+  // Settings/refresh props
+  isAdmin?: boolean;
+  bankAccountsForSettings?: PaymentBankAccount[];
+  paymentSettingsMap?: Map<string, PaymentSettings>;
+  linkedAccountsMap?: Map<string, LinkedAccountInfo>;
+  onUpdatePaymentSettings?: (walletCardId: string, settings: Omit<PaymentSettingsData, 'wallet_card_id'>) => Promise<void>;
 }
 
 // ============================================================================
@@ -119,11 +144,28 @@ export function UpcomingPayments({
   unbilledBalances,
   bankAccounts,
   players,
+  paymentDateOverridesMap,
+  isAdmin = false,
+  bankAccountsForSettings = [],
+  paymentSettingsMap,
+  linkedAccountsMap,
+  onUpdatePaymentSettings,
 }: UpcomingPaymentsProps) {
   const router = useRouter();
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isPending, startTransition] = useTransition();
+  const [isExpanded, setIsExpanded] = useState(false); // Default to collapsed
   const [isUnbilledExpanded, setIsUnbilledExpanded] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  
+  // Payment settings modal state
+  const [editingPaymentSettingsCard, setEditingPaymentSettingsCard] = useState<{
+    walletCardId: string;
+    cardName: string;
+    cardMask: string | null;
+  } | null>(null);
+  
+  // Refreshing card balance
+  const [refreshingCardId, setRefreshingCardId] = useState<string | null>(null);
 
   const handleMarkAsPaid = async (walletCardId: string, statementDate: string) => {
     setMarkingPaidId(walletCardId);
@@ -139,6 +181,51 @@ export function UpcomingPayments({
     } finally {
       setMarkingPaidId(null);
     }
+  };
+
+  // Open payment settings modal for a card
+  const handleEditPaymentSettings = (walletCardId: string, cardName: string, cardMask: string | null) => {
+    setEditingPaymentSettingsCard({ walletCardId, cardName, cardMask });
+  };
+
+  // Save payment settings
+  const handleSavePaymentSettings = async (settings: Omit<PaymentSettingsData, 'wallet_card_id'>) => {
+    if (!editingPaymentSettingsCard || !onUpdatePaymentSettings) return;
+    await onUpdatePaymentSettings(editingPaymentSettingsCard.walletCardId, settings);
+  };
+
+  // Refresh balance for a specific card (admin only)
+  const refreshCardBalance = async (walletCardId: string) => {
+    if (!isAdmin) return;
+    
+    // Get the linked account for this wallet card
+    const linkedAccount = linkedAccountsMap?.get(walletCardId);
+    if (!linkedAccount) return;
+    
+    setRefreshingCardId(walletCardId);
+    try {
+      const response = await fetch("/api/plaid/refresh-balance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: linkedAccount.id }),
+      });
+      
+      if (response.ok) {
+        // Trigger a page refresh to get updated data
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error("Failed to refresh card balance:", error);
+    } finally {
+      setRefreshingCardId(null);
+    }
+  };
+
+  // Helper to get player display name
+  const getPlayerLabel = (playerNumber: number | null | undefined): string | null => {
+    if (playerNumber === null || playerNumber === undefined) return null;
+    const player = players.find(p => p.player_number === playerNumber);
+    return player?.description || `P${playerNumber}`;
   };
 
   // Filter to only payments with a due date (either from Plaid or calculated)
@@ -302,12 +389,33 @@ export function UpcomingPayments({
             <div className="w-24 text-right">Amount</div>
             <div className="w-16 text-right">Due</div>
             <div className="w-12 text-right">Days</div>
+            {onUpdatePaymentSettings && <div className="w-14" />} {/* Actions spacer */}
           </div>
 
           {/* Payments List */}
           <div className="divide-y divide-zinc-800">
             {sortedPayments.map((payment) => {
-              const effectiveDueDate = payment.dueDate || payment.calculatedDueDate;
+              const originalDueDate = payment.dueDate || payment.calculatedDueDate;
+              
+              // Check for date override
+              let effectiveDueDate = originalDueDate;
+              let hasDateOverride = false;
+              if (paymentDateOverridesMap && originalDueDate && payment.walletCardId) {
+                // Use local date string to match the key format
+                const year = originalDueDate.getFullYear();
+                const month = String(originalDueDate.getMonth() + 1).padStart(2, '0');
+                const day = String(originalDueDate.getDate()).padStart(2, '0');
+                const originalDateStr = `${year}-${month}-${day}`;
+                const overrideKey = `${payment.walletCardId}_${originalDateStr}`;
+                const override = paymentDateOverridesMap.get(overrideKey);
+                if (override) {
+                  // Parse as local date to avoid timezone issues
+                  const [y, m, d] = override.override_date.split('-').map(Number);
+                  effectiveDueDate = new Date(y, m - 1, d);
+                  hasDateOverride = true;
+                }
+              }
+              
               // Show remaining balance if partial payment, otherwise show full statement balance
               const displayBalance = payment.remainingBalance ?? payment.statementBalance ?? payment.currentBalance;
               const effectiveBalance = payment.statementBalance ?? payment.currentBalance;
@@ -342,11 +450,14 @@ export function UpcomingPayments({
                         )}
                         {hasMultiplePlayers && payment.playerNumber && (
                           <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-px rounded">
-                            P{payment.playerNumber}
+                            {getPlayerLabel(payment.playerNumber)}
                           </span>
                         )}
                         {payment.issuerName && (
                           <span className="text-sm text-zinc-500">• {payment.issuerName}</span>
+                        )}
+                        {hasDateOverride && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">Rescheduled</span>
                         )}
                       </div>
                       {/* Payment Source */}
@@ -398,8 +509,9 @@ export function UpcomingPayments({
 
                     {/* Due Date */}
                     <div className="w-16 text-right flex-shrink-0">
-                      <p className={`text-sm ${overdue ? 'text-red-400' : 'text-zinc-400'}`}>
+                      <p className={`text-sm ${overdue ? 'text-red-400' : hasDateOverride ? 'text-amber-400' : 'text-zinc-400'}`}>
                         {formatDate(effectiveDueDate)}
+                        {hasDateOverride && '*'}
                       </p>
                     </div>
 
@@ -413,6 +525,31 @@ export function UpcomingPayments({
                         {daysUntil !== null ? (daysUntil < 0 ? `${Math.abs(daysUntil)}d ago` : `${daysUntil}d`) : '—'}
                       </p>
                     </div>
+
+                    {/* Actions */}
+                    {onUpdatePaymentSettings && payment.walletCardId && (
+                      <div className="w-14 flex items-center justify-end gap-1 flex-shrink-0">
+                        {/* Admin refresh button */}
+                        {isAdmin && linkedAccountsMap?.get(payment.walletCardId) && (
+                          <button
+                            onClick={() => refreshCardBalance(payment.walletCardId!)}
+                            disabled={refreshingCardId === payment.walletCardId}
+                            className="p-1 rounded text-amber-500/70 hover:text-amber-400 hover:bg-zinc-700 disabled:opacity-50"
+                            title="Refresh balance"
+                          >
+                            <RefreshCw className={`h-3.5 w-3.5 ${refreshingCardId === payment.walletCardId ? 'animate-spin' : ''}`} />
+                          </button>
+                        )}
+                        {/* Edit payment settings button */}
+                        <button
+                          onClick={() => handleEditPaymentSettings(payment.walletCardId!, payment.cardName, payment.cardMask)}
+                          className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-700"
+                          title="Edit payment settings"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -456,12 +593,32 @@ export function UpcomingPayments({
               <div className="w-20 text-right">Unbilled</div>
               <div className="w-20 text-right">Closes</div>
               <div className="w-20 text-right">Due</div>
+              {onUpdatePaymentSettings && <div className="w-14" />} {/* Actions spacer */}
             </div>
 
             {/* Unbilled Balances List */}
             <div className="divide-y divide-zinc-800">
               {unbilledBalances.map((balance) => {
                 const daysUntilClose = getDaysUntil(balance.statementCloseDate);
+                
+                // Check for date override
+                let displayDueDate = balance.projectedDueDate;
+                let hasDateOverride = false;
+                if (paymentDateOverridesMap && balance.projectedDueDate) {
+                  // Use local date string to match the key format
+                  const year = balance.projectedDueDate.getFullYear();
+                  const month = String(balance.projectedDueDate.getMonth() + 1).padStart(2, '0');
+                  const day = String(balance.projectedDueDate.getDate()).padStart(2, '0');
+                  const originalDateStr = `${year}-${month}-${day}`;
+                  const overrideKey = `${balance.walletCardId}_${originalDateStr}`;
+                  const override = paymentDateOverridesMap.get(overrideKey);
+                  if (override) {
+                    // Parse as local date to avoid timezone issues
+                    const [y, m, d] = override.override_date.split('-').map(Number);
+                    displayDueDate = new Date(y, m - 1, d);
+                    hasDateOverride = true;
+                  }
+                }
                 
                 return (
                   <div key={balance.walletCardId} className="px-4 py-3">
@@ -480,18 +637,21 @@ export function UpcomingPayments({
                           )}
                           {hasMultiplePlayers && balance.playerNumber && (
                             <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded">
-                              P{balance.playerNumber}
+                              {getPlayerLabel(balance.playerNumber)}
                             </span>
                           )}
                           {balance.issuerName && (
                             <span className="text-sm text-zinc-500">• {balance.issuerName}</span>
+                          )}
+                          {hasDateOverride && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">Rescheduled</span>
                           )}
                         </div>
                       </div>
 
                       {/* Unbilled Amount */}
                       <div className="w-20 text-right flex-shrink-0">
-                        <p className="text-sm text-blue-400 italic">
+                        <p className="text-sm text-white">
                           {formatCurrency(balance.unbilledAmount)}
                         </p>
                       </div>
@@ -501,17 +661,40 @@ export function UpcomingPayments({
                         <p className="text-sm text-zinc-400">
                           {formatDate(balance.statementCloseDate)}
                         </p>
-                        {daysUntilClose !== null && daysUntilClose <= 7 && (
-                          <p className="text-xs text-zinc-500">{daysUntilClose}d</p>
-                        )}
                       </div>
 
                       {/* Projected Due Date */}
                       <div className="w-20 text-right flex-shrink-0">
-                        <p className="text-sm text-zinc-400">
-                          {formatDate(balance.projectedDueDate)}
+                        <p className={`text-sm ${hasDateOverride ? 'text-amber-400' : 'text-zinc-400'}`}>
+                          {formatDate(displayDueDate)}
+                          {hasDateOverride && '*'}
                         </p>
                       </div>
+
+                      {/* Actions */}
+                      {onUpdatePaymentSettings && balance.walletCardId && (
+                        <div className="w-14 flex items-center justify-end gap-1 flex-shrink-0">
+                          {/* Admin refresh button */}
+                          {isAdmin && linkedAccountsMap?.get(balance.walletCardId) && (
+                            <button
+                              onClick={() => refreshCardBalance(balance.walletCardId)}
+                              disabled={refreshingCardId === balance.walletCardId}
+                              className="p-1 rounded text-amber-500/70 hover:text-amber-400 hover:bg-zinc-700 disabled:opacity-50"
+                              title="Refresh balance"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${refreshingCardId === balance.walletCardId ? 'animate-spin' : ''}`} />
+                            </button>
+                          )}
+                          {/* Edit payment settings button */}
+                          <button
+                            onClick={() => handleEditPaymentSettings(balance.walletCardId, balance.cardName, balance.cardMask)}
+                            className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-700"
+                            title="Edit payment settings"
+                          >
+                            <Settings className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -520,6 +703,27 @@ export function UpcomingPayments({
           </>
         )}
       </div>
+    )}
+
+    {/* Payment Settings Modal */}
+    {editingPaymentSettingsCard && onUpdatePaymentSettings && (
+      <PaymentSettingsModal
+        isOpen={!!editingPaymentSettingsCard}
+        onClose={() => setEditingPaymentSettingsCard(null)}
+        onSave={handleSavePaymentSettings}
+        cardName={editingPaymentSettingsCard.cardName}
+        cardMask={editingPaymentSettingsCard.cardMask}
+        walletCardId={editingPaymentSettingsCard.walletCardId}
+        bankAccounts={bankAccountsForSettings}
+        currentSettings={paymentSettingsMap?.get(editingPaymentSettingsCard.walletCardId) ? {
+          wallet_card_id: editingPaymentSettingsCard.walletCardId,
+          pay_from_account_id: paymentSettingsMap.get(editingPaymentSettingsCard.walletCardId)!.pay_from_account_id,
+          is_autopay: paymentSettingsMap.get(editingPaymentSettingsCard.walletCardId)!.is_autopay,
+          autopay_type: null,
+          fixed_autopay_amount: null,
+          reminder_days_before: 3,
+        } : null}
+      />
     )}
     </>
   );

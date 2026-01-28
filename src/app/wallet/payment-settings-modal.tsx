@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Building2, CreditCard, AlertTriangle, Check, Info } from "lucide-react";
+import { Building2, CreditCard, AlertTriangle, Check } from "lucide-react";
 
 // ============================================================================
 // Types
@@ -61,29 +61,20 @@ export function PaymentSettingsModal({
 }: PaymentSettingsModalProps) {
   const [isPending, startTransition] = useTransition();
   
-  // Form state
+  // Form state - simplified to just pay_from_account and is_autopay
   const [payFromAccountId, setPayFromAccountId] = useState<string | null>(null);
   const [isAutopay, setIsAutopay] = useState(false);
-  const [autopayType, setAutopayType] = useState<PaymentSettingsData['autopay_type']>(null);
-  const [fixedAmount, setFixedAmount] = useState("");
-  const [reminderDays, setReminderDays] = useState(3);
   
   // Initialize form from current settings when modal opens
   useEffect(() => {
     if (isOpen && currentSettings) {
       setPayFromAccountId(currentSettings.pay_from_account_id);
       setIsAutopay(currentSettings.is_autopay);
-      setAutopayType(currentSettings.autopay_type);
-      setFixedAmount(currentSettings.fixed_autopay_amount ? currentSettings.fixed_autopay_amount.toString() : "");
-      setReminderDays(currentSettings.reminder_days_before);
     } else if (isOpen && !currentSettings) {
       // Default to primary account if available
       const primaryAccount = bankAccounts.find(a => a.is_primary);
       setPayFromAccountId(primaryAccount?.id || null);
       setIsAutopay(false);
-      setAutopayType(null);
-      setFixedAmount("");
-      setReminderDays(3);
     }
   }, [isOpen, currentSettings, bankAccounts]);
 
@@ -92,9 +83,9 @@ export function PaymentSettingsModal({
       await onSave({
         pay_from_account_id: payFromAccountId,
         is_autopay: isAutopay,
-        autopay_type: isAutopay ? autopayType : null,
-        fixed_autopay_amount: autopayType === 'fixed_amount' ? parseFloat(fixedAmount) || null : null,
-        reminder_days_before: reminderDays,
+        autopay_type: null, // Always null - we assume statement balance
+        fixed_autopay_amount: null,
+        reminder_days_before: 3, // Default
       });
       onClose();
     });
@@ -155,14 +146,21 @@ export function PaymentSettingsModal({
                   value={payFromAccountId || ""}
                   onChange={(e) => setPayFromAccountId(e.target.value || null)}
                   className="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  autoFocus
                 >
                   <option value="">Not specified</option>
-                  {bankAccounts.map((account) => (
+                  {bankAccounts
+                    .sort((a, b) => {
+                      const aFull = `${a.institution_name || ''} ${getAccountDisplayName(a)}`;
+                      const bFull = `${b.institution_name || ''} ${getAccountDisplayName(b)}`;
+                      return aFull.localeCompare(bFull);
+                    })
+                    .map((account) => (
                     <option key={account.id} value={account.id}>
+                      {account.institution_name && `${account.institution_name} - `}
                       {getAccountDisplayName(account)}
                       {account.mask && ` (••••${account.mask})`}
                       {account.is_primary && " ★"}
-                      {account.institution_name && ` - ${account.institution_name}`}
                     </option>
                   ))}
                 </select>
@@ -185,10 +183,13 @@ export function PaymentSettingsModal({
             )}
           </div>
 
-          {/* Auto-pay Settings */}
-          <div className="space-y-3">
+          {/* Auto-pay Toggle */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-zinc-300">Auto-pay Enabled</label>
+              <div>
+                <label className="text-sm font-medium text-zinc-300">Auto-pay</label>
+                <p className="text-xs text-zinc-500">Statement balance will be paid automatically on the due date</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsAutopay(!isAutopay)}
@@ -203,91 +204,6 @@ export function PaymentSettingsModal({
                 />
               </button>
             </div>
-
-            {isAutopay && (
-              <div className="space-y-3 pl-4 border-l-2 border-zinc-700">
-                <div className="space-y-2">
-                  <label className="text-sm text-zinc-400">Auto-pay Amount</label>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'full_balance', label: 'Full Balance', desc: 'Pay entire balance' },
-                      { value: 'statement_balance', label: 'Statement Balance', desc: 'Pay statement balance' },
-                      { value: 'minimum', label: 'Minimum Payment', desc: 'Pay minimum due' },
-                      { value: 'fixed_amount', label: 'Fixed Amount', desc: 'Pay a specific amount' },
-                    ].map((option) => (
-                      <label
-                        key={option.value}
-                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                          autopayType === option.value
-                            ? 'bg-emerald-600/20 border border-emerald-600/50'
-                            : 'hover:bg-zinc-800 border border-transparent'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="autopayType"
-                          value={option.value}
-                          checked={autopayType === option.value}
-                          onChange={(e) => setAutopayType(e.target.value as PaymentSettingsData['autopay_type'])}
-                          className="sr-only"
-                        />
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                          autopayType === option.value ? 'border-emerald-500' : 'border-zinc-600'
-                        }`}>
-                          {autopayType === option.value && (
-                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-zinc-200">{option.label}</p>
-                          <p className="text-xs text-zinc-500">{option.desc}</p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {autopayType === 'fixed_amount' && (
-                  <div className="space-y-1">
-                    <label className="text-sm text-zinc-400">Fixed Amount</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
-                      <input
-                        type="number"
-                        value={fixedAmount}
-                        onChange={(e) => setFixedAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg pl-7 pr-3 py-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Reminder Settings */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-zinc-300">Payment Reminder</label>
-              <div className="group relative">
-                <Info className="h-4 w-4 text-zinc-500" />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  Days before due date to show reminders
-                </div>
-              </div>
-            </div>
-            <select
-              value={reminderDays}
-              onChange={(e) => setReminderDays(parseInt(e.target.value))}
-              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500"
-            >
-              <option value={1}>1 day before</option>
-              <option value={3}>3 days before</option>
-              <option value={5}>5 days before</option>
-              <option value={7}>7 days before</option>
-              <option value={14}>14 days before</option>
-            </select>
           </div>
         </div>
 

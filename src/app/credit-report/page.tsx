@@ -7,6 +7,7 @@ import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import { CreditReportClient } from "./credit-report-client";
+import { extractDateFromISO } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Credit Report | CardTool",
@@ -402,9 +403,9 @@ export default async function CreditReportPage() {
             // No existing date - auto-fill from credit report
             updates.approval_date = creditAccount.date_opened;
           } else {
-            // Check if dates are different
-            const walletDate = new Date(walletCard.approval_date).toISOString().split('T')[0];
-            const creditDate = new Date(creditAccount.date_opened).toISOString().split('T')[0];
+            // Check if dates are different (extract date portion to compare safely)
+            const walletDate = extractDateFromISO(walletCard.approval_date) || walletCard.approval_date.substring(0, 10);
+            const creditDate = extractDateFromISO(creditAccount.date_opened) || creditAccount.date_opened.substring(0, 10);
             
             if (walletDate !== creditDate) {
               // Dates are different - return conflict info
@@ -775,7 +776,7 @@ export default async function CreditReportPage() {
   }));
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="flex-1 bg-zinc-950">
       <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-7xl px-4 py-12">
         <div className="mb-8">

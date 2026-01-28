@@ -41,3 +41,12 @@ yarn-error.log*
 next-env.d.ts
 .env*.local
 clerk-migration
+
+# Local dev tools (not for production)
+/src/app/kudos-explorer/
+/src/app/api/kudos/
+/scripts/kudos-*.ts
+/scripts/fetch-specific-cards.ts
+/scripts/find-missing-cards.ts
+/scripts/find-unmatched-ct.ts
+/scripts/scrape-kudos.ts

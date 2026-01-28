@@ -11,6 +11,7 @@ import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import { calculateCreditPeriod } from "@/lib/credit-matcher";
+import { formatDateToString } from "@/lib/utils";
 import { calculateBillingDates } from "@/lib/billing-cycle";
 import { calculateStatementBalance, type StatementEstimate } from "@/lib/statement-calculator";
 import {
@@ -280,7 +281,7 @@ export default async function WalletPage() {
       `)
       .eq("user_id", effectiveUserId)
       .eq("pending", false)
-      .gte("date", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+      .gte("date", formatDateToString(new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)))
       .order("date", { ascending: false }),
     
     // User's linked bank accounts for "Pay From" feature
@@ -1197,8 +1198,8 @@ export default async function WalletPage() {
             await supabase
               .from("user_credit_usage")
               .update({
-                period_start: periodStart.toISOString().split("T")[0],
-                period_end: periodEnd.toISOString().split("T")[0],
+                period_start: formatDateToString(periodStart),
+                period_end: formatDateToString(periodEnd),
               })
               .eq("id", usage.id);
           }
@@ -2076,7 +2077,7 @@ export default async function WalletPage() {
 
   return (
     <WalletClient>
-      <div className="min-h-screen bg-zinc-950">
+      <div className="flex-1 bg-zinc-950">
         <UserHeader 
           isAdmin={isAdmin} 
           emulationInfo={emulationInfo}

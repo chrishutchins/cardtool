@@ -4,12 +4,15 @@ import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | CardTool",
-  description: "Privacy Policy for CardTool - How we collect, use, and protect your data",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col">
+    <div className="flex-1 bg-zinc-950 flex flex-col">
       <main className="flex-1">
         <div className="mx-auto max-w-3xl px-4 py-16">
           <h1 className="text-4xl font-bold text-white mb-8">Privacy Policy</h1>

@@ -7,7 +7,7 @@ import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import { calculateBillingDates, type BillingCycleFormula } from "@/lib/billing-cycle";
 import { calculateStatementBalance, type StatementEstimate } from "@/lib/statement-calculator";
 import { UpcomingPayments, type UpcomingPayment, type BankAccount, type UnbilledBalance } from "../upcoming/upcoming-payments";
-import { BankAccountsSection } from "../wallet/bank-accounts-section";
+import { BankAccountsSection, type CashFlowItem } from "../wallet/bank-accounts-section";
 import { UserHeader } from "@/components/user-header";
 import { isAdminEmail } from "@/lib/admin";
 
@@ -41,6 +41,8 @@ export default async function PaymentsPage() {
     paymentSettingsResult,
     playersResult,
     featureFlagsResult,
+    cashFlowItemsResult,
+    paymentDateOverridesResult,
   ] = await Promise.all([
     // User's wallet cards with billing info
     supabase
@@ -118,9 +120,20 @@ export default async function PaymentsPage() {
     // Feature flags
     supabase
       .from("user_feature_flags")
-      .select("account_linking_enabled")
+      .select("account_linking_enabled, plaid_on_demand_refresh_enabled")
       .eq("user_id", effectiveUserId)
       .single(),
+    // Cash flow items
+    supabase
+      .from("user_cash_flow_items")
+      .select("*")
+      .eq("user_id", effectiveUserId)
+      .order("expected_date"),
+    // Payment date overrides
+    supabase
+      .from("user_payment_date_overrides")
+      .select("*")
+      .eq("user_id", effectiveUserId),
   ]);
 
   // Process wallet cards
@@ -258,6 +271,37 @@ export default async function PaymentsPage() {
 
   // Feature flags
   const accountLinkingEnabled = featureFlagsResult.data?.account_linking_enabled ?? false;
+  const onDemandRefreshEnabled = featureFlagsResult.data?.plaid_on_demand_refresh_enabled ?? false;
+
+  // Process cash flow items
+  const cashFlowItems: CashFlowItem[] = (cashFlowItemsResult.data ?? []).map(item => ({
+    id: item.id,
+    description: item.description,
+    amount_cents: item.amount_cents,
+    expected_date: item.expected_date,
+    is_recurring: item.is_recurring ?? false,
+    recurrence_type: item.recurrence_type,
+    category: item.category,
+    is_completed: item.is_completed ?? false,
+    bank_account_id: item.bank_account_id,
+    wallet_card_id: item.wallet_card_id ?? null,
+    linked_item_id: item.linked_item_id ?? null,
+  }));
+
+  // Process payment date overrides into a map
+  type PaymentDateOverride = {
+    id: string;
+    wallet_card_id: string;
+    override_date: string;
+    original_due_date: string;
+  };
+  const paymentDateOverrides = (paymentDateOverridesResult.data ?? []) as PaymentDateOverride[];
+  const paymentDateOverridesMap = new Map<string, PaymentDateOverride>();
+  paymentDateOverrides.forEach(override => {
+    // Key by wallet_card_id + original_due_date to handle multiple cycles
+    const key = `${override.wallet_card_id}_${override.original_due_date}`;
+    paymentDateOverridesMap.set(key, override);
+  });
 
   // Build upcoming payments array
   const upcomingPayments: UpcomingPayment[] = [];
@@ -312,7 +356,15 @@ export default async function PaymentsPage() {
     let remainingBalance: number | null = null;
     let statementAlreadyPaid = false;
     
-    if (hasPlaidLiabilitiesData && linked?.last_payment_date && statementIssueDate) {
+    // Check if current_balance is 0 or negative and is_overdue is false - statement is paid
+    // This handles cases where Plaid's last_payment_date hasn't been updated yet
+    if (hasPlaidLiabilitiesData && linked?.is_overdue === false && 
+        linked?.current_balance !== null && linked?.current_balance !== undefined && 
+        linked.current_balance <= 0) {
+      statementAlreadyPaid = true;
+    }
+    // Otherwise check using payment date logic
+    else if (hasPlaidLiabilitiesData && linked?.last_payment_date && statementIssueDate) {
       const paymentDate = new Date(linked.last_payment_date);
       const statementDate = new Date(statementIssueDate);
       const paymentAmount = linked.last_payment_amount ?? 0;
@@ -382,15 +434,36 @@ export default async function PaymentsPage() {
     // Calculate unbilled amount: current balance - statement balance
     const currentBalance = linked?.current_balance ?? null;
     const statementBalance = linked?.last_statement_balance ?? null;
+    const statementIssueDate = linked?.last_statement_issue_date ?? null;
     
     // Skip if no current balance or if current balance is 0 or negative
     if (currentBalance === null || currentBalance <= 0) continue;
     
-    // Unbilled = current balance - statement balance (if statement exists)
+    // Check if the last statement was paid in full
+    // If so, current balance IS the unbilled amount (all new spending)
+    let statementWasPaid = false;
+    if (linked?.last_payment_date && statementIssueDate && statementBalance) {
+      const paymentDate = new Date(linked.last_payment_date);
+      const statementDate = new Date(statementIssueDate);
+      const paymentAmount = linked.last_payment_amount ?? 0;
+      
+      // Payment after statement that covers the full balance
+      if (paymentDate >= statementDate && paymentAmount >= statementBalance) {
+        statementWasPaid = true;
+      }
+    }
+    
+    // Unbilled = current balance - statement balance (if statement exists and not paid)
+    // If statement was paid, current balance is all new unbilled spending
     // If no statement data, all of current balance is unbilled
-    const unbilledAmount = statementBalance !== null 
-      ? currentBalance - (statementBalance > 0 ? statementBalance : 0)
-      : currentBalance;
+    let unbilledAmount: number;
+    if (statementWasPaid) {
+      unbilledAmount = currentBalance; // All current spending is unbilled (statement was paid)
+    } else if (statementBalance !== null) {
+      unbilledAmount = currentBalance - (statementBalance > 0 ? statementBalance : 0);
+    } else {
+      unbilledAmount = currentBalance;
+    }
     
     // Only show if there's unbilled spending
     if (unbilledAmount <= 0) continue;
@@ -537,13 +610,255 @@ export default async function PaymentsPage() {
     revalidatePath("/wallet");
   }
 
+  // Server actions for cash flow items
+  async function addCashFlowItem(item: {
+    description: string;
+    amount_cents: number;
+    expected_date: string;
+    is_recurring: boolean;
+    recurrence_type: string | null;
+    category: string | null;
+    bank_account_id: string | null;
+    wallet_card_id: string | null;
+  }): Promise<string | null> {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return null;
+
+    const supabase = createClient();
+    const result = await supabase
+      .from("user_cash_flow_items")
+      .insert({
+        user_id: userId,
+        ...item,
+      })
+      .select("id")
+      .single();
+
+    revalidatePath("/payments");
+    return result.data?.id ?? null;
+  }
+
+  // Link two cash flow items together (for transfers)
+  async function linkCashFlowItems(id1: string, id2: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    // Update both items to link to each other
+    await Promise.all([
+      supabase
+        .from("user_cash_flow_items")
+        .update({ linked_item_id: id2 })
+        .eq("id", id1)
+        .eq("user_id", userId),
+      supabase
+        .from("user_cash_flow_items")
+        .update({ linked_item_id: id1 })
+        .eq("id", id2)
+        .eq("user_id", userId),
+    ]);
+
+    revalidatePath("/payments");
+  }
+
+  async function updateCashFlowItem(id: string, item: {
+    description: string;
+    amount_cents: number;
+    expected_date: string;
+    is_recurring: boolean;
+    recurrence_type: string | null;
+    category: string | null;
+    bank_account_id: string | null;
+    wallet_card_id: string | null;
+  }) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    
+    // First, get the current item to check if it has a linked item
+    const { data: currentItem } = await supabase
+      .from("user_cash_flow_items")
+      .select("linked_item_id, bank_account_id, description")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    // Update the main item
+    await supabase
+      .from("user_cash_flow_items")
+      .update(item)
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    // If there's a linked item (transfer), sync relevant fields
+    if (currentItem?.linked_item_id && item.category === "Transfer") {
+      // Get the linked item's current data to preserve its bank_account_id
+      const { data: linkedItem } = await supabase
+        .from("user_cash_flow_items")
+        .select("bank_account_id")
+        .eq("id", currentItem.linked_item_id)
+        .eq("user_id", userId)
+        .single();
+
+      // Generate the linked item's description based on the updated source item
+      // If source is going "To AccountB", linked should be "From AccountA"
+      const linkedDescription = item.description.replace(/^Transfer (To|From)/, (_, dir) => 
+        `Transfer ${dir === "To" ? "From" : "To"}`
+      );
+
+      await supabase
+        .from("user_cash_flow_items")
+        .update({
+          description: linkedDescription,
+          amount_cents: -item.amount_cents, // Opposite sign
+          expected_date: item.expected_date,
+          is_recurring: item.is_recurring,
+          recurrence_type: item.recurrence_type,
+          category: "Transfer",
+          bank_account_id: linkedItem?.bank_account_id, // Keep the linked item's account
+        })
+        .eq("id", currentItem.linked_item_id)
+        .eq("user_id", userId);
+    }
+
+    revalidatePath("/payments");
+  }
+
+  async function deleteCashFlowItem(id: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    
+    // Check if this item has a linked item
+    const { data: item } = await supabase
+      .from("user_cash_flow_items")
+      .select("linked_item_id")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    // Delete the main item
+    await supabase
+      .from("user_cash_flow_items")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    // Also delete the linked item if it exists
+    if (item?.linked_item_id) {
+      await supabase
+        .from("user_cash_flow_items")
+        .delete()
+        .eq("id", item.linked_item_id)
+        .eq("user_id", userId);
+    }
+
+    revalidatePath("/payments");
+  }
+
+  async function toggleCashFlowItemCompleted(id: string, completed: boolean) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    await supabase
+      .from("user_cash_flow_items")
+      .update({ is_completed: completed })
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    revalidatePath("/payments");
+  }
+
+  // Server actions for payment date overrides
+  async function setPaymentDateOverride(walletCardId: string, overrideDate: string, originalDueDate: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    // Upsert - create or update override for this card/cycle
+    await supabase
+      .from("user_payment_date_overrides")
+      .upsert({
+        user_id: userId,
+        wallet_card_id: walletCardId,
+        override_date: overrideDate,
+        original_due_date: originalDueDate,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: "user_id,wallet_card_id,original_due_date"
+      });
+
+    revalidatePath("/payments");
+  }
+
+  async function clearPaymentDateOverride(walletCardId: string, originalDueDate: string) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) return;
+
+    const supabase = createClient();
+    await supabase
+      .from("user_payment_date_overrides")
+      .delete()
+      .eq("user_id", userId)
+      .eq("wallet_card_id", walletCardId)
+      .eq("original_due_date", originalDueDate);
+
+    revalidatePath("/payments");
+  }
+
+  async function updatePaymentSettings(walletCardId: string, settings: {
+    pay_from_account_id: string | null;
+    is_autopay: boolean;
+    autopay_type: string | null;
+    fixed_autopay_amount: number | null;
+    reminder_days_before: number;
+  }) {
+    "use server";
+    const userId = await getEffectiveUserId();
+    if (!userId) {
+      console.error("[updatePaymentSettings] No user ID");
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("user_card_payment_settings")
+      .upsert({
+        user_id: userId,
+        wallet_card_id: walletCardId,
+        pay_from_account_id: settings.pay_from_account_id,
+        is_autopay: settings.is_autopay,
+        autopay_type: settings.autopay_type,
+        fixed_autopay_amount: settings.fixed_autopay_amount,
+        reminder_days_before: settings.reminder_days_before,
+      }, { onConflict: "wallet_card_id" });
+    
+    if (error) {
+      console.error("[updatePaymentSettings] Error:", error);
+      throw new Error(`Failed to update payment settings: ${error.message}`);
+    }
+    
+    revalidatePath("/payments");
+    revalidatePath("/wallet");
+  }
+
   // Check if admin
   const isAdmin = user.primaryEmailAddress?.emailAddress
     ? isAdminEmail(user.primaryEmailAddress.emailAddress)
     : false;
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="flex-1 bg-zinc-950">
       <UserHeader
         isAdmin={isAdmin}
         emulationInfo={emulationInfo}
@@ -563,6 +878,21 @@ export default async function PaymentsPage() {
           unbilledBalances={unbilledBalances}
           bankAccounts={bankAccountsForPayments}
           players={players}
+          paymentDateOverridesMap={paymentDateOverridesMap}
+          isAdmin={isAdmin}
+          bankAccountsForSettings={bankAccountsData.map(ba => ({
+            id: ba.id,
+            name: ba.name,
+            display_name: ba.display_name,
+            mask: ba.mask,
+            institution_name: ba.institution_name,
+            current_balance: ba.current_balance,
+            available_balance: ba.available_balance,
+            is_primary: ba.is_primary,
+          }))}
+          paymentSettingsMap={paymentSettingsMap}
+          linkedAccountsMap={linkedAccountsMap}
+          onUpdatePaymentSettings={updatePaymentSettings}
         />
 
         {/* Pay From Accounts Section */}
@@ -583,9 +913,33 @@ export default async function PaymentsPage() {
               statement_close_day: wc.statement_close_day ?? null,
               payment_due_day: wc.payment_due_day ?? null,
               billing_formula: wc.cards?.issuers?.billing_cycle_formula ?? null,
+              player_number: wc.player_number ?? null,
             }))}
+            players={players}
             linkedAccountsMap={linkedAccountsMap}
             statementEstimatesMap={statementEstimatesMap}
+            onDemandRefreshEnabled={onDemandRefreshEnabled}
+            cashFlowItems={cashFlowItems}
+            onAddCashFlowItem={addCashFlowItem}
+            onLinkCashFlowItems={linkCashFlowItems}
+            onUpdateCashFlowItem={updateCashFlowItem}
+            onDeleteCashFlowItem={deleteCashFlowItem}
+            onToggleCashFlowCompleted={toggleCashFlowItemCompleted}
+            paymentDateOverridesMap={paymentDateOverridesMap}
+            onSetPaymentDateOverride={setPaymentDateOverride}
+            onClearPaymentDateOverride={clearPaymentDateOverride}
+            isAdmin={isAdmin}
+            bankAccountsForSettings={bankAccountsData.map(ba => ({
+              id: ba.id,
+              name: ba.name,
+              display_name: ba.display_name,
+              mask: ba.mask,
+              institution_name: ba.institution_name,
+              current_balance: ba.current_balance,
+              available_balance: ba.available_balance,
+              is_primary: ba.is_primary,
+            }))}
+            onUpdatePaymentSettings={updatePaymentSettings}
           />
         </div>
       </div>

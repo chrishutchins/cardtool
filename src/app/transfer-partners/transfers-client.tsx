@@ -225,6 +225,15 @@ export function TransfersClient({
     return map;
   }, [transferPartners]);
 
+  // Count transfer partners per source currency
+  const partnerCountBySource = useMemo(() => {
+    const counts = new Map<string, number>();
+    transferPartners.forEach(tp => {
+      counts.set(tp.source_currency_id, (counts.get(tp.source_currency_id) || 0) + 1);
+    });
+    return counts;
+  }, [transferPartners]);
+
   // Filter destinations - hide rows that have no visible transfers
   const filteredDestinations = useMemo(() => {
     const visibleColumnIds = new Set(visibleColumns.map(c => c.id));
@@ -382,14 +391,23 @@ export function TransfersClient({
       );
     }
 
-    // Format ratio as X:1 (normalize destination to 1)
-    // e.g., 3:2 becomes 1.5:1, 1:1 stays 1:1, 2:3 becomes 0.67:1
-    const sourcePerDest = partner.source_units / partner.destination_units;
-    // Format: show integer if whole, otherwise up to 2 decimal places (trim trailing zeros)
-    const formattedSource = Number.isInteger(sourcePerDest) 
-      ? sourcePerDest.toString() 
-      : parseFloat(sourcePerDest.toFixed(2)).toString();
-    const ratio = `${formattedSource}:1`;
+    // Format ratio with smaller side normalized to 1
+    // e.g., 5:8 becomes 1:1.6, 8:5 becomes 1.6:1, 1:1 stays 1:1
+    const formatNumber = (n: number) => 
+      Number.isInteger(n) ? n.toString() : parseFloat(n.toFixed(2)).toString();
+    
+    let ratio: string;
+    if (partner.source_units === partner.destination_units) {
+      ratio = "1:1";
+    } else if (partner.source_units < partner.destination_units) {
+      // Source is smaller, normalize source to 1: show "1:X"
+      const destPerSource = partner.destination_units / partner.source_units;
+      ratio = `1:${formatNumber(destPerSource)}`;
+    } else {
+      // Destination is smaller, normalize destination to 1: show "X:1"
+      const sourcePerDest = partner.source_units / partner.destination_units;
+      ratio = `${formatNumber(sourcePerDest)}:1`;
+    }
     const hasFee = !!partner.notes;
     
     // Build tooltip content (only notes, not timing)
@@ -469,20 +487,24 @@ export function TransfersClient({
                       {renderSortArrow("name")}
                     </span>
                   </th>
-                  {visibleColumns.map(source => (
-                    <th 
-                      key={source.id}
-                      className="sticky top-0 z-20 bg-zinc-900 px-3 py-3 font-medium text-center cursor-pointer hover:text-white transition-colors min-w-[70px]"
-                      onClick={() => handleSort(`source_${source.id}`)}
-                    >
-                      <Tooltip text={source.name}>
-                        <span className="flex items-center justify-center">
-                          {source.code}
-                          {renderSortArrow(`source_${source.id}`)}
-                        </span>
-                      </Tooltip>
-                    </th>
-                  ))}
+                  {visibleColumns.map(source => {
+                    const partnerCount = partnerCountBySource.get(source.id) || 0;
+                    return (
+                      <th 
+                        key={source.id}
+                        className="sticky top-0 z-20 bg-zinc-900 px-3 py-3 font-medium text-center cursor-pointer hover:text-white transition-colors min-w-[70px]"
+                        onClick={() => handleSort(`source_${source.id}`)}
+                      >
+                        <Tooltip text={source.name}>
+                          <span className="flex items-center justify-center gap-1">
+                            {source.code}
+                            <span className="text-[10px] text-zinc-500 font-normal">({partnerCount})</span>
+                            {renderSortArrow(`source_${source.id}`)}
+                          </span>
+                        </Tooltip>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50">

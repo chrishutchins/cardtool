@@ -21,6 +21,7 @@ interface NavGroup {
 const navGroups: (NavItem | NavGroup)[] = [
   { href: "/admin", label: "Dashboard", exact: true },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/invite-codes", label: "Invite Codes" },
   {
     label: "Cards",
     items: [

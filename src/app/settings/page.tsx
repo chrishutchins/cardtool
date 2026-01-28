@@ -105,7 +105,7 @@ export default async function SettingsPage() {
       .eq("user_id", effectiveUserId),
     supabase
       .from("user_feature_flags")
-      .select("debit_pay_enabled, account_linking_enabled, plaid_liabilities_enabled, wholesale_club_networks")
+      .select("debit_pay_enabled, account_linking_enabled, plaid_liabilities_enabled, plaid_on_demand_refresh_enabled, wholesale_club_networks")
       .eq("user_id", effectiveUserId)
       .maybeSingle(),
     supabase
@@ -172,6 +172,7 @@ export default async function SettingsPage() {
   const debitPayEnabled = featureFlagsResult.data?.debit_pay_enabled ?? false;
   const accountLinkingEnabled = featureFlagsResult.data?.account_linking_enabled ?? false;
   const plaidLiabilitiesEnabled = featureFlagsResult.data?.plaid_liabilities_enabled ?? false;
+  const plaidOnDemandRefreshEnabled = featureFlagsResult.data?.plaid_on_demand_refresh_enabled ?? false;
   const wholesaleClubNetworks = featureFlagsResult.data?.wholesale_club_networks ?? null;
   const largePurchaseCategories = largePurchaseCategoriesResult.data;
   const everythingElseCategoryId = everythingElseCategoryResult.data?.id ?? null;
@@ -697,7 +698,7 @@ export default async function SettingsPage() {
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="flex-1 bg-zinc-950">
       <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="mb-8">
@@ -928,6 +929,7 @@ export default async function SettingsPage() {
                     .sort((a, b) => a.name.localeCompare(b.name))
                 }
                 plaidLiabilitiesEnabled={plaidLiabilitiesEnabled}
+                onDemandRefreshEnabled={plaidOnDemandRefreshEnabled}
                 onPairCard={pairLinkedAccount}
                 onUnlinkCard={unlinkLinkedAccount}
                 onUpdateCreditLimit={updateLinkedAccountCreditLimit}

@@ -216,6 +216,117 @@ const STYLES = {
   debitPayEmpty: "text-zinc-500 underline decoration-dashed underline-offset-4 decoration-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer",
 } as const;
 
+// Helper to calculate next renewal date (first statement close after anniversary)
+// This is when the annual fee is charged - the first statement close after the card anniversary.
+// Returns the NEXT upcoming renewal date (today or in the future).
+// 
+// For issuers with fixed close days (BoA, etc.): uses the close day directly
+// For issuers where close is derived from due (Amex, Chase, etc.): calculates close from due day using formula
+function getNextRenewalDate(
+  approvalDateStr: string | null, 
+  billingFormula: string | null,
+  statementCloseDay: number | null,
+  paymentDueDay: number | null
+): Date | null {
+  if (!approvalDateStr) return null;
+  
+  const approvalDate = parseLocalDate(approvalDateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Helper to calculate close date from a due date based on formula
+  const getCloseFromDue = (dueDate: Date, formula: string): Date => {
+    switch (formula) {
+      case 'due_minus_25':
+        // Close = 25 days before due
+        return new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate() - 25);
+      case 'due_minus_25_skip_sat':
+      case 'bilt_formula': {
+        // Close = 25 days before due (26 if that falls on Saturday)
+        let close = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate() - 25);
+        if (close.getDay() === 6) { // Saturday
+          close = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate() - 26);
+        }
+        return close;
+      }
+      case 'due_plus_3':
+        // Close day = due day + 3 (same month cycle)
+        return new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate() + 3);
+      case 'due_plus_6':
+        // Close day = due day + 6 (same month cycle)
+        return new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate() + 6);
+      default:
+        // Default: assume close is 25 days before due
+        return new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate() - 25);
+    }
+  };
+  
+  // Helper to find first close on or after anniversary for due-primary formulas
+  const getFirstCloseAfterAnniversaryDuePrimary = (anniversary: Date, dueDay: number, formula: string): Date => {
+    // Start checking from the month before anniversary (in case close for that month's due is after anniversary)
+    for (let monthOffset = -1; monthOffset <= 12; monthOffset++) {
+      const dueDate = new Date(anniversary.getFullYear(), anniversary.getMonth() + monthOffset, dueDay);
+      const closeDate = getCloseFromDue(dueDate, formula);
+      if (closeDate >= anniversary) {
+        return closeDate;
+      }
+    }
+    // Fallback (shouldn't happen)
+    return anniversary;
+  };
+  
+  // Helper to find first close on or after anniversary for fixed close day
+  const getFirstCloseAfterAnniversaryFixed = (anniversary: Date, closeDay: number): Date => {
+    const anniversaryMonth = anniversary.getMonth();
+    const anniversaryYear = anniversary.getFullYear();
+    const anniversaryDay = anniversary.getDate();
+    
+    if (closeDay >= anniversaryDay) {
+      return new Date(anniversaryYear, anniversaryMonth, closeDay);
+    } else {
+      return new Date(anniversaryYear, anniversaryMonth + 1, closeDay);
+    }
+  };
+  
+  // Determine which approach to use based on formula and available data
+  const isDuePrimary = billingFormula && [
+    'due_minus_25', 'due_minus_25_skip_sat', 'bilt_formula', 
+    'due_plus_3', 'due_plus_6', 'citi_formula', 'usbank_formula'
+  ].includes(billingFormula);
+  
+  // Get the next upcoming anniversary
+  let anniversary = new Date(today.getFullYear(), approvalDate.getMonth(), approvalDate.getDate());
+  
+  // Calculate renewal date
+  let renewalDate: Date | null = null;
+  
+  if (isDuePrimary && paymentDueDay) {
+    // Use due day and formula to calculate close
+    renewalDate = getFirstCloseAfterAnniversaryDuePrimary(anniversary, paymentDueDay, billingFormula!);
+  } else if (statementCloseDay) {
+    // Use fixed close day
+    renewalDate = getFirstCloseAfterAnniversaryFixed(anniversary, statementCloseDay);
+  } else {
+    // No billing info, just return the anniversary
+    if (anniversary >= today) {
+      return anniversary;
+    }
+    return new Date(today.getFullYear() + 1, approvalDate.getMonth(), approvalDate.getDate());
+  }
+  
+  // If this renewal date is in the past, calculate for next year's anniversary
+  if (renewalDate < today) {
+    anniversary = new Date(today.getFullYear() + 1, approvalDate.getMonth(), approvalDate.getDate());
+    if (isDuePrimary && paymentDueDay) {
+      renewalDate = getFirstCloseAfterAnniversaryDuePrimary(anniversary, paymentDueDay, billingFormula!);
+    } else if (statementCloseDay) {
+      renewalDate = getFirstCloseAfterAnniversaryFixed(anniversary, statementCloseDay);
+    }
+  }
+  
+  return renewalDate;
+}
+
 // Helper to format currency with consistent negative format
 function formatCurrency(cents: number, showSign: "always" | "negative" | "never" = "never"): string {
   const dollars = Math.round(cents / 100);
@@ -663,6 +774,7 @@ export function WalletCardTable({
       ...(playerCount > 1 ? [{
         id: "player",
         label: "Player",
+        sticky: true,
         align: "center" as const,
         minWidth: "70px",
         accessor: (row: RowType) => playerDescriptions.get(row.playerNum) ?? `P${row.playerNum}`,
@@ -1368,6 +1480,51 @@ export function WalletCardTable({
           </button>
         ),
       },
+      // Renews (first statement close after card anniversary)
+      {
+        id: "renews",
+        label: "Renews",
+        align: "center" as const,
+        minWidth: "80px",
+        accessor: (row) => {
+          const renewalDate = getNextRenewalDate(
+            row.approval_date,
+            row.billingFormula,
+            row.statement_close_day ?? null,
+            row.payment_due_day ?? null
+          );
+          return renewalDate?.getTime() ?? null;
+        },
+        sortAccessor: (row) => {
+          const renewalDate = getNextRenewalDate(
+            row.approval_date,
+            row.billingFormula,
+            row.statement_close_day ?? null,
+            row.payment_due_day ?? null
+          );
+          return renewalDate?.getTime() ?? 0;
+        },
+        render: (row) => {
+          const renewalDate = getNextRenewalDate(
+            row.approval_date,
+            row.billingFormula,
+            row.statement_close_day ?? null,
+            row.payment_due_day ?? null
+          );
+          if (!renewalDate) {
+            return <span className={STYLES.empty}>—</span>;
+          }
+          // Show tooltip based on whether we have billing info
+          const hasBillingInfo = (row.billingFormula && row.payment_due_day) || row.statement_close_day;
+          return (
+            <Tooltip text={hasBillingInfo ? "First statement close after anniversary" : "Card anniversary (set billing dates for exact renewal)"}>
+              <span className={hasBillingInfo ? STYLES.readOnly : "text-zinc-500"}>
+                {renewalDate.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" })}
+              </span>
+            </Tooltip>
+          );
+        },
+      },
       // Settings button removed - gear icon is now in the Card column
     ];
 
@@ -1400,6 +1557,7 @@ export function WalletCardTable({
       "next_close",
       "pay_from",
       "opened",
+      "renews",
       "notes",
     ];
     // Add conditional columns
@@ -1432,6 +1590,7 @@ export function WalletCardTable({
     "next_close",
     "pay_from",
     "opened",
+    "renews",
     "notes",
     "debit_pay",
   ], []);

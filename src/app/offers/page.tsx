@@ -453,7 +453,7 @@ export default async function OffersPage() {
   });
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="flex-1 bg-zinc-950">
       <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-[1600px] px-4 py-8">
         <div className="mb-6">

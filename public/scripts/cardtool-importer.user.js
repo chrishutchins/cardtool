@@ -3087,9 +3087,24 @@
 
     function parseEquifaxDate(str) {
         if (!str) return null;
+        
+        // For ISO strings with time component, extract date directly (no timezone conversion)
+        if (typeof str === 'string' && str.includes('T')) {
+            return str.substring(0, 10);
+        }
+        
+        // For YYYY-MM-DD strings, return as-is
+        if (typeof str === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(str)) {
+            return str;
+        }
+        
+        // For other formats (e.g., "November 13, 2025"), parse and format in local timezone
         const d = new Date(str);
         if (!isNaN(d.getTime())) {
-            return d.toISOString().split('T')[0];
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
         return null;
     }
@@ -3150,15 +3165,38 @@
         // Helper to parse Experian date formats
         const parseExperianDate = (dateVal) => {
             if (!dateVal) return null;
-            // Handle timestamp (milliseconds)
+            
+            // Handle timestamp (milliseconds) - format in local timezone
             if (typeof dateVal === 'number') {
                 const d = new Date(dateVal);
-                if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+                if (!isNaN(d.getTime())) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
             }
+            
             // Handle string formats
             if (typeof dateVal === 'string') {
+                // For ISO strings with time component, extract date directly (no timezone conversion)
+                if (dateVal.includes('T')) {
+                    return dateVal.substring(0, 10);
+                }
+                
+                // For YYYY-MM-DD strings, return as-is
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+                    return dateVal;
+                }
+                
+                // For other formats, parse and format in local timezone
                 const d = new Date(dateVal);
-                if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+                if (!isNaN(d.getTime())) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
             }
             return null;
         };
@@ -3463,12 +3501,21 @@
         console.log('CardTool Credit: Parsing Credit Karma response', url);
         
         try {
-            // Helper to convert Unix timestamp to date string
+            // Helper to convert Unix timestamp to date string (local timezone)
             const timestampToDate = (ts) => {
-                if (!ts) return new Date().toISOString().split('T')[0];
+                if (!ts) {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(now.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
                 // Credit Karma uses seconds, not milliseconds
                 const date = new Date(ts * 1000);
-                return date.toISOString().split('T')[0];
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
             };
             
             // Credit Karma GraphQL response - look for FabricScoreDialsEntry
@@ -3560,14 +3607,21 @@
             // Helper to parse myFICO date format (2026-01-12T20:41:35.840 or "November 13, 2025")
             const parseDate = (dateStr) => {
                 if (!dateStr) return null;
-                // ISO format
+                // ISO format - extract date directly (no timezone conversion)
                 if (dateStr.includes('T')) {
-                    return dateStr.split('T')[0];
+                    return dateStr.substring(0, 10);
                 }
-                // "November 13, 2025" format
+                // YYYY-MM-DD format - return as-is
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                    return dateStr;
+                }
+                // "November 13, 2025" format - parse and format in local timezone
                 const parsed = new Date(dateStr);
                 if (!isNaN(parsed.getTime())) {
-                    return parsed.toISOString().split('T')[0];
+                    const year = parsed.getFullYear();
+                    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+                    const day = String(parsed.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
                 }
                 return null;
             };
@@ -4793,11 +4847,14 @@
         if (!value) return null;
         
         // Handle ISO format (e.g., "2025-02-28T08:00:00.000+0000")
+        // Extract date directly without timezone conversion
         if (typeof value === 'string' && value.includes('T')) {
-            const d = new Date(value);
-            if (!isNaN(d.getTime())) {
-                return d.toISOString().split('T')[0];
-            }
+            return value.substring(0, 10);
+        }
+        
+        // Handle YYYY-MM-DD format - return as-is
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return value;
         }
         
         // Handle MM/DD/YYYY format

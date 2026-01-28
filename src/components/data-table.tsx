@@ -363,6 +363,28 @@ export function DataTable<T>({
       .filter((c): c is DataTableColumn<T> => c != null && localVisibleColumns.has(c.id));
     return visibleInOrder;
   }, [columns, localVisibleColumns, columnOrder, getColumnById]);
+
+  // Calculate sticky column left offsets and find last sticky index
+  // Sticky columns must be at the start of visible columns for proper stacking
+  const { stickyLeftOffsets, lastStickyIndex } = useMemo(() => {
+    const offsets: Record<string, number> = {};
+    let cumulativeLeft = 0;
+    let lastIdx = -1;
+    
+    for (let i = 0; i < visibleColumns.length; i++) {
+      const column = visibleColumns[i];
+      const isSticky = column.sticky || i === 0;
+      if (isSticky) {
+        offsets[column.id] = cumulativeLeft;
+        // Parse minWidth to get pixel value, default to 100px if not set
+        const width = column.minWidth ? parseInt(column.minWidth, 10) : 100;
+        cumulativeLeft += width;
+        lastIdx = i;
+      }
+    }
+    
+    return { stickyLeftOffsets: offsets, lastStickyIndex: lastIdx };
+  }, [visibleColumns]);
   
   // All pickable columns in order (for the column picker dropdown)
   const orderedPickableColumns = useMemo(() => {
@@ -652,6 +674,8 @@ export function DataTable<T>({
             <tr className="bg-zinc-800">
                 {visibleColumns.map((column, index) => {
                   const isSticky = column.sticky || index === 0;
+                  const stickyLeft = isSticky ? stickyLeftOffsets[column.id] : undefined;
+                  const isLastSticky = index === lastStickyIndex;
                   return (
                     <th
                       key={column.id}
@@ -666,11 +690,13 @@ export function DataTable<T>({
                         px-4 py-3 text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap bg-zinc-800
                         ${column.sortable !== false ? "cursor-pointer hover:text-white" : ""}
                         ${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : "text-left"}
-                        ${isSticky ? "sticky left-0 top-0 z-40 border-r border-zinc-700" : ""}
+                        ${isSticky ? "sticky top-0 z-40" : ""}
+                        ${isLastSticky ? "border-r border-zinc-700" : ""}
                       `}
                       style={{ 
                         minWidth: column.minWidth,
                         width: column.width,
+                        ...(isSticky ? { left: stickyLeft } : {}),
                       }}
                     >
                       <span className="inline-flex items-center gap-1">
@@ -703,6 +729,8 @@ export function DataTable<T>({
                   >
                     {visibleColumns.map((column, index) => {
                       const isSticky = column.sticky || index === 0;
+                      const stickyLeft = isSticky ? stickyLeftOffsets[column.id] : undefined;
+                      const isLastSticky = index === lastStickyIndex;
                       const value = getCellValue(row, column);
                       
                       // Color scaling
@@ -718,12 +746,14 @@ export function DataTable<T>({
                           className={`
                             px-4 py-3 text-sm
                             ${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : "text-left"}
-                            ${isSticky ? "sticky left-0 z-10 bg-zinc-900 border-r border-zinc-700" : ""}
+                            ${isSticky ? "sticky z-10 bg-zinc-900" : ""}
+                            ${isLastSticky ? "border-r border-zinc-700" : ""}
                             ${colorClass}
                           `}
                           style={{ 
                             minWidth: column.minWidth,
                             width: column.width,
+                            ...(isSticky ? { left: stickyLeft } : {}),
                           }}
                         >
                           {column.render ? column.render(row, value) : (value as React.ReactNode)}

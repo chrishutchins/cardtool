@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { createUntypedClient } from "@/lib/supabase/server";
+import { createClient, createUntypedClient } from "@/lib/supabase/server";
 import { checkRateLimit, ratelimit } from "@/lib/rate-limit";
 import logger from "@/lib/logger";
 
@@ -46,8 +46,8 @@ export async function POST(request: Request) {
     }
 
     // Use untyped client since stripe_members isn't in generated types yet
-    const supabase = createUntypedClient();
-    const { data, error } = await supabase
+    const untypedSupabase = createUntypedClient();
+    const { data, error } = await untypedSupabase
       .from("stripe_members")
       .select("subscription_status")
       .eq("email", normalizedEmail)
@@ -62,6 +62,26 @@ export async function POST(request: Request) {
     const isWhitelisted =
       data.subscription_status === "active" ||
       data.subscription_status === "trialing";
+
+    // If whitelisted, store in pending_signups table (replaces cookie approach)
+    // This allows the Clerk webhook to verify the email matches
+    if (isWhitelisted) {
+      const supabase = createClient();
+      
+      // Delete any existing pending signup for this email first
+      await supabase
+        .from("pending_signups")
+        .delete()
+        .ilike("email", normalizedEmail);
+      
+      // Insert new pending signup record
+      await supabase.from("pending_signups").insert({
+        email: normalizedEmail,
+        invite_code: null, // Whitelisted users don't need an invite code
+      });
+      
+      logger.info({ email: normalizedEmail }, "Pending signup created for whitelisted user");
+    }
 
     return NextResponse.json({ whitelisted: isWhitelisted, existingUser: false });
   } catch (error) {

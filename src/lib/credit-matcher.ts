@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { parseLocalDate } from './utils';
+import { parseLocalDate, formatDateToString } from './utils';
 import logger from './logger';
 
 interface MatchingRule {
@@ -189,10 +189,11 @@ export function calculateCreditPeriod(
 }
 
 /**
- * Formats a date as YYYY-MM-DD string
+ * Formats a date as YYYY-MM-DD string in local timezone.
+ * Re-exported from utils for backward compatibility.
  */
 export function formatDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return formatDateToString(date);
 }
 
 /**

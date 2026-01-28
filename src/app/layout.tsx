@@ -18,18 +18,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CardTool - Optimize Your Credit Card Rewards",
-  description:
-    "Track 100+ credit cards and see which one earns the most for every purchase. Optimize your spending across 30+ categories.",
+  title: "CardTool",
   icons: {
     icon: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
-  openGraph: {
-    title: "CardTool - Credit Card Rewards Optimizer",
-    description:
-      "See exactly which card earns you the most for every purchase.",
-    type: "website",
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+    },
   },
 };
 

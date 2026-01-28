@@ -76,21 +76,45 @@ export type Database = {
           },
         ]
       }
-      card_cap_categories: {
+      brands: {
         Row: {
-          cap_id: string
-          category_id: number
-          cap_amount: number | null
+          created_at: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string | null
         }
         Insert: {
-          cap_id: string
-          category_id: number
-          cap_amount?: number | null
+          created_at?: string | null
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string | null
         }
         Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      card_cap_categories: {
+        Row: {
+          cap_amount: number | null
+          cap_id: string
+          category_id: number
+        }
+        Insert: {
+          cap_amount?: number | null
+          cap_id: string
+          category_id: number
+        }
+        Update: {
+          cap_amount?: number | null
           cap_id?: string
           category_id?: number
-          cap_amount?: number | null
         }
         Relationships: [
           {
@@ -758,7 +782,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_active: boolean
-          is_approved: boolean
+          is_approved: boolean | null
           is_no_longer_available: boolean
           issuer_id: string
           name: string
@@ -788,7 +812,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
-          is_approved?: boolean
+          is_approved?: boolean | null
           is_no_longer_available?: boolean
           issuer_id: string
           name: string
@@ -818,7 +842,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
-          is_approved?: boolean
+          is_approved?: boolean | null
           is_no_longer_available?: boolean
           issuer_id?: string
           name?: string
@@ -834,6 +858,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cards_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cards_issuer_id_fkey"
             columns: ["issuer_id"]
@@ -1533,27 +1564,42 @@ export type Database = {
         }
         Relationships: []
       }
-      brands: {
+      invite_codes: {
         Row: {
-          created_at: string | null
           id: string
-          name: string
-          slug: string
-          updated_at: string | null
+          code: string
+          description: string | null
+          plaid_tier: string
+          uses_remaining: number | null
+          uses_total: number | null
+          expires_at: string | null
+          created_at: string
+          created_by: string | null
+          is_active: boolean
         }
         Insert: {
-          created_at?: string | null
           id?: string
-          name: string
-          slug: string
-          updated_at?: string | null
+          code: string
+          description?: string | null
+          plaid_tier?: string
+          uses_remaining?: number | null
+          uses_total?: number | null
+          expires_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          is_active?: boolean
         }
         Update: {
-          created_at?: string | null
           id?: string
-          name?: string
-          slug?: string
-          updated_at?: string | null
+          code?: string
+          description?: string | null
+          plaid_tier?: string
+          uses_remaining?: number | null
+          uses_total?: number | null
+          expires_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          is_active?: boolean
         }
         Relationships: []
       }
@@ -1583,6 +1629,989 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      kudos_benefit_categories: {
+        Row: {
+          benefit_id: string
+          category_id: string
+          id: number
+        }
+        Insert: {
+          benefit_id: string
+          category_id: string
+          id?: number
+        }
+        Update: {
+          benefit_id?: string
+          category_id?: string
+          id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_benefit_categories_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_benefits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_benefit_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_benefit_merchants: {
+        Row: {
+          benefit_id: string
+          id: number
+          merchant_id: string
+        }
+        Insert: {
+          benefit_id: string
+          id?: number
+          merchant_id: string
+        }
+        Update: {
+          benefit_id?: string
+          id?: number
+          merchant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_benefit_merchants_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_benefits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_benefit_merchants_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_benefits: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          description: string | null
+          detail: string | null
+          id: string
+          limitations: string | null
+          name: string | null
+          summary_types: string[] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          description?: string | null
+          detail?: string | null
+          id: string
+          limitations?: string | null
+          name?: string | null
+          summary_types?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          description?: string | null
+          detail?: string | null
+          id?: string
+          limitations?: string | null
+          name?: string | null
+          summary_types?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_benefits_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_card_tiers: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          id: number
+          tier_name: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          id?: number
+          tier_name: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          id?: number
+          tier_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_card_tiers_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_cards: {
+        Row: {
+          account_type: string | null
+          alternative_names: string[] | null
+          annual_fee: string | null
+          application_partner_id: string | null
+          application_partner_name: string | null
+          application_tracking_link_template: string | null
+          application_url: string | null
+          apr_type: string | null
+          balance_transfer_fee: number | null
+          balance_transfer_fee_percent: number | null
+          balance_transfer_initial_apr: number | null
+          bank: string | null
+          cardtool_card_id: string | null
+          cash_advance_apr: number | null
+          cash_advance_fee: number | null
+          cash_advance_fee_percent: number | null
+          click_through_partner_name: string | null
+          click_through_partner_url: string | null
+          created_at: string | null
+          currency: string | null
+          discovery_image_uri: string | null
+          discovery_thumbnail_uri: string | null
+          final_application_page_name: string | null
+          final_application_page_url: string | null
+          foreign_transaction_fee_percent: number | null
+          has_balance_transfer: boolean | null
+          has_foreign_transaction_fees: boolean | null
+          has_welcome_offer_guarantee: boolean | null
+          id: string
+          image_uri: string | null
+          import_flagged: boolean | null
+          initial_apr: number | null
+          initial_apr_period: string | null
+          intro_annual_fee: number | null
+          intro_balance_transfer_period: string | null
+          is_boost_eligible: boolean | null
+          is_diamond_set: boolean | null
+          is_golden_set: boolean | null
+          is_kickstart_eligible: boolean | null
+          is_recommendable: boolean | null
+          issuer_id: string | null
+          kudos_date_created: string | null
+          kudos_rating_editorial: string | null
+          kudos_rating_score: number | null
+          kudos_review_url: string | null
+          late_fee: number | null
+          learn_more_url: string | null
+          match_rejected: boolean | null
+          max_apr: number | null
+          max_credit_score: number | null
+          min_apr: number | null
+          min_credit_score: number | null
+          monetized_status: string | null
+          name: string
+          network: string | null
+          over_limit_fee: number | null
+          ownership_type: string | null
+          pay_bill_url: string | null
+          point_cash_multiplier: number | null
+          raw_data: Json | null
+          recommended_credit_score: number | null
+          status: string | null
+          support_phone_number: string | null
+          thumbnail_uri: string | null
+          type: string | null
+          type_description: string | null
+          updated_at: string | null
+          url: string | null
+          version: number | null
+        }
+        Insert: {
+          account_type?: string | null
+          alternative_names?: string[] | null
+          annual_fee?: string | null
+          application_partner_id?: string | null
+          application_partner_name?: string | null
+          application_tracking_link_template?: string | null
+          application_url?: string | null
+          apr_type?: string | null
+          balance_transfer_fee?: number | null
+          balance_transfer_fee_percent?: number | null
+          balance_transfer_initial_apr?: number | null
+          bank?: string | null
+          cardtool_card_id?: string | null
+          cash_advance_apr?: number | null
+          cash_advance_fee?: number | null
+          cash_advance_fee_percent?: number | null
+          click_through_partner_name?: string | null
+          click_through_partner_url?: string | null
+          created_at?: string | null
+          currency?: string | null
+          discovery_image_uri?: string | null
+          discovery_thumbnail_uri?: string | null
+          final_application_page_name?: string | null
+          final_application_page_url?: string | null
+          foreign_transaction_fee_percent?: number | null
+          has_balance_transfer?: boolean | null
+          has_foreign_transaction_fees?: boolean | null
+          has_welcome_offer_guarantee?: boolean | null
+          id: string
+          image_uri?: string | null
+          import_flagged?: boolean | null
+          initial_apr?: number | null
+          initial_apr_period?: string | null
+          intro_annual_fee?: number | null
+          intro_balance_transfer_period?: string | null
+          is_boost_eligible?: boolean | null
+          is_diamond_set?: boolean | null
+          is_golden_set?: boolean | null
+          is_kickstart_eligible?: boolean | null
+          is_recommendable?: boolean | null
+          issuer_id?: string | null
+          kudos_date_created?: string | null
+          kudos_rating_editorial?: string | null
+          kudos_rating_score?: number | null
+          kudos_review_url?: string | null
+          late_fee?: number | null
+          learn_more_url?: string | null
+          match_rejected?: boolean | null
+          max_apr?: number | null
+          max_credit_score?: number | null
+          min_apr?: number | null
+          min_credit_score?: number | null
+          monetized_status?: string | null
+          name: string
+          network?: string | null
+          over_limit_fee?: number | null
+          ownership_type?: string | null
+          pay_bill_url?: string | null
+          point_cash_multiplier?: number | null
+          raw_data?: Json | null
+          recommended_credit_score?: number | null
+          status?: string | null
+          support_phone_number?: string | null
+          thumbnail_uri?: string | null
+          type?: string | null
+          type_description?: string | null
+          updated_at?: string | null
+          url?: string | null
+          version?: number | null
+        }
+        Update: {
+          account_type?: string | null
+          alternative_names?: string[] | null
+          annual_fee?: string | null
+          application_partner_id?: string | null
+          application_partner_name?: string | null
+          application_tracking_link_template?: string | null
+          application_url?: string | null
+          apr_type?: string | null
+          balance_transfer_fee?: number | null
+          balance_transfer_fee_percent?: number | null
+          balance_transfer_initial_apr?: number | null
+          bank?: string | null
+          cardtool_card_id?: string | null
+          cash_advance_apr?: number | null
+          cash_advance_fee?: number | null
+          cash_advance_fee_percent?: number | null
+          click_through_partner_name?: string | null
+          click_through_partner_url?: string | null
+          created_at?: string | null
+          currency?: string | null
+          discovery_image_uri?: string | null
+          discovery_thumbnail_uri?: string | null
+          final_application_page_name?: string | null
+          final_application_page_url?: string | null
+          foreign_transaction_fee_percent?: number | null
+          has_balance_transfer?: boolean | null
+          has_foreign_transaction_fees?: boolean | null
+          has_welcome_offer_guarantee?: boolean | null
+          id?: string
+          image_uri?: string | null
+          import_flagged?: boolean | null
+          initial_apr?: number | null
+          initial_apr_period?: string | null
+          intro_annual_fee?: number | null
+          intro_balance_transfer_period?: string | null
+          is_boost_eligible?: boolean | null
+          is_diamond_set?: boolean | null
+          is_golden_set?: boolean | null
+          is_kickstart_eligible?: boolean | null
+          is_recommendable?: boolean | null
+          issuer_id?: string | null
+          kudos_date_created?: string | null
+          kudos_rating_editorial?: string | null
+          kudos_rating_score?: number | null
+          kudos_review_url?: string | null
+          late_fee?: number | null
+          learn_more_url?: string | null
+          match_rejected?: boolean | null
+          max_apr?: number | null
+          max_credit_score?: number | null
+          min_apr?: number | null
+          min_credit_score?: number | null
+          monetized_status?: string | null
+          name?: string
+          network?: string | null
+          over_limit_fee?: number | null
+          ownership_type?: string | null
+          pay_bill_url?: string | null
+          point_cash_multiplier?: number | null
+          raw_data?: Json | null
+          recommended_credit_score?: number | null
+          status?: string | null
+          support_phone_number?: string | null
+          thumbnail_uri?: string | null
+          type?: string | null
+          type_description?: string | null
+          updated_at?: string | null
+          url?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_cards_cardtool_card_id_fkey"
+            columns: ["cardtool_card_id"]
+            isOneToOne: false
+            referencedRelation: "card_with_currency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_cards_cardtool_card_id_fkey"
+            columns: ["cardtool_card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_cards_issuer_id_fkey"
+            columns: ["issuer_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_issuers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_cash_credit_merchants: {
+        Row: {
+          cash_credit_id: string
+          id: number
+          merchant_id: string
+        }
+        Insert: {
+          cash_credit_id: string
+          id?: number
+          merchant_id: string
+        }
+        Update: {
+          cash_credit_id?: string
+          id?: number
+          merchant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_cash_credit_merchants_cash_credit_id_fkey"
+            columns: ["cash_credit_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cash_credits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_cash_credit_merchants_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_cash_credits: {
+        Row: {
+          amount: number | null
+          calendar_year_max_amount: number | null
+          card_id: string
+          category_id: string | null
+          created_at: string | null
+          credit_type_description: string | null
+          credit_type_id: string | null
+          credit_type_name: string | null
+          currency: string | null
+          expiration_date: string | null
+          frequency: string | null
+          header: string
+          id: string
+          image_urls: string[] | null
+          label: string | null
+          limitations: string | null
+          redemption_type: string | null
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          calendar_year_max_amount?: number | null
+          card_id: string
+          category_id?: string | null
+          created_at?: string | null
+          credit_type_description?: string | null
+          credit_type_id?: string | null
+          credit_type_name?: string | null
+          currency?: string | null
+          expiration_date?: string | null
+          frequency?: string | null
+          header: string
+          id: string
+          image_urls?: string[] | null
+          label?: string | null
+          limitations?: string | null
+          redemption_type?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          calendar_year_max_amount?: number | null
+          card_id?: string
+          category_id?: string | null
+          created_at?: string | null
+          credit_type_description?: string | null
+          credit_type_id?: string | null
+          credit_type_name?: string | null
+          currency?: string | null
+          expiration_date?: string | null
+          frequency?: string | null
+          header?: string
+          id?: string
+          image_urls?: string[] | null
+          label?: string | null
+          limitations?: string | null
+          redemption_type?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_cash_credits_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_cash_credits_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_categories: {
+        Row: {
+          average_annual_spend: number | null
+          created_at: string | null
+          icon_slug: string | null
+          id: string
+          is_selectable: boolean | null
+          keywords: string | null
+          max_reward_amount: number | null
+          max_reward_currency: string | null
+          name: string
+          parent_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          average_annual_spend?: number | null
+          created_at?: string | null
+          icon_slug?: string | null
+          id: string
+          is_selectable?: boolean | null
+          keywords?: string | null
+          max_reward_amount?: number | null
+          max_reward_currency?: string | null
+          name: string
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          average_annual_spend?: number | null
+          created_at?: string | null
+          icon_slug?: string | null
+          id?: string
+          is_selectable?: boolean | null
+          keywords?: string | null
+          max_reward_amount?: number | null
+          max_reward_currency?: string | null
+          name?: string
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_editorials: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          editorial_type: string
+          id: string
+          sort_order: number | null
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          editorial_type: string
+          id: string
+          sort_order?: number | null
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          editorial_type?: string
+          id?: string
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_editorials_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_issuers: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_uri: string | null
+          name: string
+          phone: string | null
+          status: string | null
+          updated_at: string | null
+          url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id: string
+          image_uri?: string | null
+          name: string
+          phone?: string | null
+          status?: string | null
+          updated_at?: string | null
+          url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_uri?: string | null
+          name?: string
+          phone?: string | null
+          status?: string | null
+          updated_at?: string | null
+          url?: string | null
+        }
+        Relationships: []
+      }
+      kudos_merchants: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_uri: string | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id: string
+          image_uri?: string | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_uri?: string | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      kudos_redemption_options: {
+        Row: {
+          card_id: string
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string | null
+          id: string
+          name: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_redemption_options_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_reward_categories: {
+        Row: {
+          category_id: string
+          id: number
+          reward_id: string
+        }
+        Insert: {
+          category_id: string
+          id?: number
+          reward_id: string
+        }
+        Update: {
+          category_id?: string
+          id?: number
+          reward_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_reward_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_reward_categories_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_rewards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_reward_merchants: {
+        Row: {
+          id: number
+          merchant_id: string
+          reward_id: string
+        }
+        Insert: {
+          id?: number
+          merchant_id: string
+          reward_id: string
+        }
+        Update: {
+          id?: number
+          merchant_id?: string
+          reward_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_reward_merchants_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_reward_merchants_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_rewards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_rewards: {
+        Row: {
+          amount: number | null
+          card_id: string
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          id: string
+          multiplier: number | null
+          tier_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          card_id: string
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          id: string
+          multiplier?: number | null
+          tier_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          card_id?: string
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          id?: string
+          multiplier?: number | null
+          tier_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_rewards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_rotating_reward_categories: {
+        Row: {
+          category_id: string
+          id: number
+          rotating_reward_id: string
+        }
+        Insert: {
+          category_id: string
+          id?: number
+          rotating_reward_id: string
+        }
+        Update: {
+          category_id?: string
+          id?: number
+          rotating_reward_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_rotating_reward_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_rotating_reward_categories_rotating_reward_id_fkey"
+            columns: ["rotating_reward_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_rotating_rewards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_rotating_reward_merchants: {
+        Row: {
+          id: number
+          merchant_id: string
+          rotating_reward_id: string
+        }
+        Insert: {
+          id?: number
+          merchant_id: string
+          rotating_reward_id: string
+        }
+        Update: {
+          id?: number
+          merchant_id?: string
+          rotating_reward_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_rotating_reward_merchants_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kudos_rotating_reward_merchants_rotating_reward_id_fkey"
+            columns: ["rotating_reward_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_rotating_rewards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_rotating_rewards: {
+        Row: {
+          amount: number | null
+          card_id: string
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          card_id: string
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          card_id?: string
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_rotating_rewards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kudos_scrape_log: {
+        Row: {
+          cards_scraped: number | null
+          completed_at: string | null
+          error_message: string | null
+          id: number
+          started_at: string
+          status: string
+          total_cards: number | null
+        }
+        Insert: {
+          cards_scraped?: number | null
+          completed_at?: string | null
+          error_message?: string | null
+          id?: number
+          started_at: string
+          status: string
+          total_cards?: number | null
+        }
+        Update: {
+          cards_scraped?: number | null
+          completed_at?: string | null
+          error_message?: string | null
+          id?: number
+          started_at?: string
+          status?: string
+          total_cards?: number | null
+        }
+        Relationships: []
+      }
+      kudos_welcome_offers: {
+        Row: {
+          capture_date: string | null
+          card_id: string
+          created_at: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          is_featured: boolean | null
+          is_guarantee_eligible: boolean | null
+          is_promotional: boolean | null
+          is_targeted: boolean | null
+          offer_cash_value_amount: number | null
+          offer_cash_value_currency: string | null
+          offer_type: string
+          reward_currency: string | null
+          reward_value: number | null
+          spend_requirement_amount: number | null
+          spend_requirement_currency: string | null
+          start_date: string | null
+          time_limit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          capture_date?: string | null
+          card_id: string
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          id: string
+          is_featured?: boolean | null
+          is_guarantee_eligible?: boolean | null
+          is_promotional?: boolean | null
+          is_targeted?: boolean | null
+          offer_cash_value_amount?: number | null
+          offer_cash_value_currency?: string | null
+          offer_type: string
+          reward_currency?: string | null
+          reward_value?: number | null
+          spend_requirement_amount?: number | null
+          spend_requirement_currency?: string | null
+          start_date?: string | null
+          time_limit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          capture_date?: string | null
+          card_id?: string
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_guarantee_eligible?: boolean | null
+          is_promotional?: boolean | null
+          is_targeted?: boolean | null
+          offer_cash_value_amount?: number | null
+          offer_cash_value_currency?: string | null
+          offer_type?: string
+          reward_currency?: string | null
+          reward_value?: number | null
+          spend_requirement_amount?: number | null
+          spend_requirement_currency?: string | null
+          start_date?: string | null
+          time_limit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kudos_welcome_offers_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "kudos_cards"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       point_value_templates: {
         Row: {
@@ -1668,6 +2697,30 @@ export type Database = {
           program_name?: string | null
           transfer_increment?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pending_signups: {
+        Row: {
+          id: string
+          email: string
+          invite_code: string | null
+          verified_at: string
+          expires_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          invite_code?: string | null
+          verified_at?: string
+          expires_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          invite_code?: string | null
+          verified_at?: string
+          expires_at?: string
         }
         Relationships: []
       }
@@ -1906,7 +2959,7 @@ export type Database = {
           mask?: string | null
           name: string
           official_name?: string | null
-          plaid_account_id?: string
+          plaid_account_id: string
           plaid_item_id?: string | null
           subtype?: string | null
           type: string
@@ -1946,34 +2999,34 @@ export type Database = {
       }
       user_bilt_settings: {
         Row: {
+          bilt_option: number
+          created_at: string | null
+          housing_tier: string
           id: string
+          monthly_bilt_spend_cents: number | null
+          updated_at: string | null
           user_id: string
           wallet_card_id: string
-          bilt_option: number
-          monthly_bilt_spend_cents: number | null
-          housing_tier: string
-          created_at: string | null
-          updated_at: string | null
         }
         Insert: {
+          bilt_option?: number
+          created_at?: string | null
+          housing_tier?: string
           id?: string
+          monthly_bilt_spend_cents?: number | null
+          updated_at?: string | null
           user_id: string
           wallet_card_id: string
-          bilt_option?: number
-          monthly_bilt_spend_cents?: number | null
-          housing_tier?: string
-          created_at?: string | null
-          updated_at?: string | null
         }
         Update: {
+          bilt_option?: number
+          created_at?: string | null
+          housing_tier?: string
           id?: string
+          monthly_bilt_spend_cents?: number | null
+          updated_at?: string | null
           user_id?: string
           wallet_card_id?: string
-          bilt_option?: number
-          monthly_bilt_spend_cents?: number | null
-          housing_tier?: string
-          created_at?: string | null
-          updated_at?: string | null
         }
         Relationships: [
           {
@@ -2110,6 +3163,44 @@ export type Database = {
           },
         ]
       }
+      user_payment_date_overrides: {
+        Row: {
+          id: string
+          user_id: string
+          wallet_card_id: string
+          override_date: string
+          original_due_date: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          wallet_card_id: string
+          override_date: string
+          original_due_date: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          wallet_card_id?: string
+          override_date?: string
+          original_due_date?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_payment_date_overrides_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_card_perks_values: {
         Row: {
           created_at: string | null
@@ -2194,6 +3285,157 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_effective_spending"
             referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "user_card_selections_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_card_spend_goals: {
+        Row: {
+          bonus_id: string | null
+          created_at: string | null
+          goal_type: string
+          id: string
+          notes: string | null
+          target_amount_cents: number
+          target_category_id: number | null
+          updated_at: string | null
+          user_id: string
+          wallet_card_id: string
+          year: number
+        }
+        Insert: {
+          bonus_id?: string | null
+          created_at?: string | null
+          goal_type: string
+          id?: string
+          notes?: string | null
+          target_amount_cents: number
+          target_category_id?: number | null
+          updated_at?: string | null
+          user_id: string
+          wallet_card_id: string
+          year: number
+        }
+        Update: {
+          bonus_id?: string | null
+          created_at?: string | null
+          goal_type?: string
+          id?: string
+          notes?: string | null
+          target_amount_cents?: number
+          target_category_id?: number | null
+          updated_at?: string | null
+          user_id?: string
+          wallet_card_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_card_spend_goals_bonus_id_fkey"
+            columns: ["bonus_id"]
+            isOneToOne: false
+            referencedRelation: "user_spend_bonuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_card_spend_goals_target_category_id_fkey"
+            columns: ["target_category_id"]
+            isOneToOne: false
+            referencedRelation: "earning_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_card_spend_goals_target_category_id_fkey"
+            columns: ["target_category_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "user_card_spend_goals_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_cash_flow_items: {
+        Row: {
+          amount_cents: number
+          bank_account_id: string | null
+          category: string | null
+          created_at: string | null
+          description: string
+          expected_date: string
+          id: string
+          is_completed: boolean | null
+          is_recurring: boolean | null
+          linked_item_id: string | null
+          recurrence_type: string | null
+          updated_at: string | null
+          user_id: string
+          wallet_card_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          bank_account_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          description: string
+          expected_date: string
+          id?: string
+          is_completed?: boolean | null
+          is_recurring?: boolean | null
+          linked_item_id?: string | null
+          recurrence_type?: string | null
+          updated_at?: string | null
+          user_id: string
+          wallet_card_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          bank_account_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          description?: string
+          expected_date?: string
+          id?: string
+          is_completed?: boolean | null
+          is_recurring?: boolean | null
+          linked_item_id?: string | null
+          recurrence_type?: string | null
+          updated_at?: string | null
+          user_id?: string
+          wallet_card_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_cash_flow_items_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "user_bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_cash_flow_items_linked_item_id_fkey"
+            columns: ["linked_item_id"]
+            isOneToOne: false
+            referencedRelation: "user_cash_flow_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_cash_flow_items_wallet_card_id_fkey"
+            columns: ["wallet_card_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2550,10 +3792,10 @@ export type Database = {
           onboarding_completed?: boolean | null
           plaid_liabilities_enabled?: boolean | null
           plaid_on_demand_refresh_enabled?: boolean | null
-          wholesale_club_networks?: string[] | null
           plaid_transactions_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
+          wholesale_club_networks?: string[] | null
         }
         Relationships: []
       }
@@ -2610,6 +3852,38 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_invite_codes: {
+        Row: {
+          id: string
+          user_id: string
+          invite_code_id: string | null
+          code_used: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          invite_code_id?: string | null
+          code_used: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          invite_code_id?: string | null
+          code_used?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_invite_codes_invite_code_id_fkey"
+            columns: ["invite_code_id"]
+            isOneToOne: false
+            referencedRelation: "invite_codes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_inventory: {
         Row: {
@@ -3132,6 +4406,66 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "credit_matching_rules"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_planned_spending: {
+        Row: {
+          amount_cents: number
+          category_id: number | null
+          cost_percent: number | null
+          created_at: string | null
+          frequency: string
+          id: string
+          name: string
+          notes: string | null
+          target_month: number | null
+          updated_at: string | null
+          user_id: string
+          year: number
+        }
+        Insert: {
+          amount_cents: number
+          category_id?: number | null
+          cost_percent?: number | null
+          created_at?: string | null
+          frequency: string
+          id?: string
+          name: string
+          notes?: string | null
+          target_month?: number | null
+          updated_at?: string | null
+          user_id: string
+          year: number
+        }
+        Update: {
+          amount_cents?: number
+          category_id?: number | null
+          cost_percent?: number | null
+          created_at?: string | null
+          frequency?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          target_month?: number | null
+          updated_at?: string | null
+          user_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_planned_spending_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "earning_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_planned_spending_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "user_effective_spending"
+            referencedColumns: ["category_id"]
           },
         ]
       }
@@ -3766,6 +5100,9 @@ export type Database = {
       card_with_currency: {
         Row: {
           annual_fee: number | null
+          brand: string | null
+          brand_id: string | null
+          brand_name: string | null
           created_by_user_id: string | null
           default_earn_rate: number | null
           default_perks_value: number | null
@@ -3782,7 +5119,15 @@ export type Database = {
           secondary_currency_name: string | null
           slug: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cards_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_effective_currency_values: {
         Row: {

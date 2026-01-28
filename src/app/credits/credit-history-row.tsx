@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import { Credit, CreditWithSlot, CreditUsage, CreditSettings, WalletCard, Player } from "./credits-client";
-import { parseLocalDate } from "@/lib/utils";
+import { parseLocalDate, formatDateToString } from "@/lib/utils";
 import { LinkedTransactionModal } from "./linked-transaction-modal";
 
 /**
@@ -117,8 +117,8 @@ function getPeriodsForYear(credit: Credit, year: number, walletCard: WalletCard,
         key: `${year}-${m}`,
         label: monthLabels[m],
         shortLabel: monthLabels[m],
-        start: start.toISOString().split("T")[0],
-        end: end.toISOString().split("T")[0],
+        start: formatDateToString(start),
+        end: formatDateToString(end),
         colSpan: 1,
         colStart: m + 1,
       });
@@ -131,8 +131,8 @@ function getPeriodsForYear(credit: Credit, year: number, walletCard: WalletCard,
         key: `${year}-Q${q + 1}`,
         label: `Q${q + 1}`,
         shortLabel: `Q${q + 1}`,
-        start: start.toISOString().split("T")[0],
-        end: end.toISOString().split("T")[0],
+        start: formatDateToString(start),
+        end: formatDateToString(end),
         colSpan: 3,
         colStart: q * 3 + 1,
       });
@@ -145,8 +145,8 @@ function getPeriodsForYear(credit: Credit, year: number, walletCard: WalletCard,
         key: `${year}-H${h + 1}`,
         label: `H${h + 1}`,
         shortLabel: `H${h + 1}`,
-        start: start.toISOString().split("T")[0],
-        end: end.toISOString().split("T")[0],
+        start: formatDateToString(start),
+        end: formatDateToString(end),
         colSpan: 6,
         colStart: h * 6 + 1,
       });
@@ -195,7 +195,7 @@ function getPeriodsForYear(credit: Credit, year: number, walletCard: WalletCard,
         label: `${monthLabels[approvalMonth]} ${yearShort(year - 1)}-${monthLabels[approvalMonth - 1]} ${yearShort(year)}`,
         shortLabel: `${yearShort(year - 1)}/${yearShort(year)}`,
         start: `${year}-01-01`,
-        end: period1End.toISOString().split("T")[0],
+        end: formatDateToString(period1End),
         colSpan: approvalMonth, // Spans from Jan to before approval month
         colStart: 1,
         resetInfo: `Resets ${resetMonth} ${resetDay}`,
@@ -207,7 +207,7 @@ function getPeriodsForYear(credit: Credit, year: number, walletCard: WalletCard,
         key: `${year}-cardmember-2`,
         label: `${monthLabels[approvalMonth]} ${yearShort(year)}-${monthLabels[approvalMonth - 1]} ${yearShort(year + 1)}`,
         shortLabel: `${yearShort(year)}/${yearShort(year + 1)}`,
-        start: period2Start.toISOString().split("T")[0],
+        start: formatDateToString(period2Start),
         end: `${year}-12-31`,
         colSpan: 12 - approvalMonth, // Spans from approval month to Dec
         colStart: approvalMonth + 1,
@@ -419,7 +419,7 @@ export function CreditHistoryRow({
     formData.set("user_wallet_id", walletCard.id);
     formData.set("credit_id", credit.id);
     formData.set("period_start", usageBasedDate);
-    formData.set("period_end", periodEnd.toISOString().split("T")[0]);
+    formData.set("period_end", formatDateToString(periodEnd));
     // For initial setup, mark full credit as used
     const maxAmount = credit.default_quantity ?? 1;
     formData.set("amount_used", maxAmount.toString());

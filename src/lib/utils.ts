@@ -31,3 +31,33 @@ export function formatDate(dateString: string | null, options?: Intl.DateTimeFor
   const date = parseLocalDate(dateString);
   return date.toLocaleDateString("en-US", options ?? { month: "short", year: "numeric" });
 }
+
+/**
+ * Convert a Date object to YYYY-MM-DD string in LOCAL timezone (not UTC).
+ * 
+ * IMPORTANT: Do NOT use `date.toISOString().split('T')[0]` - that converts to UTC
+ * which can shift the date by ±1 day depending on timezone.
+ * 
+ * Use this function instead when you need to store a date from a Date object.
+ */
+export function formatDateToString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Extract the date portion (YYYY-MM-DD) from an ISO string WITHOUT timezone conversion.
+ * 
+ * This is safe to use when you receive ISO strings from external APIs and want to
+ * preserve the date as-is without any timezone shifting.
+ * 
+ * Example: "2024-11-07T08:00:00.000+0000" → "2024-11-07"
+ */
+export function extractDateFromISO(isoString: string | null | undefined): string | null {
+  if (!isoString) return null;
+  // For ISO strings, just take the date part directly (first 10 characters: YYYY-MM-DD)
+  const match = isoString.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}

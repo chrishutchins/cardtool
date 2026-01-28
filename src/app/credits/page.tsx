@@ -9,6 +9,7 @@ import { CreditsClient } from "./credits-client";
 import { getEffectiveUserId, getEmulationInfo } from "@/lib/emulation";
 import { PlaidSyncTrigger } from "@/components/plaid-sync-trigger";
 import { calculateCreditPeriod } from "@/lib/credit-matcher";
+import { formatDateToString } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Credit Tracker | CardTool",
@@ -385,9 +386,9 @@ export default async function CreditsPage() {
       creditData.reset_day_of_month
     );
 
-    // Format dates as YYYY-MM-DD
-    const periodStartStr = periodStart.toISOString().split("T")[0];
-    const periodEndStr = periodEnd.toISOString().split("T")[0];
+    // Format dates as YYYY-MM-DD in local timezone
+    const periodStartStr = formatDateToString(periodStart);
+    const periodEndStr = formatDateToString(periodEnd);
 
     // Update the usage record with new period and date
     const { error: updateError } = await supabase
@@ -488,8 +489,8 @@ export default async function CreditsPage() {
       usageData.card_credits.reset_day_of_month
     );
 
-    const periodStartStr = periodStart.toISOString().split("T")[0];
-    const periodEndStr = periodEnd.toISOString().split("T")[0];
+    const periodStartStr = formatDateToString(periodStart);
+    const periodEndStr = formatDateToString(periodEnd);
 
     // If same period, nothing to do
     if (periodStartStr === usageData.period_start) {
@@ -769,7 +770,7 @@ export default async function CreditsPage() {
   const transformedPlayers = (players ?? []) as { player_number: number; description: string | null }[];
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="flex-1 bg-zinc-950">
       {accountLinkingEnabled && <PlaidSyncTrigger />}
       <UserHeader isAdmin={isAdmin} emulationInfo={emulationInfo} />
       <div className="mx-auto max-w-6xl px-4 py-12">

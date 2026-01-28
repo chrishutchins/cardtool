@@ -41,18 +41,20 @@ interface LinkedAccountsProps {
   initialAccounts: LinkedAccount[];
   walletCards?: WalletCard[];
   plaidLiabilitiesEnabled?: boolean;
+  onDemandRefreshEnabled?: boolean;
   onPairCard?: (linkedAccountId: string, walletCardId: string | null) => Promise<void>;
   onUnlinkCard?: (linkedAccountId: string) => Promise<void>;
   onUpdateCreditLimit?: (linkedAccountId: string, creditLimit: number | null) => Promise<void>;
 }
 
-export function LinkedAccounts({ initialAccounts, walletCards = [], plaidLiabilitiesEnabled = false, onPairCard, onUnlinkCard, onUpdateCreditLimit }: LinkedAccountsProps) {
+export function LinkedAccounts({ initialAccounts, walletCards = [], plaidLiabilitiesEnabled = false, onDemandRefreshEnabled = false, onPairCard, onUnlinkCard, onUpdateCreditLimit }: LinkedAccountsProps) {
   const [accounts, setAccounts] = useState(initialAccounts);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
   const [editingLimitId, setEditingLimitId] = useState<string | null>(null);
   const [editLimitValue, setEditLimitValue] = useState<string>("");
+  const [refreshingAccountId, setRefreshingAccountId] = useState<string | null>(null);
 
   const handlePairCard = (linkedAccountId: string, walletCardId: string) => {
     if (!onPairCard) return;
@@ -151,6 +153,43 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], plaidLiabili
       console.error("Error refreshing accounts:", error);
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  // Refresh a single account's balance in real-time (requires Full Plaid access)
+  const refreshSingleAccount = async (accountId: string) => {
+    if (!onDemandRefreshEnabled) return;
+    
+    setRefreshingAccountId(accountId);
+    try {
+      const response = await fetch("/api/plaid/refresh-balance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, accountType: "credit" }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.balance) {
+        // Update the account in state with the new balance
+        setAccounts(prev => prev.map(acc => 
+          acc.id === accountId 
+            ? { 
+                ...acc, 
+                current_balance: data.balance.current_balance != null ? Number(data.balance.current_balance) : null,
+                available_balance: data.balance.available_balance != null ? Number(data.balance.available_balance) : null,
+                credit_limit: data.balance.credit_limit != null ? Number(data.balance.credit_limit) : null,
+                last_balance_update: data.balance.last_balance_update,
+              }
+            : acc
+        ));
+      } else {
+        console.error("Error refreshing account balance:", data.error);
+      }
+    } catch (error) {
+      console.error("Error refreshing account balance:", error);
+    } finally {
+      setRefreshingAccountId(null);
     }
   };
 
@@ -315,6 +354,18 @@ export function LinkedAccounts({ initialAccounts, walletCards = [], plaidLiabili
                         ))}
                       </select>
                     </div>
+                  )}
+                  
+                  {/* Per-account real-time refresh (requires Full Plaid access) */}
+                  {onDemandRefreshEnabled && (
+                    <button
+                      onClick={() => refreshSingleAccount(account.id)}
+                      disabled={refreshingAccountId === account.id}
+                      className="p-1.5 text-amber-500/70 hover:text-amber-400 hover:bg-zinc-700 rounded-lg transition-colors disabled:opacity-50"
+                      title="Refresh balance (real-time)"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${refreshingAccountId === account.id ? "animate-spin" : ""}`} />
+                    </button>
                   )}
                   
                   {/* Unlink Button */}

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function AccountDeletedPage() {
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+    <div className="flex-1 bg-zinc-950 flex items-center justify-center px-4">
       <div className="max-w-md text-center">
         <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-zinc-800">
           <svg

@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="flex-1 bg-zinc-950">
       {/* Header skeleton */}
       <div className="h-16 bg-zinc-900 border-b border-zinc-800" />
 

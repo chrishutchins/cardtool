@@ -73,3 +73,24 @@ CREATE POLICY "Authenticated users can read table_name"
 ## Testing
 - Build must pass (`npm run build`) before pushing
 - Test UI changes in browser before considering complete
+
+## Date Handling Standards
+
+### Storage Format
+- Date-only fields: `YYYY-MM-DD` string (e.g., `approval_date`, `expiration_date`)
+- Timestamp fields: Full ISO string via `new Date().toISOString()` (e.g., `updated_at`, `created_at`)
+
+### Date Utilities (from `@/lib/utils`)
+- `parseLocalDate(str)` - Parse YYYY-MM-DD to Date in local timezone
+- `formatDateToString(date)` - Format Date to YYYY-MM-DD in local timezone
+- `formatDate(str, options)` - Format date string for display
+- `extractDateFromISO(str)` - Extract YYYY-MM-DD from ISO string without timezone conversion
+
+### Rules
+1. **NEVER** use `new Date(dateString)` for date-only strings - use `parseLocalDate()`
+2. **NEVER** use `date.toISOString().split('T')[0]` for local dates - use `formatDateToString()`
+3. **NEVER** duplicate date utilities in components - import from `@/lib/utils`
+4. For ISO strings with time, extract date directly: `str.substring(0, 10)` or `extractDateFromISO()`
+
+### Why This Matters
+JavaScript's `new Date("2024-01-15")` parses as UTC midnight, which can shift to the previous day in US timezones. Similarly, `toISOString()` converts to UTC, which can cause ±1 day errors. Always use the utilities above to avoid these timezone bugs.

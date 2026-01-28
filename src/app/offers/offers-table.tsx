@@ -291,7 +291,7 @@ interface OffersTableProps {
   isAdmin: boolean;
 }
 
-type SortKey = "bonusValue" | "name" | "returnOnSpend" | "annualFee";
+type SortKey = "bonusValue" | "name" | "returnOnSpend" | "annualFee" | "minSpend";
 type SortDirection = "asc" | "desc";
 
 const currencyTypes = [
@@ -569,6 +569,9 @@ export function OffersTable({ cards, brands, currencies, players, walletCardsFor
           break;
         case "annualFee":
           comparison = a.annualFee - b.annualFee;
+          break;
+        case "minSpend":
+          comparison = a.spendRequirement - b.spendRequirement;
           break;
       }
       return sortDirection === "asc" ? comparison : -comparison;
@@ -858,6 +861,15 @@ export function OffersTable({ cards, brands, currencies, players, walletCardsFor
                 </th>
                 <th
                   className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white"
+                  onClick={() => handleSort("minSpend")}
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    Min Spend
+                    <SortIcon columnKey="minSpend" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase cursor-pointer hover:text-white"
                   onClick={() => handleSort("returnOnSpend")}
                 >
                   <div className="flex items-center justify-end gap-1">
@@ -992,6 +1004,17 @@ export function OffersTable({ cards, brands, currencies, players, walletCardsFor
                       </span>
                       <Info className="w-3 h-3 text-zinc-500" />
                     </RichTooltip>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="text-white font-medium">
+                      {card.spendRequirement === 0 ? (
+                        "$0"
+                      ) : card.spendRequirement === 1 ? (
+                        "1st purchase"
+                      ) : (
+                        `$${card.spendRequirement.toLocaleString()}`
+                      )}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <RichTooltip content={buildRosTooltip(card)}>

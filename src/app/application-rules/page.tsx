@@ -123,7 +123,7 @@ export default async function RulesPage() {
   const isAdmin = isAdminEmail(user.emailAddresses?.[0]?.emailAddress);
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="flex-1 bg-zinc-950">
       <UserHeader
         isAdmin={isAdmin}
         emulationInfo={emulationInfo}

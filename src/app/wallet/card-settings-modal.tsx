@@ -256,7 +256,19 @@ export function CardSettingsModal({
   focusField,
 }: CardSettingsModalProps) {
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<TabId>("settings");
+  
+  // Determine initial tab based on focusField
+  const getTabForField = (field: typeof focusField): TabId => {
+    if (!field) return "settings";
+    // Billing tab fields
+    if (["statementCloseDay", "paymentDueDay", "manualBalance", "payFrom"].includes(field)) {
+      return "billing";
+    }
+    // All other fields are on settings tab
+    return "settings";
+  };
+  
+  const [activeTab, setActiveTab] = useState<TabId>(() => getTabForField(focusField));
   
   // Bonus form state
   const [showAddWelcomeBonus, setShowAddWelcomeBonus] = useState(false);
@@ -316,11 +328,19 @@ export function CardSettingsModal({
   const [isAutopay, setIsAutopay] = useState(paymentSettings?.is_autopay ?? false);
   const [autopayType, setAutopayType] = useState<string | null>(paymentSettings?.autopay_type ?? null);
 
+  // Switch to the correct tab when focusField changes
+  useEffect(() => {
+    if (focusField) {
+      const targetTab = getTabForField(focusField);
+      setActiveTab(targetTab);
+    }
+  }, [focusField]);
+
   // Focus on the specified field when modal opens
   useEffect(() => {
     if (!isOpen || !focusField) return;
     
-    // Small delay to ensure the dialog has rendered
+    // Small delay to ensure the dialog and correct tab have rendered
     const timer = setTimeout(() => {
       let element: HTMLInputElement | HTMLSelectElement | null = null;
       
@@ -347,10 +367,10 @@ export function CardSettingsModal({
           element.select();
         }
       }
-    }, 100);
+    }, 150); // Slightly longer delay to allow tab switch to render
     
     return () => clearTimeout(timer);
-  }, [isOpen, focusField]);
+  }, [isOpen, focusField, activeTab]);
 
   const card = walletCard.cards;
   if (!card) return null;

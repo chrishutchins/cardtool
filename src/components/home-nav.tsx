@@ -297,12 +297,6 @@ export function HomeNav({ isAdmin = false }: HomeNavProps) {
               >
                 Sign In
               </Link>
-              <Link
-                href="/sign-up"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-              >
-                Sign Up
-              </Link>
             </SignedOut>
           </div>
         </div>

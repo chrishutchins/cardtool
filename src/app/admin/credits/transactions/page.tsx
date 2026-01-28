@@ -236,7 +236,7 @@ export default async function AdminTransactionsPage({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 p-6">
+    <div className="flex-1 bg-zinc-950 p-6">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Credit Transactions</h1>
