@@ -14,7 +14,7 @@ Credit card rewards tracking and optimization app.
 - Clerk for authentication
 - Stripe for payments
 - Plaid for bank account linking and transaction sync
-- Recharts for charts, xlsx for Excel handling
+- Recharts for charts
 - Upstash Redis for rate limiting
 - Sentry for error tracking
 
@@ -76,6 +76,51 @@ Three webhook handlers:
 
 ### Rate Limiting
 API routes use Upstash Redis rate limiting via `src/lib/rate-limit.ts`. New API endpoints handling user input should use the appropriate limiter.
+
+### Signup & Payment Flow
+1. User pays via Stripe → record created in `stripe_members`
+2. User verifies email at `/api/verify-email` (checked against `stripe_members`)
+3. `pending_signups` record created with optional invite code
+4. User creates Clerk account → `user.created` webhook fires
+5. Webhook creates `user_feature_flags` with Plaid tier from invite code
+
+### Plaid Integration
+- **Webhook-driven transaction sync** with cursor-based pagination (`user_plaid_sync_state`)
+- Transactions auto-matched to card credits via `credit-matcher.ts` pattern rules
+- Balance refreshes use `accountsGet()` (free cached balances), NOT `accountsBalanceGet()`
+- Feature-gated by `user_feature_flags`: `plaid_transactions_enabled`, `plaid_liabilities_enabled`, `plaid_on_demand_refresh_enabled`
+
+### Points Balance Importing (Tampermonkey Script)
+Two import mechanisms in the userscript:
+1. **Server-driven configs** (`site_configs` table) — scraping recipes that can be updated without pushing a new script version
+2. **Hard-coded importers** — look at XHR requests or DOM; require a script update to change
+
+The script calls `POST /api/points/import` (rate limited to 60/min per user).
+
+### Multi-Player Support
+`user_players` and `player_number` on point balances support households where one person manages cards/points for multiple family members, treating them as one optimized system.
+
+## Domain Concepts
+
+### Rewards Optimization Engine (`returns-calculator.ts`)
+Multi-pass greedy allocation with re-ranking. For each spending category, allocates to the best card, re-ranks when caps exhaust, and recalculates. Key nuances:
+- **Marginal value** for top-category selection (not absolute spend)
+- **Shared cap keys** across mobile pay/PayPal categories
+- **Bilt Housing Points** special logic (housing spend caps, tiered rates)
+- **>$5k purchases** split into virtual categories for independent optimization
+- **Post-allocation bonus calculation** (bonuses depend on total card spend)
+- **Booking method preferences** for travel subcategories (direct/portal/brand)
+
+### Card Credits vs Card Benefits
+- **`card_credits`** — trackable statement credits with dollar values, matching rules, and usage tracking (e.g., "$15/month Uber credit"). Matched to Plaid transactions automatically.
+- **`card_benefits`** / **`spreadsheet_card_benefits`** — broader card perks catalog (lounge access, travel insurance, purchase protection, etc.) that aren't necessarily dollar-trackable. The spreadsheet data was a one-time import and the import tooling can be removed.
+- **Planned feature**: Let users assign perceived values to both credits and benefits to estimate total card value vs. annual fee.
+
+### Kudos Data (`kudos_*` tables)
+Crawled from an external card database site. Currently dormant — sitting in the DB as a reference catalog. Future use: if a user wants a card not in our database, we may build a way to add it from Kudos data.
+
+### Issuer Billing Formulas (`billing-cycle.ts`)
+Each card issuer uses a different formula to calculate statement close dates from due dates (or vice versa). 8 formula types supported: Capital One, Amex/Wells Fargo, Chase personal/business, BoA, Citi, US Bank.
 
 ## Key Files
 - `src/lib/returns-calculator.ts` — Core rewards optimization algorithm (2,222 lines)
