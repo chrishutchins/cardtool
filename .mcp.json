@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=dxenzrpnjxbrnidhafrd"
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "clerk": {
+      "type": "http",
+      "url": "https://mcp.clerk.com/mcp"
+    }
+  }
+}

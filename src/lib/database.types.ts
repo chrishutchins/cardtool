@@ -902,6 +902,135 @@ export type Database = {
           },
         ]
       }
+      benefits_viewer_ignored: {
+        Row: {
+          id: string
+          card_id: string
+          source: string
+          source_id: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          card_id: string
+          source: string
+          source_id: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          card_id?: string
+          source?: string
+          source_id?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "benefits_viewer_ignored_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      card_benefits: {
+        Row: {
+          id: string
+          card_id: string
+          source: string
+          title: string | null
+          description: string | null
+          detail: string | null
+          limitations: string | null
+          default_value: string | null
+          display_order: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          card_id: string
+          source: string
+          title?: string | null
+          description?: string | null
+          detail?: string | null
+          limitations?: string | null
+          default_value?: string | null
+          display_order?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          card_id?: string
+          source?: string
+          title?: string | null
+          description?: string | null
+          detail?: string | null
+          limitations?: string | null
+          default_value?: string | null
+          display_order?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_benefits_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spreadsheet_card_benefits: {
+        Row: {
+          id: string
+          card_id: string
+          sheet_name: string | null
+          title: string | null
+          description: string | null
+          detail: string | null
+          limitations: string | null
+          estimated_annual_value: string | null
+          display_order: number | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          card_id: string
+          sheet_name?: string | null
+          title?: string | null
+          description?: string | null
+          detail?: string | null
+          limitations?: string | null
+          estimated_annual_value?: string | null
+          display_order?: number | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          card_id?: string
+          sheet_name?: string | null
+          title?: string | null
+          description?: string | null
+          detail?: string | null
+          limitations?: string | null
+          estimated_annual_value?: string | null
+          display_order?: number | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spreadsheet_card_benefits_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_account_wallet_links: {
         Row: {
           created_at: string

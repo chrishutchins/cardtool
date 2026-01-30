@@ -50,3 +50,4 @@ clerk-migration
 /scripts/find-missing-cards.ts
 /scripts/find-unmatched-ct.ts
 /scripts/scrape-kudos.ts
+/simplefin-test/
